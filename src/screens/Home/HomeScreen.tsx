@@ -1,9 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
-import { homeService, BannerItem } from '@/services/home.service';
+import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/home.service';
+import { RestaurantCard } from '@/components/RestaurantCard';
+import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
+import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { storageService } from '@/services/storage.service';
 import * as Location from 'expo-location';
 import { BlurView } from 'expo-blur';
@@ -45,28 +49,130 @@ const fallbackCarouselData: CarouselItem[] = [
   },
 ];
 
+// Fallback category data if API fails or returns empty
+const fallbackCategoryData: CategoryItem[] = [
+  {
+    id: 1,
+    name: 'Biryani',
+    description: 'Aromatic rice dish with spices',
+    icon: require('@/assets/biriyani.png'),
+  },
+  {
+    id: 2,
+    name: 'South Indian',
+    description: 'Traditional South Indian dishes',
+    icon: require('@/assets/idlies.png'),
+  },
+  {
+    id: 3,
+    name: 'Pizza',
+    description: 'Italian style pizzas',
+    icon: require('@/assets/pizza.png'),
+  },
+  {
+    id: 4,
+    name: 'Burger',
+    description: 'Delicious burgers',
+    icon: require('@/assets/burger.png'),
+  },
+  {
+    id: 5,
+    name: 'Cakes',
+    description: 'Sweet desserts',
+    icon: require('@/assets/cake.png'),
+  },
+];
+
+// Fallback restaurant data if API fails or returns empty
+const fallbackRestaurantData: Restaurant[] = [
+  {
+    id: 1,
+    name: 'A2B',
+    cuisine: 'South Indian, Traditional, Meals.',
+    rating: 4.5,
+    deliveryTime: '10 - 15 mins',
+    location: 'Keelkattalai',
+    distance: '0.5Kms',
+    image: require('@/assets/biriyani.png'),
+    isFavorite: false,
+  },
+  {
+    id: 2,
+    name: 'Dinidigul Thalapakatti',
+    cuisine: 'Burgers, Pizza, Chicken Wings Rolls & Wrap',
+    rating: 4.5,
+    deliveryTime: '10 - 15 mins',
+    location: 'Pallavaram',
+    distance: '1.2Kms',
+    image: require('@/assets/burger.png'),
+    isFavorite: false,
+  },
+  {
+    id: 3,
+    name: 'Pizza Hut',
+    cuisine: 'Italian, Pizza, Fast Food',
+    rating: 4.2,
+    deliveryTime: '15 - 20 mins',
+    location: 'Chrompet',
+    distance: '2.5Kms',
+    image: require('@/assets/pizza.png'),
+    isFavorite: false,
+  },
+];
+
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [showLocationPopup, setShowLocationPopup] = React.useState(true);
+  const [showVegModePopup, setShowVegModePopup] = React.useState(false);
+  const [showLocationSelection, setShowLocationSelection] = React.useState(false);
+  const [showAddAddressMap, setShowAddAddressMap] = React.useState(false);
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [carouselData, setCarouselData] = React.useState<CarouselItem[]>([]);
+  const [categoryData, setCategoryData] = React.useState<CategoryItem[]>([]);
+  const [restaurantData, setRestaurantData] = React.useState<Restaurant[]>([]);
   const [isLoadingBanners, setIsLoadingBanners] = React.useState(true);
+  const [isVegMode, setIsVegMode] = React.useState(false);
+  const [tempVegSelection, setTempVegSelection] = React.useState<'all' | 'veg'>('all');
+  const [selectedLocation, setSelectedLocation] = React.useState({ name: 'Chennai', address: 'Vigneshwar Nagar, Nanganallur, Tamilnadu,...' });
   const flatListRef = React.useRef<FlatList>(null);
 
   const handleAllowLocation = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      console.log('[Location] Starting permission request...');
 
-      if (status === 'granted') {
+      // First check current permission status
+      const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+      console.log('[Location] Existing permission status:', existingStatus);
+
+      let finalStatus = existingStatus;
+
+      // Only request permission if not already granted
+      if (existingStatus !== 'granted') {
+        console.log('[Location] Requesting foreground permission...');
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        finalStatus = status;
+        console.log('[Location] Permission request result:', status);
+      }
+
+      if (finalStatus === 'granted') {
+        console.log('[Location] Permission granted, getting current position...');
         const location = await Location.getCurrentPositionAsync({});
-        console.log('Location granted:', location);
+        console.log('[Location] Current location:', location);
         setShowLocationPopup(false);
       } else {
-        Alert.alert('Permission Denied', 'Location permission is required to show nearby restaurants.');
+        console.log('[Location] Permission denied or not granted:', finalStatus);
+        Alert.alert(
+          'Permission Denied',
+          'Location permission is required to show nearby restaurants. Please enable it in your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Location.requestForegroundPermissionsAsync() }
+          ]
+        );
       }
     } catch (error) {
-      console.error('Location error:', error);
-      Alert.alert('Error', 'Failed to get location permission.');
+      console.error('[Location] Error requesting permission:', error);
+      Alert.alert('Error', 'Failed to get location permission. Please try again.');
     }
   };
 
@@ -75,32 +181,32 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
     Alert.alert('Location Disabled', 'You can enable location access later from settings.');
   };
 
+  const handleVegModeToggle = () => {
+    setTempVegSelection(isVegMode ? 'veg' : 'all');
+    setShowVegModePopup(true);
+  };
+
+  const handleApplyVegMode = () => {
+    setIsVegMode(tempVegSelection === 'veg');
+    setShowVegModePopup(false);
+  };
+
   // Fetch home data on component mount
   React.useEffect(() => {
     const fetchHomeData = async () => {
       try {
         setIsLoadingBanners(true);
 
-        // Log token for Postman testing
-        const token = await storageService.getAccessToken();
-        console.log('='.repeat(80));
-        console.log('FOR POSTMAN TESTING:');
-        console.log('URL: https://devapi.tazty.in/api/buyer/home');
-        console.log('Method: GET');
-        console.log('Authorization Header: Bearer ' + token);
-        console.log('='.repeat(80));
-
         const response = await homeService.getHomeData();
-
-        console.log('[HomeScreen] Full API response:', JSON.stringify(response, null, 2));
 
         if (response.success && response.data) {
           // The API returns data nested as: { data: { data: { promotional_banner: {...} } } }
-          // So response.data is already pointing to the inner 'data' object
           const actualData = response.data.data || response.data;
           const promotionalBanner = actualData.promotional_banner;
-          console.log('[HomeScreen] Promotional banner:', JSON.stringify(promotionalBanner, null, 2));
+          const whatsOnYourMind = actualData.whats_on_your_mind;
+          const nearbyRestaurants = actualData.nearby_restaurants;
 
+          // Handle promotional banners
           if (promotionalBanner) {
             // Handle if it's a single object or array
             const bannerArray = Array.isArray(promotionalBanner) ? promotionalBanner : [promotionalBanner];
@@ -114,27 +220,55 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
               imageUrl: banner.image_url || banner.banner_url,
             }));
 
-            console.log('[HomeScreen] Transformed banners count:', transformedBanners.length);
-            console.log('[HomeScreen] Transformed banners:', JSON.stringify(transformedBanners, null, 2));
-
             if (transformedBanners.length > 0) {
-              console.log('[HomeScreen] Setting carousel data with', transformedBanners.length, 'banner(s)');
               setCarouselData(transformedBanners);
             } else {
-              console.log('[HomeScreen] No banners after transformation, using fallback data');
               setCarouselData(fallbackCarouselData);
             }
           } else {
-            console.log('[HomeScreen] No promotional_banner in response, using fallback data');
             setCarouselData(fallbackCarouselData);
           }
+
+          // Handle categories - use fallback if empty or undefined
+          if (whatsOnYourMind && Array.isArray(whatsOnYourMind) && whatsOnYourMind.length > 0) {
+            setCategoryData(whatsOnYourMind);
+          } else {
+            setCategoryData(fallbackCategoryData);
+          }
+
+          // Handle restaurants - use fallback if empty or undefined
+          if (nearbyRestaurants && Array.isArray(nearbyRestaurants) && nearbyRestaurants.length > 0) {
+            console.log('[HomeScreen] Restaurant data from API:', nearbyRestaurants);
+
+            // Transform API data to match our Restaurant interface
+            const transformedRestaurants = nearbyRestaurants.map((restaurant: any) => ({
+              id: restaurant.id,
+              name: restaurant.name,
+              cuisine: restaurant.description || 'Restaurant',
+              rating: restaurant.rating || 0,
+              deliveryTime: restaurant.delivery_time || '25-30 mins',
+              location: restaurant.location,
+              distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
+              image: restaurant.logo_url || restaurant.image,
+              isFavorite: false,
+            }));
+
+            console.log('[HomeScreen] Transformed restaurant data:', transformedRestaurants);
+            setRestaurantData(transformedRestaurants);
+          } else {
+            console.log('[HomeScreen] Using fallback restaurant data');
+            setRestaurantData(fallbackRestaurantData);
+          }
         } else {
-          console.log('[HomeScreen] Failed to fetch banners, using fallback data');
           setCarouselData(fallbackCarouselData);
+          setCategoryData(fallbackCategoryData);
+          setRestaurantData(fallbackRestaurantData);
         }
       } catch (error) {
         console.error('[HomeScreen] Error fetching home data:', error);
         setCarouselData(fallbackCarouselData);
+        setCategoryData(fallbackCategoryData);
+        setRestaurantData(fallbackRestaurantData);
       } finally {
         setIsLoadingBanners(false);
       }
@@ -159,7 +293,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
             setIsLoggingOut(true);
             try {
               await authService.logout();
-              console.log('Logged out successfully');
               if (onLogout) {
                 onLogout();
               }
@@ -167,7 +300,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
               console.error('Logout error:', error);
               Alert.alert('Error', 'Failed to logout. Please try again.');
             } finally {
-              setIsLoggingOut(false);
+              setIsLoadingBanners(false);
             }
           },
         },
@@ -183,70 +316,94 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
 
   const viewConfigRef = React.useRef({ viewAreaCoveragePercentThreshold: 50 });
 
-  const renderCarouselItem = ({ item }: { item: CarouselItem }) => {
-    console.log('[HomeScreen] Rendering banner:', item.title, 'Image URL:', item.imageUrl);
-    console.log('[HomeScreen] Current carouselData length in state:', carouselData.length);
-
+  const renderCarouselItem = React.useCallback(({ item }: { item: CarouselItem }) => {
     return (
-      <View style={styles.carouselSlide}>
-        <View style={styles.adBanner}>
+      <View style={styles.carouselSlide} testID={`carousel-slide-${item.id}`}>
+        <View style={styles.adBanner} testID={`banner-${item.id}`}>
           {/* Blob with masked image */}
           {item.imageUrl ? (
-            <View style={styles.blobContainer}>
+            <View style={styles.blobContainer} testID={`blob-container-${item.id}`}>
               {/* Blob background with image masked inside */}
               <View style={styles.adImageBlob}>
                 <Image
                   source={{ uri: item.imageUrl }}
                   style={styles.adImageMasked}
                   resizeMode="cover"
-                  onError={(error) => console.log('[HomeScreen] Image load error:', error.nativeEvent.error)}
-                  onLoad={() => console.log('[HomeScreen] Image loaded successfully:', item.imageUrl)}
+                  testID={`banner-image-${item.id}`}
                 />
               </View>
             </View>
-          ) : (
-            console.log('[HomeScreen] No image URL for banner:', item.title)
-          )}
+          ) : null}
 
-          <View style={styles.adContent}>
-            <Text style={styles.adTitle}>{item.title}</Text>
-            <Text style={styles.adDescription}>{item.description}</Text>
-            <TouchableOpacity style={styles.adButton}>
+          <View style={styles.adContent} testID={`banner-content-${item.id}`}>
+            <Text style={styles.adTitle} testID={`banner-title-${item.id}`}>{item.title}</Text>
+            <Text style={styles.adDescription} testID={`banner-description-${item.id}`}>{item.description}</Text>
+            <TouchableOpacity style={styles.adButton} testID={`banner-button-${item.id}`}>
               <Text style={styles.adButtonText}>{item.buttonText}</Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
     );
-  };
+  }, []);
+
+  const renderCategoryItem = React.useCallback(({ item }: { item: CategoryItem }) => {
+    const imageSource = typeof item.icon === 'string' ? { uri: item.icon } : item.icon;
+
+    return (
+      <TouchableOpacity style={styles.categoryItem} testID={`category-${item.id}`}>
+        <View style={styles.categoryImageContainer}>
+          <Image
+            source={imageSource}
+            style={styles.categoryImage}
+            resizeMode="contain"
+            testID={`category-image-${item.id}`}
+          />
+        </View>
+        <Text style={styles.categoryName} testID={`category-name-${item.id}`}>
+          {item.name}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, []);
 
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
+      <ScrollView style={styles.container} stickyHeaderIndices={[3]} testID="home-screen">
 
       {/* Header with Background Image */}
       <ImageBackground
         source={require('@/assets/home_app_bar.png')}
         style={styles.headerBackground}
         imageStyle={styles.headerBackgroundImage}
+        testID="header-background"
       >
         {/* Location Section */}
-        <View style={styles.locationSection}>
-          <View style={styles.locationInfo}>
+        <View style={styles.locationSection} testID="location-section">
+          <TouchableOpacity
+            style={styles.locationInfo}
+            onPress={() => setShowLocationSelection(true)}
+            activeOpacity={0.7}
+          >
             {/* City Name with Icon */}
             <View style={styles.cityRow}>
               <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
-              <Text style={styles.cityName}>Chennai</Text>
+              <Text style={styles.cityName} testID="city-name">{selectedLocation.name}</Text>
               <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
             </View>
             {/* Address */}
-            <Text style={styles.addressText}>
-              Vigneshwar Nagar, Nanganallur, Tamilnadu,...
+            <Text style={styles.addressText} testID="address-text">
+              {selectedLocation.address}
             </Text>
-          </View>
+          </TouchableOpacity>
 
           {/* Profile Avatar */}
-          <TouchableOpacity style={styles.profileButton} onPress={handleLogout}>
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={handleLogout}
+            testID="profile-button"
+          >
             <View style={styles.profileAvatar}>
               <MaterialIcons name="person" size={24} color="#00B14F" />
             </View>
@@ -270,12 +427,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
           </LinearGradient>
 
           {/* VEG Mode Toggle */}
-          <View style={styles.vegModeContainer}>
+          <TouchableOpacity
+            style={styles.vegModeContainer}
+            onPress={handleVegModeToggle}
+            testID="veg-mode-toggle"
+          >
             <Text style={styles.vegModeLabel}>VEG{'\n'}MODE</Text>
-            <View style={styles.vegToggle}>
-              <View style={styles.vegToggleThumb} />
+            <View style={[styles.vegToggle, isVegMode && styles.vegToggleActive]}>
+              <View style={[styles.vegToggleThumb, isVegMode && styles.vegToggleThumbActive]} />
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
       </ImageBackground>
 
@@ -320,11 +481,109 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
         )}
       </View>
 
-      {/* Content Area */}
-      <View style={styles.content}>
-        <Text style={styles.message}>
-          Home Content Goes Here
-        </Text>
+      {/* What's On Your Mind Section */}
+      <View style={[
+        styles.sectionTitleContainer,
+        carouselData.length <= 1 && styles.sectionTitleContainerCompact
+      ]}>
+        <LinearGradient
+          colors={['rgba(0, 0, 0, 0)', '#000000']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.sectionTitleLine}
+        />
+        <Text style={styles.sectionTitle}>What's On Your Mind?</Text>
+        <LinearGradient
+          colors={['#000000', 'rgba(0, 0, 0, 0)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.sectionTitleLine}
+        />
+      </View>
+
+      {/* Category List */}
+      <View style={styles.categoryListContainer}>
+        <FlatList
+          data={categoryData}
+          renderItem={renderCategoryItem}
+          keyExtractor={(item) => item.id.toString()}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryListContent}
+          testID="category-list"
+        />
+      </View>
+
+      {/* Restaurants Near You Section */}
+      <View style={styles.restaurantsSectionTitleContainer}>
+        <LinearGradient
+          colors={['rgba(0, 0, 0, 0)', '#000000']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.restaurantsTitleLine}
+        />
+        <Text style={styles.restaurantsTitle}>Restaurants Near You</Text>
+        <LinearGradient
+          colors={['#000000', 'rgba(0, 0, 0, 0)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.restaurantsTitleLine}
+        />
+      </View>
+
+      {/* Filter Buttons */}
+      <View style={styles.filterContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+        >
+          <TouchableOpacity style={styles.filterButtonActive} testID="filter-filters">
+            <MaterialIcons name="filter-list" size={16} color="#00B14F" />
+            <Text style={styles.filterTextActive}>Filters</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.filterButtonInactive} testID="filter-sort">
+            <Text style={styles.filterTextInactive}>Sort By</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.filterButtonInactive} testID="filter-price">
+            <Text style={styles.filterTextInactive}>Price</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.filterButtonInactive} testID="filter-veg">
+            <Text style={styles.filterTextInactive}>Veg</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.filterButtonInactive} testID="filter-delivery">
+            <Text style={styles.filterTextInactive}>10 Mins Delivery</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+
+      {/* Restaurant List */}
+      <View style={styles.restaurantListContainer}>
+        {restaurantData.map((restaurant) => (
+          <View key={restaurant.id} style={styles.restaurantCardWrapper}>
+            <RestaurantCard
+              restaurant={restaurant}
+              onPress={() => {
+                // Handle restaurant card press
+                console.log('Restaurant pressed:', restaurant.name);
+              }}
+              onFavoriteToggle={() => {
+                // Handle favorite toggle
+                setRestaurantData(prev =>
+                  prev.map(r =>
+                    r.id === restaurant.id
+                      ? { ...r, isFavorite: !r.isFavorite }
+                      : r
+                  )
+                );
+              }}
+            />
+          </View>
+        ))}
       </View>
 
       {/* Location Permission Modal */}
@@ -374,11 +633,159 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
           </View>
         </BlurView>
       </Modal>
+
+      {/* VEG Mode Selection Modal */}
+      <Modal
+        visible={showVegModePopup}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowVegModePopup(false)}
+      >
+        <TouchableOpacity
+          style={styles.vegModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowVegModePopup(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.vegModalContent}>
+              {/* All Restaurants Option */}
+              <TouchableOpacity
+                style={styles.vegOption}
+                onPress={() => setTempVegSelection('all')}
+                testID="veg-option-all"
+              >
+                <View style={styles.radioButton}>
+                  {tempVegSelection === 'all' && <View style={styles.radioButtonSelected} />}
+                </View>
+                <Text style={styles.vegOptionText}>All Restaurants</Text>
+              </TouchableOpacity>
+
+              {/* Pure Veg Option */}
+              <TouchableOpacity
+                style={styles.vegOption}
+                onPress={() => setTempVegSelection('veg')}
+                testID="veg-option-veg"
+              >
+                <View style={styles.radioButton}>
+                  {tempVegSelection === 'veg' && <View style={styles.radioButtonSelected} />}
+                </View>
+                <Text style={styles.vegOptionText}>Pure Veg</Text>
+              </TouchableOpacity>
+
+              {/* Apply Button */}
+              <TouchableOpacity
+                style={styles.vegApplyButton}
+                onPress={handleApplyVegMode}
+                testID="veg-apply-button"
+              >
+                <Text style={styles.vegApplyButtonText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Address Selection Modal */}
+      <Modal
+        visible={showLocationSelection}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => setShowLocationSelection(false)}
+      >
+        <AddressSelectionScreen
+          onBack={() => setShowLocationSelection(false)}
+          onAddAddress={() => {
+            // Will be implemented with new page instructions
+            console.log('Add address clicked - awaiting new page implementation');
+          }}
+          onUseCurrentLocation={() => {
+            setShowLocationSelection(false);
+            setShowAddAddressMap(true);
+          }}
+          onSelectAddress={(address) => {
+            setSelectedLocation({
+              name: address.name,
+              address: `${address.address}, ${address.city}`,
+            });
+            setShowLocationSelection(false);
+          }}
+        />
+      </Modal>
+
+      {/* Add Address Map Modal */}
+      <Modal
+        visible={showAddAddressMap}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => setShowAddAddressMap(false)}
+      >
+        <LocationSelectionScreen
+          onBack={() => {
+            setShowAddAddressMap(false);
+            setShowLocationSelection(true);
+          }}
+          onLocationConfirm={async (location) => {
+            console.log('Complete address data:', {
+              tag: location.name,
+              locationName: location.locationName,
+              locationAddress: location.locationAddress,
+              houseNo: location.houseNo,
+              building: location.building,
+              locality: location.locality,
+              alternateMobile: location.alternateMobile,
+              isDefault: location.isDefault,
+              latitude: location.latitude,
+              longitude: location.longitude,
+            });
+
+            // Update selected location for display
+            setSelectedLocation({
+              name: location.name || location.locationName,
+              address: location.locationAddress,
+            });
+
+            // TODO: Save complete address to backend
+            // Example API call structure:
+            // try {
+            //   const response = await fetch('YOUR_API_ENDPOINT/addresses', {
+            //     method: 'POST',
+            //     headers: {
+            //       'Content-Type': 'application/json',
+            //       'Authorization': `Bearer ${userToken}`,
+            //     },
+            //     body: JSON.stringify({
+            //       tag: location.name,
+            //       locationName: location.locationName,
+            //       locationAddress: location.locationAddress,
+            //       houseNo: location.houseNo,
+            //       building: location.building,
+            //       locality: location.locality,
+            //       alternateMobile: location.alternateMobile,
+            //       isDefault: location.isDefault,
+            //       latitude: location.latitude,
+            //       longitude: location.longitude,
+            //     }),
+            //   });
+            //   const data = await response.json();
+            //   console.log('Address saved to backend:', data);
+            // } catch (error) {
+            //   console.error('Error saving address:', error);
+            // }
+
+            setShowAddAddressMap(false);
+          }}
+        />
+      </Modal>
     </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#00B14F',
+  },
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -386,15 +793,15 @@ const styles = StyleSheet.create({
   // Header styles
   headerBackground: {
     width: '100%',
-    height: 252,
+    height: 212,
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 20,
     paddingBottom: 20,
     gap: 18,
   },
   headerBackgroundImage: {
     width: '120%',
-    height: 252,
+    height: 212,
     left: 0,
   },
   // Location section
@@ -425,16 +832,18 @@ const styles = StyleSheet.create({
   cityName: {
     width: 70,
     height: 24,
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins',
     fontWeight: '700',
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',
+    letterSpacing: 0,
+    textAlignVertical: 'center',
   },
   addressText: {
     width: 271,
     height: 18,
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins',
     fontWeight: '400',
     fontSize: 12,
     lineHeight: 18,
@@ -472,7 +881,8 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins',
+    fontWeight: '400',
     fontSize: 14,
     lineHeight: 21,
     color: '#FFFFFF',
@@ -487,7 +897,7 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   vegModeLabel: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins',
     fontSize: 12,
     lineHeight: 18,
     textAlign: 'center',
@@ -510,6 +920,13 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     backgroundColor: '#FFFFFF',
+  },
+  vegToggleActive: {
+    backgroundColor: '#00B14F',
+    justifyContent: 'flex-end',
+  },
+  vegToggleThumbActive: {
+    alignSelf: 'flex-end',
   },
   // Carousel Container
   carouselContainer: {
@@ -583,7 +1000,7 @@ const styles = StyleSheet.create({
   adTitle: {
     width: 294,
     height: 29,
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins',
     fontWeight: '700',
     fontSize: 19,
     lineHeight: 28,
@@ -592,7 +1009,7 @@ const styles = StyleSheet.create({
   adDescription: {
     width: 239,
     height: 42,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins',
     fontWeight: '500',
     fontSize: 14,
     lineHeight: 21,
@@ -610,7 +1027,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
   },
   adButtonText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins',
     fontWeight: '400',
     fontSize: 13,
     lineHeight: 20,
@@ -638,12 +1055,165 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#00B14F',
   },
-  // Content area
-  content: {
-    flex: 1,
-    padding: spacing.lg,
+  // Section Title
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    gap: 15,
+  },
+  sectionTitleContainerCompact: {
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  sectionTitleLine: {
+    width: 35,
+    height: 1,
+  },
+  sectionTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 14,
+    lineHeight: 14,
+    letterSpacing: 0,
+    textAlign: 'center',
+    color: '#000000',
+  },
+  // Category List
+  categoryListContainer: {
+    width: '100%',
+    minHeight: 100,
+    paddingLeft: 20,
+    marginBottom: 0,
+    backgroundColor: '#FFFFFF',
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  categoryListContent: {
+    paddingRight: 20,
+    alignItems: 'flex-start',
+  },
+  categoryItem: {
+    width: 74,
+    marginRight: 14,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  categoryImageContainer: {
+    width: 74,
+    height: 59,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 6,
+  },
+  categoryImage: {
+    width: '100%',
+    height: '100%',
+    shadowColor: '#000000',
+    shadowOffset: {
+      width: -6,
+      height: -2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  categoryName: {
+    width: 74,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 12,
+    lineHeight: 12,
+    letterSpacing: 0,
+    textAlign: 'center',
+    color: '#000000',
+    opacity: 0.85,
+    flexWrap: 'wrap',
+  },
+  // Restaurants Near You Section
+  restaurantsSectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
+    gap: 15,
+  },
+  restaurantsTitleLine: {
+    width: 35,
+    height: 1,
+  },
+  restaurantsTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 14,
+    lineHeight: 14,
+    letterSpacing: 0,
+    textAlign: 'center',
+    color: '#000000',
+    opacity: 0.85,
+  },
+  // Filter buttons
+  filterContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+  },
+  filterScrollContent: {
+    gap: 10,
+  },
+  filterButtonActive: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    gap: 4,
+    height: 29,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 128, 74, 0.25)',
+    borderRadius: 13,
+  },
+  filterTextActive: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 14,
+    letterSpacing: 0,
+    color: '#00B14F',
+  },
+  filterButtonInactive: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    gap: 4,
+    height: 29,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.25)',
+    borderRadius: 13,
+  },
+  filterTextInactive: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 14,
+    letterSpacing: 0,
+    color: '#000000',
+  },
+  // Restaurant List
+  restaurantListContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 20,
+    gap: 10,
+    backgroundColor: '#F5F5F5',
+  },
+  restaurantCardWrapper: {
+    marginBottom: 10,
   },
   message: {
     ...typography.bodyLarge,
@@ -688,7 +1258,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   modalTitle: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins',
     fontSize: 24,
     lineHeight: 32,
     color: '#000000',
@@ -697,7 +1267,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   modalDescription: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins',
+    fontWeight: '400',
     fontSize: 14,
     lineHeight: 22,
     color: '#9E9E9E',
@@ -718,7 +1289,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   allowButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins',
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',
@@ -733,10 +1304,76 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   notNowButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins',
     fontSize: 16,
     lineHeight: 24,
     color: '#000000',
     fontWeight: '600',
+  },
+  // VEG Mode Modal
+  vegModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  vegModalContent: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    gap: 12,
+    width: 192,
+    minHeight: 130,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+  },
+  vegOption: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    gap: 20,
+    width: '100%',
+  },
+  radioButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#D9D9D9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioButtonSelected: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#00B14F',
+  },
+  vegOptionText: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#000000',
+    opacity: 0.85,
+  },
+  vegApplyButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    width: '100%',
+    backgroundColor: '#00B14F',
+    borderRadius: 6,
+  },
+  vegApplyButtonText: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#FFFFFF',
+    opacity: 0.85,
   },
 });
