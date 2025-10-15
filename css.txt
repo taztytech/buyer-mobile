@@ -1,0 +1,160 @@
+/* Frame 427321128 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 14px;
+gap: 11px;
+isolation: isolate;
+
+position: absolute;
+width: 400px;
+height: 149px;
+left: 20px;
+top: 208px;
+
+background: #00BEC8;
+border-radius: 20px;
+
+
+/* Craving Something Delicious? */
+
+width: 294px;
+height: 29px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 700;
+font-size: 19px;
+line-height: 28px;
+/* identical to box height */
+
+color: #FFFFFF;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+z-index: 0;
+
+
+/* Get your favorite meals delivered hot & fast—right to your doorstep. */
+
+width: 239px;
+height: 42px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 14px;
+line-height: 21px;
+
+color: #FFFFFF;
+
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+z-index: 1;
+
+
+/* Frame 427321123 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px 15px;
+gap: 10px;
+
+width: 103px;
+height: 28px;
+
+background: #FFFFFF;
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+flex-grow: 0;
+z-index: 2;
+
+
+/* Order Now! */
+
+width: 73px;
+height: 20px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 20px;
+/* identical to box height */
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Ellipse 1 */
+
+position: absolute;
+width: 188px;
+height: 99px;
+left: 249px;
+top: 75px;
+
+background: #000000;
+opacity: 0.5;
+filter: blur(35.5px);
+
+/* Inside auto layout */
+flex: none;
+order: 3;
+flex-grow: 0;
+z-index: 3;
+
+
+/* pngwing.com 1 */
+
+position: absolute;
+width: 188px;
+height: 141px;
+left: 249px;
+top: 35px;
+
+background: url(pngwing.com.png);
+
+/* Inside auto layout */
+flex: none;
+order: 4;
+flex-grow: 0;
+z-index: 4;
+
+
+/* Ellipse 2 */
+
+position: absolute;
+width: 96px;
+height: 96px;
+left: -16px;
+top: 70px;
+
+background: #FFFFFF;
+opacity: 0.2;
+
+/* Inside auto layout */
+flex: none;
+order: 5;
+flex-grow: 0;
+z-index: 5;

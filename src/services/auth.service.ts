@@ -1,0 +1,158 @@
+/**
+ * Authentication Service
+ * Handles all authentication-related API calls
+ */
+
+import { apiService, ApiResponse } from './api.service';
+import { API_CONFIG } from '@/config/api.config';
+import { storageService, UserData } from './storage.service';
+
+// Types
+export interface SendOtpRequest {
+  phoneNumber: string;
+  countryCode?: string;
+}
+
+export interface SendOtpResponse {
+  message: string;
+  otpSent: boolean;
+  expiresIn?: number;
+}
+
+export interface VerifyOtpRequest {
+  phoneNumber: string;
+  otp: string;
+  countryCode?: string;
+}
+
+export interface VerifyOtpResponse {
+  user?: {
+    id: string;
+    phoneNumber: string;
+    name?: string;
+    email?: string;
+  };
+  access_token: string;
+  refresh_token: string;
+  expires_in?: number;
+}
+
+class AuthService {
+  /**
+   * Send OTP to phone number
+   */
+  async sendOtp(phoneNumber: string): Promise<ApiResponse<SendOtpResponse>> {
+    try {
+      const response = await apiService.post<SendOtpResponse>(
+        API_CONFIG.ENDPOINTS.AUTHENTICATION.GENERATE_OTP,
+        {
+          phone_number: parseInt(phoneNumber, 10),
+        }
+      );
+
+      return response;
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to send OTP',
+        message: error.message,
+      };
+    }
+  }
+
+  /**
+   * Verify OTP and login
+   */
+  async verifyOtp(
+    phoneNumber: string,
+    otp: string
+  ): Promise<ApiResponse<VerifyOtpResponse>> {
+    try {
+      const response = await apiService.post<VerifyOtpResponse>(
+        API_CONFIG.ENDPOINTS.AUTHENTICATION.LOGIN,
+        {
+          phone_number: phoneNumber,
+          otp: parseInt(otp, 10),
+        }
+      );
+
+      // If verification successful, store tokens and user data
+      if (response.success && response.data) {
+        // 1. Save authentication tokens to storage
+        await storageService.saveTokens({
+          accessToken: response.data.access_token,
+          refreshToken: response.data.refresh_token,
+          expiresIn: response.data.expires_in || 3600, // Default 1 hour
+        });
+
+        // 2. Save user data to storage (if provided)
+        if (response.data.user) {
+          await storageService.saveUser(response.data.user);
+        } else {
+          // If no user data, create minimal user object from phone number
+          await storageService.saveUser({
+            id: '', // Will be filled later
+            phoneNumber: phoneNumber,
+          });
+        }
+
+        // 3. Set tokens in API service (in-memory)
+        apiService.setTokens(response.data.access_token, response.data.refresh_token);
+
+        console.log('[AuthService] Session initialized successfully');
+      }
+
+      return response;
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to verify OTP',
+        message: error.message,
+      };
+    }
+  }
+
+  /**
+   * Logout user
+   */
+  async logout(): Promise<ApiResponse> {
+    try {
+      // Attempt to call logout API
+      const response = await apiService.post(API_CONFIG.ENDPOINTS.AUTHENTICATION.LOGOUT);
+
+      // Clear tokens and user data regardless of API response
+      await apiService.clearTokens();
+
+      console.log('[AuthService] Logout successful');
+      return response;
+    } catch (error: any) {
+      // Clear tokens even if API call fails
+      await apiService.clearTokens();
+
+      console.log('[AuthService] Logout completed (with error)');
+      return {
+        success: false,
+        error: error.message || 'Failed to logout',
+        message: error.message,
+      };
+    }
+  }
+
+  /**
+   * Check if user is authenticated
+   */
+  async isAuthenticated(): Promise<boolean> {
+    return await storageService.isLoggedIn();
+  }
+
+  /**
+   * Get current user data
+   */
+  async getCurrentUser(): Promise<UserData | null> {
+    return await storageService.getUser();
+  }
+}
+
+// Export singleton instance
+export const authService = new AuthService();
+export default authService;
