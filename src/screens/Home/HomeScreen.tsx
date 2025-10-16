@@ -126,6 +126,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
   const [showVegModePopup, setShowVegModePopup] = React.useState(false);
   const [showLocationSelection, setShowLocationSelection] = React.useState(false);
   const [showAddAddressMap, setShowAddAddressMap] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState<string>('');
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [carouselData, setCarouselData] = React.useState<CarouselItem[]>([]);
   const [categoryData, setCategoryData] = React.useState<CategoryItem[]>([]);
@@ -158,6 +159,42 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
         console.log('[Location] Permission granted, getting current position...');
         const location = await Location.getCurrentPositionAsync({});
         console.log('[Location] Current location:', location);
+
+        // Get address from coordinates using reverse geocoding
+        try {
+          const addresses = await Location.reverseGeocodeAsync({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          });
+
+          if (addresses.length > 0) {
+            const addr = addresses[0];
+            const locationName = addr.district || addr.city || addr.subregion || 'Current Location';
+            const locationAddress = [
+              addr.street,
+              addr.district,
+              addr.city,
+              addr.region,
+              addr.country
+            ].filter(Boolean).join(', ');
+
+            console.log('[Location] Detected location:', locationName, locationAddress);
+
+            // Update the selected location display
+            setSelectedLocation({
+              name: locationName,
+              address: locationAddress || 'Location detected',
+            });
+          }
+        } catch (error) {
+          console.error('[Location] Error reverse geocoding:', error);
+          // Still update with coordinates if reverse geocoding fails
+          setSelectedLocation({
+            name: 'Current Location',
+            address: `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`,
+          });
+        }
+
         setShowLocationPopup(false);
       } else {
         console.log('[Location] Permission denied or not granted:', finalStatus);
@@ -699,6 +736,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
             console.log('Add address clicked - awaiting new page implementation');
           }}
           onUseCurrentLocation={() => {
+            setSearchQuery(''); // Clear search query when using current location
             setShowLocationSelection(false);
             setShowAddAddressMap(true);
           }}
@@ -708,6 +746,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
               address: `${address.address}, ${address.city}`,
             });
             setShowLocationSelection(false);
+          }}
+          onSearch={(query) => {
+            setSearchQuery(query);
+            setShowLocationSelection(false);
+            setShowAddAddressMap(true);
           }}
         />
       </Modal>
@@ -720,9 +763,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
         onRequestClose={() => setShowAddAddressMap(false)}
       >
         <LocationSelectionScreen
+          initialSearchQuery={searchQuery}
           onBack={() => {
             setShowAddAddressMap(false);
             setShowLocationSelection(true);
+            setSearchQuery(''); // Clear search query when going back
           }}
           onLocationConfirm={async (location) => {
             console.log('Complete address data:', {
@@ -773,6 +818,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
             // }
 
             setShowAddAddressMap(false);
+            setSearchQuery(''); // Clear search query after saving address
           }}
         />
       </Modal>
@@ -826,11 +872,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 0,
     gap: 4,
-    width: 114,
+    width: 271,
     height: 24,
+    marginLeft: -3,
   },
   cityName: {
-    width: 70,
     height: 24,
     fontFamily: 'Poppins',
     fontWeight: '700',
@@ -839,6 +885,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0,
     textAlignVertical: 'center',
+    flexShrink: 1,
   },
   addressText: {
     width: 271,

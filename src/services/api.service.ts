@@ -113,6 +113,13 @@ class ApiService {
       const data = await response.json();
 
       if (response.ok && data.success) {
+        // Validate that we received valid tokens
+        if (!data.data?.accessToken) {
+          console.error('[API] Token refresh response missing accessToken');
+          await this.clearTokens();
+          return false;
+        }
+
         // Save new tokens
         this.accessToken = data.data.accessToken;
         this.refreshToken = data.data.refreshToken || refreshToken;

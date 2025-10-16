@@ -10,9 +10,12 @@ import {
   Platform,
   Keyboard,
   Animated,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { addressService, AddAddressRequest } from '@/services/address.service';
 
 interface AddAddressFormScreenProps {
   locationName: string;
@@ -34,9 +37,13 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [houseNo, setHouseNo] = useState('');
   const [building, setBuilding] = useState('');
   const [locality, setLocality] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [pincode, setPincode] = useState('');
   const [alternateMobile, setAlternateMobile] = useState('');
   const [isDefault, setIsDefault] = useState(false);
   const [selectedTag, setSelectedTag] = useState<'Home' | 'Work' | 'Other'>('Home');
+  const [loading, setLoading] = useState(false);
   const bottomPosition = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -68,22 +75,73 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     };
   }, []);
 
-  const handleContinue = () => {
-    const addressData = {
-      name: selectedTag,
-      locationName,
-      locationAddress,
-      houseNo,
-      building,
-      locality,
-      alternateMobile,
-      isDefault,
-      latitude,
-      longitude,
-    };
+  const handleContinue = async () => {
+    // Validation
+    if (!houseNo.trim()) {
+      Alert.alert('Validation Error', 'Please enter house/flat number');
+      return;
+    }
+    if (!building.trim()) {
+      Alert.alert('Validation Error', 'Please enter building/street name');
+      return;
+    }
+    if (!locality.trim()) {
+      Alert.alert('Validation Error', 'Please enter locality');
+      return;
+    }
+    if (!city.trim()) {
+      Alert.alert('Validation Error', 'Please enter city');
+      return;
+    }
+    if (!state.trim()) {
+      Alert.alert('Validation Error', 'Please enter state');
+      return;
+    }
+    if (!pincode.trim()) {
+      Alert.alert('Validation Error', 'Please enter pincode');
+      return;
+    }
 
-    if (onSave) {
-      onSave(addressData);
+    setLoading(true);
+
+    try {
+      // Prepare address data for API
+      const addressData: AddAddressRequest = {
+        address1: houseNo,
+        address2: building,
+        address3: locality,
+        city: city,
+        state: state,
+        pincode: pincode,
+        latitude: latitude,
+        longitude: longitude,
+        type: selectedTag.toLowerCase() as 'home' | 'work' | 'other',
+        alternate_phone_number: alternateMobile ? parseInt(alternateMobile, 10) : undefined,
+        is_default: isDefault,
+      };
+
+      // Call API
+      const response = await addressService.addAddress(addressData);
+
+      if (response.success) {
+        Alert.alert('Success', 'Address added successfully', [
+          {
+            text: 'OK',
+            onPress: () => {
+              if (onSave) {
+                onSave(response.data);
+              }
+            },
+          },
+        ]);
+      } else {
+        Alert.alert('Error', response.error || 'Failed to add address');
+      }
+    } catch (error) {
+      console.error('[AddAddressForm] Error adding address:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -164,6 +222,45 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   placeholderTextColor="#999"
                 />
               </View>
+            </View>
+
+            {/* City and State */}
+            <View style={styles.rowFields}>
+              <View style={[styles.fieldGroup, styles.halfField]}>
+                <Text style={styles.fieldLabel}>City</Text>
+                <TextInput
+                  style={styles.input}
+                  value={city}
+                  onChangeText={setCity}
+                  placeholder="Chennai"
+                  placeholderTextColor="#999"
+                />
+              </View>
+
+              <View style={[styles.fieldGroup, styles.halfField]}>
+                <Text style={styles.fieldLabel}>State</Text>
+                <TextInput
+                  style={styles.input}
+                  value={state}
+                  onChangeText={setState}
+                  placeholder="Tamil Nadu"
+                  placeholderTextColor="#999"
+                />
+              </View>
+            </View>
+
+            {/* Pincode */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Pincode</Text>
+              <TextInput
+                style={styles.input}
+                value={pincode}
+                onChangeText={setPincode}
+                placeholder="600061"
+                placeholderTextColor="#999"
+                keyboardType="number-pad"
+                maxLength={6}
+              />
             </View>
 
             {/* Alternate Mobile Number */}
@@ -256,12 +353,19 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         {/* Continue Button */}
         <View style={styles.footer}>
           <TouchableOpacity
-            style={styles.continueButton}
+            style={[styles.continueButton, loading && styles.continueButtonDisabled]}
             onPress={handleContinue}
             activeOpacity={0.8}
+            disabled={loading}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
-            <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
+            {loading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Text style={styles.continueButtonText}>Continue</Text>
+                <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
+              </>
+            )}
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -448,6 +552,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#00B14F',
     borderRadius: 10,
     gap: 10,
+  },
+  continueButtonDisabled: {
+    backgroundColor: '#80D8A7',
+    opacity: 0.7,
   },
   continueButtonText: {
     fontFamily: 'Poppins',

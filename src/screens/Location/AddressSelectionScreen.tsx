@@ -15,7 +15,7 @@ import * as Location from 'expo-location';
 
 interface SavedAddress {
   id: string;
-  name: string;
+  type: 'Home' | 'Work' | 'Other';
   address: string;
   city: string;
   distance?: string;
@@ -28,6 +28,7 @@ interface AddressSelectionScreenProps {
   onAddAddress?: () => void;
   onUseCurrentLocation?: () => void;
   onSelectAddress?: (address: SavedAddress) => void;
+  onSearch?: (searchQuery: string) => void;
 }
 
 export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
@@ -35,13 +36,14 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
   onAddAddress,
   onUseCurrentLocation,
   onSelectAddress,
+  onSearch,
 }) => {
   const [searchText, setSearchText] = useState('');
   const [currentLocationName, setCurrentLocationName] = useState('Getting location...');
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([
     {
       id: '1',
-      name: 'Home',
+      type: 'Home',
       address: 'Vigneshwar Nagar, Nanganallur',
       city: 'Chennai',
       distance: '0 m',
@@ -50,7 +52,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
     },
     {
       id: '2',
-      name: 'Work',
+      type: 'Work',
       address: 'Anna Nagar',
       city: 'Chennai',
       distance: '5.2 km',
@@ -104,6 +106,25 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
     }
   };
 
+  const handleSearchSubmit = () => {
+    if (searchText.trim() && onSearch) {
+      onSearch(searchText.trim());
+    }
+  };
+
+  const getIconForType = (type: 'Home' | 'Work' | 'Other') => {
+    switch (type) {
+      case 'Home':
+        return 'home';
+      case 'Work':
+        return 'work';
+      case 'Other':
+        return 'location-on';
+      default:
+        return 'location-on';
+    }
+  };
+
   const renderAddressItem = ({ item }: { item: SavedAddress }) => (
     <TouchableOpacity
       style={styles.addressItem}
@@ -111,11 +132,11 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
       activeOpacity={0.7}
     >
       <View style={styles.addressIconContainer}>
-        <MaterialIcons name="access-time" size={24} color="#999" />
+        <MaterialIcons name={getIconForType(item.type)} size={24} color="#00B14F" />
       </View>
       <View style={styles.addressInfo}>
-        <Text style={styles.addressName}>{item.name}</Text>
-        <Text style={styles.addressCity}>{item.city}</Text>
+        <Text style={styles.addressName}>{item.type}</Text>
+        <Text style={styles.addressCity}>{item.address}</Text>
       </View>
       {item.distance && (
         <Text style={styles.addressDistance}>{item.distance}</Text>
@@ -155,6 +176,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="search"
+              onSubmitEditing={handleSearchSubmit}
             />
           </View>
 
@@ -163,43 +185,26 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
             {/* Add Address */}
             <TouchableOpacity
               style={styles.optionItem}
-              onPress={onAddAddress}
+              onPress={handleUseCurrentLocation}
               activeOpacity={0.7}
             >
               <View style={styles.optionLeft}>
                 <View style={styles.optionIconContainer}>
                   <MaterialIcons name="add" size={24} color="#00B14F" />
                 </View>
-                <Text style={styles.optionText}>Add address</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color="#999" />
-            </TouchableOpacity>
-
-            {/* Divider */}
-            <View style={styles.divider} />
-
-            {/* Use Current Location */}
-            <TouchableOpacity
-              style={styles.optionItem}
-              onPress={handleUseCurrentLocation}
-              activeOpacity={0.7}
-            >
-              <View style={styles.optionLeft}>
-                <View style={styles.optionIconContainer}>
-                  <MaterialIcons name="my-location" size={24} color="#00B14F" />
-                </View>
                 <View>
-                  <Text style={styles.optionText}>Use your current location</Text>
+                  <Text style={styles.optionText}>Add address</Text>
                   <Text style={styles.optionSubtext}>{currentLocationName}</Text>
                 </View>
               </View>
+              <MaterialIcons name="chevron-right" size={24} color="#999" />
             </TouchableOpacity>
           </View>
 
-          {/* Recent Locations */}
+          {/* Saved Addresses */}
           {savedAddresses.length > 0 && (
             <View style={styles.recentSection}>
-              <Text style={styles.recentTitle}>RECENT LOCATIONS</Text>
+              <Text style={styles.recentTitle}>SAVED ADDRESSES</Text>
 
               <View style={styles.recentList}>
                 <FlatList

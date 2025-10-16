@@ -45,11 +45,13 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 interface LocationSelectionScreenProps {
   onBack?: () => void;
   onLocationConfirm?: (location: { name: string; address: string; latitude: number; longitude: number }) => void;
+  initialSearchQuery?: string;
 }
 
 export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = ({
   onBack,
   onLocationConfirm,
+  initialSearchQuery = '',
 }) => {
   const [region, setRegion] = useState<Region>({
     latitude: 12.9716, // Default to Chennai
@@ -61,13 +63,18 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const [locationName, setLocationName] = useState('Kannan Nagar');
   const [locationAddress, setLocationAddress] = useState('Vigneshwar Nagar, Nanganallur, Tamilnadu, India');
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState(initialSearchQuery);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const bottomPosition = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<any>(null);
 
   useEffect(() => {
-    getCurrentLocation();
+    // If initial search query is provided, trigger search, otherwise get current location
+    if (initialSearchQuery.trim()) {
+      handleSearch();
+    } else {
+      getCurrentLocation();
+    }
 
     // Keyboard listeners with animation
     const keyboardDidShowListener = Keyboard.addListener(
@@ -450,11 +457,12 @@ const styles = StyleSheet.create({
     fontStyle: 'normal',
     fontWeight: '400',
     fontSize: 14,
-    lineHeight: 21,
     color: '#001E1F',
     paddingVertical: 0,
     paddingHorizontal: 0,
     margin: 0,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   locationCard: {
     flexDirection: 'row',

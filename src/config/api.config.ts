@@ -29,6 +29,7 @@ export const API_CONFIG = {
     USER: {
       PROFILE: '/user/profile',
       UPDATE_PROFILE: '/user/update',
+      ADDRESS: '/user/address',
     },
     // Buyer endpoints
     BUYER: {

@@ -21,10 +21,29 @@ export interface BannerItem {
   redirect_url?: string;
 }
 
+export interface CategoryItem {
+  id: number | string;
+  name: string;
+  description?: string;
+  icon?: string;
+}
+
+export interface Restaurant {
+  id: string | number;
+  name: string;
+  cuisine: string;
+  rating: number;
+  deliveryTime: string;
+  location: string | { lat?: number; lng?: number; city?: string; locality?: string };
+  distance: string;
+  image: string;
+  isFavorite?: boolean;
+}
+
 export interface HomeData {
   promotional_banner?: BannerItem | BannerItem[];
-  nearby_restaurants?: any[];
-  whats_on_your_mind?: any[];
+  nearby_restaurants?: Restaurant[];
+  whats_on_your_mind?: CategoryItem[];
 }
 
 class HomeService {

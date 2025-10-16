@@ -30,7 +30,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   onSuccess
 }) => {
   const [otp, setOtp] = useState(['', '', '', '']);
-  const [timer, setTimer] = useState(20);
+  const [timer, setTimer] = useState(30);
   const [isLoading, setIsLoading] = useState(false);
   const inputRefs = [
     useRef<TextInput>(null),
@@ -110,14 +110,39 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
     }
   };
 
-  const handleResendCode = () => {
+  const handleResendCode = async () => {
     if (timer > 0) return;
 
-    setTimer(20);
-    setOtp(['', '', '', '']);
-    inputRefs[0].current?.focus();
-    console.log('Resending OTP');
-    // TODO: Implement resend OTP logic
+    try {
+      setIsLoading(true);
+
+      // Call the resend OTP API
+      const response = await authService.sendOtp(phoneNumber);
+
+      if (response.success) {
+        // Reset timer and OTP inputs
+        setTimer(30);
+        setOtp(['', '', '', '']);
+        inputRefs[0].current?.focus();
+
+        Alert.alert('Success', 'OTP has been resent to your phone number.');
+        console.log('OTP resent successfully');
+      } else {
+        // Show error message with better context
+        const errorMessage = response.error || 'Failed to resend OTP';
+        const detailedMessage = errorMessage.includes('Failed to generate OTP')
+          ? 'Please wait a bit longer before requesting a new OTP. Try again in a minute.'
+          : errorMessage;
+
+        Alert.alert('Error', detailedMessage);
+        console.error('Resend OTP failed:', response.error);
+      }
+    } catch (error: any) {
+      console.error('Resend OTP error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleLinkPress = (url: string) => {
@@ -179,13 +204,13 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
             <View style={styles.resendRow}>
               <TouchableOpacity
                 onPress={handleResendCode}
-                disabled={timer > 0}
+                disabled={timer > 0 || isLoading}
               >
                 <Text style={[
                   styles.resendText,
-                  timer === 0 && styles.resendTextActive
+                  timer === 0 && !isLoading && styles.resendTextActive
                 ]}>
-                  Resend Code
+                  {isLoading ? 'Sending...' : 'Resend Code'}
                 </Text>
               </TouchableOpacity>
               <Text style={styles.timerText}>0.{timer.toString().padStart(2, '0')} s</Text>

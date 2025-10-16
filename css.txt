@@ -1,102 +1,327 @@
-/* Frame 427321128 */
+/* Frame 427321117 */
 
 /* Auto layout */
 display: flex;
 flex-direction: column;
-align-items: flex-start;
-padding: 14px;
-gap: 11px;
-isolation: isolate;
+align-items: center;
+padding: 20px;
+gap: 10px;
 
 position: absolute;
+width: 440px;
+height: 572px;
+left: 0px;
+bottom: 0px;
+
+background: #FFFFFF;
+box-shadow: 0px -6px 43px rgba(0, 0, 0, 0.25);
+border-radius: 30px 30px 0px 0px;
+
+
+/* Frame 427321113 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+justify-content: center;
+align-items: flex-start;
+padding: 0px;
+gap: 24px;
+
 width: 400px;
-height: 149px;
-left: 20px;
-top: 208px;
-
-background: #00BEC8;
-border-radius: 20px;
-
-
-/* Craving Something Delicious? */
-
-width: 294px;
-height: 29px;
-
-font-family: 'Poppins';
-font-style: normal;
-font-weight: 700;
-font-size: 19px;
-line-height: 28px;
-/* identical to box height */
-
-color: #FFFFFF;
+height: 532px;
 
 
 /* Inside auto layout */
 flex: none;
 order: 0;
 flex-grow: 0;
-z-index: 0;
 
 
-/* Get your favorite meals delivered hot & fast—right to your doorstep. */
+/* Frame 427321121 */
 
-width: 239px;
-height: 42px;
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: flex-start;
+padding: 0px;
+gap: 24px;
+
+width: 400px;
+height: 83px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Frame 427321120 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 0px;
+gap: 2px;
+
+width: 326px;
+height: 83px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 1;
+
+
+/* Frame 427321119 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 0px;
+gap: 10px;
+
+width: 234px;
+height: 39px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* material-symbols-light:location-on */
+
+width: 28px;
+height: 28px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 20.43%;
+right: 20.43%;
+top: 12.5%;
+bottom: 12.42%;
+
+background: #00B14F;
+
+
+/* Kannan Nagar */
+
+width: 196px;
+height: 39px;
 
 font-family: 'Poppins';
 font-style: normal;
-font-weight: 500;
-font-size: 14px;
-line-height: 21px;
+font-weight: 700;
+font-size: 26px;
+line-height: 39px;
+/* identical to box height */
 
-color: #FFFFFF;
+color: #001E1F;
 
 
 /* Inside auto layout */
 flex: none;
 order: 1;
 flex-grow: 0;
-z-index: 1;
 
 
-/* Frame 427321123 */
+/* Vigneshwar Nagar, Nanganallur, Tamilnadu, India */
+
+width: 282px;
+height: 42px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+
+color: #001E1F;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321110 */
 
 /* Auto layout */
 display: flex;
 flex-direction: row;
 justify-content: center;
 align-items: center;
-padding: 4px 15px;
+padding: 19px 20px;
 gap: 10px;
 
-width: 103px;
-height: 28px;
+width: 50px;
+height: 50px;
 
-background: #FFFFFF;
-border-radius: 13px;
+background: rgba(0, 128, 74, 0.2);
+border-radius: 10px;
 
 /* Inside auto layout */
 flex: none;
-order: 2;
+order: 1;
 flex-grow: 0;
-z-index: 2;
 
 
-/* Order Now! */
+/* mage:location-fill */
 
-width: 73px;
-height: 20px;
+width: 24px;
+height: 24px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 7.29%;
+right: 7.29%;
+top: 7.2%;
+bottom: 7.39%;
+
+background: #00B14F;
+
+
+/* Vector */
+
+position: absolute;
+left: 30.83%;
+right: 31.33%;
+top: 31.03%;
+bottom: 31.14%;
+
+background: #00B14F;
+
+
+/* Frame 427321111 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 0px;
+gap: 9px;
+
+width: 400px;
+height: 80px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Frame 427321267 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: space-between;
+align-items: flex-start;
+padding: 0px;
+gap: 9px;
+
+width: 400px;
+height: 21px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* House / Flat No */
+
+margin: 0 auto;
+width: 106px;
+height: 21px;
 
 font-family: 'Poppins';
 font-style: normal;
 font-weight: 400;
-font-size: 13px;
-line-height: 20px;
+font-size: 14px;
+line-height: 21px;
 /* identical to box height */
 
-color: #000000;
+color: #001E1F;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Frame 427321125 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 0px;
+gap: 4px;
+
+margin: 0 auto;
+width: 144px;
+height: 21px;
+
+border-radius: 0px 0px 6px 6px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Make is as default */
+
+width: 119px;
+height: 9px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 13px;
+line-height: 20px;
+/* leading-trim and text-edge are draft CSS properties.
+
+Read more: https://drafts.csswg.org/css-inline-3/#leading-trim
+*/
+leading-trim: both;
+text-edge: cap;
+text-align: center;
+
+color: rgba(0, 0, 0, 0.8);
 
 opacity: 0.85;
 
@@ -106,55 +331,649 @@ order: 0;
 flex-grow: 0;
 
 
-/* Ellipse 1 */
+/* system-uicons:checkbox-empty */
+
+width: 21px;
+height: 21px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Vector */
 
 position: absolute;
-width: 188px;
-height: 99px;
-left: 249px;
-top: 75px;
+left: 16.67%;
+right: 16.67%;
+top: 16.67%;
+bottom: 16.67%;
 
-background: #000000;
-opacity: 0.5;
-filter: blur(35.5px);
+border: 1px solid rgba(0, 0, 0, 0.8);
+
+
+/* Frame 427321110 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 0px 20px;
+gap: 10px;
+
+width: 400px;
+height: 50px;
+
+background: #F7F7F7;
+border-radius: 10px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* F! */
+
+width: 12px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #001E1F;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Frame 427321236 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: flex-start;
+padding: 0px;
+gap: 20px;
+
+width: 400px;
+height: 80px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Frame 427321123 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 0px;
+gap: 9px;
+
+width: 190px;
+height: 80px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 1;
+
+
+/* Building / Street */
+
+width: 190px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #001E1F;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Frame 427321110 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 0px 20px;
+gap: 10px;
+
+width: 190px;
+height: 50px;
+
+background: #F7F7F7;
+border-radius: 10px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Jeyalakshmi Appart... */
+
+width: 149px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #001E1F;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Frame 427321118 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 0px;
+gap: 9px;
+
+width: 190px;
+height: 80px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 1;
+
+
+/* Locality */
+
+width: 190px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #001E1F;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Frame 427321110 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 19px 20px;
+gap: 10px;
+
+width: 190px;
+height: 50px;
+
+background: #F7F7F7;
+border-radius: 10px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Nanganallur */
+
+width: 87px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #001E1F;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Frame 427321237 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 0px;
+gap: 9px;
+
+width: 400px;
+height: 80px;
+
 
 /* Inside auto layout */
 flex: none;
 order: 3;
+align-self: stretch;
 flex-grow: 0;
-z-index: 3;
 
 
-/* pngwing.com 1 */
+/* Alternate Mobile number */
 
-position: absolute;
-width: 188px;
-height: 141px;
-left: 249px;
-top: 35px;
+width: 400px;
+height: 21px;
 
-background: url(pngwing.com.png);
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #001E1F;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Frame 427321110 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 0px 20px;
+gap: 10px;
+
+width: 400px;
+height: 50px;
+
+background: #F7F7F7;
+border-radius: 10px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* +91 9876543210 */
+
+width: 108px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #001E1F;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Frame 427321122 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 0px;
+gap: 9px;
+
+width: 400px;
+height: 29px;
+
 
 /* Inside auto layout */
 flex: none;
 order: 4;
+align-self: stretch;
 flex-grow: 0;
-z-index: 4;
 
 
-/* Ellipse 2 */
+/* Frame 427321126 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: flex-start;
+padding: 0px;
+gap: 9px;
+
+width: 267px;
+height: 29px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Frame 427321123 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px 12px;
+gap: 4px;
+
+width: 86px;
+height: 29px;
+
+background: #001E1F;
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* material-symbols:home-rounded */
+
+width: 16px;
+height: 16px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
 
 position: absolute;
-width: 96px;
-height: 96px;
-left: -16px;
-top: 70px;
+left: 16.67%;
+right: 16.67%;
+top: 14.58%;
+bottom: 12.5%;
 
 background: #FFFFFF;
-opacity: 0.2;
+
+
+/* Home */
+
+width: 42px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #FFFFFF;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321124 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px 12px;
+gap: 4px;
+
+width: 80px;
+height: 29px;
+
+background: rgba(0, 30, 31, 0.05);
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* material-symbols-light:work */
+
+width: 16px;
+height: 16px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 12.5%;
+right: 12.5%;
+top: 16.67%;
+bottom: 16.67%;
+
+background: #001E1F;
+
+
+/* Work */
+
+width: 36px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #001E1F;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321125 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px 12px;
+gap: 4px;
+
+width: 83px;
+height: 29px;
+
+background: rgba(0, 30, 31, 0.05);
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+flex-grow: 0;
+
+
+/* tdesign:location-filled */
+
+width: 16px;
+height: 16px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 12.5%;
+right: 12.5%;
+top: 4.17%;
+bottom: 3.27%;
+
+background: #001E1F;
+
+
+/* Other */
+
+width: 39px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #001E1F;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321115 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 19px 20px;
+gap: 10px;
+
+width: 400px;
+height: 60px;
+
+background: #00B14F;
+border-radius: 10px;
 
 /* Inside auto layout */
 flex: none;
 order: 5;
+align-self: stretch;
 flex-grow: 0;
-z-index: 5;
+
+
+/* Continue */
+
+width: 75px;
+height: 24px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 600;
+font-size: 16px;
+line-height: 24px;
+/* identical to box height */
+
+color: #FFFFFF;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* tabler:arrow-right */
+
+width: 24px;
+height: 24px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 20.83%;
+right: 20.83%;
+top: 25%;
+bottom: 25%;
+
+border: 2px solid #FFFFFF;

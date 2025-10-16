@@ -34,6 +34,12 @@ class StorageService {
    */
   async saveTokens(tokenData: TokenData): Promise<void> {
     try {
+      // Validate tokens are not undefined or null
+      if (!tokenData.accessToken || !tokenData.refreshToken) {
+        console.error('[StorageService] Cannot save undefined tokens');
+        throw new Error('Access token and refresh token are required');
+      }
+
       const expiryTime = Date.now() + tokenData.expiresIn * 1000;
 
       await AsyncStorage.multiSet([
