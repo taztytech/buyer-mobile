@@ -1,20 +1,33 @@
 import React from 'react';
+import { View, StyleSheet, Animated, Dimensions } from 'react-native';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
+import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
+import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
+import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 // Keep splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'addressSelection' | 'locationSelection'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [selectedLocation, setSelectedLocation] = React.useState({ name: 'Chennai', address: 'Vigneshwar Nagar, Nanganallur, Tamilnadu,...' });
+
+  const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
+  const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const addressScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
   const [fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
@@ -71,6 +84,146 @@ export default function App() {
     setCurrentScreen('login');
   };
 
+  const handleNavigateToProfile = () => {
+    setCurrentScreen('profile');
+
+    // Slide both screens simultaneously
+    Animated.parallel([
+      Animated.timing(homeScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(profileScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackToHome = () => {
+    // Slide both screens back
+    Animated.parallel([
+      Animated.timing(homeScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(profileScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('home');
+    });
+  };
+
+  // Address Selection Navigation
+  const handleNavigateToAddressSelection = () => {
+    setCurrentScreen('addressSelection');
+
+    Animated.parallel([
+      Animated.timing(homeScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(addressScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromAddressSelection = () => {
+    Animated.parallel([
+      Animated.timing(homeScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(addressScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('home');
+    });
+  };
+
+  // Location Selection Navigation
+  const handleNavigateToLocationSelection = (query?: string) => {
+    if (query) {
+      setSearchQuery(query);
+    }
+    setCurrentScreen('locationSelection');
+
+    Animated.parallel([
+      Animated.timing(addressScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(locationScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromLocationSelection = () => {
+    Animated.parallel([
+      Animated.timing(addressScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(locationScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('addressSelection');
+      setSearchQuery('');
+    });
+  };
+
+  const handleLocationConfirm = (location: any) => {
+    // Update selected location
+    setSelectedLocation({
+      name: location.name || location.locationName,
+      address: location.locationAddress || location.address,
+    });
+
+    // Slide both address and location screens back to home
+    Animated.parallel([
+      Animated.timing(homeScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(addressScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(locationScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('home');
+      setSearchQuery('');
+    });
+  };
+
   if (!fontsLoaded || isCheckingAuth) {
     return null;
   }
@@ -86,8 +239,126 @@ export default function App() {
           onSuccess={handleOtpSuccess}
         />
       ) : (
-        <HomeScreen onLogout={handleLogout} />
+        <View style={styles.container}>
+          {/* Keep HomeScreen mounted to preserve state */}
+          <Animated.View
+            style={[
+              styles.homeScreenContainer,
+              {
+                transform: [{ translateX: homeScreenSlide }],
+              },
+            ]}
+          >
+            <HomeScreen
+              onLogout={handleLogout}
+              onNavigateToProfile={handleNavigateToProfile}
+              onNavigateToAddressSelection={handleNavigateToAddressSelection}
+              selectedLocation={selectedLocation}
+            />
+          </Animated.View>
+
+          {/* Always render ProfileScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.profileOverlay,
+              {
+                transform: [{ translateX: profileScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'profile' ? 'auto' : 'none'}
+          >
+            <ProfileScreen
+              onBack={handleBackToHome}
+              onLogout={handleLogout}
+              onEditProfile={() => console.log('Edit Profile')}
+              onMyOrders={() => console.log('My Orders')}
+              onMyAddresses={() => console.log('My Addresses')}
+              onFavorites={() => console.log('Favorites')}
+              onChatWithUs={() => console.log('Chat With Us')}
+              onPrivacyPolicy={() => console.log('Privacy Policy')}
+              onTermsConditions={() => console.log('Terms & Conditions')}
+            />
+          </Animated.View>
+
+          {/* Always render AddressSelectionScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.addressOverlay,
+              {
+                transform: [{ translateX: addressScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'addressSelection' || currentScreen === 'locationSelection' ? 'auto' : 'none'}
+          >
+            <AddressSelectionScreen
+              onBack={handleBackFromAddressSelection}
+              onUseCurrentLocation={() => handleNavigateToLocationSelection()}
+              onSearch={(query) => handleNavigateToLocationSelection(query)}
+              onSelectAddress={(address) => {
+                setSelectedLocation({
+                  name: address.type,
+                  address: `${address.address}, ${address.city}`,
+                });
+                handleBackFromAddressSelection();
+              }}
+            />
+          </Animated.View>
+
+          {/* Always render LocationSelectionScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.locationOverlay,
+              {
+                transform: [{ translateX: locationScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'locationSelection' ? 'auto' : 'none'}
+          >
+            <LocationSelectionScreen
+              initialSearchQuery={searchQuery}
+              onBack={handleBackFromLocationSelection}
+              onLocationConfirm={handleLocationConfirm}
+            />
+          </Animated.View>
+        </View>
       )}
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  homeScreenContainer: {
+    flex: 1,
+  },
+  profileOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+    backgroundColor: '#F3FFFA',
+  },
+  addressOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 2,
+    backgroundColor: '#F5F5F5',
+  },
+  locationOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 3,
+    backgroundColor: '#FFFFFF',
+  },
+});

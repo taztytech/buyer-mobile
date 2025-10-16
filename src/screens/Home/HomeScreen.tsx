@@ -6,8 +6,7 @@ import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
 import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/home.service';
 import { RestaurantCard } from '@/components/RestaurantCard';
-import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
-import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
+import { Shimmer } from '@/components/Shimmer';
 import { storageService } from '@/services/storage.service';
 import * as Location from 'expo-location';
 import { BlurView } from 'expo-blur';
@@ -17,6 +16,9 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface HomeScreenProps {
   onLogout?: () => void;
+  onNavigateToProfile?: () => void;
+  onNavigateToAddressSelection?: () => void;
+  selectedLocation?: { name: string; address: string };
 }
 
 interface CarouselItem {
@@ -120,22 +122,110 @@ const fallbackRestaurantData: Restaurant[] = [
   },
 ];
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({
+  onLogout,
+  onNavigateToProfile,
+  onNavigateToAddressSelection,
+  selectedLocation: externalSelectedLocation
+}) => {
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [showLocationPopup, setShowLocationPopup] = React.useState(true);
   const [showVegModePopup, setShowVegModePopup] = React.useState(false);
-  const [showLocationSelection, setShowLocationSelection] = React.useState(false);
-  const [showAddAddressMap, setShowAddAddressMap] = React.useState(false);
-  const [searchQuery, setSearchQuery] = React.useState<string>('');
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [carouselData, setCarouselData] = React.useState<CarouselItem[]>([]);
   const [categoryData, setCategoryData] = React.useState<CategoryItem[]>([]);
   const [restaurantData, setRestaurantData] = React.useState<Restaurant[]>([]);
   const [isLoadingBanners, setIsLoadingBanners] = React.useState(true);
+  const [isLoadingCategories, setIsLoadingCategories] = React.useState(true);
+  const [isLoadingRestaurants, setIsLoadingRestaurants] = React.useState(true);
+  const [isLoadingLocation, setIsLoadingLocation] = React.useState(true);
+
+  // Track image loading states
+  const [loadedBannerImages, setLoadedBannerImages] = React.useState<Set<string>>(new Set());
+  const [loadedCategoryImages, setLoadedCategoryImages] = React.useState<Set<string>>(new Set());
+  const [loadedRestaurantImages, setLoadedRestaurantImages] = React.useState<Set<string>>(new Set());
+
+  // Combined loading states (API + Images)
+  const [showBannerShimmer, setShowBannerShimmer] = React.useState(true);
+  const [showCategoryShimmer, setShowCategoryShimmer] = React.useState(true);
+  const [showRestaurantShimmer, setShowRestaurantShimmer] = React.useState(true);
   const [isVegMode, setIsVegMode] = React.useState(false);
   const [tempVegSelection, setTempVegSelection] = React.useState<'all' | 'veg'>('all');
-  const [selectedLocation, setSelectedLocation] = React.useState({ name: 'Chennai', address: 'Vigneshwar Nagar, Nanganallur, Tamilnadu,...' });
+  const [selectedLocation, setSelectedLocation] = React.useState(externalSelectedLocation || { name: 'Chennai', address: 'Vigneshwar Nagar, Nanganallur, Tamilnadu,...' });
   const flatListRef = React.useRef<FlatList>(null);
+
+  // Update local state when external selectedLocation changes
+  React.useEffect(() => {
+    if (externalSelectedLocation) {
+      setSelectedLocation(externalSelectedLocation);
+    }
+  }, [externalSelectedLocation]);
+
+  // Check if all banner images are loaded
+  React.useEffect(() => {
+    if (!isLoadingBanners && carouselData.length > 0) {
+      // Check if all banner images with URLs are loaded (or if there are no images with URLs)
+      const bannersWithImages = carouselData.filter(item => item.imageUrl);
+      const allImagesLoaded = bannersWithImages.length === 0 ||
+                              bannersWithImages.every(item => loadedBannerImages.has(item.id));
+
+      if (allImagesLoaded) {
+        setShowBannerShimmer(false);
+      } else {
+        // Fallback: Hide shimmer after 3 seconds even if images haven't loaded
+        const timeout = setTimeout(() => {
+          console.log('[Shimmer] Banner timeout - hiding shimmer');
+          setShowBannerShimmer(false);
+        }, 3000);
+        return () => clearTimeout(timeout);
+      }
+    } else if (!isLoadingBanners && carouselData.length === 0) {
+      // No data received, hide shimmer immediately
+      setShowBannerShimmer(false);
+    }
+  }, [isLoadingBanners, carouselData, loadedBannerImages]);
+
+  // Check if all category images are loaded
+  React.useEffect(() => {
+    if (!isLoadingCategories && categoryData.length > 0) {
+      const allImagesLoaded = categoryData.every(item => loadedCategoryImages.has(item.id.toString()));
+
+      if (allImagesLoaded) {
+        setShowCategoryShimmer(false);
+      } else {
+        // Fallback: Hide shimmer after 3 seconds even if images haven't loaded
+        const timeout = setTimeout(() => {
+          console.log('[Shimmer] Category timeout - hiding shimmer');
+          setShowCategoryShimmer(false);
+        }, 3000);
+        return () => clearTimeout(timeout);
+      }
+    } else if (!isLoadingCategories && categoryData.length === 0) {
+      // No data received, hide shimmer immediately
+      setShowCategoryShimmer(false);
+    }
+  }, [isLoadingCategories, categoryData, loadedCategoryImages]);
+
+  // Check if all restaurant images are loaded
+  React.useEffect(() => {
+    if (!isLoadingRestaurants && restaurantData.length > 0) {
+      const allImagesLoaded = restaurantData.every(item => loadedRestaurantImages.has(item.id.toString()));
+
+      if (allImagesLoaded) {
+        setShowRestaurantShimmer(false);
+      } else {
+        // Fallback: Hide shimmer after 3 seconds even if images haven't loaded
+        const timeout = setTimeout(() => {
+          console.log('[Shimmer] Restaurant timeout - hiding shimmer');
+          setShowRestaurantShimmer(false);
+        }, 3000);
+        return () => clearTimeout(timeout);
+      }
+    } else if (!isLoadingRestaurants && restaurantData.length === 0) {
+      // No data received, hide shimmer immediately
+      setShowRestaurantShimmer(false);
+    }
+  }, [isLoadingRestaurants, restaurantData, loadedRestaurantImages]);
 
   const handleAllowLocation = async () => {
     try {
@@ -196,6 +286,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
         }
 
         setShowLocationPopup(false);
+        setIsLoadingLocation(false);
       } else {
         console.log('[Location] Permission denied or not granted:', finalStatus);
         Alert.alert(
@@ -228,11 +319,46 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
     setShowVegModePopup(false);
   };
 
+  // Mark local (bundled) images as loaded immediately
+  React.useEffect(() => {
+    if (categoryData.length > 0) {
+      const localImageIds = categoryData
+        .filter(item => typeof item.icon !== 'string')
+        .map(item => item.id.toString());
+
+      if (localImageIds.length > 0) {
+        console.log('[Category] Marking local images as loaded:', localImageIds);
+        setLoadedCategoryImages(prev => {
+          const newSet = new Set(prev);
+          localImageIds.forEach(id => newSet.add(id));
+          return newSet;
+        });
+      }
+    }
+
+    if (restaurantData.length > 0) {
+      const localImageIds = restaurantData
+        .filter(item => typeof item.image !== 'string')
+        .map(item => item.id.toString());
+
+      if (localImageIds.length > 0) {
+        console.log('[Restaurant] Marking local images as loaded:', localImageIds);
+        setLoadedRestaurantImages(prev => {
+          const newSet = new Set(prev);
+          localImageIds.forEach(id => newSet.add(id));
+          return newSet;
+        });
+      }
+    }
+  }, [categoryData, restaurantData]);
+
   // Fetch home data on component mount
   React.useEffect(() => {
     const fetchHomeData = async () => {
       try {
         setIsLoadingBanners(true);
+        setIsLoadingCategories(true);
+        setIsLoadingRestaurants(true);
 
         const response = await homeService.getHomeData();
 
@@ -308,6 +434,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
         setRestaurantData(fallbackRestaurantData);
       } finally {
         setIsLoadingBanners(false);
+        setIsLoadingCategories(false);
+        setIsLoadingRestaurants(false);
       }
     };
 
@@ -367,6 +495,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
                   style={styles.adImageMasked}
                   resizeMode="cover"
                   testID={`banner-image-${item.id}`}
+                  onLoad={() => {
+                    setLoadedBannerImages(prev => new Set(prev).add(item.id));
+                  }}
                 />
               </View>
             </View>
@@ -395,6 +526,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
             style={styles.categoryImage}
             resizeMode="contain"
             testID={`category-image-${item.id}`}
+            onLoad={() => {
+              console.log('[Category] Image loaded:', item.name);
+              setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
+            }}
+            onError={(error) => {
+              console.error('[Category] Image load error:', item.name, error.nativeEvent.error);
+              // Mark as loaded anyway to not block shimmer
+              setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
+            }}
           />
         </View>
         <Text style={styles.categoryName} testID={`category-name-${item.id}`}>
@@ -420,68 +560,101 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
         <View style={styles.locationSection} testID="location-section">
           <TouchableOpacity
             style={styles.locationInfo}
-            onPress={() => setShowLocationSelection(true)}
+            onPress={onNavigateToAddressSelection}
             activeOpacity={0.7}
           >
-            {/* City Name with Icon */}
-            <View style={styles.cityRow}>
-              <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
-              <Text style={styles.cityName} testID="city-name">{selectedLocation.name}</Text>
-              <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
-            </View>
-            {/* Address */}
-            <Text style={styles.addressText} testID="address-text">
-              {selectedLocation.address}
-            </Text>
+            {isLoadingLocation ? (
+              <>
+                {/* City Name with Icon - Shimmer */}
+                <View style={styles.cityRow}>
+                  <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
+                  <Shimmer width={120} height={18} borderRadius={8} />
+                  <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                </View>
+                {/* Address - Shimmer */}
+                <Shimmer width={220} height={14} borderRadius={6} style={{ marginTop: 4 }} />
+              </>
+            ) : (
+              <>
+                {/* City Name with Icon */}
+                <View style={styles.cityRow}>
+                  <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
+                  <Text style={styles.cityName}>{selectedLocation.name}</Text>
+                  <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                </View>
+                {/* Address */}
+                <Text style={styles.addressText}>{selectedLocation.address}</Text>
+              </>
+            )}
           </TouchableOpacity>
 
           {/* Profile Avatar */}
-          <TouchableOpacity
-            style={styles.profileButton}
-            onPress={handleLogout}
-            testID="profile-button"
-          >
-            <View style={styles.profileAvatar}>
-              <MaterialIcons name="person" size={24} color="#00B14F" />
+          {isLoadingLocation ? (
+            <View style={styles.profileButton}>
+              <Shimmer width={50} height={50} borderRadius={25} />
             </View>
-          </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.profileButton}
+              onPress={onNavigateToProfile}
+              testID="profile-button"
+            >
+              <View style={styles.profileAvatar}>
+                <MaterialIcons name="person" size={24} color="#00B14F" />
+              </View>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Search Bar and VEG Mode Toggle */}
         <View style={styles.searchSection}>
-          <LinearGradient
-            colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.searchBar}
-          >
-            <MaterialIcons name="search" size={24} color="#FFFFFF" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search Restaurants & foods.."
-              placeholderTextColor="rgba(255, 255, 255, 0.7)"
-            />
-          </LinearGradient>
+          {isLoadingLocation ? (
+            <>
+              {/* Search Bar Shimmer */}
+              <View style={{ flex: 1 }}>
+                <Shimmer width="100%" height={60} borderRadius={10} />
+              </View>
 
-          {/* VEG Mode Toggle */}
-          <TouchableOpacity
-            style={styles.vegModeContainer}
-            onPress={handleVegModeToggle}
-            testID="veg-mode-toggle"
-          >
-            <Text style={styles.vegModeLabel}>VEG{'\n'}MODE</Text>
-            <View style={[styles.vegToggle, isVegMode && styles.vegToggleActive]}>
-              <View style={[styles.vegToggleThumb, isVegMode && styles.vegToggleThumbActive]} />
-            </View>
-          </TouchableOpacity>
+              {/* VEG Mode Shimmer */}
+              <Shimmer width={46} height={60} borderRadius={10} />
+            </>
+          ) : (
+            <>
+              <LinearGradient
+                colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.searchBar}
+              >
+                <MaterialIcons name="search" size={24} color="#FFFFFF" />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search Restaurants & foods.."
+                  placeholderTextColor="rgba(255, 255, 255, 0.7)"
+                />
+              </LinearGradient>
+
+              {/* VEG Mode Toggle */}
+              <TouchableOpacity
+                style={styles.vegModeContainer}
+                onPress={handleVegModeToggle}
+                testID="veg-mode-toggle"
+              >
+                <Text style={styles.vegModeLabel}>VEG{'\n'}MODE</Text>
+                <View style={[styles.vegToggle, isVegMode && styles.vegToggleActive]}>
+                  <View style={[styles.vegToggleThumb, isVegMode && styles.vegToggleThumbActive]} />
+                </View>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </ImageBackground>
 
       {/* Ad Banner Carousel */}
       <View style={styles.carouselContainer}>
-        {isLoadingBanners ? (
+        {showBannerShimmer ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
+            <Shimmer width="100%" height={149} borderRadius={20} backgroundColor="#00BEC8" />
           </View>
         ) : (
           <>
@@ -540,15 +713,35 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
 
       {/* Category List */}
       <View style={styles.categoryListContainer}>
-        <FlatList
-          data={categoryData}
-          renderItem={renderCategoryItem}
-          keyExtractor={(item) => item.id.toString()}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryListContent}
-          testID="category-list"
-        />
+        {showCategoryShimmer ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryListContent}
+          >
+            {/* Render 6 shimmer category items */}
+            {[1, 2, 3, 4, 5, 6].map((item) => (
+              <View key={item} style={styles.categoryItem}>
+                {/* Image Shimmer */}
+                <View style={styles.categoryImageContainer}>
+                  <Shimmer width={74} height={59} borderRadius={12} backgroundColor="#E8E8E8" />
+                </View>
+                {/* Text Shimmer */}
+                <Shimmer width={60} height={12} borderRadius={6} backgroundColor="#E8E8E8" />
+              </View>
+            ))}
+          </ScrollView>
+        ) : (
+          <FlatList
+            data={categoryData}
+            renderItem={renderCategoryItem}
+            keyExtractor={(item) => item.id.toString()}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryListContent}
+            testID="category-list"
+          />
+        )}
       </View>
 
       {/* Restaurants Near You Section */}
@@ -570,57 +763,112 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
 
       {/* Filter Buttons */}
       <View style={styles.filterContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScrollContent}
-        >
-          <TouchableOpacity style={styles.filterButtonActive} testID="filter-filters">
-            <MaterialIcons name="filter-list" size={16} color="#00B14F" />
-            <Text style={styles.filterTextActive}>Filters</Text>
-          </TouchableOpacity>
+        {showRestaurantShimmer ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterScrollContent}
+          >
+            {/* Render 5 shimmer filter buttons */}
+            <Shimmer width={80} height={29} borderRadius={13} backgroundColor="#E8E8E8" />
+            <Shimmer width={70} height={29} borderRadius={13} backgroundColor="#E8E8E8" />
+            <Shimmer width={60} height={29} borderRadius={13} backgroundColor="#E8E8E8" />
+            <Shimmer width={50} height={29} borderRadius={13} backgroundColor="#E8E8E8" />
+            <Shimmer width={120} height={29} borderRadius={13} backgroundColor="#E8E8E8" />
+          </ScrollView>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterScrollContent}
+          >
+            <TouchableOpacity style={styles.filterButtonActive} testID="filter-filters">
+              <MaterialIcons name="filter-list" size={16} color="#00B14F" />
+              <Text style={styles.filterTextActive}>Filters</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.filterButtonInactive} testID="filter-sort">
-            <Text style={styles.filterTextInactive}>Sort By</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.filterButtonInactive} testID="filter-sort">
+              <Text style={styles.filterTextInactive}>Sort By</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.filterButtonInactive} testID="filter-price">
-            <Text style={styles.filterTextInactive}>Price</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.filterButtonInactive} testID="filter-price">
+              <Text style={styles.filterTextInactive}>Price</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.filterButtonInactive} testID="filter-veg">
-            <Text style={styles.filterTextInactive}>Veg</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.filterButtonInactive} testID="filter-veg">
+              <Text style={styles.filterTextInactive}>Veg</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.filterButtonInactive} testID="filter-delivery">
-            <Text style={styles.filterTextInactive}>10 Mins Delivery</Text>
-          </TouchableOpacity>
-        </ScrollView>
+            <TouchableOpacity style={styles.filterButtonInactive} testID="filter-delivery">
+              <Text style={styles.filterTextInactive}>10 Mins Delivery</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
       </View>
 
       {/* Restaurant List */}
       <View style={styles.restaurantListContainer}>
-        {restaurantData.map((restaurant) => (
-          <View key={restaurant.id} style={styles.restaurantCardWrapper}>
-            <RestaurantCard
-              restaurant={restaurant}
-              onPress={() => {
-                // Handle restaurant card press
-                console.log('Restaurant pressed:', restaurant.name);
-              }}
-              onFavoriteToggle={() => {
-                // Handle favorite toggle
-                setRestaurantData(prev =>
-                  prev.map(r =>
-                    r.id === restaurant.id
-                      ? { ...r, isFavorite: !r.isFavorite }
-                      : r
-                  )
-                );
-              }}
-            />
-          </View>
-        ))}
+        {showRestaurantShimmer ? (
+          <>
+            {/* Shimmer for 2 restaurant cards */}
+            {[1, 2].map((item) => (
+              <View key={item} style={styles.restaurantCardWrapper}>
+                <View style={styles.restaurantCardShimmer}>
+                  {/* Left Side - Image Shimmer */}
+                  <Shimmer width={166} height={153} borderRadius={20} backgroundColor="#E8E8E8" style={styles.restaurantImageShimmer} />
+
+                  {/* Right Side - Details Shimmer */}
+                  <View style={styles.restaurantDetailsShimmer}>
+                    {/* Restaurant Name */}
+                    <Shimmer width="80%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
+
+                    {/* Cuisine */}
+                    <Shimmer width="60%" height={12} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 12 }} />
+
+                    {/* Rating and Time */}
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                      <Shimmer width={47} height={22} borderRadius={13} backgroundColor="#E8E8E8" />
+                      <Shimmer width={86} height={22} borderRadius={13} backgroundColor="#E8E8E8" />
+                    </View>
+
+                    {/* Location and Distance */}
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <Shimmer width="50%" height={12} borderRadius={4} backgroundColor="#E8E8E8" />
+                      <Shimmer width="30%" height={12} borderRadius={4} backgroundColor="#E8E8E8" />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </>
+        ) : (
+          <>
+            {restaurantData.map((restaurant) => (
+              <View key={restaurant.id} style={styles.restaurantCardWrapper}>
+                <RestaurantCard
+                  restaurant={restaurant}
+                  onPress={() => {
+                    // Handle restaurant card press
+                    console.log('Restaurant pressed:', restaurant.name);
+                  }}
+                  onFavoriteToggle={() => {
+                    // Handle favorite toggle
+                    setRestaurantData(prev =>
+                      prev.map(r =>
+                        r.id === restaurant.id
+                          ? { ...r, isFavorite: !r.isFavorite }
+                          : r
+                      )
+                    );
+                  }}
+                  onImageLoad={() => {
+                    setLoadedRestaurantImages(prev => new Set(prev).add(restaurant.id.toString()));
+                  }}
+                />
+              </View>
+            ))}
+          </>
+        )}
       </View>
 
       {/* Location Permission Modal */}
@@ -722,106 +970,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
         </TouchableOpacity>
       </Modal>
 
-      {/* Address Selection Modal */}
-      <Modal
-        visible={showLocationSelection}
-        transparent={false}
-        animationType="slide"
-        onRequestClose={() => setShowLocationSelection(false)}
-      >
-        <AddressSelectionScreen
-          onBack={() => setShowLocationSelection(false)}
-          onAddAddress={() => {
-            // Will be implemented with new page instructions
-            console.log('Add address clicked - awaiting new page implementation');
-          }}
-          onUseCurrentLocation={() => {
-            setSearchQuery(''); // Clear search query when using current location
-            setShowLocationSelection(false);
-            setShowAddAddressMap(true);
-          }}
-          onSelectAddress={(address) => {
-            setSelectedLocation({
-              name: address.name,
-              address: `${address.address}, ${address.city}`,
-            });
-            setShowLocationSelection(false);
-          }}
-          onSearch={(query) => {
-            setSearchQuery(query);
-            setShowLocationSelection(false);
-            setShowAddAddressMap(true);
-          }}
-        />
-      </Modal>
-
-      {/* Add Address Map Modal */}
-      <Modal
-        visible={showAddAddressMap}
-        transparent={false}
-        animationType="slide"
-        onRequestClose={() => setShowAddAddressMap(false)}
-      >
-        <LocationSelectionScreen
-          initialSearchQuery={searchQuery}
-          onBack={() => {
-            setShowAddAddressMap(false);
-            setShowLocationSelection(true);
-            setSearchQuery(''); // Clear search query when going back
-          }}
-          onLocationConfirm={async (location) => {
-            console.log('Complete address data:', {
-              tag: location.name,
-              locationName: location.locationName,
-              locationAddress: location.locationAddress,
-              houseNo: location.houseNo,
-              building: location.building,
-              locality: location.locality,
-              alternateMobile: location.alternateMobile,
-              isDefault: location.isDefault,
-              latitude: location.latitude,
-              longitude: location.longitude,
-            });
-
-            // Update selected location for display
-            setSelectedLocation({
-              name: location.name || location.locationName,
-              address: location.locationAddress,
-            });
-
-            // TODO: Save complete address to backend
-            // Example API call structure:
-            // try {
-            //   const response = await fetch('YOUR_API_ENDPOINT/addresses', {
-            //     method: 'POST',
-            //     headers: {
-            //       'Content-Type': 'application/json',
-            //       'Authorization': `Bearer ${userToken}`,
-            //     },
-            //     body: JSON.stringify({
-            //       tag: location.name,
-            //       locationName: location.locationName,
-            //       locationAddress: location.locationAddress,
-            //       houseNo: location.houseNo,
-            //       building: location.building,
-            //       locality: location.locality,
-            //       alternateMobile: location.alternateMobile,
-            //       isDefault: location.isDefault,
-            //       latitude: location.latitude,
-            //       longitude: location.longitude,
-            //     }),
-            //   });
-            //   const data = await response.json();
-            //   console.log('Address saved to backend:', data);
-            // } catch (error) {
-            //   console.error('Error saving address:', error);
-            // }
-
-            setShowAddAddressMap(false);
-            setSearchQuery(''); // Clear search query after saving address
-          }}
-        />
-      </Modal>
     </ScrollView>
     </SafeAreaView>
   );
@@ -986,7 +1134,7 @@ const styles = StyleSheet.create({
     height: 149,
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 20,
+    paddingHorizontal: 20,
   },
   carouselSlide: {
     width: SCREEN_WIDTH,
@@ -1261,6 +1409,30 @@ const styles = StyleSheet.create({
   },
   restaurantCardWrapper: {
     marginBottom: 10,
+  },
+  restaurantCardShimmer: {
+    flexDirection: 'row',
+    width: '100%',
+    height: 153,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  restaurantImageShimmer: {
+    borderTopLeftRadius: 20,
+    borderBottomLeftRadius: 20,
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  restaurantDetailsShimmer: {
+    flex: 1,
+    padding: 12,
+    justifyContent: 'space-between',
   },
   message: {
     ...typography.bodyLarge,

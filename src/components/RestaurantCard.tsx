@@ -18,12 +18,14 @@ interface RestaurantCardProps {
   restaurant: Restaurant;
   onPress?: () => void;
   onFavoriteToggle?: () => void;
+  onImageLoad?: () => void;
 }
 
 export const RestaurantCard: React.FC<RestaurantCardProps> = ({
   restaurant,
   onPress,
   onFavoriteToggle,
+  onImageLoad,
 }) => {
   // Handle location - convert object to string if needed
   const locationText = typeof restaurant.location === 'string'
@@ -66,6 +68,9 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
           }}
           onLoad={() => {
             console.log('[RestaurantCard] Image loaded successfully for', restaurant.name);
+            if (onImageLoad) {
+              onImageLoad();
+            }
           }}
         />
       </View>
