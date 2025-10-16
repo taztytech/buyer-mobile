@@ -19,7 +19,7 @@ interface HomeScreenProps {
   onNavigateToProfile?: () => void;
   onNavigateToAddressSelection?: () => void;
   onNavigateToCategory?: (categoryName: string) => void;
-  onNavigateToRestaurant?: (restaurantName: string) => void;
+  onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
   selectedLocation?: { name: string; address: string };
 }
 
@@ -861,8 +861,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <RestaurantCard
                   restaurant={restaurant}
                   onPress={() => {
+                    console.log('[HomeScreen] Restaurant card pressed:', restaurant.name, 'ID:', restaurant.id);
                     if (onNavigateToRestaurant) {
-                      onNavigateToRestaurant(restaurant.name);
+                      console.log('[HomeScreen] Calling onNavigateToRestaurant with ID:', restaurant.id, 'Name:', restaurant.name);
+                      onNavigateToRestaurant(restaurant.id, restaurant.name);
                     }
                   }}
                   onFavoriteToggle={() => {
@@ -1270,7 +1272,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingTop: 20,
+    paddingBottom: 8,
     gap: 15,
   },
   sectionTitleContainerCompact: {
@@ -1297,7 +1300,7 @@ const styles = StyleSheet.create({
     paddingLeft: 20,
     marginBottom: 0,
     backgroundColor: '#FFFFFF',
-    paddingTop: 12,
+    paddingTop: 4,
     paddingBottom: 12,
   },
   categoryListContent: {
@@ -1334,7 +1337,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins',
     fontWeight: '500',
     fontSize: 12,
-    lineHeight: 12,
+    lineHeight: 16,
     letterSpacing: 0,
     textAlign: 'center',
     color: '#000000',

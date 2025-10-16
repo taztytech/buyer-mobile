@@ -113,21 +113,25 @@ class ApiService {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        // Validate that we received valid tokens
-        if (!data.data?.accessToken) {
-          console.error('[API] Token refresh response missing accessToken');
+        // Validate that we received valid tokens (check both camelCase and snake_case)
+        const newAccessToken = data.data?.access_token || data.data?.accessToken;
+        const newRefreshToken = data.data?.refresh_token || data.data?.refreshToken;
+
+        if (!newAccessToken) {
+          console.error('[API] Token refresh response missing access_token/accessToken');
+          console.log('[API] Response data:', JSON.stringify(data, null, 2));
           await this.clearTokens();
           return false;
         }
 
         // Save new tokens
-        this.accessToken = data.data.accessToken;
-        this.refreshToken = data.data.refreshToken || refreshToken;
+        this.accessToken = newAccessToken;
+        this.refreshToken = newRefreshToken || refreshToken;
 
         await storageService.saveTokens({
-          accessToken: data.data.accessToken,
-          refreshToken: data.data.refreshToken || refreshToken,
-          expiresIn: data.data.expiresIn || 3600,
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken || refreshToken,
+          expiresIn: data.data?.expires_in || data.data?.expiresIn || 3600,
         });
 
         console.log('[API] Access token refreshed successfully');

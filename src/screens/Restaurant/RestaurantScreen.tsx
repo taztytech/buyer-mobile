@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,18 @@ import {
   Image,
   ImageBackground,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { apiService } from '@/services/api.service';
+import { Shimmer } from '@/components/Shimmer';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface RestaurantScreenProps {
-  restaurantName: string;
+  restaurantId: number;
+  restaurantName?: string;
   onBack?: () => void;
 }
 
@@ -96,13 +100,171 @@ const MENU_DATA: MenuSection[] = [
   },
 ];
 
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  isVeg: boolean;
+}
+
 export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
+  restaurantId,
   restaurantName,
   onBack,
 }) => {
-  const [menuSections, setMenuSections] = useState(MENU_DATA);
+  const [menuSections, setMenuSections] = useState<MenuSection[]>([]);
+  const [restaurantData, setRestaurantData] = useState<any>(null);
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('Idly');
-  const [cartCount, setCartCount] = useState(1);
+  const [cart, setCart] = useState<{ [key: string]: CartItem }>({});
+  const [showQuickMenu, setShowQuickMenu] = useState(false);
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  const sectionRefs = React.useRef<{ [key: string]: View | null }>({});
+  const sectionPositions = React.useRef<{ [key: string]: number }>({});
+
+  // Calculate total cart items
+  const totalCartItems = Object.values(cart).reduce((sum, item) => sum + item.quantity, 0);
+
+  console.log('[RestaurantScreen] Component render - restaurantId:', restaurantId, 'name:', restaurantName);
+
+  // Handle image load
+  const handleImageLoad = (itemId: string) => {
+    setLoadedImages(prev => new Set(prev).add(itemId));
+  };
+
+  // Add item to cart
+  const addToCart = (item: MenuItem) => {
+    setCart(prev => ({
+      ...prev,
+      [item.id]: {
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: 1,
+        isVeg: item.isVeg,
+      }
+    }));
+  };
+
+  // Increment item quantity
+  const incrementItem = (itemId: string) => {
+    setCart(prev => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        quantity: prev[itemId].quantity + 1,
+      }
+    }));
+  };
+
+  // Decrement item quantity
+  const decrementItem = (itemId: string) => {
+    setCart(prev => {
+      const newCart = { ...prev };
+      if (newCart[itemId].quantity === 1) {
+        delete newCart[itemId];
+      } else {
+        newCart[itemId] = {
+          ...newCart[itemId],
+          quantity: newCart[itemId].quantity - 1,
+        };
+      }
+      return newCart;
+    });
+  };
+
+  // Fetch restaurant details from API
+  useEffect(() => {
+    console.log('[RestaurantScreen] useEffect triggered with restaurantId:', restaurantId);
+    if (restaurantId) {
+      fetchRestaurantDetails();
+    } else {
+      console.log('[RestaurantScreen] No restaurantId provided, skipping API call');
+    }
+  }, [restaurantId]);
+
+  // Initialize active category when menu sections load
+  useEffect(() => {
+    if (menuSections.length > 0 && !activeCategoryId) {
+      setActiveCategoryId(menuSections[0].id);
+    }
+  }, [menuSections]);
+
+  const fetchRestaurantDetails = async () => {
+    console.log('[RestaurantScreen] fetchRestaurantDetails called for ID:', restaurantId);
+    try {
+      setIsLoading(true);
+
+      // Default location - you can make this dynamic later
+      const lat = 9.9352300;
+      const lng = 78.1304040;
+
+      console.log('[RestaurantScreen] Making API call to:', `/api/buyer/restaurants/${restaurantId}?lat=${lat}&lng=${lng}&include_items=true`);
+
+      const response = await apiService.get(
+        `/api/buyer/restaurants/${restaurantId}?lat=${lat}&lng=${lng}&include_items=true`
+      );
+
+      console.log('Restaurant API Response:', JSON.stringify(response.data, null, 2));
+
+      // Handle nested data structure: response.data.data.data
+      const nestedData = response.data?.data?.data || response.data?.data;
+
+      if (nestedData) {
+        const restaurant = nestedData;
+        console.log('Restaurant data:', restaurant);
+        setRestaurantData(restaurant);
+
+        // Process categories from API response
+        if (restaurant.categories && Array.isArray(restaurant.categories)) {
+          console.log('Processing categories:', restaurant.categories.length);
+
+          const sections: MenuSection[] = restaurant.categories.map((category: any, index: number) => {
+            console.log(`Category ${index}:`, category.name, 'Items:', category.items?.length || 0);
+
+            // Process items in this category
+            const items: MenuItem[] = (category.items || []).map((item: any) => {
+              const menuItem = {
+                id: item.id.toString(),
+                name: item.name,
+                price: parseFloat(item.price?.base_price || 0),
+                description: item.description || '',
+                image: item.images && item.images.length > 0
+                  ? { uri: item.images[0] }
+                  : require('@/assets/biriyani.png'),
+                isVeg: item.dietary_preference === 'veg',
+                isSpicy: false, // API doesn't provide this info
+                isBestSeller: item.is_recommended || false,
+                isCustomizable: item.has_customizations || false,
+              };
+              console.log(`  Item:`, menuItem.name, `Price: ${menuItem.price}`);
+              return menuItem;
+            });
+
+            return {
+              id: category.id.toString(),
+              title: category.name,
+              items,
+              isExpanded: true, // Expand all sections by default
+            };
+          });
+
+          console.log('Menu sections created:', sections.length);
+          setMenuSections(sections);
+        } else {
+          console.log('No categories found in restaurant data');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching restaurant details:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const toggleSection = (sectionId: string) => {
     setMenuSections(prev =>
@@ -114,95 +276,152 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     );
   };
 
+  // Scroll to category
+  const scrollToCategory = (categoryId: string) => {
+    const position = sectionPositions.current[categoryId];
+    if (position !== undefined && scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ y: position - 100, animated: true });
+      setActiveCategoryId(categoryId);
+    }
+  };
+
+  // Handle scroll to detect current category
+  const handleScroll = (event: any) => {
+    const scrollY = event.nativeEvent.contentOffset.y;
+
+    // Find which section is currently visible
+    let currentSection = null;
+    for (const section of menuSections) {
+      const position = sectionPositions.current[section.id];
+      if (position !== undefined && scrollY >= position - 150) {
+        currentSection = section.id;
+      }
+    }
+
+    if (currentSection && currentSection !== activeCategoryId) {
+      setActiveCategoryId(currentSection);
+    }
+  };
+
+  // Measure section positions after layout
+  const handleSectionLayout = (sectionId: string, event: any) => {
+    event.target.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+      sectionPositions.current[sectionId] = pageY;
+    });
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Header Image with Overlay */}
-      <ImageBackground
-        source={require('@/assets/biriyani.png')}
-        style={styles.headerImage}
-        resizeMode="cover"
-      >
-        <View style={styles.headerOverlay}>
-          {/* Status Bar Placeholder */}
-          <View style={styles.statusBar}>
-            <Text style={styles.time}>9:41</Text>
-            <View style={styles.statusIcons} />
-          </View>
-
-          {/* Back Button */}
-          <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-            <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
-          </TouchableOpacity>
-
-          {/* Restaurant Info Card */}
-          <View style={styles.restaurantCard}>
-            <View style={styles.restaurantTopRow}>
-              <View style={styles.restaurantNameRow}>
-                <Text style={styles.restaurantName} numberOfLines={1}>
-                  {restaurantName}
-                </Text>
-                <MaterialIcons name="info-outline" size={19} color="#00B14F" />
-              </View>
-              <View style={styles.ratingBadge}>
-                <MaterialIcons name="star" size={14} color="#00B14F" />
-                <Text style={styles.ratingText}>4.5</Text>
-              </View>
-            </View>
-
-            {/* Dotted Divider */}
-            <View style={styles.dividerContainer}>
-              {Array.from({ length: 30 }).map((_, index) => (
-                <View key={index} style={styles.dash} />
-              ))}
-            </View>
-
-            <View style={styles.restaurantBottomRow}>
-              <Text style={styles.locationText}>Keelkattalai</Text>
-              <Text style={styles.deliveryText}>10-15 mins</Text>
-            </View>
-          </View>
-        </View>
-      </ImageBackground>
-
-      {/* Filter Buttons with Search */}
-      <View style={styles.filterSectionContainer}>
-        <View style={styles.filterSection}>
-          <TouchableOpacity style={styles.filterButton}>
-            <MaterialIcons name="filter-list" size={16} color="#000000" />
-            <Text style={styles.filterText}>Filters</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.filterButtonActive}>
-            <View style={styles.vegIcon}>
-              <View style={styles.vegDot} />
-            </View>
-            <Text style={styles.filterTextActive}>Veg</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.filterButton}>
-            <View style={styles.nonVegIcon}>
-              <View style={styles.nonVegDot} />
-            </View>
-            <Text style={styles.filterText}>Non - Veg</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Search Button */}
-        <TouchableOpacity style={styles.searchButton}>
-          <MaterialIcons name="search" size={24} color="#00B14F" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Menu Sections */}
+      {/* Scrollable Content with Sticky Filter */}
       <ScrollView
-        style={styles.menuContainer}
-        contentContainerStyle={styles.menuContent}
+        ref={scrollViewRef}
+        style={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={[1]} // Make the filter section (index 1) sticky
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
+        {/* Header Image with Overlay */}
+        <ImageBackground
+          source={
+            restaurantData?.logo_url
+              ? { uri: restaurantData.logo_url }
+              : require('@/assets/biriyani.png')
+          }
+          style={styles.headerImage}
+          resizeMode="cover"
+        >
+          <View style={styles.headerOverlay}>
+            {/* Status Bar Placeholder */}
+            <View style={styles.statusBar}>
+              <Text style={styles.time}>9:41</Text>
+              <View style={styles.statusIcons} />
+            </View>
+
+            {/* Back Button */}
+            <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
+              <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+            </TouchableOpacity>
+
+            {/* Restaurant Info Card */}
+            <View style={styles.restaurantCard}>
+              <View style={styles.restaurantTopRow}>
+                <View style={styles.restaurantNameRow}>
+                  <Text style={styles.restaurantName} numberOfLines={1}>
+                    {restaurantData?.name || restaurantName || 'Restaurant'}
+                  </Text>
+                  <MaterialIcons name="info-outline" size={19} color="#00B14F" />
+                </View>
+                <View style={styles.ratingBadge}>
+                  <MaterialIcons name="star" size={14} color="#00B14F" />
+                  <Text style={styles.ratingText}>
+                    {restaurantData?.stats?.average_rating || restaurantData?.rating || '0'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Dotted Divider */}
+              <View style={styles.dividerContainer}>
+                {Array.from({ length: 30 }).map((_, index) => (
+                  <View key={index} style={styles.dash} />
+                ))}
+              </View>
+
+              <View style={styles.restaurantBottomRow}>
+                <Text style={styles.locationText}>
+                  {restaurantData?.locations?.[0]?.street ||
+                   restaurantData?.locations?.[0]?.locality ||
+                   restaurantData?.location?.locality ||
+                   'Location'}
+                </Text>
+                <Text style={styles.deliveryText}>{restaurantData?.delivery_time || '25-30 mins'}</Text>
+              </View>
+            </View>
+          </View>
+        </ImageBackground>
+
+        {/* Filter Buttons with Search - STICKY */}
+        <View style={styles.filterSectionContainer}>
+          <View style={styles.filterSection}>
+            <View style={styles.filterButtonsGroup}>
+              <TouchableOpacity style={styles.filterButton}>
+                <MaterialIcons name="filter-list" size={16} color="#000000" />
+                <Text style={styles.filterText}>Filters</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.filterButtonActive}>
+                <View style={styles.vegIcon}>
+                  <View style={styles.vegDot} />
+                </View>
+                <Text style={styles.filterTextActive}>Veg</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.filterButton}>
+                <View style={styles.nonVegIcon}>
+                  <View style={styles.nonVegDot} />
+                </View>
+                <Text style={styles.filterText}>Non - Veg</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Button - right aligned */}
+            <TouchableOpacity style={styles.searchButton}>
+              <MaterialIcons name="search" size={24} color="#00B14F" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Menu Sections */}
+        <View style={styles.menuContent}>
         {menuSections.map((section) => (
-          <View key={section.id} style={styles.menuSection}>
+          <View
+            key={section.id}
+            style={styles.menuSection}
+            ref={ref => sectionRefs.current[section.id] = ref}
+            onLayout={(event) => handleSectionLayout(section.id, event)}
+          >
             <TouchableOpacity
               style={styles.sectionHeader}
               onPress={() => toggleSection(section.id)}
@@ -267,14 +486,56 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 </View>
 
                 <View style={styles.itemRight}>
-                  {/* Item Image */}
-                  <Image source={item.image} style={styles.itemImage} resizeMode="cover" />
+                  {/* Item Image with Shimmer */}
+                  <View style={styles.itemImageContainer}>
+                    {!loadedImages.has(item.id) && (
+                      <Shimmer
+                        width={166}
+                        height={137}
+                        borderRadius={16}
+                        backgroundColor="#E8E8E8"
+                        style={styles.imageShimmer}
+                      />
+                    )}
+                    <Image
+                      source={item.image}
+                      style={styles.itemImage}
+                      resizeMode="cover"
+                      onLoad={() => handleImageLoad(item.id)}
+                    />
+                  </View>
 
-                  {/* Add Button */}
-                  <TouchableOpacity style={styles.addButton}>
-                    <Text style={styles.addButtonPlus}>+</Text>
-                    <Text style={styles.addButtonText}>Add</Text>
-                  </TouchableOpacity>
+                  {/* Add Button or Increment/Decrement Controls */}
+                  {!item.isCustomizable && cart[item.id] ? (
+                    // Show increment/decrement controls if item is in cart
+                    <View style={styles.quantityControl}>
+                      <TouchableOpacity
+                        style={styles.quantityButton}
+                        onPress={() => decrementItem(item.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.quantityButtonText}>-</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.quantityText}>{cart[item.id].quantity}</Text>
+                      <TouchableOpacity
+                        style={styles.quantityButton}
+                        onPress={() => incrementItem(item.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.quantityButtonText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    // Show Add button if item is not in cart
+                    <TouchableOpacity
+                      style={styles.addButton}
+                      onPress={() => addToCart(item)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.addButtonPlus}>+</Text>
+                      <Text style={styles.addButtonText}>Add</Text>
+                    </TouchableOpacity>
+                  )}
 
                   {/* Customizable Text */}
                   {item.isCustomizable && (
@@ -285,23 +546,100 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             ))}
           </View>
         ))}
+        </View>
       </ScrollView>
 
       {/* Bottom Cart Bar */}
-      <View style={styles.cartBar}>
-        <View style={styles.cartButton}>
-          <Text style={styles.cartItemCount}>{cartCount} Item Added</Text>
-          <View style={styles.viewCartButton}>
-            <Text style={styles.viewCartText}>View Cart</Text>
-            <MaterialIcons name="arrow-forward" size={16} color="#181C2E" />
+      {totalCartItems > 0 && (
+        <View style={styles.cartBar}>
+          <View style={styles.cartButton}>
+            <Text style={styles.cartItemCount}>
+              {totalCartItems} Item{totalCartItems > 1 ? 's' : ''} Added
+            </Text>
+            <View style={styles.viewCartButton}>
+              <Text style={styles.viewCartText}>View Cart</Text>
+              <MaterialIcons name="arrow-forward" size={16} color="#181C2E" />
+            </View>
           </View>
         </View>
-      </View>
+      )}
 
-      {/* Floating Menu Button */}
-      <TouchableOpacity style={styles.floatingMenuButton}>
-        <MaterialIcons name="restaurant-menu" size={20} color="#000000" />
-      </TouchableOpacity>
+      {/* Floating Menu Button - Toggle (only show when menu is closed) */}
+      {!showQuickMenu && (
+        <TouchableOpacity
+          style={[
+            styles.floatingMenuButton,
+            totalCartItems > 0 && styles.floatingMenuButtonWithCart
+          ]}
+          onPress={() => setShowQuickMenu(true)}
+        >
+          <MaterialIcons name="restaurant-menu" size={20} color="#000000" />
+        </TouchableOpacity>
+      )}
+
+      {/* Overlay - closes menu when clicking outside */}
+      {showQuickMenu && (
+        <TouchableOpacity
+          style={styles.menuOverlay}
+          activeOpacity={1}
+          onPress={() => setShowQuickMenu(false)}
+        />
+      )}
+
+      {/* Close Menu Button (only show when menu is open) */}
+      {showQuickMenu && (
+        <TouchableOpacity
+          style={[
+            styles.closeMenuButton,
+            totalCartItems > 0 && styles.closeMenuButtonWithCart
+          ]}
+          onPress={() => setShowQuickMenu(false)}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="close" size={16} color="#000000" />
+          <Text style={styles.closeMenuText}>Menu</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Quick Menu Panel */}
+      {showQuickMenu && menuSections.length > 0 && (
+        <View style={[
+          styles.quickMenuPanel,
+          totalCartItems > 0 && styles.quickMenuPanelWithCart
+        ]}>
+          <ScrollView style={styles.quickMenuScroll} showsVerticalScrollIndicator={false}>
+            {menuSections.map((section) => (
+              <TouchableOpacity
+                key={section.id}
+                style={[
+                  styles.quickMenuItem,
+                  activeCategoryId === section.id && styles.quickMenuItemActive
+                ]}
+                onPress={() => scrollToCategory(section.id)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.quickMenuText,
+                    activeCategoryId === section.id && styles.quickMenuTextActive
+                  ]}
+                  numberOfLines={1}
+                >
+                  {section.title}
+                </Text>
+                <Text
+                  style={[
+                    styles.quickMenuCount,
+                    activeCategoryId === section.id && styles.quickMenuCountActive
+                  ]}
+                >
+                  {section.items.length}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
     </View>
   );
 };
@@ -431,14 +769,20 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   filterSectionContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    backgroundColor: '#FFFFFF', // Add background for sticky effect
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  filterSection: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 9,
-    marginTop: 19,
   },
-  filterSection: {
+  filterButtonsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -525,11 +869,11 @@ const styles = StyleSheet.create({
   },
   menuContainer: {
     flex: 1,
-    marginTop: 10,
+    marginTop: 0,
   },
   menuContent: {
     paddingHorizontal: 0,
-    paddingBottom: 120,
+    paddingBottom: 40,
   },
   menuSection: {
     gap: 9,
@@ -567,6 +911,7 @@ const styles = StyleSheet.create({
   itemLeft: {
     flex: 1,
     paddingVertical: 14,
+    paddingRight: 12,
     gap: 3,
   },
   itemBadges: {
@@ -676,6 +1021,18 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 26,
   },
+  itemImageContainer: {
+    width: 166,
+    height: 137,
+    borderRadius: 16,
+    position: 'relative',
+  },
+  imageShimmer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    zIndex: 1,
+  },
   itemImage: {
     width: 166,
     height: 137,
@@ -713,6 +1070,43 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     color: '#00B14F',
     opacity: 0.85,
+  },
+  quantityControl: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    width: 76,
+    height: 37,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#00B14F',
+    borderRadius: 9,
+    position: 'absolute',
+    top: 115,
+    left: 53,
+  },
+  quantityButton: {
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityButtonText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 20,
+    color: '#00B14F',
+    opacity: 0.85,
+    marginTop: -2,
+  },
+  quantityText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    color: '#00B14F',
+    minWidth: 20,
+    textAlign: 'center',
+    marginTop: 4,
   },
   customizableText: {
     fontFamily: 'Poppins',
@@ -794,7 +1188,7 @@ const styles = StyleSheet.create({
   floatingMenuButton: {
     position: 'absolute',
     right: 20,
-    bottom: 120,
+    bottom: 30,
     width: 50,
     height: 50,
     borderRadius: 10,
@@ -807,10 +1201,122 @@ const styles = StyleSheet.create({
     shadowRadius: 29,
     elevation: 10,
   },
+  floatingMenuButtonWithCart: {
+    bottom: 110,
+  },
   arrowIcon: {
     transform: [{ rotate: '0deg' }],
   },
   arrowIconExpanded: {
     transform: [{ rotate: '180deg' }],
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#000000',
+    opacity: 0.6,
+  },
+  menuOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+    zIndex: 1,
+  },
+  closeMenuButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 30,
+    width: 122,
+    height: 50,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 7,
+    backgroundColor: '#FFC529',
+    borderRadius: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 29,
+    elevation: 10,
+    zIndex: 3,
+  },
+  closeMenuButtonWithCart: {
+    bottom: 110,
+  },
+  closeMenuText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 18,
+    lineHeight: 27,
+    color: '#000000',
+    opacity: 0.85,
+  },
+  quickMenuPanel: {
+    position: 'absolute',
+    right: 20,
+    bottom: 100,
+    width: '60%',
+    maxHeight: 280,
+    backgroundColor: '#000000',
+    borderRadius: 16,
+    paddingVertical: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 15,
+    zIndex: 2,
+  },
+  quickMenuPanelWithCart: {
+    bottom: 180,
+  },
+  quickMenuScroll: {
+    maxHeight: 280,
+  },
+  quickMenuItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginHorizontal: 6,
+  },
+  quickMenuItemActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  quickMenuText: {
+    flex: 1,
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#FFFFFF',
+    opacity: 0.85,
+  },
+  quickMenuTextActive: {
+    fontFamily: 'Poppins_600SemiBold',
+    opacity: 1,
+  },
+  quickMenuCount: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#FFFFFF',
+    opacity: 0.7,
+    marginLeft: 12,
+  },
+  quickMenuCountActive: {
+    fontFamily: 'Poppins_600SemiBold',
+    opacity: 1,
   },
 });

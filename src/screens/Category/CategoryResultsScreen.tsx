@@ -21,7 +21,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 interface CategoryResultsScreenProps {
   categoryName: string;
   onBack?: () => void;
-  onNavigateToRestaurant?: (restaurantName: string) => void;
+  onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
 }
 
 interface TopRatedItem {
@@ -375,7 +375,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
                 style={styles.restaurantCard}
                 onPress={() => {
                   if (onNavigateToRestaurant) {
-                    onNavigateToRestaurant(restaurant.name);
+                    onNavigateToRestaurant(restaurant.id, restaurant.name);
                   }
                 }}
                 activeOpacity={0.9}
