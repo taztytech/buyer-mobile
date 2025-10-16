@@ -210,7 +210,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             >
               <Text style={styles.sectionTitle}>{section.title}</Text>
               <MaterialIcons
-                name="keyboard-arrow-down"
+                name="arrow-drop-down"
                 size={24}
                 color="#000000"
                 style={[
@@ -220,14 +220,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               />
             </TouchableOpacity>
 
-            <View style={styles.sectionDivider} />
-
             {section.isExpanded && section.items.map((item) => (
               <View key={item.id} style={styles.menuItem}>
                 <View style={styles.itemLeft}>
                   {/* Veg Icon and Spicy Badge */}
                   <View style={styles.itemBadges}>
-                    <View style={styles.vegIconLarge} />
+                    <View style={styles.vegIconLarge}>
+                      <View style={styles.vegDotLarge} />
+                    </View>
                     {item.isSpicy && (
                       <View style={styles.spicyBadge}>
                         <MaterialIcons name="local-fire-department" size={9} color="#FF0000" />
@@ -283,10 +283,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 </View>
               </View>
             ))}
-
-            {section.id !== menuSections[menuSections.length - 1].id && (
-              <View style={styles.sectionSeparator} />
-            )}
           </View>
         ))}
       </ScrollView>
@@ -304,7 +300,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
       {/* Floating Menu Button */}
       <TouchableOpacity style={styles.floatingMenuButton}>
-        <MaterialIcons name="restaurant-menu" size={14} color="#000000" />
+        <MaterialIcons name="restaurant-menu" size={20} color="#000000" />
       </TouchableOpacity>
     </View>
   );
@@ -543,11 +539,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    height: 24,
+    paddingVertical: 12,
+    marginHorizontal: 0,
+    marginVertical: 5,
   },
   sectionTitle: {
     fontFamily: 'Poppins',
-    fontWeight: '500',
+    fontWeight: '600',
     fontSize: 14,
     lineHeight: 21,
     textAlign: 'center',
@@ -583,6 +581,14 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     borderWidth: 1,
     borderColor: '#00B14F',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  vegDotLarge: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#00B14F',
   },
   spicyBadge: {
     flexDirection: 'row',
@@ -609,7 +615,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 18,
     lineHeight: 27,
-    textAlign: 'center',
+    textAlign: 'left',
     color: '#000000',
     opacity: 0.85,
   },

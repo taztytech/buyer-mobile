@@ -30,7 +30,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   onSuccess
 }) => {
   const [otp, setOtp] = useState(['', '', '', '']);
-  const [timer, setTimer] = useState(30);
+  const [timer, setTimer] = useState(61);
   const [isLoading, setIsLoading] = useState(false);
   const inputRefs = [
     useRef<TextInput>(null),
@@ -121,7 +121,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
 
       if (response.success) {
         // Reset timer and OTP inputs
-        setTimer(30);
+        setTimer(61);
         setOtp(['', '', '', '']);
         inputRefs[0].current?.focus();
 

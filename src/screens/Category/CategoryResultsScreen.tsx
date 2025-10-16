@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,12 @@ import {
   TextInput,
   Image,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { apiService } from '@/services/api.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -31,14 +33,19 @@ interface TopRatedItem {
 }
 
 interface RestaurantItem {
-  id: string;
+  id: number;
   name: string;
-  cuisine: string;
+  description: string;
+  logo_url: string;
   rating: number;
-  deliveryTime: string;
-  location: string;
-  distance: string;
-  image: any;
+  delivery_time: string;
+  location: {
+    locality: string;
+    city: string;
+  };
+  distance: number;
+  is_open: boolean;
+  items_count: number;
   isFavorite: boolean;
 }
 
@@ -111,9 +118,44 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(categoryName);
-  const [restaurants, setRestaurants] = useState(RESTAURANT_DATA);
+  const [restaurants, setRestaurants] = useState<RestaurantItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const toggleFavorite = (id: string) => {
+  // Fetch restaurants data from API
+  useEffect(() => {
+    fetchRestaurants();
+  }, [selectedCategory]);
+
+  const fetchRestaurants = async () => {
+    try {
+      setIsLoading(true);
+
+      // Default location - you can make this dynamic later
+      const lat = 9.93550394286794;
+      const lng = 78.13114931086115;
+      const radius = 5;
+
+      const query = selectedCategory.toLowerCase();
+
+      const response = await apiService.get(
+        `/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`
+      );
+
+      if (response.data?.success && response.data?.data?.restaurants) {
+        const restaurantsData = response.data.data.restaurants.map((restaurant: any) => ({
+          ...restaurant,
+          isFavorite: false,
+        }));
+        setRestaurants(restaurantsData);
+      }
+    } catch (error) {
+      console.error('Error fetching restaurants:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleFavorite = (id: number) => {
     setRestaurants(prev =>
       prev.map(r => (r.id === id ? { ...r, isFavorite: !r.isFavorite } : r))
     );
@@ -317,73 +359,84 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         </View>
 
         <View style={styles.restaurantList}>
-          {restaurants.map(restaurant => (
-            <TouchableOpacity
-              key={restaurant.id}
-              style={styles.restaurantCard}
-              onPress={() => {
-                if (onNavigateToRestaurant) {
-                  onNavigateToRestaurant(restaurant.name);
-                }
-              }}
-              activeOpacity={0.9}
-            >
-              {/* Image Section */}
-              <View style={styles.restaurantImageContainer}>
-                <Image
-                  source={restaurant.image}
-                  style={styles.restaurantImage}
-                  resizeMode="cover"
-                />
-                {/* Favorite Button */}
-                <TouchableOpacity
-                  style={styles.favoriteButton}
-                  onPress={() => toggleFavorite(restaurant.id)}
-                >
-                  <MaterialIcons
-                    name={restaurant.isFavorite ? 'favorite' : 'favorite-border'}
-                    size={17}
-                    color="#FFFFFF"
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#00B14F" />
+              <Text style={styles.loadingText}>Loading restaurants...</Text>
+            </View>
+          ) : restaurants.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No restaurants found</Text>
+            </View>
+          ) : (
+            restaurants.map(restaurant => (
+              <TouchableOpacity
+                key={restaurant.id}
+                style={styles.restaurantCard}
+                onPress={() => {
+                  if (onNavigateToRestaurant) {
+                    onNavigateToRestaurant(restaurant.name);
+                  }
+                }}
+                activeOpacity={0.9}
+              >
+                {/* Image Section */}
+                <View style={styles.restaurantImageContainer}>
+                  <Image
+                    source={{ uri: restaurant.logo_url }}
+                    style={styles.restaurantImage}
+                    resizeMode="cover"
                   />
-                </TouchableOpacity>
-                {/* Delivery Time Badge */}
-                <View style={styles.deliveryBadge}>
-                  <MaterialIcons name="two-wheeler" size={15} color="#000080" />
-                  <Text style={styles.deliveryBadgeText}>{restaurant.deliveryTime}</Text>
-                </View>
-              </View>
-
-              {/* Details Section */}
-              <View style={styles.restaurantDetails}>
-                <View style={styles.restaurantTopRow}>
-                  <View style={styles.restaurantInfo}>
-                    <Text style={styles.restaurantName} numberOfLines={1}>
-                      {restaurant.name}
-                    </Text>
-                    <Text style={styles.restaurantCuisine} numberOfLines={2}>
-                      {restaurant.cuisine}
-                    </Text>
-                  </View>
-                  <View style={styles.ratingBadge}>
-                    <MaterialIcons name="star" size={14} color="#00B14F" />
-                    <Text style={styles.ratingText}>{restaurant.rating}</Text>
+                  {/* Favorite Button */}
+                  <TouchableOpacity
+                    style={styles.favoriteButton}
+                    onPress={() => toggleFavorite(restaurant.id)}
+                  >
+                    <MaterialIcons
+                      name={restaurant.isFavorite ? 'favorite' : 'favorite-border'}
+                      size={17}
+                      color="#FFFFFF"
+                    />
+                  </TouchableOpacity>
+                  {/* Delivery Time Badge */}
+                  <View style={styles.deliveryBadge}>
+                    <MaterialIcons name="two-wheeler" size={15} color="#000080" />
+                    <Text style={styles.deliveryBadgeText}>{restaurant.delivery_time}</Text>
                   </View>
                 </View>
 
-                {/* Dotted Divider */}
-                <View style={styles.dividerContainer}>
-                  {Array.from({ length: 30 }).map((_, index) => (
-                    <View key={index} style={styles.dash} />
-                  ))}
-                </View>
+                {/* Details Section */}
+                <View style={styles.restaurantDetails}>
+                  <View style={styles.restaurantTopRow}>
+                    <View style={styles.restaurantInfo}>
+                      <Text style={styles.restaurantName} numberOfLines={1}>
+                        {restaurant.name}
+                      </Text>
+                      <Text style={styles.restaurantCuisine} numberOfLines={2}>
+                        {restaurant.description}
+                      </Text>
+                    </View>
+                    <View style={styles.ratingBadge}>
+                      <MaterialIcons name="star" size={14} color="#00B14F" />
+                      <Text style={styles.ratingText}>{restaurant.rating || '0'}</Text>
+                    </View>
+                  </View>
 
-                <View style={styles.restaurantBottomRow}>
-                  <Text style={styles.locationText}>{restaurant.location}</Text>
-                  <Text style={styles.distanceText}>{restaurant.distance}</Text>
+                  {/* Dotted Divider */}
+                  <View style={styles.dividerContainer}>
+                    {Array.from({ length: 30 }).map((_, index) => (
+                      <View key={index} style={styles.dash} />
+                    ))}
+                  </View>
+
+                  <View style={styles.restaurantBottomRow}>
+                    <Text style={styles.locationText}>{restaurant.location.locality}</Text>
+                    <Text style={styles.distanceText}>{restaurant.distance.toFixed(1)}Kms</Text>
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -792,5 +845,30 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#00B14F',
     opacity: 0.85,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#000000',
+    opacity: 0.6,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontFamily: 'Poppins',
+    fontSize: 16,
+    color: '#000000',
+    opacity: 0.6,
   },
 });
