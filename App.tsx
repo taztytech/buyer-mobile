@@ -6,6 +6,8 @@ import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
+import { CategoryResultsScreen } from '@/screens/Category/CategoryResultsScreen';
+import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -18,16 +20,21 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'addressSelection' | 'locationSelection'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedLocation, setSelectedLocation] = React.useState({ name: 'Chennai', address: 'Vigneshwar Nagar, Nanganallur, Tamilnadu,...' });
+  const [selectedCategory, setSelectedCategory] = React.useState('Briyani');
+  const [selectedRestaurant, setSelectedRestaurant] = React.useState('Adyar Anantha Bhavan');
+  const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category'>('home');
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const addressScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const categoryScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const restaurantScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
   const [fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
@@ -224,6 +231,117 @@ export default function App() {
     });
   };
 
+  // Category Results Navigation
+  const handleNavigateToCategoryResults = (categoryName: string) => {
+    setSelectedCategory(categoryName);
+    setCurrentScreen('categoryResults');
+
+    Animated.parallel([
+      Animated.timing(homeScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(categoryScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromCategoryResults = () => {
+    Animated.parallel([
+      Animated.timing(homeScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(categoryScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('home');
+    });
+  };
+
+  // Restaurant Navigation from Category
+  const handleNavigateToRestaurantFromCategory = (restaurantName: string) => {
+    setSelectedRestaurant(restaurantName);
+    setRestaurantCameFrom('category');
+    setCurrentScreen('restaurant');
+
+    Animated.parallel([
+      Animated.timing(categoryScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(restaurantScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  // Restaurant Navigation from Home
+  const handleNavigateToRestaurantFromHome = (restaurantName: string) => {
+    setSelectedRestaurant(restaurantName);
+    setRestaurantCameFrom('home');
+    setCurrentScreen('restaurant');
+
+    Animated.parallel([
+      Animated.timing(homeScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(restaurantScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  // Back from Restaurant (dynamic based on where we came from)
+  const handleBackFromRestaurant = () => {
+    if (restaurantCameFrom === 'home') {
+      Animated.parallel([
+        Animated.timing(homeScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(restaurantScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('home');
+      });
+    } else {
+      Animated.parallel([
+        Animated.timing(categoryScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(restaurantScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('categoryResults');
+      });
+    }
+  };
+
   if (!fontsLoaded || isCheckingAuth) {
     return null;
   }
@@ -253,6 +371,8 @@ export default function App() {
               onLogout={handleLogout}
               onNavigateToProfile={handleNavigateToProfile}
               onNavigateToAddressSelection={handleNavigateToAddressSelection}
+              onNavigateToCategory={handleNavigateToCategoryResults}
+              onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
               selectedLocation={selectedLocation}
             />
           </Animated.View>
@@ -320,6 +440,39 @@ export default function App() {
               onLocationConfirm={handleLocationConfirm}
             />
           </Animated.View>
+
+          {/* Always render CategoryResultsScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.categoryOverlay,
+              {
+                transform: [{ translateX: categoryScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'categoryResults' || currentScreen === 'restaurant' ? 'auto' : 'none'}
+          >
+            <CategoryResultsScreen
+              categoryName={selectedCategory}
+              onBack={handleBackFromCategoryResults}
+              onNavigateToRestaurant={handleNavigateToRestaurantFromCategory}
+            />
+          </Animated.View>
+
+          {/* Always render RestaurantScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.restaurantOverlay,
+              {
+                transform: [{ translateX: restaurantScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'restaurant' ? 'auto' : 'none'}
+          >
+            <RestaurantScreen
+              restaurantName={selectedRestaurant}
+              onBack={handleBackFromRestaurant}
+            />
+          </Animated.View>
         </View>
       )}
     </SafeAreaProvider>
@@ -359,6 +512,24 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 3,
+    backgroundColor: '#FFFFFF',
+  },
+  categoryOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  restaurantOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
     backgroundColor: '#FFFFFF',
   },
 });

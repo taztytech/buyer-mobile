@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontSize: 14,
     lineHeight: 21,
-    color: '#E0E0E0',
+    color: colors.primary,
   },
   verifyButton: {
     width: '100%',

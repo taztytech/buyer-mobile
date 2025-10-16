@@ -18,6 +18,8 @@ interface HomeScreenProps {
   onLogout?: () => void;
   onNavigateToProfile?: () => void;
   onNavigateToAddressSelection?: () => void;
+  onNavigateToCategory?: (categoryName: string) => void;
+  onNavigateToRestaurant?: (restaurantName: string) => void;
   selectedLocation?: { name: string; address: string };
 }
 
@@ -126,6 +128,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onLogout,
   onNavigateToProfile,
   onNavigateToAddressSelection,
+  onNavigateToCategory,
+  onNavigateToRestaurant,
   selectedLocation: externalSelectedLocation
 }) => {
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
@@ -519,7 +523,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const imageSource = typeof item.icon === 'string' ? { uri: item.icon } : item.icon;
 
     return (
-      <TouchableOpacity style={styles.categoryItem} testID={`category-${item.id}`}>
+      <TouchableOpacity
+        style={styles.categoryItem}
+        testID={`category-${item.id}`}
+        onPress={() => {
+          if (onNavigateToCategory) {
+            onNavigateToCategory(item.name);
+          }
+        }}
+        activeOpacity={0.7}
+      >
         <View style={styles.categoryImageContainer}>
           <Image
             source={imageSource}
@@ -542,7 +555,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </Text>
       </TouchableOpacity>
     );
-  }, []);
+  }, [onNavigateToCategory]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -848,8 +861,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <RestaurantCard
                   restaurant={restaurant}
                   onPress={() => {
-                    // Handle restaurant card press
-                    console.log('Restaurant pressed:', restaurant.name);
+                    if (onNavigateToRestaurant) {
+                      onNavigateToRestaurant(restaurant.name);
+                    }
                   }}
                   onFavoriteToggle={() => {
                     // Handle favorite toggle
@@ -1418,10 +1432,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 25,
+    elevation: 5,
   },
   restaurantImageShimmer: {
     borderTopLeftRadius: 20,

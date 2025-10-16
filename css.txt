@@ -1,75 +1,32 @@
-/* Profie */
+/* Hotel Page */
 
 position: relative;
 width: 440px;
 height: 956px;
+overflow-y: scroll;
 
-background: #F3FFFA;
+background: #FFFFFF;
 border-radius: 20px;
 
 
-/* Frame 427321115 */
+/* Frame 427321127 */
 
 /* Auto layout */
 display: flex;
-flex-direction: row;
-justify-content: center;
-align-items: center;
-padding: 19px 20px;
-gap: 10px;
+flex-direction: column;
+justify-content: space-between;
+align-items: flex-start;
+padding: 0px 20px 20px;
+gap: 18px;
 
 position: absolute;
-width: 400px;
-height: 60px;
-left: calc(50% - 400px/2);
-top: 872px;
+width: 440px;
+height: 252px;
+left: 0px;
+top: 0px;
 
-background: #FF0000;
-border-radius: 10px;
-
-
-/* LOGOUT */
-
-width: 66px;
-height: 24px;
-
-font-family: 'Poppins';
-font-style: normal;
-font-weight: 600;
-font-size: 16px;
-line-height: 24px;
-/* identical to box height */
-
-color: #FFFFFF;
-
-
-/* Inside auto layout */
-flex: none;
-order: 0;
-flex-grow: 0;
-
-
-/* tabler:arrow-right */
-
-width: 24px;
-height: 24px;
-
-
-/* Inside auto layout */
-flex: none;
-order: 1;
-flex-grow: 0;
-
-
-/* Vector */
-
-position: absolute;
-left: 20.83%;
-right: 20.83%;
-top: 25%;
-bottom: 25%;
-
-border: 2px solid #FFFFFF;
+background: url(image.png), #C9C9C9;
+border-radius: 0px 0px 20px 20px;
 
 
 /* Top bar */
@@ -81,12 +38,16 @@ justify-content: space-between;
 align-items: center;
 padding: 0px;
 
-position: absolute;
+margin: 0 auto;
 width: 400px;
 height: 44px;
-left: 20px;
-top: 0px;
 
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
 
 
 /* 9:41 */
@@ -110,7 +71,7 @@ display: flex;
 align-items: center;
 letter-spacing: 0.2px;
 
-color: #000000;
+color: #FFFFFF;
 
 
 /* Inside auto layout */
@@ -159,7 +120,7 @@ right: 77.57%;
 top: 0%;
 bottom: 23.08%;
 
-background: #000000;
+background: #FFFFFF;
 
 
 /* Cellular_Connection-path */
@@ -226,7 +187,7 @@ height: 10.97px;
 left: 28px;
 top: 0px;
 
-background: #000000;
+background: #FFFFFF;
 
 
 /* Wifi-path */
@@ -296,7 +257,7 @@ top: calc(50% - 13px/2);
 
 mix-blend-mode: normal;
 opacity: 0.35;
-border: 1px solid #000000;
+border: 1px solid #FFFFFF;
 border-radius: 2.66667px;
 
 
@@ -308,7 +269,7 @@ height: 4px;
 right: 0px;
 top: calc(50% - 4px/2 + 0.5px);
 
-background: #000000;
+background: #FFFFFF;
 mix-blend-mode: normal;
 opacity: 0.4;
 
@@ -321,40 +282,114 @@ height: 8.33px;
 right: 4.48px;
 top: calc(50% - 8.33px/2 - 0px);
 
-background: #000000;
+background: #FFFFFF;
 border-radius: 1.33333px;
 
 
-/* Frame 427321120 */
+/* Frame 966 */
+
+box-sizing: border-box;
+
+margin: 0 auto;
+width: 40px;
+height: 40px;
+
+background: #FFFFFF;
+border: 1px solid #E4E4E4;
+border-radius: 50px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* chevron-left */
+
+position: absolute;
+width: 24px;
+height: 24px;
+left: 8px;
+top: 8px;
+
+
+
+/* Vector */
+
+position: absolute;
+left: 0%;
+right: 0%;
+top: 0%;
+bottom: 0%;
+
+
+
+/* Vector */
+
+position: absolute;
+left: 37.5%;
+right: 37.5%;
+top: 25%;
+bottom: 25%;
+
+border: 1.5px solid #001E1F;
+
+
+/* Frame 427321140 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 10px;
+gap: 10px;
+
+margin: 0 auto;
+width: 400px;
+height: 87px;
+
+background: #FFFFFF;
+border-radius: 10px;
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+flex-grow: 0;
+
+
+/* Frame 427321138 */
 
 /* Auto layout */
 display: flex;
 flex-direction: row;
 justify-content: space-between;
-align-items: center;
+align-items: flex-start;
 padding: 0px;
 gap: 10px;
 
-position: absolute;
-width: 400px;
-height: 50px;
-left: 20px;
-top: 80px;
+width: 380px;
+height: 27px;
 
 
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
 
-/* Frame 427321172 */
+
+/* Frame 427321136 */
 
 /* Auto layout */
 display: flex;
 flex-direction: row;
 align-items: center;
 padding: 0px;
-gap: 10px;
+gap: 4px;
 
 margin: 0 auto;
-width: 229.5px;
-height: 50px;
+width: 237px;
+height: 27px;
 
 
 /* Inside auto layout */
@@ -363,21 +398,80 @@ order: 0;
 flex-grow: 0;
 
 
-/* Frame 427321110 */
+/* Adyar Anantha Bhavan */
+
+width: 214px;
+height: 27px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 600;
+font-size: 18px;
+line-height: 27px;
+/* identical to box height */
+text-align: center;
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* ci:info */
+
+width: 19px;
+height: 19px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 12.5%;
+right: 12.5%;
+top: 12.5%;
+bottom: 12.5%;
+
+border: 2px solid #00B14F;
+
+
+/* Frame 427321124 */
 
 /* Auto layout */
 display: flex;
 flex-direction: row;
 justify-content: center;
 align-items: center;
-padding: 19px 20px;
-gap: 10px;
+padding: 4px;
+gap: 4px;
 
-width: 50px;
-height: 50px;
+margin: 0 auto;
+width: 47px;
+height: 22px;
 
-background: linear-gradient(0deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)), url(.jpg), #F7F7F7;
-border-radius: 50px;
+background: rgba(0, 128, 74, 0.1);
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* mingcute:star-fill */
+
+width: 14px;
+height: 14px;
+
 
 /* Inside auto layout */
 flex: none;
@@ -385,7 +479,187 @@ order: 0;
 flex-grow: 0;
 
 
-/* fe:edit */
+/* Group */
+
+position: absolute;
+left: 7.13%;
+right: 7.13%;
+top: 9.36%;
+bottom: 0.78%;
+
+
+
+/* Vector */
+
+position: absolute;
+left: 50.32%;
+right: 46.2%;
+top: 96.43%;
+bottom: 0.77%;
+
+
+
+/* Vector */
+
+position: absolute;
+left: 7.13%;
+right: 7.13%;
+top: 9.36%;
+bottom: 8.59%;
+
+background: #00B14F;
+
+
+/* 4.5 */
+
+width: 21px;
+height: 10px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+/* leading-trim and text-edge are draft CSS properties.
+
+Read more: https://drafts.csswg.org/css-inline-3/#leading-trim
+*/
+leading-trim: both;
+text-edge: cap;
+
+color: #00B14F;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Line 3 */
+
+width: 383px;
+height: 0px;
+
+border: 1px dashed rgba(0, 0, 0, 0.5);
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321139 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: space-between;
+align-items: flex-start;
+padding: 0px;
+gap: 10px;
+
+width: 380px;
+height: 20px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Keelkattalai */
+
+margin: 0 auto;
+width: 77px;
+height: 20px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 20px;
+/* identical to box height */
+
+color: rgba(0, 0, 0, 0.5);
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* 10-15 mins */
+
+margin: 0 auto;
+width: 70px;
+height: 20px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 13px;
+line-height: 20px;
+/* identical to box height */
+
+color: #00B14F;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321135 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 0px;
+gap: 10px;
+
+position: absolute;
+width: 292px;
+height: 29px;
+left: 20px;
+top: 271px;
+
+
+
+/* Frame 427321125 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px 12px;
+gap: 4px;
+
+width: 85px;
+height: 29px;
+
+background: rgba(0, 0, 0, 0.05);
+border: 1px solid rgba(0, 0, 0, 0.25);
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* mage:filter */
 
 width: 16px;
 height: 16px;
@@ -400,64 +674,24 @@ flex-grow: 0;
 /* Vector */
 
 position: absolute;
-left: 16.67%;
-right: 16.67%;
-top: 8.33%;
-bottom: 8.33%;
+left: 11.46%;
+right: 11.46%;
+top: 13.39%;
+bottom: 13.38%;
 
-background: #FFFFFF;
-
-
-/* Frame 427321167 */
-
-/* Auto layout */
-display: flex;
-flex-direction: column;
-align-items: flex-start;
-padding: 0px;
-gap: 2px;
-
-width: 96px;
-height: 41px;
+border: 1.5px solid #000000;
 
 
-/* Inside auto layout */
-flex: none;
-order: 1;
-flex-grow: 0;
+/* Filters */
 
-
-/* RANJITH */
-
-width: 60px;
+width: 41px;
 height: 21px;
 
 font-family: 'Poppins';
 font-style: normal;
-font-weight: 600;
+font-weight: 400;
 font-size: 14px;
 line-height: 21px;
-/* identical to box height */
-
-color: #000000;
-
-
-/* Inside auto layout */
-flex: none;
-order: 0;
-flex-grow: 0;
-
-
-/* +91 78459 65231 */
-
-width: 96px;
-height: 18px;
-
-font-family: 'Poppins';
-font-style: normal;
-font-weight: 400;
-font-size: 12px;
-line-height: 18px;
 /* identical to box height */
 
 color: #000000;
@@ -470,19 +704,24 @@ order: 1;
 flex-grow: 0;
 
 
-/* Frame 427321171 */
+/* Frame 427321132 */
+
+box-sizing: border-box;
 
 /* Auto layout */
 display: flex;
 flex-direction: row;
+justify-content: center;
 align-items: center;
-padding: 0px;
-gap: 10px;
+padding: 4px 12px;
+gap: 4px;
 
-margin: 0 auto;
-width: 87px;
-height: 20px;
+width: 72px;
+height: 29px;
 
+background: rgba(0, 0, 0, 0.05);
+border: 1px solid rgba(0, 0, 0, 0.25);
+border-radius: 13px;
 
 /* Inside auto layout */
 flex: none;
@@ -490,16 +729,169 @@ order: 1;
 flex-grow: 0;
 
 
-/* Edit Profile */
+/* pngwing.com (4) 1 */
 
-width: 68px;
-height: 20px;
+width: 16px;
+height: 16px;
+
+background: url(pngwing.com (4).png);
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Veg */
+
+width: 28px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321135 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px 12px;
+gap: 4px;
+
+width: 115px;
+height: 29px;
+
+border: 1px solid rgba(0, 0, 0, 0.25);
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+flex-grow: 0;
+
+
+/* pngwing.com (4) 1 */
+
+width: 16px;
+height: 16px;
+
+background: url(pngwing.com (4).png);
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Non - Veg */
+
+width: 71px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321148 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 0px;
+gap: 9px;
+
+position: absolute;
+width: 400px;
+height: 733px;
+left: calc(50% - 400px/2 + 1px);
+top: 448px;
+
+
+
+/* Frame 427321242 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 0px;
+gap: 10px;
+
+width: 400px;
+height: 112px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Frame 427321169 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: space-between;
+align-items: center;
+padding: 0px;
+gap: 10px;
+
+width: 400px;
+height: 24px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Snacks */
+
+margin: 0 auto;
+width: 51px;
+height: 21px;
 
 font-family: 'Poppins';
 font-style: normal;
 font-weight: 500;
-font-size: 13px;
-line-height: 20px;
+font-size: 14px;
+line-height: 21px;
 /* identical to box height */
 text-align: center;
 
@@ -513,10 +905,11 @@ order: 0;
 flex-grow: 0;
 
 
-/* ep:arrow-right-bold */
+/* mdi:arrow-down-drop */
 
-width: 9px;
-height: 9px;
+margin: 0 auto;
+width: 24px;
+height: 24px;
 
 
 /* Inside auto layout */
@@ -528,106 +921,20 @@ flex-grow: 0;
 /* Vector */
 
 position: absolute;
-left: 31.25%;
-right: 20.9%;
-top: 8.4%;
-bottom: 8.47%;
+left: 29.17%;
+right: 29.17%;
+top: 41.67%;
+bottom: 37.5%;
 
 background: #000000;
 
 
-/* Frame 427321117 */
+/* Line 1622 */
 
-/* Auto layout */
-display: flex;
-flex-direction: column;
-align-items: flex-start;
-padding: 20px;
-gap: 20px;
-
-position: absolute;
 width: 400px;
-height: 427px;
-left: calc(50% - 400px/2);
-top: 170px;
-
-background: #FFFFFF;
-border-radius: 20px;
-
-
-/* Frame 427321120 */
-
-/* Auto layout */
-display: flex;
-flex-direction: row;
-justify-content: space-between;
-align-items: center;
-padding: 0px;
-gap: 10px;
-
-width: 360px;
-height: 21px;
-
-
-/* Inside auto layout */
-flex: none;
-order: 0;
-align-self: stretch;
-flex-grow: 0;
-
-
-/* My Orders */
-
-margin: 0 auto;
-width: 72px;
-height: 21px;
-
-font-family: 'Poppins';
-font-style: normal;
-font-weight: 500;
-font-size: 14px;
-line-height: 21px;
-/* identical to box height */
-
-color: #000000;
-
-
-/* Inside auto layout */
-flex: none;
-order: 0;
-flex-grow: 0;
-
-
-/* ep:arrow-right-bold */
-
-margin: 0 auto;
-width: 14px;
-height: 14px;
-
-
-/* Inside auto layout */
-flex: none;
-order: 1;
-flex-grow: 0;
-
-
-/* Vector */
-
-position: absolute;
-left: 31.25%;
-right: 20.89%;
-top: 8.39%;
-bottom: 8.47%;
-
-background: #000000;
-
-
-/* Line 4 */
-
-width: 360px;
 height: 0px;
 
-border: 1px dashed rgba(158, 158, 158, 0.5);
+border: 1px solid rgba(0, 0, 0, 0.2);
 
 /* Inside auto layout */
 flex: none;
@@ -636,7 +943,7 @@ align-self: stretch;
 flex-grow: 0;
 
 
-/* Frame 427321121 */
+/* Frame 427321171 */
 
 /* Auto layout */
 display: flex;
@@ -646,8 +953,8 @@ align-items: center;
 padding: 0px;
 gap: 10px;
 
-width: 360px;
-height: 21px;
+width: 400px;
+height: 24px;
 
 
 /* Inside auto layout */
@@ -657,10 +964,10 @@ align-self: stretch;
 flex-grow: 0;
 
 
-/* My Addresses */
+/* Morning Tiffin */
 
 margin: 0 auto;
-width: 98px;
+width: 96px;
 height: 21px;
 
 font-family: 'Poppins';
@@ -669,9 +976,11 @@ font-weight: 500;
 font-size: 14px;
 line-height: 21px;
 /* identical to box height */
+text-align: center;
 
 color: #000000;
 
+opacity: 0.85;
 
 /* Inside auto layout */
 flex: none;
@@ -679,11 +988,11 @@ order: 0;
 flex-grow: 0;
 
 
-/* ep:arrow-right-bold */
+/* mdi:arrow-down-drop */
 
 margin: 0 auto;
-width: 14px;
-height: 14px;
+width: 24px;
+height: 24px;
 
 
 /* Inside auto layout */
@@ -695,20 +1004,20 @@ flex-grow: 0;
 /* Vector */
 
 position: absolute;
-left: 31.25%;
-right: 20.89%;
-top: 8.39%;
-bottom: 8.47%;
+left: 29.17%;
+right: 29.17%;
+top: 41.67%;
+bottom: 37.5%;
 
 background: #000000;
 
 
-/* Line 9 */
+/* Line 1621 */
 
-width: 360px;
+width: 400px;
 height: 0px;
 
-border: 1px dashed rgba(158, 158, 158, 0.5);
+border: 1px solid rgba(0, 0, 0, 0.2);
 
 /* Inside auto layout */
 flex: none;
@@ -717,7 +1026,7 @@ align-self: stretch;
 flex-grow: 0;
 
 
-/* Frame 427321126 */
+/* Frame 427321170 */
 
 /* Auto layout */
 display: flex;
@@ -727,8 +1036,8 @@ align-items: center;
 padding: 0px;
 gap: 10px;
 
-width: 360px;
-height: 21px;
+width: 400px;
+height: 24px;
 
 
 /* Inside auto layout */
@@ -738,10 +1047,10 @@ align-self: stretch;
 flex-grow: 0;
 
 
-/* Favorites */
+/* Restaurants Near You */
 
 margin: 0 auto;
-width: 65px;
+width: 153px;
 height: 21px;
 
 font-family: 'Poppins';
@@ -750,9 +1059,11 @@ font-weight: 500;
 font-size: 14px;
 line-height: 21px;
 /* identical to box height */
+text-align: center;
 
 color: #000000;
 
+opacity: 0.85;
 
 /* Inside auto layout */
 flex: none;
@@ -760,11 +1071,11 @@ order: 0;
 flex-grow: 0;
 
 
-/* ep:arrow-right-bold */
+/* mdi:arrow-down-drop */
 
 margin: 0 auto;
-width: 14px;
-height: 14px;
+width: 24px;
+height: 24px;
 
 
 /* Inside auto layout */
@@ -776,63 +1087,64 @@ flex-grow: 0;
 /* Vector */
 
 position: absolute;
-left: 31.25%;
-right: 20.89%;
-top: 8.39%;
-bottom: 8.47%;
+left: 29.17%;
+right: 29.17%;
+top: 41.67%;
+bottom: 37.5%;
 
 background: #000000;
 
 
-/* Line 5 */
-
-width: 360px;
-height: 0px;
-
-border: 1px dashed rgba(158, 158, 158, 0.5);
-
-/* Inside auto layout */
-flex: none;
-order: 5;
-align-self: stretch;
-flex-grow: 0;
-
-
-/* Frame 427321123 */
+/* Frame 427321137 */
 
 /* Auto layout */
 display: flex;
 flex-direction: row;
-justify-content: space-between;
-align-items: center;
+align-items: flex-start;
 padding: 0px;
-gap: 10px;
 
-width: 360px;
-height: 21px;
+width: 400px;
+height: 192px;
+
+background: #FFFFFF;
+border-radius: 16px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321140 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 14px 0px;
+gap: 3px;
+
+width: 234px;
+height: 196px;
 
 
 /* Inside auto layout */
 flex: none;
-order: 6;
-align-self: stretch;
-flex-grow: 0;
+order: 0;
+flex-grow: 1;
 
 
-/* Chat With Us */
+/* Frame 427321182 */
 
-margin: 0 auto;
-width: 92px;
-height: 21px;
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 0px;
+gap: 3px;
 
-font-family: 'Poppins';
-font-style: normal;
-font-weight: 500;
-font-size: 14px;
-line-height: 21px;
-/* identical to box height */
-
-color: #000000;
+width: 49px;
+height: 13px;
 
 
 /* Inside auto layout */
@@ -841,79 +1153,48 @@ order: 0;
 flex-grow: 0;
 
 
-/* ep:arrow-right-bold */
+/* pngwing.com (4) 2 */
 
-margin: 0 auto;
-width: 14px;
-height: 14px;
+width: 12px;
+height: 12px;
 
-
-/* Inside auto layout */
-flex: none;
-order: 1;
-flex-grow: 0;
-
-
-/* Vector */
-
-position: absolute;
-left: 31.25%;
-right: 20.89%;
-top: 8.39%;
-bottom: 8.47%;
-
-background: #000000;
-
-
-/* Line 7 */
-
-width: 360px;
-height: 0px;
-
-border: 1px dashed rgba(158, 158, 158, 0.5);
+background: url(pngwing.com (4).png);
 
 /* Inside auto layout */
 flex: none;
-order: 7;
-align-self: stretch;
+order: 0;
 flex-grow: 0;
 
 
 /* Frame 427321124 */
 
+box-sizing: border-box;
+
 /* Auto layout */
 display: flex;
 flex-direction: row;
-justify-content: space-between;
+justify-content: center;
 align-items: center;
-padding: 0px;
-gap: 10px;
+padding: 2px;
+gap: 1px;
 
-width: 360px;
-height: 21px;
+width: 34px;
+height: 13px;
 
+background: rgba(213, 0, 0, 0.13);
+border: 0.5px solid #FF0000;
+border-radius: 13px;
 
 /* Inside auto layout */
 flex: none;
-order: 8;
-align-self: stretch;
+order: 1;
 flex-grow: 0;
 
 
-/* Notification */
+/* mdi:chilli-mild */
 
-margin: 0 auto;
-width: 82px;
-height: 21px;
-
-font-family: 'Poppins';
-font-style: normal;
-font-weight: 500;
-font-size: 14px;
-line-height: 21px;
-/* identical to box height */
-
-color: #000000;
+width: 9px;
+height: 9px;
 
 
 /* Inside auto layout */
@@ -922,104 +1203,37 @@ order: 0;
 flex-grow: 0;
 
 
-/* material-symbols:toggle-on */
-
-margin: 0 auto;
-width: 30px;
-height: 30px;
-
-
-/* Inside auto layout */
-flex: none;
-order: 1;
-flex-grow: 0;
-
-
 /* Vector */
 
 position: absolute;
-left: 4.17%;
-right: 4.17%;
-top: 25%;
-bottom: 25%;
+left: 33.33%;
+right: 33.33%;
+top: 8.33%;
+bottom: 8.33%;
 
-background: #00B14F;
-
-
-/* Vector */
-
-position: absolute;
-left: 56.67%;
-right: 13.33%;
-top: 31.67%;
-bottom: 35%;
-
-background: #FFFFFF;
+background: #FF0000;
 
 
-/* Line 8 */
+/* Spicy */
 
-width: 360px;
-height: 0px;
-
-border: 1px dashed rgba(158, 158, 158, 0.5);
-
-/* Inside auto layout */
-flex: none;
-order: 9;
-align-self: stretch;
-flex-grow: 0;
-
-
-/* Frame 427321122 */
-
-/* Auto layout */
-display: flex;
-flex-direction: row;
-justify-content: space-between;
-align-items: center;
-padding: 0px;
-gap: 10px;
-
-width: 360px;
-height: 21px;
-
-
-/* Inside auto layout */
-flex: none;
-order: 10;
-align-self: stretch;
-flex-grow: 0;
-
-
-/* Privacy Policy */
-
-margin: 0 auto;
-width: 97px;
-height: 21px;
+width: 20px;
+height: 5px;
 
 font-family: 'Poppins';
 font-style: normal;
 font-weight: 500;
-font-size: 14px;
-line-height: 21px;
-/* identical to box height */
+font-size: 7px;
+line-height: 10px;
+/* leading-trim and text-edge are draft CSS properties.
 
-color: #000000;
+Read more: https://drafts.csswg.org/css-inline-3/#leading-trim
+*/
+leading-trim: both;
+text-edge: cap;
 
+color: #FF0000;
 
-/* Inside auto layout */
-flex: none;
-order: 0;
-flex-grow: 0;
-
-
-/* ep:arrow-right-bold */
-
-margin: 0 auto;
-width: 14px;
-height: 14px;
-
+opacity: 0.85;
 
 /* Inside auto layout */
 flex: none;
@@ -1027,28 +1241,26 @@ order: 1;
 flex-grow: 0;
 
 
-/* Vector */
+/* Rava Kichadi */
 
-position: absolute;
-left: 31.25%;
-right: 20.89%;
-top: 8.39%;
-bottom: 8.47%;
+width: 121px;
+height: 27px;
 
-background: #000000;
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 600;
+font-size: 18px;
+line-height: 27px;
+/* identical to box height */
+text-align: center;
 
+color: #000000;
 
-/* Line 6 */
-
-width: 360px;
-height: 0px;
-
-border: 1px dashed rgba(158, 158, 158, 0.5);
+opacity: 0.85;
 
 /* Inside auto layout */
 flex: none;
-order: 11;
-align-self: stretch;
+order: 1;
 flex-grow: 0;
 
 
@@ -1057,26 +1269,76 @@ flex-grow: 0;
 /* Auto layout */
 display: flex;
 flex-direction: row;
-justify-content: space-between;
+justify-content: center;
 align-items: center;
-padding: 0px;
-gap: 10px;
+padding: 4px 2px;
+gap: 1px;
 
-width: 360px;
-height: 21px;
+width: 55px;
+height: 16px;
+
+background: linear-gradient(90deg, #FFF2CF 0%, rgba(255, 255, 255, 0) 100%);
+border-radius: 2px;
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+flex-grow: 0;
+
+
+/* zondicons:badge */
+
+width: 8px;
+height: 8px;
 
 
 /* Inside auto layout */
 flex: none;
-order: 12;
-align-self: stretch;
+order: 0;
 flex-grow: 0;
 
 
-/* Terms & Conditions */
+/* Vector */
 
-margin: 0 auto;
-width: 139px;
+position: absolute;
+left: 20%;
+right: 20%;
+top: 0%;
+bottom: 0%;
+
+background: #FFC529;
+
+
+/* Best Seller */
+
+width: 42px;
+height: 6px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 8px;
+line-height: 12px;
+/* leading-trim and text-edge are draft CSS properties.
+
+Read more: https://drafts.csswg.org/css-inline-3/#leading-trim
+*/
+leading-trim: both;
+text-edge: cap;
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* ₹ 120 */
+
+width: 35px;
 height: 21px;
 
 font-family: 'Poppins';
@@ -1088,6 +1350,71 @@ line-height: 21px;
 
 color: #000000;
 
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 3;
+flex-grow: 0;
+
+
+/* Spicy Coriander leaves in the top and Freshly Cooked Rav with ghee in the top..More */
+
+width: 181px;
+height: 51px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 16px;
+
+color: rgba(0, 0, 0, 0.6);
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 4;
+flex-grow: 0;
+
+
+/* Frame 427321269 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: flex-start;
+padding: 0px;
+gap: 3px;
+
+width: 53px;
+height: 25px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 5;
+flex-grow: 0;
+
+
+/* Frame 427321124 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px;
+gap: 4px;
+
+width: 25px;
+height: 25px;
+
+background: rgba(0, 0, 0, 0.05);
+border-radius: 13px;
 
 /* Inside auto layout */
 flex: none;
@@ -1095,11 +1422,1389 @@ order: 0;
 flex-grow: 0;
 
 
-/* ep:arrow-right-bold */
+/* solar:heart-linear */
+
+width: 17px;
+height: 17px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 5.21%;
+right: 5.21%;
+top: 10.56%;
+bottom: 11.46%;
+
+background: rgba(0, 0, 0, 0.5);
+
+
+/* Frame 427321183 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px;
+gap: 4px;
+
+width: 25px;
+height: 25px;
+
+background: rgba(0, 0, 0, 0.05);
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* stash:share */
+
+width: 17px;
+height: 17px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 15.63%;
+right: 15.62%;
+top: 13.56%;
+bottom: 13.54%;
+
+background: rgba(0, 0, 0, 0.5);
+
+
+/* Frame 427321268 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 0px;
+gap: 26px;
+
+width: 166px;
+height: 178px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321141 */
+
+width: 166px;
+height: 137px;
+
+background: linear-gradient(0deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)), url(image.png);
+border-radius: 16px;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Frame 427321133 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 5px 13px;
+gap: 2px;
+
+position: absolute;
+width: 76px;
+height: 37px;
+left: 53px;
+top: 115px;
+
+background: #FFFFFF;
+border: 1px solid #00B14F;
+border-radius: 9px;
+
+
+/* + */
+
+width: 13px;
+height: 27px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 18px;
+line-height: 27px;
+/* identical to box height */
+
+color: #00B14F;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Add */
+
+width: 35px;
+height: 26px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 17px;
+line-height: 26px;
+/* identical to box height */
+
+color: #00B14F;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Customisable */
+
+width: 181px;
+height: 15px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 15px;
+/* identical to box height */
+text-align: center;
+
+color: rgba(0, 0, 0, 0.6);
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321244 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: flex-start;
+padding: 0px;
+
+width: 400px;
+height: 192px;
+
+background: #FFFFFF;
+border-radius: 16px;
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+flex-grow: 0;
+
+
+/* Frame 427321140 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 14px 0px;
+gap: 3px;
+
+width: 234px;
+height: 196px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 1;
+
+
+/* Frame 427321182 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 0px;
+gap: 3px;
+
+width: 49px;
+height: 13px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* pngwing.com (4) 2 */
+
+width: 12px;
+height: 12px;
+
+background: url(pngwing.com (4).png);
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Frame 427321124 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 2px;
+gap: 1px;
+
+width: 34px;
+height: 13px;
+
+background: rgba(213, 0, 0, 0.13);
+border: 0.5px solid #FF0000;
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* mdi:chilli-mild */
+
+width: 9px;
+height: 9px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 33.33%;
+right: 33.33%;
+top: 8.33%;
+bottom: 8.33%;
+
+background: #FF0000;
+
+
+/* Spicy */
+
+width: 20px;
+height: 5px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 7px;
+line-height: 10px;
+/* leading-trim and text-edge are draft CSS properties.
+
+Read more: https://drafts.csswg.org/css-inline-3/#leading-trim
+*/
+leading-trim: both;
+text-edge: cap;
+
+color: #FF0000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Idly */
+
+width: 34px;
+height: 27px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 600;
+font-size: 18px;
+line-height: 27px;
+/* identical to box height */
+text-align: center;
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321125 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px 2px;
+gap: 1px;
+
+width: 55px;
+height: 16px;
+
+background: linear-gradient(90deg, #FFF2CF 0%, rgba(255, 255, 255, 0) 100%);
+border-radius: 2px;
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+flex-grow: 0;
+
+
+/* zondicons:badge */
+
+width: 8px;
+height: 8px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 20%;
+right: 20%;
+top: 0%;
+bottom: 0%;
+
+background: #FFC529;
+
+
+/* Best Seller */
+
+width: 42px;
+height: 6px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 8px;
+line-height: 12px;
+/* leading-trim and text-edge are draft CSS properties.
+
+Read more: https://drafts.csswg.org/css-inline-3/#leading-trim
+*/
+leading-trim: both;
+text-edge: cap;
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* ₹ 120 */
+
+width: 35px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 3;
+flex-grow: 0;
+
+
+/* Spicy Coriander leaves in the top and Freshly Cooked Rav with ghee in the top..More */
+
+width: 181px;
+height: 51px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 16px;
+
+color: rgba(0, 0, 0, 0.6);
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 4;
+flex-grow: 0;
+
+
+/* Frame 427321269 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: flex-start;
+padding: 0px;
+gap: 3px;
+
+width: 53px;
+height: 25px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 5;
+flex-grow: 0;
+
+
+/* Frame 427321124 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px;
+gap: 4px;
+
+width: 25px;
+height: 25px;
+
+background: rgba(0, 0, 0, 0.05);
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* solar:heart-linear */
+
+width: 17px;
+height: 17px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 5.21%;
+right: 5.21%;
+top: 10.56%;
+bottom: 11.46%;
+
+background: rgba(0, 0, 0, 0.5);
+
+
+/* Frame 427321183 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px;
+gap: 4px;
+
+width: 25px;
+height: 25px;
+
+background: rgba(0, 0, 0, 0.05);
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* stash:share */
+
+width: 17px;
+height: 17px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 15.63%;
+right: 15.62%;
+top: 13.56%;
+bottom: 13.54%;
+
+background: rgba(0, 0, 0, 0.5);
+
+
+/* Frame 427321268 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 0px;
+gap: 26px;
+
+width: 166px;
+height: 178px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321141 */
+
+width: 166px;
+height: 137px;
+
+background: url(image.png), url(image.png), linear-gradient(0deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)), url(image.png);
+border-radius: 16px;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Frame 427321133 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 5px 13px;
+gap: 2px;
+
+position: absolute;
+width: 76px;
+height: 37px;
+left: 53px;
+top: 115px;
+
+background: #FFFFFF;
+border: 1px solid #00B14F;
+border-radius: 9px;
+
+
+/* + */
+
+width: 13px;
+height: 27px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 18px;
+line-height: 27px;
+/* identical to box height */
+
+color: #00B14F;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Add */
+
+width: 35px;
+height: 26px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 17px;
+line-height: 26px;
+/* identical to box height */
+
+color: #00B14F;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Customisable */
+
+width: 181px;
+height: 15px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 15px;
+/* identical to box height */
+text-align: center;
+
+color: rgba(0, 0, 0, 0.6);
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321243 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: flex-start;
+padding: 0px;
+
+width: 400px;
+height: 192px;
+
+background: #FFFFFF;
+border-radius: 16px;
+
+/* Inside auto layout */
+flex: none;
+order: 3;
+flex-grow: 0;
+
+
+/* Frame 427321140 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 14px 0px;
+gap: 3px;
+
+width: 234px;
+height: 196px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 1;
+
+
+/* Frame 427321182 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 0px;
+gap: 3px;
+
+width: 49px;
+height: 13px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* pngwing.com (4) 2 */
+
+width: 12px;
+height: 12px;
+
+background: url(pngwing.com (4).png);
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Frame 427321124 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 2px;
+gap: 1px;
+
+width: 34px;
+height: 13px;
+
+background: rgba(213, 0, 0, 0.13);
+border: 0.5px solid #FF0000;
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* mdi:chilli-mild */
+
+width: 9px;
+height: 9px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 33.33%;
+right: 33.33%;
+top: 8.33%;
+bottom: 8.33%;
+
+background: #FF0000;
+
+
+/* Spicy */
+
+width: 20px;
+height: 5px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 7px;
+line-height: 10px;
+/* leading-trim and text-edge are draft CSS properties.
+
+Read more: https://drafts.csswg.org/css-inline-3/#leading-trim
+*/
+leading-trim: both;
+text-edge: cap;
+
+color: #FF0000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Pongal */
+
+width: 64px;
+height: 27px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 600;
+font-size: 18px;
+line-height: 27px;
+/* identical to box height */
+text-align: center;
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321125 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px 2px;
+gap: 1px;
+
+width: 55px;
+height: 16px;
+
+background: linear-gradient(90deg, #FFF2CF 0%, rgba(255, 255, 255, 0) 100%);
+border-radius: 2px;
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+flex-grow: 0;
+
+
+/* zondicons:badge */
+
+width: 8px;
+height: 8px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 20%;
+right: 20%;
+top: 0%;
+bottom: 0%;
+
+background: #FFC529;
+
+
+/* Best Seller */
+
+width: 42px;
+height: 6px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 8px;
+line-height: 12px;
+/* leading-trim and text-edge are draft CSS properties.
+
+Read more: https://drafts.csswg.org/css-inline-3/#leading-trim
+*/
+leading-trim: both;
+text-edge: cap;
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* ₹ 120 */
+
+width: 35px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 3;
+flex-grow: 0;
+
+
+/* Spicy Coriander leaves in the top and Freshly Cooked Rav with ghee in the top..More */
+
+width: 181px;
+height: 51px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 16px;
+
+color: rgba(0, 0, 0, 0.6);
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 4;
+flex-grow: 0;
+
+
+/* Frame 427321269 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: flex-start;
+padding: 0px;
+gap: 3px;
+
+width: 53px;
+height: 25px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 5;
+flex-grow: 0;
+
+
+/* Frame 427321124 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px;
+gap: 4px;
+
+width: 25px;
+height: 25px;
+
+background: rgba(0, 0, 0, 0.05);
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* solar:heart-linear */
+
+width: 17px;
+height: 17px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 5.21%;
+right: 5.21%;
+top: 10.56%;
+bottom: 11.46%;
+
+background: rgba(0, 0, 0, 0.5);
+
+
+/* Frame 427321183 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 4px;
+gap: 4px;
+
+width: 25px;
+height: 25px;
+
+background: rgba(0, 0, 0, 0.05);
+border-radius: 13px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* stash:share */
+
+width: 17px;
+height: 17px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 15.63%;
+right: 15.62%;
+top: 13.56%;
+bottom: 13.54%;
+
+background: rgba(0, 0, 0, 0.5);
+
+
+/* Frame 427321268 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+padding: 0px;
+gap: 26px;
+
+width: 166px;
+height: 178px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Frame 427321141 */
+
+width: 166px;
+height: 137px;
+
+background: url(image.png), linear-gradient(0deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)), url(image.png);
+border-radius: 16px;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Frame 427321133 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 5px 13px;
+gap: 2px;
+
+position: absolute;
+width: 76px;
+height: 37px;
+left: 53px;
+top: 115px;
+
+background: #FFFFFF;
+border: 1px solid #00B14F;
+border-radius: 9px;
+
+
+/* + */
+
+width: 13px;
+height: 27px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 18px;
+line-height: 27px;
+/* identical to box height */
+
+color: #00B14F;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Add */
+
+width: 35px;
+height: 26px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 17px;
+line-height: 26px;
+/* identical to box height */
+
+color: #00B14F;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Customisable */
+
+width: 181px;
+height: 15px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 15px;
+/* identical to box height */
+text-align: center;
+
+color: rgba(0, 0, 0, 0.6);
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Line 1623 */
+
+width: 400px;
+height: 0px;
+
+border: 1px dashed rgba(0, 0, 0, 0.1);
+
+/* Inside auto layout */
+flex: none;
+order: 4;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Line 1624 */
+
+width: 400px;
+height: 0px;
+
+border: 1px dashed rgba(0, 0, 0, 0.1);
+
+/* Inside auto layout */
+flex: none;
+order: 5;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Frame 427321270 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+justify-content: center;
+align-items: flex-start;
+padding: 20px;
+gap: 20px;
+
+position: absolute;
+width: 440px;
+height: 100px;
+left: calc(50% - 440px/2);
+bottom: 0px;
+
+background: #FFFFFF;
+border-top: 1px solid rgba(0, 0, 0, 0.2);
+box-shadow: 0px -3px 24px rgba(0, 0, 0, 0.25);
+
+
+/* Frame 427321153 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: space-between;
+align-items: center;
+padding: 20px;
+
+width: 400px;
+height: 60px;
+
+background: #181C2E;
+box-shadow: 0px 0px 29px 10px rgba(0, 0, 0, 0.1);
+border-radius: 10px;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* 1 Item Added */
 
 margin: 0 auto;
-width: 14px;
-height: 14px;
+width: 92px;
+height: 21px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 600;
+font-size: 14px;
+line-height: 21px;
+/* identical to box height */
+
+color: #FFFFFF;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Frame 427321125 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 10px 12px;
+gap: 4px;
+
+margin: 0 auto;
+width: 103px;
+height: 36px;
+
+background: #FFFFFF;
+border-radius: 6px;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* View Cart */
+
+width: 59px;
+height: 8px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 12px;
+line-height: 18px;
+/* leading-trim and text-edge are draft CSS properties.
+
+Read more: https://drafts.csswg.org/css-inline-3/#leading-trim
+*/
+leading-trim: both;
+text-edge: cap;
+
+color: #181C2E;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* tabler:arrow-right */
+
+width: 16px;
+height: 16px;
 
 
 /* Inside auto layout */
@@ -1111,28 +2816,497 @@ flex-grow: 0;
 /* Vector */
 
 position: absolute;
-left: 31.25%;
-right: 20.89%;
-top: 8.39%;
-bottom: 8.47%;
+left: 20.83%;
+right: 20.83%;
+top: 25%;
+bottom: 25%;
 
-background: #000000;
+border: 1.5px solid #181C2E;
 
 
-/* App Version 1.2 */
+/* Frame 427321284 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+align-items: center;
+padding: 0px;
+gap: 13px;
 
 position: absolute;
-width: 106px;
-height: 21px;
-left: calc(50% - 106px/2);
-top: 827px;
+width: 425px;
+height: 90px;
+left: 20px;
+top: 320px;
+
+
+
+/* Frame 427321278 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: center;
+padding: 0px;
+gap: 12px;
+
+width: 60px;
+height: 90px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Ellipse 1342 */
+
+width: 60px;
+height: 60px;
+
+background: url(image.png);
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Briyani */
+
+width: 60px;
+height: 18px;
 
 font-family: 'Poppins';
 font-style: normal;
 font-weight: 500;
-font-size: 14px;
-line-height: 21px;
+font-size: 12px;
+line-height: 18px;
 /* identical to box height */
+text-align: center;
 
 color: #000000;
 
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Frame 427321279 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: center;
+padding: 0px;
+gap: 12px;
+
+width: 60px;
+height: 90px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+
+
+/* Ellipse 1342 */
+
+width: 60px;
+height: 60px;
+
+background: url(image.png);
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Idly */
+
+width: 60px;
+height: 18px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 12px;
+line-height: 18px;
+/* identical to box height */
+text-align: center;
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Frame 427321280 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: center;
+padding: 0px;
+gap: 12px;
+
+width: 60px;
+height: 90px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 2;
+flex-grow: 0;
+
+
+/* Ellipse 1342 */
+
+width: 60px;
+height: 60px;
+
+background: url(image.png);
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Dosa */
+
+width: 60px;
+height: 18px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 12px;
+line-height: 18px;
+/* identical to box height */
+text-align: center;
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Frame 427321281 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: center;
+padding: 0px;
+gap: 12px;
+
+width: 60px;
+height: 90px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 3;
+flex-grow: 0;
+
+
+/* Ellipse 1342 */
+
+width: 60px;
+height: 60px;
+
+background: url(image.png);
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Pongal */
+
+width: 60px;
+height: 18px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 12px;
+line-height: 18px;
+/* identical to box height */
+text-align: center;
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Frame 427321282 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: center;
+padding: 0px;
+gap: 12px;
+
+width: 60px;
+height: 90px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 4;
+flex-grow: 0;
+
+
+/* Ellipse 1342 */
+
+width: 60px;
+height: 60px;
+
+background: url(image.png);
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Fried Rice */
+
+width: 60px;
+height: 18px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 12px;
+line-height: 18px;
+/* identical to box height */
+text-align: center;
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Frame 427321283 */
+
+/* Auto layout */
+display: flex;
+flex-direction: column;
+align-items: center;
+padding: 0px;
+gap: 12px;
+
+width: 60px;
+height: 90px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 5;
+flex-grow: 0;
+
+
+/* Ellipse 1342 */
+
+width: 60px;
+height: 60px;
+
+background: url(image.png);
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Noodles */
+
+width: 60px;
+height: 18px;
+
+font-family: 'Poppins';
+font-style: normal;
+font-weight: 500;
+font-size: 12px;
+line-height: 18px;
+/* identical to box height */
+text-align: center;
+
+color: #000000;
+
+opacity: 0.85;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+align-self: stretch;
+flex-grow: 0;
+
+
+/* Group 1272628216 */
+
+position: absolute;
+width: 440px;
+height: 0px;
+left: 0px;
+top: 419px;
+
+
+
+/* Line 1619 */
+
+position: absolute;
+width: 440px;
+height: 0px;
+left: 0px;
+top: 419px;
+
+border: 1px solid rgba(0, 0, 0, 0.2);
+
+
+/* Line 1620 */
+
+position: absolute;
+width: 67px;
+height: 0px;
+left: 90px;
+top: 419px;
+
+border: 2px solid #00B14F;
+
+
+/* Frame 427321111 */
+
+box-sizing: border-box;
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+padding: 19px 20px;
+gap: 10px;
+
+position: absolute;
+width: 40px;
+height: 40px;
+left: 381px;
+top: 266px;
+
+border-radius: 10px;
+
+
+/* mdi:search */
+
+width: 24px;
+height: 24px;
+
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* Vector */
+
+position: absolute;
+left: 12.5%;
+right: 14.58%;
+top: 12.5%;
+bottom: 14.58%;
+
+background: #00B14F;
+
+
+/* Frame 427321127 */
+
+/* Auto layout */
+display: flex;
+flex-direction: row;
+justify-content: flex-end;
+align-items: center;
+padding: 10px 19px;
+gap: 7px;
+isolation: isolate;
+
+position: absolute;
+width: 50px;
+height: 50px;
+right: 20px;
+bottom: 120px;
+
+border-radius: 10px;
+
+
+/* Rectangle 1358 */
+
+position: absolute;
+width: 50px;
+height: 50px;
+right: 0px;
+top: 0px;
+
+background: #FFC529;
+box-shadow: 0px 0px 29px 10px rgba(0, 0, 0, 0.25);
+border-radius: 10px;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+z-index: 0;
+
+
+/* Vector */
+
+width: 11.91px;
+height: 14.15px;
+
+background: #000000;
+
+/* Inside auto layout */
+flex: none;
+order: 1;
+flex-grow: 0;
+z-index: 1;
