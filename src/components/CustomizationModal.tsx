@@ -28,6 +28,7 @@ interface CustomizationModalProps {
     image: any;
     addOns?: AddOn[];
   } | null;
+  preselectedAddOns?: string[];
   onClose: () => void;
   onAddToCart: (itemId: string, quantity: number, selectedAddOns: string[]) => void;
 }
@@ -35,6 +36,7 @@ interface CustomizationModalProps {
 export const CustomizationModal: React.FC<CustomizationModalProps> = ({
   visible,
   item,
+  preselectedAddOns,
   onClose,
   onAddToCart,
 }) => {
@@ -50,10 +52,17 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
         tension: 65,
         friction: 11,
       }).start();
+
+      // Initialize selected add-ons if provided
+      if (preselectedAddOns && preselectedAddOns.length > 0) {
+        setSelectedAddOns(new Set(preselectedAddOns));
+      } else {
+        setSelectedAddOns(new Set());
+      }
     } else {
       slideAnim.setValue(1000);
     }
-  }, [visible]);
+  }, [visible, preselectedAddOns]);
 
   if (!item) return null;
 

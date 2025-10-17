@@ -17,9 +17,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { apiService } from '@/services/api.service';
 import { Shimmer } from '@/components/Shimmer';
 import { CustomizationModal } from '@/components/CustomizationModal';
+import { CustomisationsReviewModal } from '@/components/CustomisationsReviewModal';
 import { FoodItemDetailModal } from '@/components/FoodItemDetailModal';
 import { FilterModal, FilterState } from '@/components/FilterModal';
 import { OrderDetailsScreen } from '@/screens/Order/OrderDetailsScreen';
+import { OrderSuccessScreen } from '@/screens/Order/OrderSuccessScreen';
+import { SearchScreen } from './SearchScreen';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -105,12 +108,24 @@ const MENU_DATA: MenuSection[] = [
   },
 ];
 
+interface CustomizationVariant {
+  id: string;
+  addOns: string[];
+  addOnNames?: string[];
+  price: number;
+  quantity: number;
+}
+
 interface CartItem {
   id: string;
   name: string;
   price: number;
-  quantity: number;
   isVeg: boolean;
+  isCustomizable?: boolean;
+  // For non-customizable items
+  quantity?: number;
+  // For customizable items
+  variants?: CustomizationVariant[];
 }
 
 export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
@@ -128,6 +143,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
   const [selectedCustomizableItem, setSelectedCustomizableItem] = useState<MenuItem | null>(null);
+  const [showCustomisationsReviewModal, setShowCustomisationsReviewModal] = useState(false);
+  const [reviewingItemId, setReviewingItemId] = useState<string | null>(null);
+  const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
+  const [preselectedAddOns, setPreselectedAddOns] = useState<string[]>([]);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
@@ -138,6 +157,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
+  const [activeDietaryFilter, setActiveDietaryFilter] = useState<'veg' | 'non-veg' | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showOrderSuccess, setShowOrderSuccess] = useState(false);
 
   const scrollViewRef = React.useRef<ScrollView>(null);
   const sectionRefs = React.useRef<{ [key: string]: View | null }>({});
@@ -148,7 +170,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const translateYAnim = useRef(new Animated.Value(0)).current;
 
   // Calculate total cart items
-  const totalCartItems = Object.values(cart).reduce((sum, item) => sum + item.quantity, 0);
+  const totalCartItems = Object.values(cart).reduce((sum, item) => {
+    if (item.isCustomizable && item.variants) {
+      return sum + item.variants.reduce((variantSum, variant) => variantSum + variant.quantity, 0);
+    }
+    return sum + (item.quantity || 0);
+  }, 0);
 
   console.log('[RestaurantScreen] Component render - restaurantId:', restaurantId, 'name:', restaurantName);
 
@@ -157,7 +184,55 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     setLoadedImages(prev => new Set(prev).add(itemId));
   };
 
-  // Add item to cart
+  // Get total quantity for an item (works for both customizable and non-customizable)
+  const getItemQuantity = (itemId: string): number => {
+    const cartItem = cart[itemId];
+    if (!cartItem) return 0;
+
+    if (cartItem.isCustomizable && cartItem.variants) {
+      return cartItem.variants.reduce((sum, variant) => sum + variant.quantity, 0);
+    }
+
+    return cartItem.quantity || 0;
+  };
+
+  // Flatten cart items for order details - convert variants into separate line items
+  const getFlattenedCartItems = () => {
+    const flattenedItems: any[] = [];
+
+    Object.values(cart).forEach(cartItem => {
+      if (cartItem.isCustomizable && cartItem.variants) {
+        // For customizable items, add each variant as a separate line item
+        cartItem.variants.forEach(variant => {
+          flattenedItems.push({
+            id: cartItem.id,  // Original item ID
+            variantId: variant.id,  // Variant ID
+            addOnIds: variant.addOns,  // Array of add-on IDs
+            name: cartItem.name,
+            price: variant.price,
+            quantity: variant.quantity,
+            isVeg: cartItem.isVeg,
+            customizations: variant.addOnNames?.length
+              ? variant.addOnNames.join(', ')
+              : 'No customizations',
+          });
+        });
+      } else {
+        // For regular items, add as-is
+        flattenedItems.push({
+          id: cartItem.id,
+          name: cartItem.name,
+          price: cartItem.price,
+          quantity: cartItem.quantity || 0,
+          isVeg: cartItem.isVeg,
+        });
+      }
+    });
+
+    return flattenedItems;
+  };
+
+  // Add item to cart (for non-customizable items)
   const addToCart = (item: MenuItem) => {
     setCart(prev => ({
       ...prev,
@@ -167,31 +242,53 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         price: item.price,
         quantity: 1,
         isVeg: item.isVeg,
+        isCustomizable: false,
       }
     }));
   };
 
   // Increment item quantity
   const incrementItem = (itemId: string) => {
+    const cartItem = cart[itemId];
+
+    // If item is customizable, open review modal instead
+    if (cartItem?.isCustomizable) {
+      setReviewingItemId(itemId);
+      setShowCustomisationsReviewModal(true);
+      return;
+    }
+
+    // For non-customizable items, just increment quantity
     setCart(prev => ({
       ...prev,
       [itemId]: {
         ...prev[itemId],
-        quantity: prev[itemId].quantity + 1,
+        quantity: (prev[itemId].quantity || 0) + 1,
       }
     }));
   };
 
   // Decrement item quantity
   const decrementItem = (itemId: string) => {
+    const cartItem = cart[itemId];
+
+    // If item is customizable, open review modal instead
+    if (cartItem?.isCustomizable) {
+      setReviewingItemId(itemId);
+      setShowCustomisationsReviewModal(true);
+      return;
+    }
+
+    // For non-customizable items, decrement or remove
     setCart(prev => {
       const newCart = { ...prev };
-      if (newCart[itemId].quantity === 1) {
+      const quantity = newCart[itemId].quantity || 0;
+      if (quantity === 1) {
         delete newCart[itemId];
       } else {
         newCart[itemId] = {
           ...newCart[itemId],
-          quantity: newCart[itemId].quantity - 1,
+          quantity: quantity - 1,
         };
       }
       return newCart;
@@ -206,23 +303,100 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle adding customizable item to cart with add-ons
   const handleAddCustomizableItem = (itemId: string, quantity: number, selectedAddOns: string[]) => {
-    // For now, we'll just add the item without add-ons tracking
-    // You can extend this later to track add-ons in the cart
+    const item = menuSections
+      .flatMap(section => section.items)
+      .find(i => i.id === itemId);
+
+    if (!item) return;
+
+    // Get add-on objects (mocked for now - in real app this would come from item.addOns)
+    const availableAddOns = [
+      { id: '1', name: 'Gulab Jamun', price: 50, isVeg: true },
+      { id: '2', name: 'Kesari', price: 50, isVeg: true },
+      { id: '3', name: 'Milk Halwa', price: 50, isVeg: true },
+    ];
+
+    const selectedAddOnObjects = availableAddOns.filter(ao => selectedAddOns.includes(ao.id));
+    const addOnNames = selectedAddOnObjects.map(ao => ao.name);
+    const addOnTotalPrice = selectedAddOnObjects.reduce((sum, ao) => sum + ao.price, 0);
+    const totalPrice = item.price + addOnTotalPrice;
+
+    setCart(prev => {
+      const existingItem = prev[itemId];
+
+      // Check if we're editing an existing variant
+      if (editingVariantId) {
+        // Update existing variant
+        return {
+          ...prev,
+          [itemId]: {
+            ...existingItem!,
+            variants: existingItem!.variants!.map(v =>
+              v.id === editingVariantId
+                ? {
+                    ...v,
+                    addOns: selectedAddOns,
+                    addOnNames: addOnNames,
+                    price: totalPrice,
+                    quantity: quantity,
+                  }
+                : v
+            ),
+          },
+        };
+      }
+
+      // Create new variant
+      const newVariant: CustomizationVariant = {
+        id: `${itemId}_variant_${Date.now()}`,
+        addOns: selectedAddOns,
+        addOnNames: addOnNames,
+        price: totalPrice,
+        quantity: quantity,
+      };
+
+      if (existingItem && existingItem.isCustomizable) {
+        // Add to existing variants
+        return {
+          ...prev,
+          [itemId]: {
+            ...existingItem,
+            variants: [...(existingItem.variants || []), newVariant],
+          },
+        };
+      } else {
+        // Create new customizable cart item
+        return {
+          ...prev,
+          [itemId]: {
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            isVeg: item.isVeg,
+            isCustomizable: true,
+            variants: [newVariant],
+          },
+        };
+      }
+    });
+
+    // Clear editing state
+    setEditingVariantId(null);
+    setPreselectedAddOns([]);
+  };
+
+  // Handle editing customization from order details
+  const handleEditCustomization = (itemId: string, variantId: string, currentAddOnIds: string[]) => {
     const item = menuSections
       .flatMap(section => section.items)
       .find(i => i.id === itemId);
 
     if (item) {
-      setCart(prev => ({
-        ...prev,
-        [item.id]: {
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: quantity,
-          isVeg: item.isVeg,
-        }
-      }));
+      setEditingVariantId(variantId);
+      setPreselectedAddOns(currentAddOnIds);
+      setSelectedCustomizableItem(item);
+      setShowCustomizationModal(true);
+      setShowOrderDetails(false);  // Close order details temporarily
     }
   };
 
@@ -239,11 +413,122 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     });
   };
 
+  // Handlers for CustomisationsReviewModal
+  const handleIncrementVariant = (variantId: string) => {
+    if (!reviewingItemId) return;
+
+    setCart(prev => {
+      const item = prev[reviewingItemId];
+      if (!item?.variants) return prev;
+
+      return {
+        ...prev,
+        [reviewingItemId]: {
+          ...item,
+          variants: item.variants.map(v =>
+            v.id === variantId ? { ...v, quantity: v.quantity + 1 } : v
+          ),
+        },
+      };
+    });
+  };
+
+  const handleDecrementVariant = (variantId: string) => {
+    if (!reviewingItemId) return;
+
+    setCart(prev => {
+      const item = prev[reviewingItemId];
+      if (!item?.variants) return prev;
+
+      const updatedVariants = item.variants
+        .map(v => v.id === variantId ? { ...v, quantity: v.quantity - 1 } : v)
+        .filter(v => v.quantity > 0);
+
+      // If no variants left, remove the item from cart
+      if (updatedVariants.length === 0) {
+        const newCart = { ...prev };
+        delete newCart[reviewingItemId];
+        return newCart;
+      }
+
+      return {
+        ...prev,
+        [reviewingItemId]: {
+          ...item,
+          variants: updatedVariants,
+        },
+      };
+    });
+  };
+
+  const handleEditVariant = (variantId: string) => {
+    // For now, just show a placeholder
+    // In a full implementation, you would:
+    // 1. Find the variant
+    // 2. Pre-select its add-ons in the customization modal
+    // 3. Allow editing
+    console.log('Edit variant:', variantId);
+  };
+
+  const handleAddNewCustomisation = () => {
+    if (!reviewingItemId) return;
+
+    const item = menuSections
+      .flatMap(section => section.items)
+      .find(i => i.id === reviewingItemId);
+
+    if (item) {
+      setShowCustomisationsReviewModal(false);
+      setSelectedCustomizableItem(item);
+      setShowCustomizationModal(true);
+    }
+  };
+
+  const handleConfirmCustomisations = () => {
+    setShowCustomisationsReviewModal(false);
+    setReviewingItemId(null);
+  };
+
   // Handle opening detail modal
   const handleImageClick = (item: MenuItem) => {
     setSelectedDetailItem(item);
     setShowDetailModal(true);
   };
+
+  // Toggle dietary filter
+  const toggleDietaryFilter = (filterType: 'veg' | 'non-veg') => {
+    if (activeDietaryFilter === filterType) {
+      // If clicking the same filter, turn it off
+      setActiveDietaryFilter(null);
+    } else {
+      // Otherwise, set the new filter
+      setActiveDietaryFilter(filterType);
+    }
+  };
+
+  // Get filtered menu sections based on active dietary filter
+  const getFilteredMenuSections = (): MenuSection[] => {
+    if (!activeDietaryFilter) {
+      return menuSections;
+    }
+
+    return menuSections
+      .map(section => ({
+        ...section,
+        items: section.items.filter(item => {
+          if (activeDietaryFilter === 'veg') {
+            return item.isVeg === true;
+          } else if (activeDietaryFilter === 'non-veg') {
+            return item.isVeg === false;
+          }
+          return true;
+        })
+      }))
+      .filter(section => section.items.length > 0); // Remove empty sections
+  };
+
+  const filteredMenuSections = getFilteredMenuSections();
+  const hasNoFilteredItems = activeDietaryFilter && filteredMenuSections.length === 0;
 
   // Handle adding item from detail modal
   const handleAddFromDetail = (itemId: string, quantity: number) => {
@@ -284,7 +569,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Animate background when modal opens/closes
   useEffect(() => {
-    if (showDetailModal || showCustomizationModal || showFilterModal) {
+    if (showDetailModal || showCustomizationModal || showCustomisationsReviewModal || showFilterModal) {
       Animated.parallel([
         Animated.timing(scaleAnim, {
           toValue: 0.95,
@@ -311,7 +596,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         }),
       ]).start();
     }
-  }, [showDetailModal, showCustomizationModal, showFilterModal]);
+  }, [showDetailModal, showCustomizationModal, showCustomisationsReviewModal, showFilterModal]);
 
   const fetchRestaurantDetails = async () => {
     console.log('[RestaurantScreen] fetchRestaurantDetails called for ID:', restaurantId);
@@ -401,6 +686,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     if (position !== undefined && scrollViewRef.current) {
       scrollViewRef.current.scrollTo({ y: position - 100, animated: true });
       setActiveCategoryId(categoryId);
+      // Close the menu immediately when category is clicked
+      setShowQuickMenu(false);
     }
   };
 
@@ -464,12 +751,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           resizeMode="cover"
         >
           <View style={styles.headerOverlay}>
-            {/* Status Bar Placeholder */}
-            <View style={styles.statusBar}>
-              <Text style={styles.time}>9:41</Text>
-              <View style={styles.statusIcons} />
-            </View>
-
             {/* Back Button */}
             <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
               <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
@@ -525,23 +806,59 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 <Text style={styles.filterText}>Filters</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.filterButtonActive}>
-                <View style={styles.vegIcon}>
-                  <View style={styles.vegDot} />
-                </View>
-                <Text style={styles.filterTextActive}>Veg</Text>
+              <TouchableOpacity
+                style={[
+                  styles.filterButton,
+                  activeDietaryFilter === 'veg' && styles.filterButtonActive
+                ]}
+                onPress={() => toggleDietaryFilter('veg')}
+                activeOpacity={0.7}
+              >
+                {activeDietaryFilter === 'veg' ? (
+                  <MaterialIcons name="close" size={16} color="#000000" />
+                ) : (
+                  <View style={styles.vegIcon}>
+                    <View style={styles.vegDot} />
+                  </View>
+                )}
+                <Text style={[
+                  styles.filterText,
+                  activeDietaryFilter === 'veg' && styles.filterTextActive
+                ]}>
+                  Veg
+                </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.filterButton}>
-                <View style={styles.nonVegIcon}>
-                  <View style={styles.nonVegDot} />
-                </View>
-                <Text style={styles.filterText}>Non - Veg</Text>
+              <TouchableOpacity
+                style={[
+                  styles.filterButton,
+                  activeDietaryFilter === 'non-veg' && styles.filterButtonActive
+                ]}
+                onPress={() => toggleDietaryFilter('non-veg')}
+                activeOpacity={0.7}
+              >
+                {activeDietaryFilter === 'non-veg' ? (
+                  <MaterialIcons name="close" size={16} color="#000000" />
+                ) : (
+                  <View style={styles.nonVegIcon}>
+                    <View style={styles.nonVegDot} />
+                  </View>
+                )}
+                <Text style={[
+                  styles.filterText,
+                  activeDietaryFilter === 'non-veg' && styles.filterTextActive
+                ]}>
+                  Non - Veg
+                </Text>
               </TouchableOpacity>
             </View>
 
             {/* Search Button - right aligned */}
-            <TouchableOpacity style={styles.searchButton}>
+            <TouchableOpacity
+              style={styles.searchButton}
+              onPress={() => setShowSearch(true)}
+              activeOpacity={0.7}
+            >
               <MaterialIcons name="search" size={24} color="#00B14F" />
             </TouchableOpacity>
           </View>
@@ -549,29 +866,38 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
         {/* Menu Sections */}
         <View style={[styles.menuContent, totalCartItems > 0 && styles.menuContentWithCart]}>
-        {menuSections.map((section) => (
-          <View
-            key={section.id}
-            style={styles.menuSection}
-            ref={ref => sectionRefs.current[section.id] = ref}
-            onLayout={(event) => handleSectionLayout(section.id, event)}
-          >
-            <TouchableOpacity
-              style={styles.sectionHeader}
-              onPress={() => toggleSection(section.id)}
-              activeOpacity={0.7}
+        {hasNoFilteredItems ? (
+          <View style={styles.noItemsContainer}>
+            <MaterialIcons name="search-off" size={48} color="rgba(0, 0, 0, 0.3)" />
+            <Text style={styles.noItemsTitle}>No items found</Text>
+            <Text style={styles.noItemsMessage}>
+              No {activeDietaryFilter === 'veg' ? 'vegetarian' : 'non-vegetarian'} items available in this restaurant.
+            </Text>
+          </View>
+        ) : (
+          filteredMenuSections.map((section) => (
+            <View
+              key={section.id}
+              style={styles.menuSection}
+              ref={ref => sectionRefs.current[section.id] = ref}
+              onLayout={(event) => handleSectionLayout(section.id, event)}
             >
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <MaterialIcons
-                name="arrow-drop-down"
-                size={24}
-                color="#000000"
-                style={[
-                  styles.arrowIcon,
-                  section.isExpanded && styles.arrowIconExpanded,
-                ]}
-              />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sectionHeader}
+                onPress={() => toggleSection(section.id)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <MaterialIcons
+                  name="arrow-drop-down"
+                  size={24}
+                  color="#000000"
+                  style={[
+                    styles.arrowIcon,
+                    section.isExpanded && styles.arrowIconExpanded,
+                  ]}
+                />
+              </TouchableOpacity>
 
             {section.isExpanded && section.items.map((item) => (
               <View key={item.id} style={styles.menuItem}>
@@ -667,8 +993,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   {/* Add Button or Increment/Decrement Controls */}
                   {loadedImages.has(item.id) && (
                     <>
-                      {!item.isCustomizable && cart[item.id] ? (
-                        // Show increment/decrement controls if item is in cart and not customizable
+                      {cart[item.id] ? (
+                        // Show increment/decrement controls if item is in cart
                         <View style={styles.quantityControl}>
                           <TouchableOpacity
                             style={styles.quantityButton}
@@ -677,7 +1003,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                           >
                             <Text style={styles.quantityButtonText}>-</Text>
                           </TouchableOpacity>
-                          <Text style={styles.quantityText}>{cart[item.id].quantity}</Text>
+                          <Text style={styles.quantityText}>{getItemQuantity(item.id)}</Text>
                           <TouchableOpacity
                             style={styles.quantityButton}
                             onPress={() => incrementItem(item.id)}
@@ -716,7 +1042,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               </View>
             ))}
           </View>
-        ))}
+          ))
+        )}
         </View>
       </ScrollView>
 
@@ -828,12 +1155,41 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             { id: '3', name: 'Milk Halwa', price: 50, isVeg: true },
           ],
         } : null}
+        preselectedAddOns={preselectedAddOns}
         onClose={() => {
+          // If we were editing from order details, reopen it
+          const wasEditing = editingVariantId !== null;
+
           setShowCustomizationModal(false);
           setSelectedCustomizableItem(null);
+          setEditingVariantId(null);
+          setPreselectedAddOns([]);
+
+          if (wasEditing) {
+            setShowOrderDetails(true);
+          }
         }}
         onAddToCart={handleAddCustomizableItem}
       />
+
+      {/* Customisations Review Modal */}
+      {reviewingItemId && cart[reviewingItemId] && (
+        <CustomisationsReviewModal
+          visible={showCustomisationsReviewModal}
+          itemName={cart[reviewingItemId].name}
+          basePrice={cart[reviewingItemId].price}
+          variants={cart[reviewingItemId].variants || []}
+          onClose={() => {
+            setShowCustomisationsReviewModal(false);
+            setReviewingItemId(null);
+          }}
+          onIncrement={handleIncrementVariant}
+          onDecrement={handleDecrementVariant}
+          onEdit={handleEditVariant}
+          onAddNewCustomisation={handleAddNewCustomisation}
+          onConfirm={handleConfirmCustomisations}
+        />
+      )}
 
       {/* Food Item Detail Modal */}
       <FoodItemDetailModal
@@ -865,7 +1221,43 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           <OrderDetailsScreen
             restaurantName={restaurantData?.name || restaurantName}
             deliveryAddress="Chennai | F1, Jeyalakshmi Appartments..."
+            cartItems={getFlattenedCartItems()}
             onBack={() => setShowOrderDetails(false)}
+            onEditCustomization={handleEditCustomization}
+            onPlaceOrder={() => {
+              setShowOrderDetails(false);
+              setShowOrderSuccess(true);
+            }}
+          />
+        </View>
+      )}
+
+      {/* Search Screen */}
+      {showSearch && (
+        <View style={styles.searchOverlay}>
+          <SearchScreen
+            menuItems={menuSections}
+            cart={cart}
+            onAddToCart={addToCart}
+            onIncrementItem={incrementItem}
+            onDecrementItem={decrementItem}
+            onCustomizableItemClick={handleCustomizableItemClick}
+            onImageClick={handleImageClick}
+            loadedImages={loadedImages}
+            onImageLoad={handleImageLoad}
+            onBack={() => setShowSearch(false)}
+          />
+        </View>
+      )}
+
+      {/* Order Success Screen */}
+      {showOrderSuccess && (
+        <View style={styles.orderSuccessOverlay}>
+          <OrderSuccessScreen
+            onContinue={() => {
+              setShowOrderSuccess(false);
+              setCart({}); // Clear the cart after successful order
+            }}
           />
         </View>
       )}
@@ -894,25 +1286,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
     paddingHorizontal: 20,
+    paddingTop: 50,
     paddingBottom: 20,
     justifyContent: 'space-between',
-  },
-  statusBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    height: 44,
-    paddingTop: 10,
-  },
-  time: {
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-    fontSize: 16,
-    color: '#FFFFFF',
-  },
-  statusIcons: {
-    width: 80,
-    height: 13,
   },
   backButton: {
     width: 40,
@@ -1042,9 +1418,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     gap: 4,
     height: 29,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    backgroundColor: 'rgba(0, 177, 79, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.25)',
+    borderColor: '#00B14F',
     borderRadius: 13,
   },
   filterText: {
@@ -1057,10 +1433,10 @@ const styles = StyleSheet.create({
   },
   filterTextActive: {
     fontFamily: 'Poppins',
-    fontWeight: '400',
+    fontWeight: '500',
     fontSize: 14,
     lineHeight: 21,
-    color: '#000000',
+    color: '#00B14F',
     opacity: 0.85,
   },
   vegIcon: {
@@ -1579,5 +1955,46 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 1000,
+  },
+  searchOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    backgroundColor: '#FFFFFF',
+  },
+  orderSuccessOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1001,
+  },
+  noItemsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  noItemsTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    lineHeight: 27,
+    color: '#000000',
+    opacity: 0.85,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  noItemsMessage: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    lineHeight: 21,
+    color: 'rgba(0, 0, 0, 0.6)',
+    opacity: 0.85,
+    textAlign: 'center',
   },
 });

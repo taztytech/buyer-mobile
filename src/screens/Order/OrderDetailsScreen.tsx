@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,20 +8,41 @@ import {
   Image,
   TextInput,
   StatusBar,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { PaymentModal } from '@/components/PaymentModal';
+import { AddressSelectionModal } from '@/components/AddressSelectionModal';
+import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
+
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  isVeg: boolean;
+  customizations?: string;
+  variantId?: string;
+  addOnIds?: string[];
+}
 
 interface OrderDetailsScreenProps {
   restaurantName?: string;
   deliveryAddress?: string;
+  cartItems?: CartItem[];
   onBack?: () => void;
+  onEditCustomization?: (itemId: string, variantId: string, currentAddOnIds: string[]) => void;
+  onPlaceOrder?: () => void;
 }
 
 export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   restaurantName = 'KFC',
   deliveryAddress = 'Chennai | F1, Jeyalakshmi Appartments...',
+  cartItems = [],
   onBack,
+  onEditCustomization,
+  onPlaceOrder,
 }) => {
   const [orderExpanded, setOrderExpanded] = useState(true);
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
@@ -30,23 +51,162 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [billExpanded, setBillExpanded] = useState(true);
   const [cancellationExpanded, setCancellationExpanded] = useState(true);
 
-  const [quantity, setQuantity] = useState(1);
+  const [localCartItems, setLocalCartItems] = useState<CartItem[]>(cartItems);
   const [selectedTip, setSelectedTip] = useState<number | null>(null);
+  const [customTipAmount, setCustomTipAmount] = useState('');
   const [selfPickup, setSelfPickup] = useState(false);
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState('pay_on_delivery');
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState('1');
+  const [showLocationSelection, setShowLocationSelection] = useState(false);
 
-  const handleIncrement = () => setQuantity(prev => prev + 1);
-  const handleDecrement = () => {
-    if (quantity > 1) setQuantity(prev => prev - 1);
+  // Sample addresses
+  const addresses = [
+    {
+      id: '1',
+      type: 'home' as const,
+      label: 'Home',
+      fullAddress: 'Vigneshwar Nagar, Nanganallur, Tamilnadu, India',
+    },
+    {
+      id: '2',
+      type: 'work' as const,
+      label: 'Work',
+      fullAddress: 'Vigneshwar Nagar, Nanganallur, Tamilnadu, India',
+    },
+  ];
+
+  const selectedAddress = addresses.find(addr => addr.id === selectedAddressId);
+
+  // Animation values
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
+
+  // Animate background when modals open/close
+  useEffect(() => {
+    // Reset animations immediately when location selection is shown
+    if (showLocationSelection) {
+      scaleAnim.setValue(1);
+      translateYAnim.setValue(0);
+      return;
+    }
+
+    if (showPaymentModal || showAddressModal) {
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 0.95,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateYAnim, {
+          toValue: -20,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateYAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [showPaymentModal, showAddressModal, showLocationSelection]);
+
+  const handleIncrement = (itemId: string) => {
+    setLocalCartItems(prev =>
+      prev.map(item =>
+        item.id === itemId
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      )
+    );
   };
+
+  const handleDecrement = (itemId: string) => {
+    setLocalCartItems(prev => {
+      const item = prev.find(i => i.id === itemId);
+      if (!item) return prev;
+
+      if (item.quantity === 1) {
+        // Remove item from cart when quantity reaches 0
+        return prev.filter(i => i.id !== itemId);
+      } else {
+        // Decrease quantity
+        return prev.map(i =>
+          i.id === itemId
+            ? { ...i, quantity: i.quantity - 1 }
+            : i
+        );
+      }
+    });
+  };
+
+  // Calculate totals
+  const itemTotal = localCartItems.reduce((sum, item) => {
+    return sum + (item.price * item.quantity);
+  }, 0);
+
+  const gstAndCharges = Math.round(itemTotal * 0.18); // 18% GST
+  const deliveryFee = selfPickup ? 0 : 29;
+  const platformFee = 10;
+
+  // Calculate tip amount based on selection
+  const tipAmount = (() => {
+    if (selectedTip === null) return 0;
+    if (selectedTip === -1) {
+      // "Other" is selected, use custom amount
+      const customAmount = parseInt(customTipAmount) || 0;
+      return customAmount;
+    }
+    return selectedTip;
+  })();
+
+  const totalAmount = itemTotal + gstAndCharges + deliveryFee + platformFee + tipAmount;
+
+  // If location selection is shown, render it as an overlay
+  if (showLocationSelection) {
+    return (
+      <View style={styles.container}>
+        <LocationSelectionScreen
+          onBack={() => setShowLocationSelection(false)}
+          onLocationConfirm={(location) => {
+            // TODO: Add the new address to the addresses list
+            console.log('New address:', location);
+            setShowLocationSelection(false);
+          }}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
 
-      {/* Header */}
-      <View style={styles.header}>
+      <Animated.View
+        style={[
+          styles.animatedContainer,
+          {
+            transform: [
+              { scale: scaleAnim },
+              { translateY: translateYAnim },
+            ],
+          },
+        ]}
+      >
+        {/* Header */}
+        <View style={styles.header}>
         <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -54,13 +214,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             </TouchableOpacity>
             <View style={styles.headerTextContainer}>
               <Text style={styles.restaurantName}>{restaurantName}</Text>
-              <TouchableOpacity style={styles.addressContainer}>
+              <View style={styles.addressContainer}>
                 <MaterialIcons name="location-on" size={14} color="#FFFFFF" />
                 <Text style={styles.addressText} numberOfLines={1}>
                   {deliveryAddress}
                 </Text>
-                <MaterialIcons name="expand-more" size={16} color="#FFFFFF" />
-              </TouchableOpacity>
+              </View>
             </View>
           </View>
         </SafeAreaView>
@@ -87,36 +246,59 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
             {orderExpanded && (
               <View style={styles.sectionContent}>
-                {/* Order Item */}
-                <View style={styles.orderItem}>
-                  <Image
-                    source={require('@/assets/biriyani.png')}
-                    style={styles.orderItemImage}
-                  />
-                  <View style={styles.orderItemDetails}>
-                    <Text style={styles.orderItemName}>Chicken Roll</Text>
-                    <Text style={styles.orderItemAddOns}>
-                      Add Ons: Extra Dip, Extra Ma...{' '}
-                      <Text style={styles.orderItemMore}>+1 More</Text>
-                    </Text>
-                  </View>
-                  <View style={styles.quantityControl}>
-                    <TouchableOpacity onPress={handleDecrement} activeOpacity={0.7}>
-                      <Text style={styles.quantityButton}>-</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.quantityText}>{quantity}</Text>
-                    <TouchableOpacity onPress={handleIncrement} activeOpacity={0.7}>
-                      <Text style={styles.quantityButton}>+</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.priceContainer}>
-                    <Text style={styles.originalPrice}>₹69</Text>
-                    <Text style={styles.finalPrice}>₹69</Text>
-                  </View>
-                </View>
+                {/* Order Items */}
+                {localCartItems.map((item) => {
+                  const itemPrice = item.price * item.quantity;
+
+                  return (
+                    <View key={item.id} style={styles.orderItem}>
+                      <View style={styles.vegIndicator}>
+                        <View style={[
+                          styles.vegIconSmall,
+                          !item.isVeg && styles.nonVegIconSmall
+                        ]}>
+                          <View style={[
+                            styles.vegDotSmall,
+                            !item.isVeg && styles.nonVegDotSmall
+                          ]} />
+                        </View>
+                      </View>
+                      <View style={styles.orderItemDetails}>
+                        <Text style={styles.orderItemName}>{item.name}</Text>
+                        {item.customizations && (
+                          <TouchableOpacity
+                            style={styles.customizationsRow}
+                            onPress={() => {
+                              if (onEditCustomization && item.variantId && item.addOnIds) {
+                                onEditCustomization(item.id, item.variantId, item.addOnIds);
+                              }
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.orderItemCustomizations}>{item.customizations}</Text>
+                            <MaterialIcons name="keyboard-arrow-down" size={16} color="rgba(0, 0, 0, 0.5)" />
+                          </TouchableOpacity>
+                        )}
+                        <Text style={styles.orderItemPrice}>₹{item.price}</Text>
+                      </View>
+                      <View style={styles.quantityControl}>
+                        <TouchableOpacity onPress={() => handleDecrement(item.id)} activeOpacity={0.7}>
+                          <Text style={styles.quantityButton}>-</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.quantityText}>{item.quantity}</Text>
+                        <TouchableOpacity onPress={() => handleIncrement(item.id)} activeOpacity={0.7}>
+                          <Text style={styles.quantityButton}>+</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.priceContainer}>
+                        <Text style={styles.finalPrice}>₹{itemPrice}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
 
                 {/* Add More Items Button */}
-                <TouchableOpacity style={styles.addMoreButton} activeOpacity={0.7}>
+                <TouchableOpacity style={styles.addMoreButton} activeOpacity={0.7} onPress={onBack}>
                   <Text style={styles.addMoreButtonText}>+ Add More Items</Text>
                 </TouchableOpacity>
 
@@ -156,11 +338,15 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 {/* Delivery At */}
                 <View style={styles.subsection}>
                   <Text style={styles.subsectionTitle}>Delivery At</Text>
-                  <TouchableOpacity style={styles.deliveryAtBox} activeOpacity={0.7}>
+                  <TouchableOpacity
+                    style={styles.deliveryAtBox}
+                    activeOpacity={0.7}
+                    onPress={() => setShowAddressModal(true)}
+                  >
                     <View style={styles.deliveryAtContent}>
                       <MaterialIcons name="location-on" size={20} color="#00B14F" />
                       <Text style={styles.deliveryAtText} numberOfLines={1}>
-                        {deliveryAddress}
+                        {selectedAddress?.fullAddress || deliveryAddress}
                       </Text>
                     </View>
                     <MaterialIcons name="expand-more" size={20} color="rgba(0, 0, 0, 0.5)" />
@@ -231,7 +417,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                         styles.tipButton,
                         selectedTip === amount && styles.tipButtonSelected,
                       ]}
-                      onPress={() => setSelectedTip(selectedTip === amount ? null : amount)}
+                      onPress={() => {
+                        setSelectedTip(selectedTip === amount ? null : amount);
+                        setCustomTipAmount(''); // Clear custom amount when selecting preset
+                      }}
                       activeOpacity={0.7}
                     >
                       <Text
@@ -262,6 +451,25 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                     </Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* Custom Tip Input */}
+                {selectedTip === -1 && (
+                  <View style={styles.customTipContainer}>
+                    <Text style={styles.customTipLabel}>Enter custom tip amount</Text>
+                    <View style={styles.customTipInputContainer}>
+                      <Text style={styles.rupeeSymbol}>₹</Text>
+                      <TextInput
+                        style={styles.customTipInput}
+                        placeholder="0"
+                        placeholderTextColor="rgba(0, 0, 0, 0.4)"
+                        value={customTipAmount}
+                        onChangeText={setCustomTipAmount}
+                        keyboardType="number-pad"
+                      />
+                    </View>
+                  </View>
+                )}
+
                 <Text style={styles.tipInfo}>
                   100% of the tip will go to your delivery partner.
                 </Text>
@@ -321,24 +529,30 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               <View style={styles.sectionContent}>
                 <View style={styles.billRow}>
                   <Text style={styles.billLabel}>Item Total</Text>
-                  <Text style={styles.billValue}>₹69</Text>
+                  <Text style={styles.billValue}>₹{itemTotal}</Text>
                 </View>
                 <View style={styles.billRow}>
                   <Text style={styles.billLabel}>GST and Restaurant Charges</Text>
-                  <Text style={styles.billValue}>₹29</Text>
+                  <Text style={styles.billValue}>₹{gstAndCharges}</Text>
                 </View>
                 <View style={styles.billRow}>
                   <Text style={styles.billLabel}>Delivery Partner Fee</Text>
-                  <Text style={styles.billValue}>₹29</Text>
+                  <Text style={styles.billValue}>₹{deliveryFee}</Text>
                 </View>
                 <View style={styles.billRow}>
                   <Text style={styles.billLabel}>Platform Fee</Text>
-                  <Text style={styles.billValue}>₹10</Text>
+                  <Text style={styles.billValue}>₹{platformFee}</Text>
                 </View>
+                {tipAmount > 0 && (
+                  <View style={styles.billRow}>
+                    <Text style={styles.billLabel}>Tip for Delivery Partner</Text>
+                    <Text style={styles.billValue}>₹{tipAmount}</Text>
+                  </View>
+                )}
                 <View style={styles.billDivider} />
                 <View style={styles.billTotalRow}>
                   <Text style={styles.billTotalLabel}>To Pay</Text>
-                  <Text style={styles.billTotalValue}>₹195</Text>
+                  <Text style={styles.billTotalValue}>₹{totalAmount}</Text>
                 </View>
               </View>
             )}
@@ -378,21 +592,63 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       <View style={styles.footer}>
         <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
           <View style={styles.footerContent}>
-            <TouchableOpacity style={styles.paymentSelector} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.paymentSelector}
+              activeOpacity={0.7}
+              onPress={() => setShowPaymentModal(true)}
+            >
               <View style={styles.paymentSelectorContent}>
-                <MaterialIcons name="account-balance-wallet" size={20} color="#00B14F" />
-                <Text style={styles.paymentSelectorText}>Pay on Delivery</Text>
+                <MaterialIcons
+                  name={selectedPayment === 'online' ? 'credit-card' : 'delivery-dining'}
+                  size={20}
+                  color="#00B14F"
+                />
+                <Text style={styles.paymentSelectorText}>
+                  {selectedPayment === 'online' ? 'Online Payment' : 'Pay on Delivery'}
+                </Text>
               </View>
               <MaterialIcons name="expand-more" size={20} color="rgba(0, 0, 0, 0.5)" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.placeOrderButton} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.placeOrderButton}
+              activeOpacity={0.8}
+              onPress={onPlaceOrder}
+            >
               <Text style={styles.placeOrderButtonText}>Place Order</Text>
               <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </SafeAreaView>
       </View>
+      </Animated.View>
+
+      {/* Payment Modal */}
+      <PaymentModal
+        visible={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        selectedPayment={selectedPayment}
+        onSelectPayment={(method) => {
+          setSelectedPayment(method);
+          setShowPaymentModal(false);
+        }}
+      />
+
+      {/* Address Selection Modal */}
+      <AddressSelectionModal
+        visible={showAddressModal}
+        onClose={() => setShowAddressModal(false)}
+        addresses={addresses}
+        selectedAddressId={selectedAddressId}
+        onSelectAddress={(addressId) => {
+          setSelectedAddressId(addressId);
+          setShowAddressModal(false);
+        }}
+        onAddNewAddress={() => {
+          setShowAddressModal(false);
+          setShowLocationSelection(true);
+        }}
+      />
     </View>
   );
 };
@@ -401,6 +657,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+  },
+  animatedContainer: {
+    flex: 1,
   },
   header: {
     backgroundColor: '#00B14F',
@@ -484,11 +743,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  orderItemImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 12,
-    marginRight: 12,
+  vegIndicator: {
+    marginRight: 8,
+  },
+  vegIconSmall: {
+    width: 14,
+    height: 14,
+    borderRadius: 2,
+    borderWidth: 1.5,
+    borderColor: '#00B14F',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  nonVegIconSmall: {
+    borderColor: '#FF0000',
+  },
+  vegDotSmall: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#00B14F',
+  },
+  nonVegDotSmall: {
+    backgroundColor: '#FF0000',
   },
   orderItemDetails: {
     flex: 1,
@@ -501,16 +778,24 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginBottom: 2,
   },
-  orderItemAddOns: {
+  customizationsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  orderItemCustomizations: {
+    fontFamily: 'Poppins',
+    fontSize: 11,
+    lineHeight: 16,
+    color: 'rgba(0, 0, 0, 0.5)',
+  },
+  orderItemPrice: {
     fontFamily: 'Poppins',
     fontWeight: '400',
     fontSize: 12,
     lineHeight: 18,
     color: 'rgba(0, 0, 0, 0.6)',
-  },
-  orderItemMore: {
-    color: '#00B14F',
-    fontFamily: 'Poppins_500Medium',
   },
   quantityControl: {
     flexDirection: 'row',
@@ -727,6 +1012,43 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: 'rgba(0, 0, 0, 0.5)',
     textAlign: 'center',
+  },
+  customTipContainer: {
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  customTipLabel: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    lineHeight: 18,
+    color: 'rgba(0, 0, 0, 0.6)',
+    marginBottom: 8,
+  },
+  customTipInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#00B14F',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  rupeeSymbol: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    lineHeight: 27,
+    color: '#00B14F',
+    marginRight: 8,
+  },
+  customTipInput: {
+    flex: 1,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#000000',
+    padding: 0,
   },
   promoCodeContainer: {
     flexDirection: 'row',
