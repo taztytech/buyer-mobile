@@ -165,6 +165,140 @@ All modals in the app should use consistent standards to ensure proper display o
 3. **Test on Android devices** to ensure no gaps appear at the bottom
 4. **Update this document** when creating new modals
 
+## Card/Box Styling Standards
+
+All cards and containers in the app should use consistent styling for a cohesive look and feel.
+
+### Standard Card Styling
+
+```typescript
+card: {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 20,
+  padding: 20,
+  // NO shadows - clean flat design
+}
+```
+
+### Layout Spacing
+
+```typescript
+content: {
+  padding: 20,
+}
+
+scrollContent: {
+  padding: 20,
+  gap: 14,  // gap between cards
+  paddingBottom: 24,
+}
+```
+
+### Specifications
+
+- **Border Radius**: 20px (rounded corners)
+- **Padding**: 20px (internal spacing)
+- **Background**: White (#FFFFFF)
+- **Shadows**: None (flat design)
+- **Card Gaps**: 14px spacing between cards
+- **Content Padding**: 20px
+
+### Screens Using This Standard
+
+1. **OrdersScreen** - Order cards
+2. **OrderDetailScreen** - Information cards
+3. **OrderDetailsScreen** - Section cards
+4. **MyAddressesScreen** - Address cards
+
+---
+
+## Status Bar and Safe Area Standards
+
+All screens must properly handle the Android status bar to avoid white/black gaps at the top.
+
+### Standard Status Bar Configuration
+
+```typescript
+// In JSX - wrap with outer container for green background
+return (
+  <View style={styles.outerContainer}>
+    <StatusBar
+      barStyle="light-content"
+      backgroundColor="#00B14F"
+      translucent={false}
+    />
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView
+        style={styles.container}
+        bounces={false}              // Prevents iOS bounce
+        overScrollMode="never"        // Prevents Android overscroll
+      >
+        {/* Content */}
+      </ScrollView>
+    </SafeAreaView>
+  </View>
+);
+
+// In styles
+const styles = StyleSheet.create({
+  outerContainer: {
+    flex: 1,
+    backgroundColor: '#00B14F',  // Green for status bar area
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#00B14F',  // Green extends to safe area
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',  // White for content area
+  },
+});
+```
+
+### Key Points
+
+1. **Three-Layer Structure**:
+   - Outer container: Green background for status bar area
+   - SafeAreaView: Handles device notches/status bar
+   - ScrollView/Container: White background for content
+
+2. **StatusBar Props**:
+   - `barStyle="light-content"` - White icons for green background
+   - `backgroundColor="#00B14F"` - Green color
+   - `translucent={false}` - Prevents content from going behind status bar
+
+3. **ScrollView Props**:
+   - `bounces={false}` - No bounce at top/bottom (iOS)
+   - `overScrollMode="never"` - No overscroll effect (Android)
+
+4. **Background Colors**:
+   - Status bar area: `#00B14F` (green)
+   - Content area: `#FFFFFF` (white) or `#F5F5F5` / `#F3F4F6` (light gray)
+
+### Why This is Required
+
+- Prevents white/black gaps showing in the status bar area on Android
+- Ensures consistent green status bar across all screens
+- Eliminates scroll bounce revealing gaps
+- Maintains professional appearance on all devices
+
+### Screens Using This Standard
+
+1. **HomeScreen** - ✓ Implemented
+2. **CategoryResultsScreen** - ✓ Needs update
+3. **All other screens** - To be updated
+
+### Implementation Checklist
+
+When creating or updating a screen:
+
+- [ ] Add outer container with green background
+- [ ] Configure StatusBar with green color and translucent={false}
+- [ ] Wrap content in SafeAreaView with green background
+- [ ] Add bounces={false} and overScrollMode="never" to ScrollView
+- [ ] Test on physical Android device
+
 ---
 
 Last Updated: 2025-10-17

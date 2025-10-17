@@ -162,15 +162,18 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Top Section - Back Button + Search Bar */}
-        <View style={styles.topSection}>
+    <View style={styles.outerContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="#00B14F" translucent={false} />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          overScrollMode="never"
+        >
+          {/* Top Section - Back Button + Search Bar */}
+          <View style={styles.topSection}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={onBack}
@@ -439,11 +442,16 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    flex: 1,
+    backgroundColor: '#00B14F',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#FFFFFF',

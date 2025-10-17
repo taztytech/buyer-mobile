@@ -281,6 +281,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
       >
         {orders.map((order) => renderOrderCard(order))}
 

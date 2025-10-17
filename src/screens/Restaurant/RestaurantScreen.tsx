@@ -739,6 +739,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         stickyHeaderIndices={[1]} // Make the filter section (index 1) sticky
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        bounces={false}
+        overScrollMode="never"
       >
         {/* Header Image with Overlay */}
         <ImageBackground
@@ -794,15 +796,16 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         </ImageBackground>
 
         {/* Filter Buttons with Search - STICKY */}
-        <View style={styles.filterSectionContainer}>
-          <View style={styles.filterSection}>
+        <SafeAreaView edges={['top']} style={styles.filterSafeArea}>
+          <View style={styles.filterSectionContainer}>
+            <View style={styles.filterSection}>
             <View style={styles.filterButtonsGroup}>
               <TouchableOpacity
                 style={styles.filterButton}
                 onPress={() => setShowFilterModal(true)}
                 activeOpacity={0.7}
               >
-                <MaterialIcons name="filter-list" size={16} color="#000000" />
+                <MaterialIcons name="filter-list" size={14} color="#000000" />
                 <Text style={styles.filterText}>Filters</Text>
               </TouchableOpacity>
 
@@ -815,7 +818,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 activeOpacity={0.7}
               >
                 {activeDietaryFilter === 'veg' ? (
-                  <MaterialIcons name="close" size={16} color="#000000" />
+                  <MaterialIcons name="close" size={14} color="#000000" />
                 ) : (
                   <View style={styles.vegIcon}>
                     <View style={styles.vegDot} />
@@ -838,7 +841,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 activeOpacity={0.7}
               >
                 {activeDietaryFilter === 'non-veg' ? (
-                  <MaterialIcons name="close" size={16} color="#000000" />
+                  <MaterialIcons name="close" size={14} color="#000000" />
                 ) : (
                   <View style={styles.nonVegIcon}>
                     <View style={styles.nonVegDot} />
@@ -862,7 +865,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               <MaterialIcons name="search" size={24} color="#00B14F" />
             </TouchableOpacity>
           </View>
-        </View>
+          </View>
+        </SafeAreaView>
 
         {/* Menu Sections */}
         <View style={[styles.menuContent, totalCartItems > 0 && styles.menuContentWithCart]}>
@@ -1378,11 +1382,14 @@ const styles = StyleSheet.create({
     color: '#00B14F',
     opacity: 0.85,
   },
+  filterSafeArea: {
+    backgroundColor: '#FFFFFF', // Add background for sticky effect
+  },
   filterSectionContainer: {
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 16,
-    backgroundColor: '#FFFFFF', // Add background for sticky effect
+    paddingBottom: 10,
+    marginTop: -20,
   },
   scrollContainer: {
     flex: 1,
@@ -1426,8 +1433,8 @@ const styles = StyleSheet.create({
   filterText: {
     fontFamily: 'Poppins',
     fontWeight: '400',
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 12,
+    lineHeight: 18,
     color: '#000000',
     opacity: 0.85,
   },
@@ -1440,8 +1447,8 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   vegIcon: {
-    width: 16,
-    height: 16,
+    width: 14,
+    height: 14,
     borderRadius: 2,
     borderWidth: 1.5,
     borderColor: '#00B14F',
@@ -1449,14 +1456,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   vegDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#00B14F',
   },
   nonVegIcon: {
-    width: 16,
-    height: 16,
+    width: 14,
+    height: 14,
     borderRadius: 2,
     borderWidth: 1.5,
     borderColor: '#FF0000',
@@ -1464,9 +1471,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   nonVegDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#FF0000',
   },
   searchButton: {
@@ -1612,7 +1619,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   descriptionContainer: {
-    width: 165,
+    width: 150,
   },
   itemDescription: {
     fontFamily: 'Poppins',

@@ -50,7 +50,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [selectedTag, setSelectedTag] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [loading, setLoading] = useState(false);
   const slideAnim = useRef(new Animated.Value(1000)).current;
-  const keyboardOffset = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
@@ -65,33 +64,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     } else {
       slideAnim.setValue(1000);
     }
-
-    const keyboardDidShowListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (event) => {
-        Animated.timing(keyboardOffset, {
-          toValue: event.endCoordinates.height,
-          duration: Platform.OS === 'ios' ? 250 : 200,
-          useNativeDriver: false,
-        }).start();
-      }
-    );
-
-    const keyboardDidHideListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => {
-        Animated.timing(keyboardOffset, {
-          toValue: 0,
-          duration: Platform.OS === 'ios' ? 250 : 200,
-          useNativeDriver: false,
-        }).start();
-      }
-    );
-
-    return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
-    };
   }, [visible]);
 
   const handleContinue = async () => {
@@ -181,9 +153,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         <Animated.View
           style={[
             styles.bottomSheetWrapper,
-            {
-              marginBottom: keyboardOffset,
-            }
           ]}
         >
           <TouchableOpacity

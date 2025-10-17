@@ -133,7 +133,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   selectedLocation: externalSelectedLocation
 }) => {
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
-  const [showLocationPopup, setShowLocationPopup] = React.useState(true);
+  const [showLocationPopup, setShowLocationPopup] = React.useState(false);
   const [showVegModePopup, setShowVegModePopup] = React.useState(false);
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [carouselData, setCarouselData] = React.useState<CarouselItem[]>([]);
@@ -291,6 +291,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         setShowLocationPopup(false);
         setIsLoadingLocation(false);
+
+        // Navigate to address selection after getting location
+        if (onNavigateToAddressSelection) {
+          onNavigateToAddressSelection();
+        }
       } else {
         console.log('[Location] Permission denied or not granted:', finalStatus);
         Alert.alert(
@@ -311,6 +316,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const handleDenyLocation = () => {
     setShowLocationPopup(false);
     Alert.alert('Location Disabled', 'You can enable location access later from settings.');
+  };
+
+  const handleLocationClick = () => {
+    console.log('[Location] Location clicked, showing modal');
+    setShowLocationPopup(true);
   };
 
   const handleVegModeToggle = () => {
@@ -558,9 +568,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [onNavigateToCategory]);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
-      <ScrollView style={styles.container} stickyHeaderIndices={[3]} testID="home-screen">
+    <View style={styles.outerContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="#00B14F" translucent={false} />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <ScrollView
+          style={styles.container}
+          stickyHeaderIndices={[3]}
+          testID="home-screen"
+          bounces={false}
+          overScrollMode="never"
+        >
 
       {/* Header with Background Image */}
       <ImageBackground
@@ -573,7 +590,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <View style={styles.locationSection} testID="location-section">
           <TouchableOpacity
             style={styles.locationInfo}
-            onPress={onNavigateToAddressSelection}
+            onPress={handleLocationClick}
             activeOpacity={0.7}
           >
             {isLoadingLocation ? (
@@ -941,6 +958,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         visible={showVegModePopup}
         transparent={true}
         animationType="fade"
+        statusBarTranslucent={true}
         onRequestClose={() => setShowVegModePopup(false)}
       >
         <TouchableOpacity
@@ -987,12 +1005,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </TouchableOpacity>
       </Modal>
 
-    </ScrollView>
-    </SafeAreaView>
+      </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    flex: 1,
+    backgroundColor: '#00B14F',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#00B14F',

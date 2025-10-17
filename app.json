@@ -21,12 +21,21 @@
         "foregroundImage": "./src/assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "predictiveBackGestureEnabled": false,
-      "package": "com.valarcom.tazty"
+      "package": "com.valarcom.tazty",
+      "statusBar": {
+        "backgroundColor": "#00B14F",
+        "barStyle": "light-content"
+      }
     },
     "web": {
       "favicon": "./src/assets/favicon.png"
+    },
+    "updates": {
+      "enabled": false,
+      "checkAutomatically": "ON_ERROR_RECOVERY",
+      "fallbackToCacheTimeout": 0
     }
   }
 }
