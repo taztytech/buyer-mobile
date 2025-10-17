@@ -114,6 +114,57 @@ This approach ensures the back button respects the device's safe area (status ba
 - **Close Buttons**: Modals use a similar circular close button pattern (see `FoodItemDetailModal.tsx`)
 - **Navigation**: All top-level navigation should use this back button pattern
 
+## Modal Standards
+
+All modals in the app should use consistent standards to ensure proper display on Android devices, particularly to avoid gaps at the bottom caused by the Android navigation bar.
+
+### Standard Modal Configuration
+
+**IMPORTANT:** All Modal components must include `statusBarTranslucent={true}` to ensure they extend fully to the bottom of the screen on Android devices.
+
+```typescript
+<Modal
+  visible={visible}
+  transparent
+  animationType="slide" // or "fade" depending on design
+  statusBarTranslucent={true}  // REQUIRED for Android
+  onRequestClose={onClose}
+>
+  {/* Modal content */}
+</Modal>
+```
+
+### Why This is Required
+
+- Without `statusBarTranslucent={true}`, modals on Android will show a gap at the bottom where the navigation bar area is visible
+- This prop allows the modal to extend into system UI areas (status bar and navigation bar)
+- This is an Android-specific prop and has no negative effect on iOS
+
+### Modals Using This Standard
+
+1. **FoodItemDetailModal** (`src/components/FoodItemDetailModal.tsx`)
+   - Location: Line 67
+   - Status: ✓ Implemented
+
+2. **CustomizationModal** (`src/components/CustomizationModal.tsx`)
+   - Location: Line 92
+   - Status: ✓ Implemented
+
+3. **Location Permission Modal** (`src/screens/Home/HomeScreen.tsx`)
+   - Location: Line 895
+   - Status: ✓ Implemented
+
+4. **FilterModal** (`src/components/FilterModal.tsx`)
+   - Location: Line 67
+   - Status: ✓ Implemented
+
+### Implementation Guidelines
+
+1. **Always add `statusBarTranslucent={true}`** to Modal components
+2. **Do NOT add manual padding** to fix bottom gaps - use this prop instead
+3. **Test on Android devices** to ensure no gaps appear at the bottom
+4. **Update this document** when creating new modals
+
 ---
 
 Last Updated: 2025-10-17

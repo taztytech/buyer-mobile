@@ -18,6 +18,7 @@ import { apiService } from '@/services/api.service';
 import { Shimmer } from '@/components/Shimmer';
 import { CustomizationModal } from '@/components/CustomizationModal';
 import { FoodItemDetailModal } from '@/components/FoodItemDetailModal';
+import { FilterModal, FilterState } from '@/components/FilterModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -127,6 +128,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
   const [selectedCustomizableItem, setSelectedCustomizableItem] = useState<MenuItem | null>(null);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    sortBy: null,
+    dietary: null,
+    topPicks: null,
+  });
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
 
@@ -275,7 +282,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Animate background when modal opens/closes
   useEffect(() => {
-    if (showDetailModal) {
+    if (showDetailModal || showCustomizationModal || showFilterModal) {
       Animated.parallel([
         Animated.timing(scaleAnim, {
           toValue: 0.95,
@@ -302,7 +309,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         }),
       ]).start();
     }
-  }, [showDetailModal]);
+  }, [showDetailModal, showCustomizationModal, showFilterModal]);
 
   const fetchRestaurantDetails = async () => {
     console.log('[RestaurantScreen] fetchRestaurantDetails called for ID:', restaurantId);
@@ -507,7 +514,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         <View style={styles.filterSectionContainer}>
           <View style={styles.filterSection}>
             <View style={styles.filterButtonsGroup}>
-              <TouchableOpacity style={styles.filterButton}>
+              <TouchableOpacity
+                style={styles.filterButton}
+                onPress={() => setShowFilterModal(true)}
+                activeOpacity={0.7}
+              >
                 <MaterialIcons name="filter-list" size={16} color="#000000" />
                 <Text style={styles.filterText}>Filters</Text>
               </TouchableOpacity>
@@ -827,6 +838,19 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           setSelectedDetailItem(null);
         }}
         onAddToCart={handleAddFromDetail}
+      />
+
+      {/* Filter Modal */}
+      <FilterModal
+        visible={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        onApply={(newFilters) => {
+          setFilters(newFilters);
+          setShowFilterModal(false);
+          // TODO: Apply filters to menu items
+          console.log('Filters applied:', newFilters);
+        }}
+        initialFilters={filters}
       />
     </View>
   );

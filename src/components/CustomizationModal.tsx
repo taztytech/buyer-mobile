@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Image,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -39,6 +40,20 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
 }) => {
   const [quantity, setQuantity] = useState(1);
   const [selectedAddOns, setSelectedAddOns] = useState<Set<string>>(new Set());
+  const slideAnim = useRef(new Animated.Value(1000)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 11,
+      }).start();
+    } else {
+      slideAnim.setValue(1000);
+    }
+  }, [visible]);
 
   if (!item) return null;
 
@@ -87,7 +102,8 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
+      statusBarTranslucent={true}
       onRequestClose={onClose}
     >
       <TouchableOpacity
@@ -95,11 +111,18 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
         activeOpacity={1}
         onPress={onClose}
       >
-        <TouchableOpacity
-          style={styles.modalContainer}
-          activeOpacity={1}
-          onPress={(e) => e.stopPropagation()}
+        <Animated.View
+          style={[
+            styles.modalContainer,
+            {
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
         >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
           {/* Header with Item Name and Close Button */}
           <View style={styles.header}>
             <View style={styles.headerContent}>
@@ -190,7 +213,8 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
               <Text style={styles.addItemText}>Add Item ₹{calculateTotalPrice()}</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </Animated.View>
       </TouchableOpacity>
     </Modal>
   );
@@ -207,8 +231,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 20,
-    paddingBottom: 34,
-    gap: 21,
     maxHeight: '95%',
   },
   header: {
@@ -251,10 +273,13 @@ const styles = StyleSheet.create({
   addOnsSection: {
     backgroundColor: '#EBFFE0',
     borderRadius: 10,
-    padding: 11,
+    paddingTop: 20,
+    paddingBottom: 20,
     paddingHorizontal: 20,
     gap: 18,
     maxHeight: 250,
+    marginTop: 30,
+    marginBottom: 30,
   },
   addOnsHeader: {
     gap: 3,
@@ -280,7 +305,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 0, 0, 0.2)',
   },
   addOnsList: {
-    gap: 18,
+    paddingTop: 4,
+    paddingBottom: 4,
   },
   addOnItem: {
     flexDirection: 'row',

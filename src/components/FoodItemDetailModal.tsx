@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Image,
   ScrollView,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -37,6 +38,20 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
   onAddToCart,
 }) => {
   const [quantity, setQuantity] = useState(1);
+  const slideAnim = useRef(new Animated.Value(1000)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 11,
+      }).start();
+    } else {
+      slideAnim.setValue(1000);
+    }
+  }, [visible]);
 
   if (!item) return null;
 
@@ -62,7 +77,8 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
+      statusBarTranslucent={true}
       onRequestClose={onClose}
     >
       <TouchableOpacity
@@ -70,11 +86,18 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
         activeOpacity={1}
         onPress={onClose}
       >
-        <TouchableOpacity
-          style={styles.modalContainer}
-          activeOpacity={1}
-          onPress={(e) => e.stopPropagation()}
+        <Animated.View
+          style={[
+            styles.modalContainer,
+            {
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
         >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
           {/* Close Button */}
           <TouchableOpacity
             style={styles.closeButton}
@@ -152,7 +175,8 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
               </TouchableOpacity>
             </View>
           </ScrollView>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </Animated.View>
       </TouchableOpacity>
     </Modal>
   );
@@ -169,7 +193,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     maxHeight: '85%',
-    paddingBottom: 34,
   },
   scrollContent: {
     padding: 20,

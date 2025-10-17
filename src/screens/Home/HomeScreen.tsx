@@ -892,6 +892,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         visible={showLocationPopup}
         transparent={true}
         animationType="fade"
+        statusBarTranslucent={true}
         onRequestClose={() => setShowLocationPopup(false)}
       >
         <BlurView intensity={80} tint="dark" style={styles.modalOverlay}>
@@ -1469,7 +1470,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 24,
     paddingTop: 28,
-    paddingBottom: 34,
+    paddingBottom: 20,
     width: '100%',
     maxWidth: 340,
     alignItems: 'center',
