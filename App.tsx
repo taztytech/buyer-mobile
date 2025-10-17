@@ -4,6 +4,8 @@ import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
+import { OrdersScreen } from '@/screens/Order/OrdersScreen';
+import { OrderDetailScreen } from '@/screens/Order/OrderDetailScreen';
 import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { CategoryResultsScreen } from '@/screens/Category/CategoryResultsScreen';
@@ -20,7 +22,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'orders' | 'orderDetail' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -29,9 +31,12 @@ export default function App() {
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
   const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category'>('home');
+  const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const ordersScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const orderDetailScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const addressScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const categoryScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -306,6 +311,77 @@ export default function App() {
     }
   };
 
+  // Orders Navigation
+  const handleNavigateToOrders = () => {
+    setCurrentScreen('orders');
+
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(ordersScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromOrders = () => {
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(ordersScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('profile');
+    });
+  };
+
+  // Order Detail Navigation
+  const handleNavigateToOrderDetail = (orderId: string) => {
+    setSelectedOrderId(orderId);
+    setCurrentScreen('orderDetail');
+
+    Animated.parallel([
+      Animated.timing(ordersScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(orderDetailScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromOrderDetail = () => {
+    Animated.parallel([
+      Animated.timing(ordersScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(orderDetailScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('orders');
+    });
+  };
+
   if (!fontsLoaded || isCheckingAuth) {
     return null;
   }
@@ -355,7 +431,7 @@ export default function App() {
               onBack={handleBackToHome}
               onLogout={handleLogout}
               onEditProfile={() => console.log('Edit Profile')}
-              onMyOrders={() => console.log('My Orders')}
+              onMyOrders={handleNavigateToOrders}
               onMyAddresses={() => console.log('My Addresses')}
               onFavorites={() => console.log('Favorites')}
               onChatWithUs={() => console.log('Chat With Us')}
@@ -402,6 +478,46 @@ export default function App() {
               initialSearchQuery={searchQuery}
               onBack={handleBackFromLocationSelection}
               onLocationConfirm={handleLocationConfirm}
+            />
+          </Animated.View>
+
+          {/* Always render OrdersScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.ordersOverlay,
+              {
+                transform: [{ translateX: ordersScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'orders' || currentScreen === 'orderDetail' ? 'auto' : 'none'}
+          >
+            <OrdersScreen
+              onBack={handleBackFromOrders}
+              onOrderDetails={handleNavigateToOrderDetail}
+              onReorder={(orderId) => console.log('Reorder:', orderId)}
+              onRateOrder={(orderId) => console.log('Rate Order:', orderId)}
+              onViewMore={() => console.log('View More Orders')}
+            />
+          </Animated.View>
+
+          {/* Always render OrderDetailScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.orderDetailOverlay,
+              {
+                transform: [{ translateX: orderDetailScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'orderDetail' ? 'auto' : 'none'}
+          >
+            <OrderDetailScreen
+              orderId={selectedOrderId}
+              onBack={handleBackFromOrderDetail}
+              onChatWithUs={() => console.log('Chat with us')}
+              onThankDriver={() => console.log('Thank Driver')}
+              onRateOrder={() => console.log('Rate Order')}
+              onReorder={() => console.log('Reorder')}
+              onDownloadInvoice={() => console.log('Download Invoice')}
             />
           </Animated.View>
 
@@ -473,13 +589,31 @@ const styles = StyleSheet.create({
     zIndex: 3,
     backgroundColor: '#FFFFFF',
   },
-  categoryOverlay: {
+  ordersOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
     zIndex: 4,
+    backgroundColor: '#F3F4F6',
+  },
+  orderDetailOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
+    backgroundColor: '#F3F4F6',
+  },
+  categoryOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 6,
     backgroundColor: '#FFFFFF',
   },
   restaurantOverlay: {
@@ -488,7 +622,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 5,
+    zIndex: 7,
     backgroundColor: '#FFFFFF',
   },
 });

@@ -151,13 +151,10 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
       {/* Header with Safe Area */}
       <SafeAreaView style={styles.safeAreaHeader} edges={['top']}>
         <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <TouchableOpacity style={styles.backButton} onPress={onBack}>
-              <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Select a location</Text>
-            <View style={styles.spacer} />
-          </View>
+          <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Select a location</Text>
         </View>
       </SafeAreaView>
 
@@ -243,19 +240,14 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
+    paddingVertical: 18,
     backgroundColor: '#00B14F',
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
-    gap: 18,
-  },
-  headerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    height: 40,
-    gap: 18,
+    gap: 12,
+    height: 76,
   },
   backButton: {
     width: 40,
@@ -268,18 +260,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontFamily: 'Poppins',
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 18,
-    fontWeight: '700',
     lineHeight: 27,
-    textAlign: 'center',
     color: '#FFFFFF',
     opacity: 0.85,
-    flex: 1,
-  },
-  spacer: {
-    width: 40,
-    height: 40,
   },
   content: {
     flex: 1,
