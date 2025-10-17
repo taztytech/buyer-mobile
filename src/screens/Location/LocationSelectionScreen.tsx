@@ -10,7 +10,6 @@ import {
   Platform,
   Keyboard,
   Animated,
-  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -324,21 +323,16 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         </Animated.View>
 
         {/* Address Form Modal */}
-        <Modal
+        <AddAddressFormScreen
           visible={showAddressForm}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowAddressForm(false)}
-        >
-          <AddAddressFormScreen
-            locationName={locationName}
-            locationAddress={locationAddress}
-            latitude={region.latitude}
-            longitude={region.longitude}
-            onBack={() => setShowAddressForm(false)}
-            onSave={handleAddressSave}
-          />
-        </Modal>
+          locationName={locationName}
+          locationAddress={locationAddress}
+          latitude={region.latitude}
+          longitude={region.longitude}
+          onBack={() => setShowAddressForm(false)}
+          onSave={handleAddressSave}
+          onClose={() => setShowAddressForm(false)}
+        />
       </View>
     </View>
   );

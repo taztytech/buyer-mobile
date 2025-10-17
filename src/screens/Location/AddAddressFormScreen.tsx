@@ -12,27 +12,32 @@ import {
   Animated,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { addressService, AddAddressRequest } from '@/services/address.service';
 
 interface AddAddressFormScreenProps {
+  visible: boolean;
   locationName: string;
   locationAddress: string;
   latitude: number;
   longitude: number;
   onBack?: () => void;
   onSave?: (addressData: any) => void;
+  onClose?: () => void;
 }
 
 export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
+  visible,
   locationName,
   locationAddress,
   latitude,
   longitude,
   onBack,
   onSave,
+  onClose,
 }) => {
   const [houseNo, setHouseNo] = useState('');
   const [building, setBuilding] = useState('');
@@ -44,13 +49,27 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [isDefault, setIsDefault] = useState(false);
   const [selectedTag, setSelectedTag] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [loading, setLoading] = useState(false);
-  const bottomPosition = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(1000)).current;
+  const keyboardOffset = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (visible) {
+      // Reset and start slide-up animation when modal becomes visible
+      slideAnim.setValue(1000);
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 11,
+      }).start();
+    } else {
+      slideAnim.setValue(1000);
+    }
+
     const keyboardDidShowListener = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       (event) => {
-        Animated.timing(bottomPosition, {
+        Animated.timing(keyboardOffset, {
           toValue: event.endCoordinates.height,
           duration: Platform.OS === 'ios' ? 250 : 200,
           useNativeDriver: false,
@@ -61,7 +80,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     const keyboardDidHideListener = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
       () => {
-        Animated.timing(bottomPosition, {
+        Animated.timing(keyboardOffset, {
           toValue: 0,
           duration: Platform.OS === 'ios' ? 250 : 200,
           useNativeDriver: false,
@@ -73,7 +92,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
       keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
     };
-  }, []);
+  }, [visible]);
 
   const handleContinue = async () => {
     // Validation
@@ -146,19 +165,46 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.backdrop} />
-
-      <Animated.View
-        style={[styles.bottomSheet, { bottom: bottomPosition }]}
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent={true}
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
       >
 
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+        <Animated.View
+          style={[
+            styles.bottomSheetWrapper,
+            {
+              marginBottom: keyboardOffset,
+            }
+          ]}
         >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Animated.View
+              style={[
+                styles.bottomSheet,
+                {
+                  transform: [{ translateY: slideAnim }],
+                }
+              ]}
+            >
+
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
           {/* Header - Location Info */}
           <View style={styles.header}>
             <View style={styles.locationHeader}>
@@ -367,26 +413,29 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               </>
             )}
           </TouchableOpacity>
-        </View>
-      </Animated.View>
-    </View>
+            </View>
+            </Animated.View>
+          </TouchableOpacity>
+        </Animated.View>
+      </TouchableOpacity>
+    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  overlay: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
   },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  bottomSheet: {
+  bottomSheetWrapper: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     maxHeight: '60%',
+  },
+  bottomSheet: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -396,6 +445,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 10,
     paddingTop: 12,
+    height: '100%',
   },
   scrollView: {
     flex: 1,
@@ -540,7 +590,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    paddingBottom: 24,
     borderTopWidth: 1,
     borderTopColor: '#F0F0F0',
   },
