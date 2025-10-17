@@ -8,6 +8,7 @@ import { OrdersScreen } from '@/screens/Order/OrdersScreen';
 import { OrderDetailScreen } from '@/screens/Order/OrderDetailScreen';
 import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
+import { MyAddressesScreen } from '@/screens/Location/MyAddressesScreen';
 import { CategoryResultsScreen } from '@/screens/Category/CategoryResultsScreen';
 import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
@@ -22,7 +23,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'orders' | 'orderDetail' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'orders' | 'orderDetail' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -37,6 +38,7 @@ export default function App() {
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const ordersScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const orderDetailScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const myAddressesScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const addressScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const categoryScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -382,6 +384,41 @@ export default function App() {
     });
   };
 
+  // My Addresses Navigation
+  const handleNavigateToMyAddresses = () => {
+    setCurrentScreen('myAddresses');
+
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(myAddressesScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromMyAddresses = () => {
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(myAddressesScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('profile');
+    });
+  };
+
   if (!fontsLoaded || isCheckingAuth) {
     return null;
   }
@@ -432,7 +469,7 @@ export default function App() {
               onLogout={handleLogout}
               onEditProfile={() => console.log('Edit Profile')}
               onMyOrders={handleNavigateToOrders}
-              onMyAddresses={() => console.log('My Addresses')}
+              onMyAddresses={handleNavigateToMyAddresses}
               onFavorites={() => console.log('Favorites')}
               onChatWithUs={() => console.log('Chat With Us')}
               onPrivacyPolicy={() => console.log('Privacy Policy')}
@@ -521,6 +558,24 @@ export default function App() {
             />
           </Animated.View>
 
+          {/* Always render MyAddressesScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.myAddressesOverlay,
+              {
+                transform: [{ translateX: myAddressesScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'myAddresses' ? 'auto' : 'none'}
+          >
+            <MyAddressesScreen
+              onBack={handleBackFromMyAddresses}
+              onAddNew={() => console.log('Add New Address')}
+              onEdit={(addressId) => console.log('Edit Address:', addressId)}
+              onDelete={(addressId) => console.log('Delete Address:', addressId)}
+            />
+          </Animated.View>
+
           {/* Always render CategoryResultsScreen, positioned off-screen initially */}
           <Animated.View
             style={[
@@ -606,6 +661,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 5,
     backgroundColor: '#F3F4F6',
+  },
+  myAddressesOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 4,
+    backgroundColor: '#F5F5F5',
   },
   categoryOverlay: {
     position: 'absolute',

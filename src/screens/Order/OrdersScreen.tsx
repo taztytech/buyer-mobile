@@ -352,8 +352,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    gap: 16,
+    padding: 20,
+    gap: 14,
     paddingBottom: 24,
   },
   searchBar: {
@@ -387,13 +387,8 @@ const styles = StyleSheet.create({
   },
   orderCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
+    borderRadius: 20,
+    padding: 20,
   },
   orderHeader: {
     flexDirection: 'row',
