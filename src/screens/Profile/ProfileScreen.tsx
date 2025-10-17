@@ -180,8 +180,10 @@ const styles = StyleSheet.create({
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 50,
     backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E4E4E4',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 10,

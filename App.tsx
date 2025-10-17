@@ -48,17 +48,28 @@ export default function App() {
   React.useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Initialize API service with stored tokens
-        await apiService.initialize();
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Auth check timeout')), 5000)
+        );
 
-        // Check if user is authenticated
-        const isLoggedIn = await authService.isAuthenticated();
+        await Promise.race([
+          (async () => {
+            // Initialize API service with stored tokens
+            await apiService.initialize();
 
-        if (isLoggedIn) {
-          setCurrentScreen('home');
-        }
+            // Check if user is authenticated
+            const isLoggedIn = await authService.isAuthenticated();
+
+            if (isLoggedIn) {
+              setCurrentScreen('home');
+            }
+          })(),
+          timeoutPromise
+        ]);
       } catch (error) {
         console.error('Error checking auth:', error);
+        // Continue to login screen even if auth check fails
       } finally {
         setIsCheckingAuth(false);
       }

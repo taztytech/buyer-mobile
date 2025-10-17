@@ -1469,7 +1469,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 24,
     paddingTop: 28,
-    paddingBottom: 20,
+    paddingBottom: 34,
     width: '100%',
     maxWidth: 340,
     alignItems: 'center',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,14 @@ import {
   ImageBackground,
   Dimensions,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiService } from '@/services/api.service';
 import { Shimmer } from '@/components/Shimmer';
+import { CustomizationModal } from '@/components/CustomizationModal';
+import { FoodItemDetailModal } from '@/components/FoodItemDetailModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -121,10 +124,19 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const [cart, setCart] = useState<{ [key: string]: CartItem }>({});
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const [showCustomizationModal, setShowCustomizationModal] = useState(false);
+  const [selectedCustomizableItem, setSelectedCustomizableItem] = useState<MenuItem | null>(null);
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
 
   const scrollViewRef = React.useRef<ScrollView>(null);
   const sectionRefs = React.useRef<{ [key: string]: View | null }>({});
   const sectionPositions = React.useRef<{ [key: string]: number }>({});
+
+  // Animation values
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
 
   // Calculate total cart items
   const totalCartItems = Object.values(cart).reduce((sum, item) => sum + item.quantity, 0);
@@ -177,6 +189,73 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     });
   };
 
+  // Handle opening customization modal
+  const handleCustomizableItemClick = (item: MenuItem) => {
+    setSelectedCustomizableItem(item);
+    setShowCustomizationModal(true);
+  };
+
+  // Handle adding customizable item to cart with add-ons
+  const handleAddCustomizableItem = (itemId: string, quantity: number, selectedAddOns: string[]) => {
+    // For now, we'll just add the item without add-ons tracking
+    // You can extend this later to track add-ons in the cart
+    const item = menuSections
+      .flatMap(section => section.items)
+      .find(i => i.id === itemId);
+
+    if (item) {
+      setCart(prev => ({
+        ...prev,
+        [item.id]: {
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: quantity,
+          isVeg: item.isVeg,
+        }
+      }));
+    }
+  };
+
+  // Toggle description expansion
+  const toggleDescription = (itemId: string) => {
+    setExpandedDescriptions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  // Handle opening detail modal
+  const handleImageClick = (item: MenuItem) => {
+    setSelectedDetailItem(item);
+    setShowDetailModal(true);
+  };
+
+  // Handle adding item from detail modal
+  const handleAddFromDetail = (itemId: string, quantity: number) => {
+    const item = menuSections
+      .flatMap(section => section.items)
+      .find(i => i.id === itemId);
+
+    if (item) {
+      setCart(prev => ({
+        ...prev,
+        [item.id]: {
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: quantity,
+          isVeg: item.isVeg,
+        }
+      }));
+    }
+  };
+
   // Fetch restaurant details from API
   useEffect(() => {
     console.log('[RestaurantScreen] useEffect triggered with restaurantId:', restaurantId);
@@ -193,6 +272,37 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       setActiveCategoryId(menuSections[0].id);
     }
   }, [menuSections]);
+
+  // Animate background when modal opens/closes
+  useEffect(() => {
+    if (showDetailModal) {
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 0.95,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateYAnim, {
+          toValue: -20,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateYAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [showDetailModal]);
 
   const fetchRestaurantDetails = async () => {
     console.log('[RestaurantScreen] fetchRestaurantDetails called for ID:', restaurantId);
@@ -314,8 +424,19 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Scrollable Content with Sticky Filter */}
-      <ScrollView
+      <Animated.View
+        style={[
+          styles.animatedContainer,
+          {
+            transform: [
+              { scale: scaleAnim },
+              { translateY: translateYAnim },
+            ],
+          },
+        ]}
+      >
+        {/* Scrollable Content with Sticky Filter */}
+        <ScrollView
         ref={scrollViewRef}
         style={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
@@ -414,7 +535,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         </View>
 
         {/* Menu Sections */}
-        <View style={styles.menuContent}>
+        <View style={[styles.menuContent, totalCartItems > 0 && styles.menuContentWithCart]}>
         {menuSections.map((section) => (
           <View
             key={section.id}
@@ -442,10 +563,16 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             {section.isExpanded && section.items.map((item) => (
               <View key={item.id} style={styles.menuItem}>
                 <View style={styles.itemLeft}>
-                  {/* Veg Icon and Spicy Badge */}
+                  {/* Veg/Non-Veg Icon and Spicy Badge */}
                   <View style={styles.itemBadges}>
-                    <View style={styles.vegIconLarge}>
-                      <View style={styles.vegDotLarge} />
+                    <View style={[
+                      styles.vegIconLarge,
+                      !item.isVeg && styles.nonVegIconLarge
+                    ]}>
+                      <View style={[
+                        styles.vegDotLarge,
+                        !item.isVeg && styles.nonVegDotLarge
+                      ]} />
                     </View>
                     {item.isSpicy && (
                       <View style={styles.spicyBadge}>
@@ -470,9 +597,24 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   <Text style={styles.itemPrice}>₹ {item.price}</Text>
 
                   {/* Description */}
-                  <Text style={styles.itemDescription} numberOfLines={3}>
-                    {item.description}
-                  </Text>
+                  <View style={styles.descriptionContainer}>
+                    <Text
+                      style={styles.itemDescription}
+                      numberOfLines={expandedDescriptions.has(item.id) ? undefined : 2}
+                    >
+                      {item.description}
+                    </Text>
+                    {item.description && item.description.length > 80 && (
+                      <TouchableOpacity
+                        onPress={() => toggleDescription(item.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.moreButton}>
+                          {expandedDescriptions.has(item.id) ? 'Less' : 'More'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
 
                   {/* Like and Share Buttons */}
                   <View style={styles.itemActions}>
@@ -487,7 +629,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
                 <View style={styles.itemRight}>
                   {/* Item Image with Shimmer */}
-                  <View style={styles.itemImageContainer}>
+                  <TouchableOpacity
+                    style={styles.itemImageContainer}
+                    onPress={() => handleImageClick(item)}
+                    activeOpacity={0.9}
+                  >
                     {!loadedImages.has(item.id) && (
                       <Shimmer
                         width={166}
@@ -503,42 +649,54 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                       resizeMode="cover"
                       onLoad={() => handleImageLoad(item.id)}
                     />
-                  </View>
+                  </TouchableOpacity>
 
                   {/* Add Button or Increment/Decrement Controls */}
-                  {!item.isCustomizable && cart[item.id] ? (
-                    // Show increment/decrement controls if item is in cart
-                    <View style={styles.quantityControl}>
-                      <TouchableOpacity
-                        style={styles.quantityButton}
-                        onPress={() => decrementItem(item.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.quantityButtonText}>-</Text>
-                      </TouchableOpacity>
-                      <Text style={styles.quantityText}>{cart[item.id].quantity}</Text>
-                      <TouchableOpacity
-                        style={styles.quantityButton}
-                        onPress={() => incrementItem(item.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.quantityButtonText}>+</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    // Show Add button if item is not in cart
-                    <TouchableOpacity
-                      style={styles.addButton}
-                      onPress={() => addToCart(item)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.addButtonPlus}>+</Text>
-                      <Text style={styles.addButtonText}>Add</Text>
-                    </TouchableOpacity>
+                  {loadedImages.has(item.id) && (
+                    <>
+                      {!item.isCustomizable && cart[item.id] ? (
+                        // Show increment/decrement controls if item is in cart and not customizable
+                        <View style={styles.quantityControl}>
+                          <TouchableOpacity
+                            style={styles.quantityButton}
+                            onPress={() => decrementItem(item.id)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.quantityButtonText}>-</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.quantityText}>{cart[item.id].quantity}</Text>
+                          <TouchableOpacity
+                            style={styles.quantityButton}
+                            onPress={() => incrementItem(item.id)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.quantityButtonText}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        // Show Add button
+                        <TouchableOpacity
+                          style={styles.addButton}
+                          onPress={() => {
+                            if (item.isCustomizable) {
+                              // Open customization modal for customizable items
+                              handleCustomizableItemClick(item);
+                            } else {
+                              // Add directly to cart for non-customizable items
+                              addToCart(item);
+                            }
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.addButtonPlus}>+</Text>
+                          <Text style={styles.addButtonText}>Add</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
                   )}
 
                   {/* Customizable Text */}
-                  {item.isCustomizable && (
+                  {loadedImages.has(item.id) && item.isCustomizable && (
                     <Text style={styles.customizableText}>Customisable</Text>
                   )}
                 </View>
@@ -640,6 +798,36 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           </ScrollView>
         </View>
       )}
+      </Animated.View>
+
+      {/* Customization Modal */}
+      <CustomizationModal
+        visible={showCustomizationModal}
+        item={selectedCustomizableItem ? {
+          ...selectedCustomizableItem,
+          addOns: [
+            { id: '1', name: 'Gulab Jamun', price: 50, isVeg: true },
+            { id: '2', name: 'Kesari', price: 50, isVeg: true, discount: 'Save Upto 25%' },
+            { id: '3', name: 'Milk Halwa', price: 50, isVeg: true },
+          ],
+        } : null}
+        onClose={() => {
+          setShowCustomizationModal(false);
+          setSelectedCustomizableItem(null);
+        }}
+        onAddToCart={handleAddCustomizableItem}
+      />
+
+      {/* Food Item Detail Modal */}
+      <FoodItemDetailModal
+        visible={showDetailModal}
+        item={selectedDetailItem}
+        onClose={() => {
+          setShowDetailModal(false);
+          setSelectedDetailItem(null);
+        }}
+        onAddToCart={handleAddFromDetail}
+      />
     </View>
   );
 };
@@ -647,7 +835,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000000',
+  },
+  animatedContainer: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
   },
   headerImage: {
     width: SCREEN_WIDTH,
@@ -792,7 +985,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 4,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     gap: 4,
     height: 29,
     backgroundColor: 'rgba(0, 0, 0, 0.05)',
@@ -805,7 +998,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 4,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     gap: 4,
     height: 29,
     backgroundColor: 'rgba(0, 0, 0, 0.05)',
@@ -875,6 +1068,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingBottom: 40,
   },
+  menuContentWithCart: {
+    paddingBottom: 120,
+  },
   menuSection: {
     gap: 9,
   },
@@ -935,6 +1131,12 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#00B14F',
   },
+  nonVegIconLarge: {
+    borderColor: '#FF0000',
+  },
+  nonVegDotLarge: {
+    backgroundColor: '#FF0000',
+  },
   spicyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -992,14 +1194,24 @@ const styles = StyleSheet.create({
     color: '#000000',
     opacity: 0.85,
   },
+  descriptionContainer: {
+    width: 165,
+  },
   itemDescription: {
     fontFamily: 'Poppins',
     fontWeight: '400',
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 18,
     color: 'rgba(0, 0, 0, 0.6)',
     opacity: 0.85,
-    width: 181,
+  },
+  moreButton: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#00B14F',
+    marginTop: 2,
   },
   itemActions: {
     flexDirection: 'row',

@@ -230,6 +230,13 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     <View style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
+      {/* Back Button in Safe Area */}
+      <SafeAreaView style={styles.headerSafeArea} edges={['top']}>
+        <TouchableOpacity style={styles.backButton} onPress={onBack}>
+          <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+        </TouchableOpacity>
+      </SafeAreaView>
+
       <View style={styles.container}>
         {/* Google Maps or Placeholder */}
         {isMapAvailable && MapView ? (
@@ -269,11 +276,6 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         <View style={styles.tooltip}>
           <Text style={styles.tooltipText}>Move the pin to change location</Text>
         </View>
-
-        {/* Back Button */}
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <MaterialIcons name="chevron-left" size={24} color="#E0E0E0" />
-        </TouchableOpacity>
 
         {/* Bottom Section */}
         <Animated.View style={[styles.bottomSection, { bottom: bottomPosition }]}>
@@ -418,10 +420,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     opacity: 0.85,
   },
-  backButton: {
+  headerSafeArea: {
     position: 'absolute',
-    left: 20,
-    top: 20,
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  backButton: {
     width: 40,
     height: 40,
     backgroundColor: '#FFFFFF',
