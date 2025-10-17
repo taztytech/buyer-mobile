@@ -19,6 +19,7 @@ import { Shimmer } from '@/components/Shimmer';
 import { CustomizationModal } from '@/components/CustomizationModal';
 import { FoodItemDetailModal } from '@/components/FoodItemDetailModal';
 import { FilterModal, FilterState } from '@/components/FilterModal';
+import { OrderDetailsScreen } from '@/screens/Order/OrderDetailsScreen';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -136,6 +137,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   });
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
+  const [showOrderDetails, setShowOrderDetails] = useState(false);
 
   const scrollViewRef = React.useRef<ScrollView>(null);
   const sectionRefs = React.useRef<{ [key: string]: View | null }>({});
@@ -721,7 +723,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       {/* Bottom Cart Bar */}
       {totalCartItems > 0 && (
         <View style={styles.cartBar}>
-          <View style={styles.cartButton}>
+          <TouchableOpacity
+            style={styles.cartButton}
+            onPress={() => setShowOrderDetails(true)}
+            activeOpacity={0.8}
+          >
             <Text style={styles.cartItemCount}>
               {totalCartItems} Item{totalCartItems > 1 ? 's' : ''} Added
             </Text>
@@ -729,7 +735,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               <Text style={styles.viewCartText}>View Cart</Text>
               <MaterialIcons name="arrow-forward" size={16} color="#181C2E" />
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -852,6 +858,17 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         }}
         initialFilters={filters}
       />
+
+      {/* Order Details Screen */}
+      {showOrderDetails && (
+        <View style={styles.orderDetailsOverlay}>
+          <OrderDetailsScreen
+            restaurantName={restaurantData?.name || restaurantName}
+            deliveryAddress="Chennai | F1, Jeyalakshmi Appartments..."
+            onBack={() => setShowOrderDetails(false)}
+          />
+        </View>
+      )}
     </View>
   );
 };
@@ -1554,5 +1571,13 @@ const styles = StyleSheet.create({
   quickMenuCountActive: {
     fontFamily: 'Poppins_600SemiBold',
     opacity: 1,
+  },
+  orderDetailsOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
   },
 });
