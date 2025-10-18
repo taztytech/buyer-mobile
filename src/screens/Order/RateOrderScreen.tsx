@@ -759,7 +759,7 @@ const styles = StyleSheet.create({
     shadowRadius: 60,
     elevation: 21,
     overflow: 'visible',
-    marginTop: 66,
+    marginTop: 100,
   },
   successIconContainer: {
     width: 310,

@@ -15,6 +15,8 @@ import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScr
 import { MyAddressesScreen } from '@/screens/Location/MyAddressesScreen';
 import { CategoryResultsScreen } from '@/screens/Category/CategoryResultsScreen';
 import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
+import { ExploreDishesScreen } from '@/screens/Favorites/ExploreDishesScreen';
+import { ContentPage } from '@/screens/Legal/ContentPage';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -27,7 +29,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'exploreDishes' | 'privacyPolicy' | 'termsConditions'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -46,6 +48,9 @@ export default function App() {
   const rateOrderScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const orderTrackingScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const searchScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const exploreDishesScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const privacyPolicyScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const termsConditionsScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const myAddressesScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const addressScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -427,6 +432,111 @@ export default function App() {
     });
   };
 
+  // Explore Dishes (Favorites) Navigation
+  const handleNavigateToExploreDishes = () => {
+    setCurrentScreen('exploreDishes');
+
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(exploreDishesScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromExploreDishes = () => {
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(exploreDishesScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('profile');
+    });
+  };
+
+  // Privacy Policy Navigation
+  const handleNavigateToPrivacyPolicy = () => {
+    setCurrentScreen('privacyPolicy');
+
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(privacyPolicyScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromPrivacyPolicy = () => {
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(privacyPolicyScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('profile');
+    });
+  };
+
+  // Terms & Conditions Navigation
+  const handleNavigateToTermsConditions = () => {
+    setCurrentScreen('termsConditions');
+
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(termsConditionsScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromTermsConditions = () => {
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(termsConditionsScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('profile');
+    });
+  };
+
   // Edit Profile Navigation
   const handleNavigateToEditProfile = () => {
     setCurrentScreen('editProfile');
@@ -621,10 +731,10 @@ export default function App() {
               onEditProfile={handleNavigateToEditProfile}
               onMyOrders={handleNavigateToOrders}
               onMyAddresses={handleNavigateToMyAddresses}
-              onFavorites={() => console.log('Favorites')}
+              onFavorites={handleNavigateToExploreDishes}
               onChatWithUs={() => console.log('Chat With Us')}
-              onPrivacyPolicy={() => console.log('Privacy Policy')}
-              onTermsConditions={() => console.log('Terms & Conditions')}
+              onPrivacyPolicy={handleNavigateToPrivacyPolicy}
+              onTermsConditions={handleNavigateToTermsConditions}
             />
           </Animated.View>
 
@@ -783,6 +893,55 @@ export default function App() {
             />
           </Animated.View>
 
+          {/* Always render ExploreDishesScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.exploreDishesOverlay,
+              {
+                transform: [{ translateX: exploreDishesScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'exploreDishes' ? 'auto' : 'none'}
+          >
+            <ExploreDishesScreen
+              onBack={handleBackFromExploreDishes}
+              onSelectCategory={(category) => console.log('Selected category:', category)}
+              onSelectRestaurant={(restaurant) => console.log('Selected restaurant:', restaurant)}
+            />
+          </Animated.View>
+
+          {/* Always render Privacy Policy Screen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.privacyPolicyOverlay,
+              {
+                transform: [{ translateX: privacyPolicyScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'privacyPolicy' ? 'auto' : 'none'}
+          >
+            <ContentPage
+              title="Privacy Policy"
+              onBack={handleBackFromPrivacyPolicy}
+            />
+          </Animated.View>
+
+          {/* Always render Terms & Conditions Screen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.termsConditionsOverlay,
+              {
+                transform: [{ translateX: termsConditionsScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'termsConditions' ? 'auto' : 'none'}
+          >
+            <ContentPage
+              title="Terms & Conditions"
+              onBack={handleBackFromTermsConditions}
+            />
+          </Animated.View>
+
           {/* Always render EditProfileScreen, positioned off-screen initially */}
           <Animated.View
             style={[
@@ -923,6 +1082,33 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 4,
     backgroundColor: '#F5F5F5',
+  },
+  exploreDishesOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
+    backgroundColor: '#FFFFFF',
+  },
+  privacyPolicyOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 6,
+    backgroundColor: '#FFFFFF',
+  },
+  termsConditionsOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 7,
+    backgroundColor: '#FFFFFF',
   },
   editProfileOverlay: {
     position: 'absolute',
