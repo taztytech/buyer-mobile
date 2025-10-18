@@ -294,12 +294,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         >
           <Text style={styles.viewMoreText}>View more orders</Text>
         </TouchableOpacity>
+
+        {/* App Version */}
+        <Text style={styles.appVersion}>App Version 1.2</Text>
       </ScrollView>
 
-        {/* App Version Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.appVersion}>App Version 1.2</Text>
-        </View>
       </SafeAreaView>
     </View>
   );
@@ -346,7 +345,8 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
     gap: 16,
     backgroundColor: '#F3F4F6',
   },
@@ -354,9 +354,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-    gap: 14,
+    paddingHorizontal: 20,
+    paddingTop: 5,
     paddingBottom: 24,
+    gap: 14,
   },
   searchBar: {
     flex: 1,
@@ -559,18 +560,12 @@ const styles = StyleSheet.create({
     color: '#00B14F',
     lineHeight: 21,
   },
-  footer: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#F3F4F6',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.05)',
-  },
   appVersion: {
     fontFamily: 'Poppins',
     fontSize: 12,
     color: 'rgba(0, 30, 31, 0.5)',
     textAlign: 'center',
     lineHeight: 18,
+    marginTop: 24,
   },
 });

@@ -58,7 +58,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <MaterialIcons name="chevron-right" size={14} color="#000000" />
         )}
       </TouchableOpacity>
-      <View style={styles.divider} />
+      <View style={styles.dividerContainer}>
+        {Array.from({ length: 22 }).map((_, index) => (
+          <View key={index} style={styles.dash} />
+        ))}
+      </View>
     </>
   );
 
@@ -78,9 +82,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               style={styles.backButton}
               onPress={onBack}
               activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <MaterialIcons name="arrow-back" size={24} color="#000000" />
+              <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
             </TouchableOpacity>
           )}
 
@@ -132,7 +135,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 ios_backgroundColor="#E0E0E0"
               />
             </View>
-            <View style={styles.divider} />
+            <View style={styles.dividerContainer}>
+              {Array.from({ length: 22 }).map((_, index) => (
+                <View key={index} style={styles.dash} />
+              ))}
+            </View>
 
             <MenuItem label="Privacy Policy" onPress={onPrivacyPolicy} />
             <MenuItem
@@ -183,6 +190,7 @@ const styles = StyleSheet.create({
   },
   scrollContentContainer: {
     paddingHorizontal: 20,
+    paddingTop: 20,
     backgroundColor: '#F3FFFA',
   },
   // Back Button
@@ -195,7 +203,6 @@ const styles = StyleSheet.create({
     borderColor: '#E4E4E4',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10,
     marginBottom: 10,
   },
   // Profile Header
@@ -275,13 +282,18 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: '#000000',
   },
-  divider: {
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
     height: 1,
-    backgroundColor: 'transparent',
-    borderStyle: 'dashed',
-    borderWidth: 1,
-    borderColor: 'rgba(158, 158, 158, 0.5)',
-    marginVertical: 20,
+    marginVertical: 12,
+  },
+  dash: {
+    width: 8,
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   // Bottom Section
   bottomSection: {

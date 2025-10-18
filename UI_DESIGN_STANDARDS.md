@@ -165,6 +165,141 @@ All modals in the app should use consistent standards to ensure proper display o
 3. **Test on Android devices** to ensure no gaps appear at the bottom
 4. **Update this document** when creating new modals
 
+## Modal Background Animation Standards
+
+All screens with modals should use consistent animation to scale down and reveal curved edges when modals appear. This creates a visual hierarchy and polish throughout the app.
+
+### Standard Animation Configuration
+
+**Animation Values:**
+- **Scale**: 0.92 (scales down to 92% of original size)
+- **TranslateY**: 30 (moves down 30px to reveal top edges)
+- **Duration**: 300ms
+- **Border Radius**: 20px on top corners (borderTopLeftRadius, borderTopRightRadius)
+- **Container Background**: #000000 (black, visible behind scaled screen)
+
+### Implementation Code
+
+```typescript
+// In component setup
+const scaleAnim = useRef(new Animated.Value(1)).current;
+const translateYAnim = useRef(new Animated.Value(0)).current;
+
+// Animation effect
+useEffect(() => {
+  if (showModal1 || showModal2 || showModal3) {
+    Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 0.92,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateYAnim, {
+        toValue: 30,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  } else {
+    Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateYAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }
+}, [showModal1, showModal2, showModal3]);
+
+// In JSX structure
+return (
+  <View style={styles.container}>
+    <Animated.View
+      style={[
+        styles.animatedContainer,
+        {
+          transform: [
+            { scale: scaleAnim },
+            { translateY: translateYAnim },
+          ],
+        },
+      ]}
+    >
+      {/* Screen content */}
+    </Animated.View>
+
+    {/* Modals */}
+  </View>
+);
+
+// In styles
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',  // Black background visible behind animation
+  },
+  animatedContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',  // Or '#F5F5F5' depending on screen
+    overflow: 'hidden',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+});
+```
+
+### Specifications
+
+- **Scale Value**: 0.92 (8% reduction in size)
+- **Translation**: 30px downward
+- **Duration**: 300ms
+- **Border Radius**: 20px (top corners only)
+- **Container Color**: Black (#000000)
+- **useNativeDriver**: true (for better performance)
+- **Animation Type**: Parallel (scale and translate happen simultaneously)
+
+### Visual Effect
+
+When a modal opens:
+1. The entire screen scales down to 92% of its size
+2. The screen moves down 30px
+3. Curved top edges (20px radius) become visible
+4. Black background shows around the scaled screen
+5. Creates depth and visual hierarchy
+
+### Screens Using This Standard
+
+1. **RestaurantScreen** (`src/screens/Restaurant/RestaurantScreen.tsx`)
+   - Lines: 169-170 (refs), 611-640 (animation), 1315-1321 (styles)
+   - Modals: FoodItemDetailModal, CustomizationModal, CustomisationsReviewModal, FilterModal
+   - Status: ✓ Implemented
+
+2. **OrderDetailsScreen** (`src/screens/Order/OrderDetailsScreen.tsx`)
+   - Lines: 89-90 (refs), 98-133 (animation), 699-705 (styles)
+   - Modals: PaymentModal, AddressModal, CustomizationModal
+   - Status: ✓ Implemented
+
+### Implementation Guidelines
+
+1. **Always use consistent values**: scale: 0.92, translateY: 30, duration: 300ms
+2. **Add border radius** to animatedContainer for curved top edges
+3. **Use black container background** (#000000) for consistent depth effect
+4. **Include all modal states** in the useEffect dependency array
+5. **Use Animated.parallel** to run scale and translate simultaneously
+6. **Enable useNativeDriver: true** for better performance
+7. **Test on physical devices** to ensure smooth animation
+8. **Update this document** when adding animations to new screens
+
+### Related Standards
+
+- See **Modal Standards** section for modal component configuration
+- See **Status Bar and Safe Area Standards** for proper screen structure
+
 ## Card/Box Styling Standards
 
 All cards and containers in the app should use consistent styling for a cohesive look and feel.
@@ -301,4 +436,4 @@ When creating or updating a screen:
 
 ---
 
-Last Updated: 2025-10-17
+Last Updated: 2025-10-18

@@ -570,6 +570,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   const filteredMenuSections = getFilteredMenuSections();
   const hasNoFilteredItems = activeDietaryFilter && filteredMenuSections.length === 0;
+  const hasNoItemsAtAll = !isLoading && menuSections.length === 0;
 
   // Handle adding item from detail modal
   const handleAddFromDetail = (itemId: string, quantity: number) => {
@@ -613,12 +614,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     if (showDetailModal || showCustomizationModal || showCustomisationsReviewModal || showFilterModal) {
       Animated.parallel([
         Animated.timing(scaleAnim, {
-          toValue: 0.95,
+          toValue: 0.92,
           duration: 300,
           useNativeDriver: true,
         }),
         Animated.timing(translateYAnim, {
-          toValue: -20,
+          toValue: 30,
           duration: 300,
           useNativeDriver: true,
         }),
@@ -911,7 +912,15 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
         {/* Menu Sections */}
         <View style={[styles.menuContent, totalCartItems > 0 && styles.menuContentWithCart]}>
-        {hasNoFilteredItems ? (
+        {hasNoItemsAtAll ? (
+          <View style={styles.noItemsContainer}>
+            <MaterialIcons name="restaurant" size={48} color="rgba(0, 0, 0, 0.3)" />
+            <Text style={styles.noItemsTitle}>No menu available</Text>
+            <Text style={styles.noItemsMessage}>
+              This restaurant hasn't added any menu items yet. Please check back later.
+            </Text>
+          </View>
+        ) : hasNoFilteredItems ? (
           <View style={styles.noItemsContainer}>
             <MaterialIcons name="search-off" size={48} color="rgba(0, 0, 0, 0.3)" />
             <Text style={styles.noItemsTitle}>No items found</Text>
@@ -1316,6 +1325,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   headerImage: {
     width: SCREEN_WIDTH,

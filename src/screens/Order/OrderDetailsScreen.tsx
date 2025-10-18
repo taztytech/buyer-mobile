@@ -106,12 +106,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     if (showPaymentModal || showAddressModal || showCustomizationModal) {
       Animated.parallel([
         Animated.timing(scaleAnim, {
-          toValue: 0.95,
+          toValue: 0.92,
           duration: 300,
           useNativeDriver: true,
         }),
         Animated.timing(translateYAnim, {
-          toValue: -20,
+          toValue: 30,
           duration: 300,
           useNativeDriver: true,
         }),
@@ -699,6 +699,9 @@ const styles = StyleSheet.create({
   animatedContainer: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+    overflow: 'hidden',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   header: {
     backgroundColor: '#00B14F',
