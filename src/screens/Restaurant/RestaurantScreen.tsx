@@ -396,7 +396,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       setPreselectedAddOns(currentAddOnIds);
       setSelectedCustomizableItem(item);
       setShowCustomizationModal(true);
-      setShowOrderDetails(false);  // Close order details temporarily
+      // Keep order details open - modal will appear on top
     }
   };
 
@@ -1161,17 +1161,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         } : null}
         preselectedAddOns={preselectedAddOns}
         onClose={() => {
-          // If we were editing from order details, reopen it
-          const wasEditing = editingVariantId !== null;
-
+          // Just close the modal and reset editing state
           setShowCustomizationModal(false);
           setSelectedCustomizableItem(null);
           setEditingVariantId(null);
           setPreselectedAddOns([]);
-
-          if (wasEditing) {
-            setShowOrderDetails(true);
-          }
+          // Order details remains open if it was already open
         }}
         onAddToCart={handleAddCustomizableItem}
       />
@@ -1232,6 +1227,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               setShowOrderDetails(false);
               setShowOrderSuccess(true);
             }}
+            showCustomizationModal={showCustomizationModal}
           />
         </View>
       )}
@@ -1769,13 +1765,12 @@ const styles = StyleSheet.create({
     right: 0,
     height: 100,
     backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.2)',
+    borderTopWidth: 0,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 24,
-    elevation: 10,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 20,
     paddingHorizontal: 20,
     paddingVertical: 20,
   },
@@ -1962,6 +1957,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 1000,
+    backgroundColor: '#000000',
   },
   searchOverlay: {
     position: 'absolute',

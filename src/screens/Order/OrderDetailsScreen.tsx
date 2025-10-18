@@ -34,6 +34,7 @@ interface OrderDetailsScreenProps {
   onBack?: () => void;
   onEditCustomization?: (itemId: string, variantId: string, currentAddOnIds: string[]) => void;
   onPlaceOrder?: () => void;
+  showCustomizationModal?: boolean;
 }
 
 export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
@@ -43,6 +44,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   onBack,
   onEditCustomization,
   onPlaceOrder,
+  showCustomizationModal = false,
 }) => {
   const [orderExpanded, setOrderExpanded] = useState(true);
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
@@ -94,7 +96,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       return;
     }
 
-    if (showPaymentModal || showAddressModal) {
+    if (showPaymentModal || showAddressModal || showCustomizationModal) {
       Animated.parallel([
         Animated.timing(scaleAnim, {
           toValue: 0.95,
@@ -121,7 +123,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         }),
       ]).start();
     }
-  }, [showPaymentModal, showAddressModal, showLocationSelection]);
+  }, [showPaymentModal, showAddressModal, showLocationSelection, showCustomizationModal]);
 
   const handleIncrement = (itemId: string) => {
     setLocalCartItems(prev =>
@@ -251,7 +253,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   const itemPrice = item.price * item.quantity;
 
                   return (
-                    <View key={item.id} style={styles.orderItem}>
+                    <View key={item.variantId || item.id} style={styles.orderItem}>
                       <View style={styles.vegIndicator}>
                         <View style={[
                           styles.vegIconSmall,
@@ -656,10 +658,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#000000',
   },
   animatedContainer: {
     flex: 1,
+    backgroundColor: '#F5F5F5',
   },
   header: {
     backgroundColor: '#00B14F',
@@ -796,26 +799,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.15)',
     borderRadius: 8,
-    marginRight: 12,
-    minWidth: 70,
+    marginRight: 8,
+    minWidth: 60,
   },
   quantityButton: {
     fontFamily: 'Poppins_700Bold',
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 14,
+    lineHeight: 21,
     color: '#00B14F',
   },
   quantityText: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 12,
+    lineHeight: 18,
     color: '#000000',
-    marginHorizontal: 8,
+    marginHorizontal: 6,
   },
   priceContainer: {
     alignItems: 'flex-end',

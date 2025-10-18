@@ -159,7 +159,11 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
             <View style={styles.dashedDivider} />
 
             {/* Add-ons List */}
-            <ScrollView style={styles.addOnsList} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.addOnsList}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+            >
               {item.addOns?.map((addOn) => (
                 <TouchableOpacity
                   key={addOn.id}
@@ -286,7 +290,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     paddingHorizontal: 20,
     gap: 18,
-    maxHeight: 250,
+    maxHeight: 350,
     marginTop: 30,
     marginBottom: 30,
   },
@@ -316,6 +320,8 @@ const styles = StyleSheet.create({
   addOnsList: {
     paddingTop: 4,
     paddingBottom: 4,
+    flexGrow: 0,
+    flexShrink: 1,
   },
   addOnItem: {
     flexDirection: 'row',
