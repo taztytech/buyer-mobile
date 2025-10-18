@@ -7,6 +7,7 @@ import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
 import { OrdersScreen } from '@/screens/Order/OrdersScreen';
 import { OrderDetailScreen } from '@/screens/Order/OrderDetailScreen';
+import { RateOrderScreen } from '@/screens/Order/RateOrderScreen';
 import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { MyAddressesScreen } from '@/screens/Location/MyAddressesScreen';
@@ -24,7 +25,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -40,6 +41,7 @@ export default function App() {
   const editProfileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const ordersScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const orderDetailScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const rateOrderScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const myAddressesScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const addressScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -456,6 +458,42 @@ export default function App() {
     });
   };
 
+  // Rate Order Navigation
+  const handleNavigateToRateOrder = (orderId: string) => {
+    setSelectedOrderId(orderId);
+    setCurrentScreen('rateOrder');
+
+    Animated.parallel([
+      Animated.timing(ordersScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(rateOrderScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromRateOrder = () => {
+    Animated.parallel([
+      Animated.timing(ordersScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(rateOrderScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('orders');
+    });
+  };
+
   if (!fontsLoaded || isCheckingAuth) {
     return null;
   }
@@ -563,13 +601,13 @@ export default function App() {
                 transform: [{ translateX: ordersScreenSlide }],
               },
             ]}
-            pointerEvents={currentScreen === 'orders' || currentScreen === 'orderDetail' ? 'auto' : 'none'}
+            pointerEvents={currentScreen === 'orders' || currentScreen === 'orderDetail' || currentScreen === 'rateOrder' ? 'auto' : 'none'}
           >
             <OrdersScreen
               onBack={handleBackFromOrders}
               onOrderDetails={handleNavigateToOrderDetail}
               onReorder={(orderId) => console.log('Reorder:', orderId)}
-              onRateOrder={(orderId) => console.log('Rate Order:', orderId)}
+              onRateOrder={handleNavigateToRateOrder}
               onViewMore={() => console.log('View More Orders')}
             />
           </Animated.View>
@@ -592,6 +630,25 @@ export default function App() {
               onRateOrder={() => console.log('Rate Order')}
               onReorder={() => console.log('Reorder')}
               onDownloadInvoice={() => console.log('Download Invoice')}
+            />
+          </Animated.View>
+
+          {/* Always render RateOrderScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.rateOrderOverlay,
+              {
+                transform: [{ translateX: rateOrderScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'rateOrder' ? 'auto' : 'none'}
+          >
+            <RateOrderScreen
+              onBack={handleBackFromRateOrder}
+              onSubmit={(data) => {
+                console.log('Rating submitted:', data);
+                handleBackFromRateOrder();
+              }}
             />
           </Animated.View>
 
@@ -717,6 +774,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 5,
     backgroundColor: '#F3F4F6',
+  },
+  rateOrderOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 6,
+    backgroundColor: '#F5F5F5',
   },
   myAddressesOverlay: {
     position: 'absolute',
