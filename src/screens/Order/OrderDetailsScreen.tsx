@@ -133,46 +133,61 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   }, [showPaymentModal, showAddressModal, showLocationSelection, showCustomizationModal]);
 
   const handleIncrement = (itemId: string, variantId?: string) => {
+    // Find current item first to get proper quantity
+    const currentItem = localCartItems.find(i => variantId ? i.variantId === variantId : i.id === itemId);
+    if (!currentItem) return;
+
+    const newQuantity = currentItem.quantity + 1;
+
+    // Update local state
     setLocalCartItems(prev =>
       prev.map(item => {
         const matchesItem = variantId ? item.variantId === variantId : item.id === itemId;
         return matchesItem
-          ? { ...item, quantity: item.quantity + 1 }
+          ? { ...item, quantity: newQuantity }
           : item;
       })
     );
 
     // Update parent cart state
-    const item = localCartItems.find(i => variantId ? i.variantId === variantId : i.id === itemId);
-    if (item && onUpdateCart) {
-      onUpdateCart(itemId, variantId, item.quantity + 1);
+    if (onUpdateCart) {
+      onUpdateCart(itemId, variantId, newQuantity);
     }
   };
 
   const handleDecrement = (itemId: string, variantId?: string) => {
-    setLocalCartItems(prev => {
-      const item = prev.find(i => variantId ? i.variantId === variantId : i.id === itemId);
-      if (!item) return prev;
+    // Find current item first
+    const currentItem = localCartItems.find(i => variantId ? i.variantId === variantId : i.id === itemId);
+    if (!currentItem) return;
 
-      if (item.quantity === 1) {
-        // Remove item from cart when quantity reaches 0
-        if (onUpdateCart) {
-          onUpdateCart(itemId, variantId, 0);
-        }
-        return prev.filter(i => variantId ? i.variantId !== variantId : i.id !== itemId);
-      } else {
-        // Decrease quantity
-        if (onUpdateCart) {
-          onUpdateCart(itemId, variantId, item.quantity - 1);
-        }
-        return prev.map(i => {
+    const newQuantity = currentItem.quantity - 1;
+
+    if (newQuantity === 0) {
+      // Remove item from cart
+      setLocalCartItems(prev =>
+        prev.filter(i => variantId ? i.variantId !== variantId : i.id !== itemId)
+      );
+
+      // Update parent cart state
+      if (onUpdateCart) {
+        onUpdateCart(itemId, variantId, 0);
+      }
+    } else {
+      // Decrease quantity
+      setLocalCartItems(prev =>
+        prev.map(i => {
           const matchesItem = variantId ? i.variantId === variantId : i.id === itemId;
           return matchesItem
-            ? { ...i, quantity: i.quantity - 1 }
+            ? { ...i, quantity: newQuantity }
             : i;
-        });
+        })
+      );
+
+      // Update parent cart state
+      if (onUpdateCart) {
+        onUpdateCart(itemId, variantId, newQuantity);
       }
-    });
+    }
   };
 
   // Calculate totals
@@ -275,19 +290,19 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
                   return (
                     <View key={item.variantId || item.id} style={styles.orderItem}>
-                      <View style={styles.vegIndicator}>
-                        <View style={[
-                          styles.vegIconSmall,
-                          !item.isVeg && styles.nonVegIconSmall
-                        ]}>
-                          <View style={[
-                            styles.vegDotSmall,
-                            !item.isVeg && styles.nonVegDotSmall
-                          ]} />
-                        </View>
-                      </View>
                       <View style={styles.orderItemDetails}>
-                        <Text style={styles.orderItemName}>{item.name}</Text>
+                        <View style={styles.itemNameRow}>
+                          <View style={[
+                            styles.vegIconSmall,
+                            !item.isVeg && styles.nonVegIconSmall
+                          ]}>
+                            <View style={[
+                              styles.vegDotSmall,
+                              !item.isVeg && styles.nonVegDotSmall
+                            ]} />
+                          </View>
+                          <Text style={styles.orderItemName}>{item.name}</Text>
+                        </View>
                         {item.customizations && (
                           <TouchableOpacity
                             style={styles.customizationsRow}
@@ -762,8 +777,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  vegIndicator: {
-    marginRight: 8,
+  orderItemDetails: {
+    flex: 1,
+    marginRight: 12,
+  },
+  itemNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   vegIconSmall: {
     width: 14,
@@ -786,16 +807,12 @@ const styles = StyleSheet.create({
   nonVegDotSmall: {
     backgroundColor: '#FF0000',
   },
-  orderItemDetails: {
-    flex: 1,
-    marginRight: 12,
-  },
   orderItemName: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
-    marginBottom: 2,
+    flex: 1,
   },
   customizationsRow: {
     flexDirection: 'row',

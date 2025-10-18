@@ -408,9 +408,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       if (variantId) {
         // Handle customizable item with variant
         const item = newCart[itemId];
+
         if (item?.variants) {
           const updatedVariants = item.variants.map(v =>
-            v.variantId === variantId ? { ...v, quantity: newQuantity } : v
+            v.id === variantId ? { ...v, quantity: newQuantity } : v
           ).filter(v => v.quantity > 0); // Remove variants with 0 quantity
 
           if (updatedVariants.length === 0) {
@@ -1690,12 +1691,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   itemRight: {
-    width: 166,
-    alignItems: 'flex-start',
+    width: 155,
+    alignItems: 'center',
     gap: 26,
   },
   itemImageContainer: {
-    width: 166,
+    width: 155,
     height: 137,
     borderRadius: 16,
     position: 'relative',
@@ -1707,7 +1708,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   itemImage: {
-    width: 166,
+    width: 155,
     height: 137,
     borderRadius: 16,
   },
@@ -1726,7 +1727,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     position: 'absolute',
     top: 115,
-    left: 53,
+    left: 39.5,
   },
   addButtonPlus: {
     fontFamily: 'Poppins',
@@ -1757,7 +1758,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     position: 'absolute',
     top: 115,
-    left: 53,
+    left: 39.5,
   },
   quantityButton: {
     width: 20,
