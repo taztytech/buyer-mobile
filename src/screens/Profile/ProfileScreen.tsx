@@ -51,6 +51,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         style={styles.menuItem}
         onPress={onPress}
         activeOpacity={0.7}
+        hitSlop={{ top: 16, bottom: 16, left: 0, right: 0 }}
       >
         <Text style={styles.menuItemText}>{label}</Text>
         {showArrow && (
@@ -62,8 +63,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <View style={styles.rootContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#F3FFFA" />
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.container}>
         <ScrollView
           style={styles.scrollContent}
@@ -76,6 +78,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               style={styles.backButton}
               onPress={onBack}
               activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <MaterialIcons name="arrow-back" size={24} color="#000000" />
             </TouchableOpacity>
@@ -104,6 +107,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               style={styles.editProfileButton}
               onPress={onEditProfile}
               activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={styles.editProfileText}>Edit Profile</Text>
               <MaterialIcons name="chevron-right" size={9} color="#000000" />
@@ -155,11 +159,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  rootContainer: {
+    flex: 1,
+    backgroundColor: '#F3FFFA',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F3FFFA',

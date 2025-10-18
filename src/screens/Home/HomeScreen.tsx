@@ -53,6 +53,14 @@ const fallbackCarouselData: CarouselItem[] = [
   },
 ];
 
+// Default location coordinates (Madurai)
+const DEFAULT_LOCATION = {
+  name: 'Madurai',
+  address: 'Madurai, Tamil Nadu, India',
+  latitude: 9.9252,
+  longitude: 78.1198,
+};
+
 // Fallback category data if API fails or returns empty
 const fallbackCategoryData: CategoryItem[] = [
   {
@@ -142,7 +150,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isLoadingBanners, setIsLoadingBanners] = React.useState(true);
   const [isLoadingCategories, setIsLoadingCategories] = React.useState(true);
   const [isLoadingRestaurants, setIsLoadingRestaurants] = React.useState(true);
-  const [isLoadingLocation, setIsLoadingLocation] = React.useState(true);
+  const [isLoadingLocation, setIsLoadingLocation] = React.useState(false);
 
   // Track image loading states
   const [loadedBannerImages, setLoadedBannerImages] = React.useState<Set<string>>(new Set());
@@ -155,7 +163,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showRestaurantShimmer, setShowRestaurantShimmer] = React.useState(true);
   const [isVegMode, setIsVegMode] = React.useState(false);
   const [tempVegSelection, setTempVegSelection] = React.useState<'all' | 'veg'>('all');
-  const [selectedLocation, setSelectedLocation] = React.useState(externalSelectedLocation || { name: 'Chennai', address: 'Vigneshwar Nagar, Nanganallur, Tamilnadu,...' });
+  const [selectedLocation, setSelectedLocation] = React.useState(externalSelectedLocation || { name: DEFAULT_LOCATION.name, address: DEFAULT_LOCATION.address });
   const flatListRef = React.useRef<FlatList>(null);
 
   // Update local state when external selectedLocation changes
@@ -164,6 +172,76 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       setSelectedLocation(externalSelectedLocation);
     }
   }, [externalSelectedLocation]);
+
+  // Check location permission on app load
+  React.useEffect(() => {
+    const checkLocationPermission = async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        console.log('[Location] Initial permission status:', status);
+
+        if (status !== 'granted') {
+          console.log('[Location] Permission not granted, using fallback location');
+          // Use default location as fallback
+          setSelectedLocation({
+            name: DEFAULT_LOCATION.name,
+            address: DEFAULT_LOCATION.address,
+          });
+          setIsLoadingLocation(false);
+        } else {
+          // Permission granted, try to get actual location
+          try {
+            const location = await Location.getCurrentPositionAsync({});
+            const addresses = await Location.reverseGeocodeAsync({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+
+            if (addresses.length > 0) {
+              const addr = addresses[0];
+              const locationName = addr.district || addr.city || addr.subregion || DEFAULT_LOCATION.name;
+              const locationAddress = [
+                addr.street,
+                addr.subregion,
+                addr.region,
+                addr.country,
+              ].filter(Boolean).join(', ') || DEFAULT_LOCATION.address;
+
+              setSelectedLocation({
+                name: locationName,
+                address: locationAddress,
+              });
+            } else {
+              // Fallback if no address found
+              setSelectedLocation({
+                name: DEFAULT_LOCATION.name,
+                address: DEFAULT_LOCATION.address,
+              });
+            }
+            setIsLoadingLocation(false);
+          } catch (locError) {
+            console.error('[Location] Error getting location:', locError);
+            // Fallback to default location on error
+            setSelectedLocation({
+              name: DEFAULT_LOCATION.name,
+              address: DEFAULT_LOCATION.address,
+            });
+            setIsLoadingLocation(false);
+          }
+        }
+      } catch (error) {
+        console.error('[Location] Error checking permission:', error);
+        // Fallback to default location on error
+        setSelectedLocation({
+          name: DEFAULT_LOCATION.name,
+          address: DEFAULT_LOCATION.address,
+        });
+        setIsLoadingLocation(false);
+      }
+    };
+
+    checkLocationPermission();
+  }, []);
 
   // Check if all banner images are loaded
   React.useEffect(() => {
@@ -291,11 +369,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         setShowLocationPopup(false);
         setIsLoadingLocation(false);
-
-        // Navigate to address selection after getting location
-        if (onNavigateToAddressSelection) {
-          onNavigateToAddressSelection();
-        }
       } else {
         console.log('[Location] Permission denied or not granted:', finalStatus);
         Alert.alert(
@@ -319,8 +392,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const handleLocationClick = () => {
-    console.log('[Location] Location clicked, showing modal');
-    setShowLocationPopup(true);
+    // Navigate to address selection when location selector is clicked
+    if (onNavigateToAddressSelection) {
+      onNavigateToAddressSelection();
+    }
   };
 
   const handleVegModeToggle = () => {
@@ -569,7 +644,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#00B14F" translucent={false} />
+      <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView
           style={styles.container}

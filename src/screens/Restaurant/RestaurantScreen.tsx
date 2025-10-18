@@ -1437,8 +1437,8 @@ const styles = StyleSheet.create({
   filterTextActive: {
     fontFamily: 'Poppins',
     fontWeight: '500',
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 12,
+    lineHeight: 18,
     color: '#00B14F',
     opacity: 0.85,
   },
