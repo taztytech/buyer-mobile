@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 350,
     alignItems: 'center',
-    gap: 20,
+    gap: 10,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -762,10 +762,11 @@ const styles = StyleSheet.create({
   },
   successIconContainer: {
     width: 310,
-    height: 177,
+    height: 200,
     marginTop: -133,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
+    marginBottom: 10,
   },
   reviewSubmittedImage: {
     width: 310,
