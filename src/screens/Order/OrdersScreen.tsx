@@ -35,6 +35,8 @@ interface OrdersScreenProps {
   onOrderDetails?: (orderId: string) => void;
   onReorder?: (orderId: string) => void;
   onRateOrder?: (orderId: string) => void;
+  onTrackOrder?: (orderId: string) => void;
+  onHelp?: (orderId: string) => void;
   onViewMore?: () => void;
 }
 
@@ -43,6 +45,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   onOrderDetails,
   onReorder,
   onRateOrder,
+  onTrackOrder,
+  onHelp,
   onViewMore,
 }) => {
   const [searchText, setSearchText] = useState('');
@@ -50,6 +54,22 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   // Mock data
   const orders: Order[] = [
+    {
+      id: '0',
+      restaurantName: 'KFC',
+      restaurantLocation: 'Keelkattlai',
+      restaurantLogo: require('@/assets/icon.png'),
+      orderDate: 'July 06, 2025',
+      totalAmount: 69,
+      status: 'ongoing',
+      items: [
+        {
+          id: '1',
+          name: 'Chicken Roll',
+          isVeg: false,
+        },
+      ],
+    },
     {
       id: '1',
       restaurantName: 'KFC',
@@ -122,6 +142,18 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const handleRateOrder = (orderId: string) => {
     if (onRateOrder) {
       onRateOrder(orderId);
+    }
+  };
+
+  const handleTrackOrder = (orderId: string) => {
+    if (onTrackOrder) {
+      onTrackOrder(orderId);
+    }
+  };
+
+  const handleHelp = (orderId: string) => {
+    if (onHelp) {
+      onHelp(orderId);
     }
   };
 
@@ -218,22 +250,45 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={styles.rateButton}
-            onPress={() => handleRateOrder(order.id)}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="star-outline" size={18} color="#001E1F" />
-            <Text style={styles.rateButtonText}>Rate Order</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.reorderButton}
-            onPress={() => handleReorder(order.id)}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons name="refresh" size={18} color="#FFFFFF" />
-            <Text style={styles.reorderButtonText}>Reorder</Text>
-          </TouchableOpacity>
+          {order.status === 'ongoing' ? (
+            <>
+              <TouchableOpacity
+                style={styles.rateButton}
+                onPress={() => handleHelp(order.id)}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="help-outline" size={18} color="#001E1F" />
+                <Text style={styles.rateButtonText}>Help</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.reorderButton}
+                onPress={() => handleTrackOrder(order.id)}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="location-on" size={18} color="#FFFFFF" />
+                <Text style={styles.reorderButtonText}>Track Order</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={styles.rateButton}
+                onPress={() => handleRateOrder(order.id)}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="star-outline" size={18} color="#001E1F" />
+                <Text style={styles.rateButtonText}>Rate Order</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.reorderButton}
+                onPress={() => handleReorder(order.id)}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="refresh" size={18} color="#FFFFFF" />
+                <Text style={styles.reorderButtonText}>Reorder</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </TouchableOpacity>
     );

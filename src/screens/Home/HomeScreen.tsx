@@ -736,6 +736,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   style={styles.searchInput}
                   placeholder="Search Restaurants & foods.."
                   placeholderTextColor="rgba(255, 255, 255, 0.7)"
+                  cursorColor="#FFFFFF"
                 />
               </LinearGradient>
 
