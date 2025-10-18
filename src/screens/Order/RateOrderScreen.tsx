@@ -759,12 +759,11 @@ const styles = StyleSheet.create({
     shadowRadius: 60,
     elevation: 21,
     overflow: 'visible',
-    marginTop: 66,
   },
   successIconContainer: {
     width: 310,
     height: 200,
-    marginTop: -200,
+    marginTop: -133,
     alignItems: 'center',
     justifyContent: 'flex-end',
     marginBottom: 10,
