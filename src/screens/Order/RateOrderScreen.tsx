@@ -8,9 +8,11 @@ import {
   TextInput,
   ScrollView,
   Animated,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 
 interface RateOrderScreenProps {
   onBack?: () => void;
@@ -34,6 +36,12 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
   const [foodComment, setFoodComment] = useState('');
   const [restaurantRating, setRestaurantRating] = useState(0);
   const [restaurantComment, setRestaurantComment] = useState('');
+  const [showFoodRatingModal, setShowFoodRatingModal] = useState(false);
+
+  // Individual food item ratings
+  const [chickenBriyaniRating, setChickenBriyaniRating] = useState(0);
+  const [muttonBriyaniRating, setMuttonBriyaniRating] = useState(0);
+  const [chickenCurryRating, setChickenCurryRating] = useState(0);
 
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -81,6 +89,14 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
   };
 
   const handleSubmit = () => {
+    // Show the food rating modal instead of immediately submitting
+    setShowFoodRatingModal(true);
+  };
+
+  const handleFoodRatingModalClose = () => {
+    setShowFoodRatingModal(false);
+
+    // Call the onSubmit and onBack callbacks after modal is closed
     if (onSubmit) {
       onSubmit({
         overallRating,
@@ -212,6 +228,26 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
     );
   };
 
+  const renderModalStars = (rating: number, onRate: (value: number) => void) => {
+    return (
+      <View style={styles.modalStarsContainer}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <TouchableOpacity
+            key={star}
+            onPress={() => onRate(star)}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons
+              name="star"
+              size={24}
+              color={star <= rating ? '#D1D5DB' : '#D1D5DB'}
+            />
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.outerContainer}>
       <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
@@ -301,6 +337,54 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+
+      {/* Food Rating Modal */}
+      <Modal
+        visible={showFoodRatingModal}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent={true}
+        onRequestClose={handleFoodRatingModalClose}
+      >
+        <View style={styles.modalBackground}>
+          <BlurView intensity={100} tint="dark" style={styles.modalOverlay}>
+          <View style={styles.foodModalContent}>
+            {/* Title and Subtitle */}
+            <View style={styles.foodModalHeader}>
+              <Text style={styles.foodModalTitle}>Rate Food</Text>
+              <Text style={styles.foodModalSubtitle}>For Future better Experience</Text>
+            </View>
+
+            {/* Chicken Briyani */}
+            <View style={styles.foodItemRow}>
+              <Text style={styles.foodItemName}>Chicken Briyani</Text>
+              {renderModalStars(chickenBriyaniRating, setChickenBriyaniRating)}
+            </View>
+
+            {/* Mutton Briyani */}
+            <View style={styles.foodItemRow}>
+              <Text style={styles.foodItemName}>Mutton Briyani</Text>
+              {renderModalStars(muttonBriyaniRating, setMuttonBriyaniRating)}
+            </View>
+
+            {/* Chicken Curry */}
+            <View style={styles.foodItemRow}>
+              <Text style={styles.foodItemName}>Chicken Curry</Text>
+              {renderModalStars(chickenCurryRating, setChickenCurryRating)}
+            </View>
+
+            {/* Okay Button */}
+            <TouchableOpacity
+              style={styles.foodModalOkayButton}
+              onPress={handleFoodRatingModalClose}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.foodModalOkayText}>Okay</Text>
+            </TouchableOpacity>
+          </View>
+          </BlurView>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -506,6 +590,90 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   submitButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#FFFFFF',
+  },
+  // Food Rating Modal Styles
+  modalBackground: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  foodModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    width: '100%',
+    maxWidth: 400,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -9,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 60,
+    elevation: 21,
+  },
+  foodModalHeader: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  foodModalTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 22,
+    lineHeight: 33,
+    textAlign: 'center',
+    color: '#000000',
+    opacity: 0.85,
+  },
+  foodModalSubtitle: {
+    fontFamily: 'Poppins',
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    color: 'rgba(0, 0, 0, 0.5)',
+    opacity: 0.85,
+  },
+  foodItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  foodItemName: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#00B14F',
+    opacity: 0.85,
+    flex: 0,
+  },
+  modalStarsContainer: {
+    flexDirection: 'row',
+    gap: 3,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  foodModalOkayButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 19,
+    paddingHorizontal: 20,
+    gap: 10,
+    backgroundColor: '#001E1F',
+    borderRadius: 10,
+  },
+  foodModalOkayText: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
     lineHeight: 24,

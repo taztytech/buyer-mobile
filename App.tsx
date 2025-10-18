@@ -9,6 +9,7 @@ import { OrdersScreen } from '@/screens/Order/OrdersScreen';
 import { OrderDetailScreen } from '@/screens/Order/OrderDetailScreen';
 import { RateOrderScreen } from '@/screens/Order/RateOrderScreen';
 import { OrderTrackingScreen } from '@/screens/Order/OrderTrackingScreen';
+import { SearchScreen } from '@/screens/Search/SearchScreen';
 import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { MyAddressesScreen } from '@/screens/Location/MyAddressesScreen';
@@ -26,7 +27,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -44,6 +45,7 @@ export default function App() {
   const orderDetailScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const rateOrderScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const orderTrackingScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const searchScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const myAddressesScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const addressScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -532,6 +534,41 @@ export default function App() {
     });
   };
 
+  // Search Navigation
+  const handleNavigateToSearch = () => {
+    setCurrentScreen('search');
+
+    Animated.parallel([
+      Animated.timing(homeScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(searchScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromSearch = () => {
+    Animated.parallel([
+      Animated.timing(homeScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(searchScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('home');
+    });
+  };
+
   if (!fontsLoaded || isCheckingAuth) {
     return null;
   }
@@ -563,6 +600,7 @@ export default function App() {
               onNavigateToAddressSelection={handleNavigateToAddressSelection}
               onNavigateToCategory={handleNavigateToCategoryResults}
               onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
+              onNavigateToSearch={handleNavigateToSearch}
               selectedLocation={selectedLocation}
             />
           </Animated.View>
@@ -708,6 +746,25 @@ export default function App() {
             />
           </Animated.View>
 
+          {/* Always render SearchScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.searchOverlay,
+              {
+                transform: [{ translateX: searchScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'search' ? 'auto' : 'none'}
+          >
+            <SearchScreen
+              onBack={handleBackFromSearch}
+              onSelectResult={(result) => {
+                console.log('Selected:', result);
+                handleBackFromSearch();
+              }}
+            />
+          </Animated.View>
+
           {/* Always render MyAddressesScreen, positioned off-screen initially */}
           <Animated.View
             style={[
@@ -848,6 +905,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 7,
     backgroundColor: '#E9E9E9',
+  },
+  searchOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 8,
+    backgroundColor: '#FFFFFF',
   },
   myAddressesOverlay: {
     position: 'absolute',

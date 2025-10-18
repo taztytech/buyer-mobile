@@ -20,6 +20,7 @@ interface HomeScreenProps {
   onNavigateToAddressSelection?: () => void;
   onNavigateToCategory?: (categoryName: string) => void;
   onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
+  onNavigateToSearch?: () => void;
   selectedLocation?: { name: string; address: string };
 }
 
@@ -138,6 +139,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToAddressSelection,
   onNavigateToCategory,
   onNavigateToRestaurant,
+  onNavigateToSearch,
   selectedLocation: externalSelectedLocation
 }) => {
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
@@ -688,7 +690,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
                 </View>
                 {/* Address */}
-                <Text style={styles.addressText}>{selectedLocation.address}</Text>
+                <Text
+                  style={styles.addressText}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {selectedLocation.address}
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -705,7 +713,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               testID="profile-button"
             >
               <View style={styles.profileAvatar}>
-                <MaterialIcons name="person" size={24} color="#00B14F" />
+                <MaterialIcons name="person" size={22} color="#00B14F" />
               </View>
             </TouchableOpacity>
           )}
@@ -725,20 +733,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </>
           ) : (
             <>
-              <LinearGradient
-                colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.searchBar}
+              <TouchableOpacity
+                style={{ flex: 1 }}
+                onPress={onNavigateToSearch}
+                activeOpacity={0.7}
               >
-                <MaterialIcons name="search" size={24} color="#FFFFFF" />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search Restaurants & foods.."
-                  placeholderTextColor="rgba(255, 255, 255, 0.7)"
-                  cursorColor="#FFFFFF"
-                />
-              </LinearGradient>
+                <LinearGradient
+                  colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.searchBar}
+                >
+                  <MaterialIcons name="search" size={24} color="#FFFFFF" />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search Restaurants & foods.."
+                    placeholderTextColor="rgba(255, 255, 255, 0.7)"
+                    cursorColor="#FFFFFF"
+                    editable={false}
+                    pointerEvents="none"
+                  />
+                </LinearGradient>
+              </TouchableOpacity>
 
               {/* VEG Mode Toggle */}
               <TouchableOpacity
@@ -1152,8 +1168,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   addressText: {
-    width: 271,
-    height: 18,
+    maxWidth: 260,
     fontFamily: 'Poppins',
     fontWeight: '400',
     fontSize: 12,
@@ -1166,9 +1181,9 @@ const styles = StyleSheet.create({
     height: 50,
   },
   profileAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#F7F7F7',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1195,10 +1210,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins',
     fontWeight: '400',
     fontSize: 14,
-    lineHeight: 21,
     color: '#FFFFFF',
     paddingVertical: 0,
-    paddingTop: 8,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   vegModeContainer: {
     width: 46,
@@ -1221,23 +1236,22 @@ const styles = StyleSheet.create({
     height: 21,
     borderRadius: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    paddingHorizontal: 20,
-    paddingVertical: 0,
+    padding: 2,
     justifyContent: 'center',
     alignItems: 'flex-start',
   },
   vegToggleThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 17,
+    height: 17,
+    borderRadius: 8.5,
     backgroundColor: '#FFFFFF',
   },
   vegToggleActive: {
     backgroundColor: '#00B14F',
-    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
   },
   vegToggleThumbActive: {
-    alignSelf: 'flex-end',
+    // No additional styles needed, alignment handled by parent
   },
   // Carousel Container
   carouselContainer: {
