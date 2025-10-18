@@ -39,12 +39,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   // Menu item component
   const MenuItem = ({
     label,
+    icon,
     onPress,
     showArrow = true,
+    showDivider = true,
   }: {
     label: string;
+    icon?: string;
     onPress?: () => void;
     showArrow?: boolean;
+    showDivider?: boolean;
   }) => (
     <>
       <TouchableOpacity
@@ -53,22 +57,25 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         activeOpacity={0.7}
         hitSlop={{ top: 16, bottom: 16, left: 0, right: 0 }}
       >
-        <Text style={styles.menuItemText}>{label}</Text>
+        <View style={styles.menuItemLeft}>
+          {icon && (
+            <MaterialIcons name={icon as any} size={20} color="#00B14F" />
+          )}
+          <Text style={styles.menuItemText}>{label}</Text>
+        </View>
         {showArrow && (
           <MaterialIcons name="chevron-right" size={14} color="#000000" />
         )}
       </TouchableOpacity>
-      <View style={styles.dividerContainer}>
-        {Array.from({ length: 22 }).map((_, index) => (
-          <View key={index} style={styles.dash} />
-        ))}
-      </View>
+      {showDivider && (
+        <View style={styles.divider} />
+      )}
     </>
   );
 
   return (
     <View style={styles.rootContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F3FFFA" />
+      <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.container}>
         <ScrollView
@@ -119,33 +126,36 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           {/* Menu Container */}
           <View style={styles.menuContainer}>
-            <MenuItem label="My Orders" onPress={onMyOrders} />
-            <MenuItem label="My Addresses" onPress={onMyAddresses} />
-            <MenuItem label="Favorites" onPress={onFavorites} />
-            <MenuItem label="Chat With Us" onPress={onChatWithUs} />
+            <MenuItem label="My Orders" icon="receipt-long" onPress={onMyOrders} />
+            <MenuItem label="My Addresses" icon="location-on" onPress={onMyAddresses} />
+            <MenuItem label="Favorites" icon="favorite" onPress={onFavorites} />
+            <MenuItem label="Chat With Us" icon="chat" onPress={onChatWithUs} />
 
             {/* Notification Toggle */}
             <View style={styles.menuItem}>
-              <Text style={styles.menuItemText}>Notification</Text>
-              <Switch
-                value={notificationsEnabled}
-                onValueChange={setNotificationsEnabled}
-                trackColor={{ false: '#E0E0E0', true: '#00B14F' }}
-                thumbColor="#FFFFFF"
-                ios_backgroundColor="#E0E0E0"
-              />
+              <View style={styles.menuItemLeft}>
+                <MaterialIcons name="notifications" size={20} color="#00B14F" />
+                <Text style={styles.menuItemText}>Notification</Text>
+              </View>
+              <View style={styles.switchContainer}>
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={setNotificationsEnabled}
+                  trackColor={{ false: '#E0E0E0', true: '#00B14F' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor="#E0E0E0"
+                />
+              </View>
             </View>
-            <View style={styles.dividerContainer}>
-              {Array.from({ length: 22 }).map((_, index) => (
-                <View key={index} style={styles.dash} />
-              ))}
-            </View>
+            <View style={styles.divider} />
 
-            <MenuItem label="Privacy Policy" onPress={onPrivacyPolicy} />
+            <MenuItem label="Privacy Policy" icon="shield" onPress={onPrivacyPolicy} />
             <MenuItem
               label="Terms & Conditions"
+              icon="description"
               onPress={onTermsConditions}
               showArrow={false}
+              showDivider={false}
             />
           </View>
         </ScrollView>
@@ -174,24 +184,24 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
-    backgroundColor: '#F3FFFA',
+    backgroundColor: '#F5F5F5',
   },
   safeArea: {
     flex: 1,
-    backgroundColor: '#F3FFFA',
+    backgroundColor: '#F5F5F5',
   },
   container: {
     flex: 1,
-    backgroundColor: '#F3FFFA',
+    backgroundColor: '#F5F5F5',
   },
   scrollContent: {
     flex: 1,
-    backgroundColor: '#F3FFFA',
+    backgroundColor: '#F5F5F5',
   },
   scrollContentContainer: {
     paddingHorizontal: 20,
-    paddingTop: 20,
-    backgroundColor: '#F3FFFA',
+    paddingTop: 15,
+    backgroundColor: '#F5F5F5',
   },
   // Back Button
   backButton: {
@@ -275,6 +285,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: 21,
   },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   menuItemText: {
     fontFamily: 'Poppins',
     fontWeight: '500',
@@ -282,24 +297,19 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: '#000000',
   },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    alignSelf: 'stretch',
-    height: 1,
-    marginVertical: 12,
+  switchContainer: {
+    transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],
   },
-  dash: {
-    width: 8,
+  divider: {
     height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    marginVertical: 20,
   },
   // Bottom Section
   bottomSection: {
     paddingHorizontal: 20,
     paddingBottom: 20,
-    backgroundColor: '#F3FFFA',
+    backgroundColor: '#F5F5F5',
   },
   // App Version
   appVersion: {
@@ -316,16 +326,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 19,
+    paddingVertical: 12,
     paddingHorizontal: 20,
     gap: 10,
-    height: 60,
-    backgroundColor: '#FF0000',
+    backgroundColor: '#DC2626',
     borderRadius: 10,
   },
   logoutText: {
-    fontFamily: 'Poppins',
-    fontWeight: '600',
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',

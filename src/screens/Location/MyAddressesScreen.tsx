@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Alert,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { AddAddressFormScreen } from './AddAddressFormScreen';
 
 interface Address {
   id: string;
@@ -30,8 +33,8 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
   onEdit,
   onDelete,
 }) => {
-  // Mock data - replace with actual data from API
-  const addresses: Address[] = [
+  // State for managing addresses
+  const [addresses, setAddresses] = useState<Address[]>([
     {
       id: '1',
       type: 'Home',
@@ -44,7 +47,45 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
       fullAddress: 'Vigneshwar Nagar, Nanganallur, Tamilnadu, India',
       isDefault: false,
     },
-  ];
+  ]);
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+
+  // Animation values
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
+
+  // Animate background when modal opens/closes
+  useEffect(() => {
+    if (showEditModal) {
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 0.92,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateYAnim, {
+          toValue: 30,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateYAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [showEditModal]);
 
   const getIconForType = (type: 'Home' | 'Work' | 'Other') => {
     switch (type) {
@@ -57,6 +98,60 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
       default:
         return 'location-on';
     }
+  };
+
+  // Handle edit address
+  const handleEdit = (addressId: string) => {
+    setEditingAddressId(addressId);
+    setShowEditModal(true);
+    if (onEdit) {
+      onEdit(addressId);
+    }
+  };
+
+  // Handle delete address
+  const handleDelete = (addressId: string) => {
+    const address = addresses.find(addr => addr.id === addressId);
+
+    Alert.alert(
+      'Delete Address',
+      `Are you sure you want to delete ${address?.type} address?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setAddresses(prev => prev.filter(addr => addr.id !== addressId));
+            if (onDelete) {
+              onDelete(addressId);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle save from edit modal
+  const handleSaveAddress = (addressData: any) => {
+    if (editingAddressId) {
+      // Update existing address
+      setAddresses(prev => prev.map(addr =>
+        addr.id === editingAddressId
+          ? {
+              ...addr,
+              fullAddress: addressData.fullAddress || addr.fullAddress,
+              type: addressData.tag || addr.type,
+              isDefault: addressData.isDefault !== undefined ? addressData.isDefault : addr.isDefault
+            }
+          : addr
+      ));
+    }
+    setShowEditModal(false);
+    setEditingAddressId(null);
   };
 
   const renderAddressCard = (address: Address) => (
@@ -89,7 +184,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
       <View style={styles.actionButtonsRow}>
         <TouchableOpacity
           style={styles.editButton}
-          onPress={() => onEdit && onEdit(address.id)}
+          onPress={() => handleEdit(address.id)}
           activeOpacity={0.7}
         >
           <Text style={styles.actionButtonText}>EDIT</Text>
@@ -97,7 +192,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         <View style={styles.verticalDivider} />
         <TouchableOpacity
           style={styles.deleteButton}
-          onPress={() => onDelete && onDelete(address.id)}
+          onPress={() => handleDelete(address.id)}
           activeOpacity={0.7}
         >
           <Text style={styles.actionButtonText}>Delete</Text>
@@ -108,37 +203,69 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
 
   return (
     <View style={styles.outerContainer}>
-      <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
-        <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
-      </SafeAreaView>
+      <Animated.View
+        style={[
+          styles.animatedContainer,
+          {
+            transform: [
+              { scale: scaleAnim },
+              { translateY: translateYAnim },
+            ],
+          },
+        ]}
+      >
+        <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
+          <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
+        </SafeAreaView>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <MaterialIcons name="chevron-left" size={24} color="#000000" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Address</Text>
-      </View>
-
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {addresses.map((address) => renderAddressCard(address))}
-
-          {/* Add New Button */}
-          <TouchableOpacity
-            style={styles.addNewButton}
-            onPress={onAddNew}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.addNewText}>Add New</Text>
-            <MaterialIcons name="add" size={24} color="#000000" />
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
           </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
+          <Text style={styles.headerTitle}>Address</Text>
+        </View>
+
+        <SafeAreaView style={styles.container} edges={['bottom']}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {addresses.map((address) => renderAddressCard(address))}
+          </ScrollView>
+
+          {/* Add New Button - Fixed at bottom */}
+          <View style={styles.bottomButtonContainer}>
+            <TouchableOpacity
+              style={styles.addNewButton}
+              onPress={onAddNew}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.addNewText}>Add New</Text>
+              <MaterialIcons name="add" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Animated.View>
+
+      {/* Edit Address Modal */}
+      <AddAddressFormScreen
+        visible={showEditModal}
+        locationName="Edit Address"
+        locationAddress={addresses.find(a => a.id === editingAddressId)?.fullAddress || ''}
+        latitude={12.9716}
+        longitude={80.2425}
+        onBack={() => {
+          setShowEditModal(false);
+          setEditingAddressId(null);
+        }}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingAddressId(null);
+        }}
+        onSave={handleSaveAddress}
+      />
     </View>
   );
 };
@@ -146,7 +273,14 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
+    backgroundColor: '#000000',
+  },
+  animatedContainer: {
+    flex: 1,
     backgroundColor: '#00B14F',
+    overflow: 'hidden',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   safeAreaTop: {
     backgroundColor: '#00B14F',
@@ -236,14 +370,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
     lineHeight: 21,
-    color: '#000000',
+    color: '#001E1F',
   },
   addressText: {
     fontFamily: 'Poppins',
     fontSize: 12,
     lineHeight: 18,
-    color: '#000000',
-    opacity: 0.85,
+    color: 'rgba(0, 30, 31, 0.6)',
   },
   divider: {
     height: 1,
@@ -268,7 +401,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     textAlign: 'center',
-    color: '#000000',
+    color: '#001E1F',
     opacity: 0.85,
   },
   verticalDivider: {
@@ -276,21 +409,25 @@ const styles = StyleSheet.create({
     height: 10,
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
+  bottomButtonContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    backgroundColor: '#F5F5F5',
+  },
   addNewButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 19,
+    paddingVertical: 12,
     paddingHorizontal: 20,
     gap: 10,
-    backgroundColor: '#CBFFC2',
+    backgroundColor: '#00B14F',
     borderRadius: 10,
-    marginTop: 6,
   },
   addNewText: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
     lineHeight: 24,
-    color: '#000000',
+    color: '#FFFFFF',
   },
 });

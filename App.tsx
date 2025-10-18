@@ -4,6 +4,7 @@ import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
+import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
 import { OrdersScreen } from '@/screens/Order/OrdersScreen';
 import { OrderDetailScreen } from '@/screens/Order/OrderDetailScreen';
 import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
@@ -23,7 +24,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'orders' | 'orderDetail' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -36,6 +37,7 @@ export default function App() {
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const editProfileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const ordersScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const orderDetailScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const myAddressesScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -419,6 +421,41 @@ export default function App() {
     });
   };
 
+  // Edit Profile Navigation
+  const handleNavigateToEditProfile = () => {
+    setCurrentScreen('editProfile');
+
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(editProfileScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromEditProfile = () => {
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(editProfileScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('profile');
+    });
+  };
+
   if (!fontsLoaded || isCheckingAuth) {
     return null;
   }
@@ -462,12 +499,12 @@ export default function App() {
                 transform: [{ translateX: profileScreenSlide }],
               },
             ]}
-            pointerEvents={currentScreen === 'profile' ? 'auto' : 'none'}
+            pointerEvents={currentScreen === 'profile' || currentScreen === 'editProfile' ? 'auto' : 'none'}
           >
             <ProfileScreen
               onBack={handleBackToHome}
               onLogout={handleLogout}
-              onEditProfile={() => console.log('Edit Profile')}
+              onEditProfile={handleNavigateToEditProfile}
               onMyOrders={handleNavigateToOrders}
               onMyAddresses={handleNavigateToMyAddresses}
               onFavorites={() => console.log('Favorites')}
@@ -576,6 +613,25 @@ export default function App() {
             />
           </Animated.View>
 
+          {/* Always render EditProfileScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.editProfileOverlay,
+              {
+                transform: [{ translateX: editProfileScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'editProfile' ? 'auto' : 'none'}
+          >
+            <EditProfileScreen
+              onBack={handleBackFromEditProfile}
+              onSave={(data) => {
+                console.log('Save profile data:', data);
+                handleBackFromEditProfile();
+              }}
+            />
+          </Animated.View>
+
           {/* Always render CategoryResultsScreen, positioned off-screen initially */}
           <Animated.View
             style={[
@@ -669,6 +725,15 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 4,
+    backgroundColor: '#F5F5F5',
+  },
+  editProfileOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
     backgroundColor: '#F5F5F5',
   },
   categoryOverlay: {
