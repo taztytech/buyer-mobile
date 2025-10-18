@@ -333,7 +333,7 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
             activeOpacity={0.8}
           >
             <Text style={styles.submitButtonText}>Submit</Text>
-            <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+            <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -583,14 +583,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 8,
+    paddingVertical: 19,
+    paddingHorizontal: 20,
+    gap: 10,
     backgroundColor: '#001E1F',
     borderRadius: 10,
   },
   submitButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins',
+    fontWeight: '700',
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',
@@ -674,7 +675,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   foodModalOkayText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins',
+    fontWeight: '700',
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',
