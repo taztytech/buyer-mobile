@@ -400,6 +400,46 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
   };
 
+  // Handle cart updates from order details screen
+  const handleUpdateCartFromOrderDetails = (itemId: string, variantId: string | undefined, newQuantity: number) => {
+    setCart(prev => {
+      const newCart = { ...prev };
+
+      if (variantId) {
+        // Handle customizable item with variant
+        const item = newCart[itemId];
+        if (item?.variants) {
+          const updatedVariants = item.variants.map(v =>
+            v.variantId === variantId ? { ...v, quantity: newQuantity } : v
+          ).filter(v => v.quantity > 0); // Remove variants with 0 quantity
+
+          if (updatedVariants.length === 0) {
+            // Remove item entirely if no variants left
+            delete newCart[itemId];
+          } else {
+            newCart[itemId] = {
+              ...item,
+              variants: updatedVariants,
+              quantity: updatedVariants.reduce((sum, v) => sum + v.quantity, 0),
+            };
+          }
+        }
+      } else {
+        // Handle non-customizable item
+        if (newQuantity === 0) {
+          delete newCart[itemId];
+        } else {
+          newCart[itemId] = {
+            ...newCart[itemId],
+            quantity: newQuantity,
+          };
+        }
+      }
+
+      return newCart;
+    });
+  };
+
   // Toggle description expansion
   const toggleDescription = (itemId: string) => {
     setExpandedDescriptions(prev => {
@@ -1228,6 +1268,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               setShowOrderSuccess(true);
             }}
             showCustomizationModal={showCustomizationModal}
+            onUpdateCart={handleUpdateCartFromOrderDetails}
           />
         </View>
       )}

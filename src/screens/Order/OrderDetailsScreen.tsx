@@ -35,6 +35,7 @@ interface OrderDetailsScreenProps {
   onEditCustomization?: (itemId: string, variantId: string, currentAddOnIds: string[]) => void;
   onPlaceOrder?: () => void;
   showCustomizationModal?: boolean;
+  onUpdateCart?: (itemId: string, variantId: string | undefined, newQuantity: number) => void;
 }
 
 export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
@@ -45,6 +46,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   onEditCustomization,
   onPlaceOrder,
   showCustomizationModal = false,
+  onUpdateCart,
 }) => {
   const [orderExpanded, setOrderExpanded] = useState(true);
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
@@ -87,6 +89,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
 
+  // Sync local cart items with parent cart items
+  useEffect(() => {
+    setLocalCartItems(cartItems);
+  }, [cartItems]);
+
   // Animate background when modals open/close
   useEffect(() => {
     // Reset animations immediately when location selection is shown
@@ -125,31 +132,45 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   }, [showPaymentModal, showAddressModal, showLocationSelection, showCustomizationModal]);
 
-  const handleIncrement = (itemId: string) => {
+  const handleIncrement = (itemId: string, variantId?: string) => {
     setLocalCartItems(prev =>
-      prev.map(item =>
-        item.id === itemId
+      prev.map(item => {
+        const matchesItem = variantId ? item.variantId === variantId : item.id === itemId;
+        return matchesItem
           ? { ...item, quantity: item.quantity + 1 }
-          : item
-      )
+          : item;
+      })
     );
+
+    // Update parent cart state
+    const item = localCartItems.find(i => variantId ? i.variantId === variantId : i.id === itemId);
+    if (item && onUpdateCart) {
+      onUpdateCart(itemId, variantId, item.quantity + 1);
+    }
   };
 
-  const handleDecrement = (itemId: string) => {
+  const handleDecrement = (itemId: string, variantId?: string) => {
     setLocalCartItems(prev => {
-      const item = prev.find(i => i.id === itemId);
+      const item = prev.find(i => variantId ? i.variantId === variantId : i.id === itemId);
       if (!item) return prev;
 
       if (item.quantity === 1) {
         // Remove item from cart when quantity reaches 0
-        return prev.filter(i => i.id !== itemId);
+        if (onUpdateCart) {
+          onUpdateCart(itemId, variantId, 0);
+        }
+        return prev.filter(i => variantId ? i.variantId !== variantId : i.id !== itemId);
       } else {
         // Decrease quantity
-        return prev.map(i =>
-          i.id === itemId
+        if (onUpdateCart) {
+          onUpdateCart(itemId, variantId, item.quantity - 1);
+        }
+        return prev.map(i => {
+          const matchesItem = variantId ? i.variantId === variantId : i.id === itemId;
+          return matchesItem
             ? { ...i, quantity: i.quantity - 1 }
-            : i
-        );
+            : i;
+        });
       }
     });
   };
@@ -284,11 +305,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                         <Text style={styles.orderItemPrice}>₹{item.price}</Text>
                       </View>
                       <View style={styles.quantityControl}>
-                        <TouchableOpacity onPress={() => handleDecrement(item.id)} activeOpacity={0.7}>
+                        <TouchableOpacity onPress={() => handleDecrement(item.id, item.variantId)} activeOpacity={0.7}>
                           <Text style={styles.quantityButton}>-</Text>
                         </TouchableOpacity>
                         <Text style={styles.quantityText}>{item.quantity}</Text>
-                        <TouchableOpacity onPress={() => handleIncrement(item.id)} activeOpacity={0.7}>
+                        <TouchableOpacity onPress={() => handleIncrement(item.id, item.variantId)} activeOpacity={0.7}>
                           <Text style={styles.quantityButton}>+</Text>
                         </TouchableOpacity>
                       </View>
