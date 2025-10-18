@@ -9,6 +9,7 @@ import {
   ScrollView,
   Animated,
   Modal,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -37,6 +38,7 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
   const [restaurantRating, setRestaurantRating] = useState(0);
   const [restaurantComment, setRestaurantComment] = useState('');
   const [showFoodRatingModal, setShowFoodRatingModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // Individual food item ratings
   const [chickenBriyaniRating, setChickenBriyaniRating] = useState(0);
@@ -95,8 +97,16 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
 
   const handleFoodRatingModalClose = () => {
     setShowFoodRatingModal(false);
+    // Show success modal after food rating modal closes
+    setTimeout(() => {
+      setShowSuccessModal(true);
+    }, 200);
+  };
 
-    // Call the onSubmit and onBack callbacks after modal is closed
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false);
+
+    // Call the onSubmit and onBack callbacks after success modal is closed
     if (onSubmit) {
       onSubmit({
         overallRating,
@@ -382,6 +392,45 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
               <Text style={styles.foodModalOkayText}>Okay</Text>
             </TouchableOpacity>
           </View>
+          </BlurView>
+        </View>
+      </Modal>
+
+      {/* Success Feedback Modal */}
+      <Modal
+        visible={showSuccessModal}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent={true}
+        onRequestClose={handleSuccessModalClose}
+      >
+        <View style={styles.successModalBackground}>
+          <BlurView intensity={100} tint="dark" style={styles.successModalOverlay}>
+            <View style={styles.successModalContent}>
+              {/* Review Submitted Image */}
+              <View style={styles.successIconContainer}>
+                <Image
+                  source={require('@/assets/review-submitted.png')}
+                  style={styles.reviewSubmittedImage}
+                  resizeMode="contain"
+                />
+              </View>
+
+              {/* Title */}
+              <Text style={styles.successTitle}>Feedback Successfull..!</Text>
+
+              {/* Subtitle */}
+              <Text style={styles.successSubtitle}>Thanks fro your valuable feedback</Text>
+
+              {/* Go to Home Button */}
+              <TouchableOpacity
+                style={styles.goToHomeButton}
+                onPress={handleSuccessModalClose}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.goToHomeText}>Go to Home</Text>
+              </TouchableOpacity>
+            </View>
           </BlurView>
         </View>
       </Modal>
@@ -680,5 +729,82 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',
+  },
+  // Success Feedback Modal Styles
+  successModalBackground: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  successModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  successModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    width: '100%',
+    maxWidth: 350,
+    alignItems: 'center',
+    gap: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -9,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 60,
+    elevation: 21,
+    overflow: 'visible',
+  },
+  successIconContainer: {
+    width: 310,
+    height: 177,
+    marginTop: -133,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewSubmittedImage: {
+    width: 310,
+    height: 310,
+  },
+  successTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 22,
+    lineHeight: 33,
+    textAlign: 'center',
+    color: '#000000',
+    opacity: 0.85,
+  },
+  successSubtitle: {
+    fontFamily: 'Poppins',
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    color: 'rgba(0, 0, 0, 0.5)',
+    opacity: 0.85,
+  },
+  goToHomeButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 4,
+    width: '100%',
+    maxWidth: 310,
+    height: 40,
+    backgroundColor: '#00B14F',
+    borderRadius: 6,
+  },
+  goToHomeText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#FFFFFF',
+    opacity: 0.85,
   },
 });
