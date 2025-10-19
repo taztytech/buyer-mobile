@@ -912,7 +912,25 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
         {/* Menu Sections */}
         <View style={[styles.menuContent, totalCartItems > 0 && styles.menuContentWithCart]}>
-        {hasNoItemsAtAll ? (
+        {isLoading ? (
+          // Show shimmer loading cards while data is loading
+          <View style={styles.loadingMenuContainer}>
+            {[1, 2, 3, 4, 5].map((index) => (
+              <View key={`shimmer-${index}`} style={styles.menuItem}>
+                <View style={styles.shimmerItemLeft}>
+                  <Shimmer width={120} height={12} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
+                  <Shimmer width={100} height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 6 }} />
+                  <Shimmer width={70} height={14} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
+                  <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                  <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" />
+                </View>
+                <View style={styles.itemRight}>
+                  <Shimmer width={155} height={137} borderRadius={16} backgroundColor="#E8E8E8" />
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : hasNoItemsAtAll ? (
           <View style={styles.noItemsContainer}>
             <MaterialIcons name="restaurant" size={48} color="rgba(0, 0, 0, 0.3)" />
             <Text style={styles.noItemsTitle}>No menu available</Text>
@@ -1544,8 +1562,13 @@ const styles = StyleSheet.create({
   menuContentWithCart: {
     paddingBottom: 120,
   },
+  loadingMenuContainer: {
+    paddingHorizontal: 5,
+    paddingTop: 10,
+    gap: 20,
+  },
   menuSection: {
-    gap: 5,
+    gap: 0,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1581,6 +1604,13 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     paddingRight: 12,
+    gap: 3,
+  },
+  shimmerItemLeft: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingLeft: 0,
+    paddingRight: 35,
     gap: 3,
   },
   itemBadges: {

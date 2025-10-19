@@ -21,13 +21,7 @@
         "foregroundImage": "./src/assets/app-icon.png",
         "backgroundColor": "#00B14F"
       },
-      "edgeToEdgeEnabled": false,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.valarcom.tazty",
-      "statusBar": {
-        "backgroundColor": "#00B14F",
-        "barStyle": "light-content"
-      }
+      "package": "com.valarcom.tazty"
     },
     "web": {
       "favicon": "./src/assets/favicon.png"

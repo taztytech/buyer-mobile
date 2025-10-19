@@ -7,12 +7,9 @@ import {
   StyleSheet,
   Image,
   ScrollView,
-  Dimensions,
   Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface FoodItemDetailModalProps {
   visible: boolean;
