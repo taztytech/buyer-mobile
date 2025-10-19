@@ -809,10 +809,15 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   </Text>
                   <MaterialIcons name="info-outline" size={19} color="#00B14F" />
                 </View>
-                <View style={styles.ratingBadge}>
-                  <MaterialIcons name="star" size={14} color="#00B14F" />
-                  <Text style={styles.ratingText}>
-                    {restaurantData?.stats?.average_rating || restaurantData?.rating || '0'}
+                <View style={styles.ratingContainer}>
+                  <View style={styles.ratingBadge}>
+                    <MaterialIcons name="star" size={14} color="#00B14F" />
+                    <Text style={styles.ratingText}>
+                      {restaurantData?.stats?.average_rating || restaurantData?.rating || '0'}
+                    </Text>
+                  </View>
+                  <Text style={styles.reviewCountText}>
+                    {restaurantData?.stats?.total_reviews || restaurantData?.total_reviews || '0'} reviews
                   </Text>
                 </View>
               </View>
@@ -1398,10 +1403,14 @@ const styles = StyleSheet.create({
     color: '#000000',
     opacity: 0.85,
   },
+  ratingContainer: {
+    alignItems: 'center',
+    gap: 4,
+  },
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     gap: 4,
     backgroundColor: 'rgba(0, 128, 74, 0.1)',
@@ -1414,6 +1423,14 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: '#00B14F',
     opacity: 0.85,
+  },
+  reviewCountText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 10,
+    lineHeight: 15,
+    color: '#000000',
+    opacity: 0.6,
   },
   dividerContainer: {
     flexDirection: 'row',

@@ -17,6 +17,7 @@ import { CategoryResultsScreen } from '@/screens/Category/CategoryResultsScreen'
 import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
 import { ExploreDishesScreen } from '@/screens/Favorites/ExploreDishesScreen';
 import { ContentPage } from '@/screens/Legal/ContentPage';
+import { HelpScreen } from '@/screens/Help/HelpScreen';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -29,7 +30,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'exploreDishes' | 'privacyPolicy' | 'termsConditions'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'exploreDishes' | 'privacyPolicy' | 'termsConditions' | 'help'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -55,6 +56,7 @@ export default function App() {
   const addressScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const categoryScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const helpScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
   const [fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
@@ -537,6 +539,41 @@ export default function App() {
     });
   };
 
+  // Help Navigation
+  const handleNavigateToHelp = () => {
+    setCurrentScreen('help');
+
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(helpScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromHelp = () => {
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(helpScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('profile');
+    });
+  };
+
   // Edit Profile Navigation
   const handleNavigateToEditProfile = () => {
     setCurrentScreen('editProfile');
@@ -732,7 +769,7 @@ export default function App() {
               onMyOrders={handleNavigateToOrders}
               onMyAddresses={handleNavigateToMyAddresses}
               onFavorites={handleNavigateToExploreDishes}
-              onChatWithUs={() => console.log('Chat With Us')}
+              onChatWithUs={handleNavigateToHelp}
               onPrivacyPolicy={handleNavigateToPrivacyPolicy}
               onTermsConditions={handleNavigateToTermsConditions}
             />
@@ -942,6 +979,21 @@ export default function App() {
             />
           </Animated.View>
 
+          {/* Always render Help Screen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.helpOverlay,
+              {
+                transform: [{ translateX: helpScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'help' ? 'auto' : 'none'}
+          >
+            <HelpScreen
+              onBack={handleBackFromHelp}
+            />
+          </Animated.View>
+
           {/* Always render EditProfileScreen, positioned off-screen initially */}
           <Animated.View
             style={[
@@ -1108,6 +1160,15 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 7,
+    backgroundColor: '#FFFFFF',
+  },
+  helpOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 8,
     backgroundColor: '#FFFFFF',
   },
   editProfileOverlay: {
