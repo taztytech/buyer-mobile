@@ -172,6 +172,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
               placeholderTextColor="#999"
               autoCapitalize="none"
               autoCorrect={false}
+              autoFocus={false}
               returnKeyType="search"
               onSubmitEditing={handleSearchSubmit}
             />

@@ -141,6 +141,17 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     setRegion(newRegion);
 
     try {
+      // Check and request location permissions before reverse geocoding
+      const { status } = await Location.getForegroundPermissionsAsync();
+
+      if (status !== 'granted') {
+        const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
+        if (newStatus !== 'granted') {
+          console.log('Location permission denied');
+          return;
+        }
+      }
+
       const addresses = await Location.reverseGeocodeAsync({
         latitude: newRegion.latitude,
         longitude: newRegion.longitude,
@@ -182,6 +193,17 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     if (!searchText.trim()) return;
 
     try {
+      // Check and request location permissions
+      const { status } = await Location.getForegroundPermissionsAsync();
+
+      if (status !== 'granted') {
+        const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
+        if (newStatus !== 'granted') {
+          console.log('Location permission denied');
+          return;
+        }
+      }
+
       // Use geocoding to search for the location
       const results = await Location.geocodeAsync(searchText);
 
@@ -289,6 +311,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
               placeholderTextColor="#8E8E8E"
               autoCapitalize="none"
               autoCorrect={false}
+              autoFocus={false}
               returnKeyType="search"
               underlineColorAndroid="transparent"
               onSubmitEditing={handleSearch}

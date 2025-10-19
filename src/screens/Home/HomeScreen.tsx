@@ -654,6 +654,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           testID="home-screen"
           bounces={false}
           overScrollMode="never"
+          showsVerticalScrollIndicator={false}
         >
 
       {/* Header with Background Image */}

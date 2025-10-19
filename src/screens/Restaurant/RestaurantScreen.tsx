@@ -1545,7 +1545,7 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   menuSection: {
-    gap: 9,
+    gap: 5,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1558,7 +1558,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: 'Poppins',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 14,
     lineHeight: 21,
     textAlign: 'center',
@@ -1632,7 +1632,7 @@ const styles = StyleSheet.create({
   },
   itemName: {
     fontFamily: 'Poppins',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 18,
     lineHeight: 27,
     textAlign: 'left',
@@ -1661,7 +1661,7 @@ const styles = StyleSheet.create({
   },
   itemPrice: {
     fontFamily: 'Poppins',
-    fontWeight: '500',
+    fontWeight: '700',
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
