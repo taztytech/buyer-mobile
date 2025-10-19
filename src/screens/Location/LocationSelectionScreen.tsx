@@ -68,12 +68,12 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const mapRef = useRef<any>(null);
 
   useEffect(() => {
-    // If initial search query is provided, trigger search, otherwise get current location
+    // If initial search query is provided, trigger search on mount
     if (initialSearchQuery.trim()) {
       handleSearch();
-    } else {
-      getCurrentLocation();
     }
+    // Note: getCurrentLocation() is not called automatically
+    // It should only be called when user explicitly requests it (e.g., clicking "Use Current Location" button)
 
     // Keyboard listeners with animation
     const keyboardDidShowListener = Keyboard.addListener(

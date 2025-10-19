@@ -144,6 +144,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 }) => {
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
+  const [hasShownLocationModal, setHasShownLocationModal] = React.useState(false);
   const [showVegModePopup, setShowVegModePopup] = React.useState(false);
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [carouselData, setCarouselData] = React.useState<CarouselItem[]>([]);
@@ -175,74 +176,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [externalSelectedLocation]);
 
-  // Check location permission on app load
+  // Initialize with default location on app load
+  // Location permission is only requested when user explicitly clicks to change location
   React.useEffect(() => {
-    const checkLocationPermission = async () => {
-      try {
-        const { status } = await Location.getForegroundPermissionsAsync();
-        console.log('[Location] Initial permission status:', status);
-
-        if (status !== 'granted') {
-          console.log('[Location] Permission not granted, using fallback location');
-          // Use default location as fallback
-          setSelectedLocation({
-            name: DEFAULT_LOCATION.name,
-            address: DEFAULT_LOCATION.address,
-          });
-          setIsLoadingLocation(false);
-        } else {
-          // Permission granted, try to get actual location
-          try {
-            const location = await Location.getCurrentPositionAsync({});
-            const addresses = await Location.reverseGeocodeAsync({
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            });
-
-            if (addresses.length > 0) {
-              const addr = addresses[0];
-              const locationName = addr.district || addr.city || addr.subregion || DEFAULT_LOCATION.name;
-              const locationAddress = [
-                addr.street,
-                addr.subregion,
-                addr.region,
-                addr.country,
-              ].filter(Boolean).join(', ') || DEFAULT_LOCATION.address;
-
-              setSelectedLocation({
-                name: locationName,
-                address: locationAddress,
-              });
-            } else {
-              // Fallback if no address found
-              setSelectedLocation({
-                name: DEFAULT_LOCATION.name,
-                address: DEFAULT_LOCATION.address,
-              });
-            }
-            setIsLoadingLocation(false);
-          } catch (locError) {
-            console.error('[Location] Error getting location:', locError);
-            // Fallback to default location on error
-            setSelectedLocation({
-              name: DEFAULT_LOCATION.name,
-              address: DEFAULT_LOCATION.address,
-            });
-            setIsLoadingLocation(false);
-          }
-        }
-      } catch (error) {
-        console.error('[Location] Error checking permission:', error);
-        // Fallback to default location on error
-        setSelectedLocation({
-          name: DEFAULT_LOCATION.name,
-          address: DEFAULT_LOCATION.address,
-        });
-        setIsLoadingLocation(false);
-      }
-    };
-
-    checkLocationPermission();
+    // Always use default location on startup
+    setSelectedLocation({
+      name: DEFAULT_LOCATION.name,
+      address: DEFAULT_LOCATION.address,
+    });
+    setIsLoadingLocation(false);
   }, []);
 
   // Check if all banner images are loaded
@@ -311,9 +253,38 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [isLoadingRestaurants, restaurantData, loadedRestaurantImages]);
 
+  // Show location permission modal after home page data loads
+  React.useEffect(() => {
+    const showLocationModal = async () => {
+      console.log('[Location Modal] Checking if should show modal...');
+      console.log('[Location Modal] hasShownLocationModal:', hasShownLocationModal);
+      console.log('[Location Modal] isLoadingBanners:', isLoadingBanners);
+      console.log('[Location Modal] isLoadingCategories:', isLoadingCategories);
+      console.log('[Location Modal] isLoadingRestaurants:', isLoadingRestaurants);
+
+      // Only show if all data has finished loading and modal hasn't been shown yet this session
+      if (!isLoadingBanners && !isLoadingCategories && !isLoadingRestaurants && !hasShownLocationModal) {
+        console.log('[Location Modal] All data loaded, showing modal in 2 seconds...');
+
+        // Show modal after a 2 second delay for better UX
+        setTimeout(() => {
+          console.log('[Location Modal] Showing modal now!');
+          setShowLocationPopup(true);
+          setHasShownLocationModal(true);
+        }, 2000);
+      }
+    };
+
+    showLocationModal();
+  }, [isLoadingBanners, isLoadingCategories, isLoadingRestaurants, hasShownLocationModal]);
+
   const handleAllowLocation = async () => {
     try {
+      console.log('[Location] Allow Access button clicked!');
       console.log('[Location] Starting permission request...');
+
+      // Close the custom modal first
+      setShowLocationPopup(false);
 
       // First check current permission status
       const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
@@ -321,13 +292,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       let finalStatus = existingStatus;
 
-      // Only request permission if not already granted
-      if (existingStatus !== 'granted') {
-        console.log('[Location] Requesting foreground permission...');
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        finalStatus = status;
-        console.log('[Location] Permission request result:', status);
-      }
+      // Request permission (will show Android system dialog)
+      console.log('[Location] Requesting foreground permission - system dialog should appear now...');
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      finalStatus = status;
+      console.log('[Location] Permission request result:', status);
 
       if (finalStatus === 'granted') {
         console.log('[Location] Permission granted, getting current position...');
@@ -369,7 +338,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           });
         }
 
-        setShowLocationPopup(false);
         setIsLoadingLocation(false);
       } else {
         console.log('[Location] Permission denied or not granted:', finalStatus);

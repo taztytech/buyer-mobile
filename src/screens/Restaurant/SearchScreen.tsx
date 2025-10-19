@@ -128,7 +128,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
               placeholderTextColor="rgba(0, 0, 0, 0.4)"
               value={searchQuery}
               onChangeText={handleSearch}
-              autoFocus
+              autoFocus={false}
             />
           </View>
         </View>
