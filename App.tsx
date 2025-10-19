@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, BackHandler } from 'react-native';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
@@ -105,6 +105,73 @@ export default function App() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, isCheckingAuth]);
+
+  // Handle Android back button
+  React.useEffect(() => {
+    const backAction = () => {
+      // Handle back button based on current screen
+      switch (currentScreen) {
+        case 'home':
+          // On home screen, exit app
+          BackHandler.exitApp();
+          return true;
+        case 'profile':
+          handleBackToHome();
+          return true;
+        case 'editProfile':
+          handleBackFromEditProfile();
+          return true;
+        case 'orders':
+          handleBackFromOrders();
+          return true;
+        case 'orderDetail':
+          handleBackFromOrderDetail();
+          return true;
+        case 'rateOrder':
+          handleBackFromRateOrder();
+          return true;
+        case 'orderTracking':
+          handleBackFromOrderTracking();
+          return true;
+        case 'search':
+          handleBackFromSearch();
+          return true;
+        case 'myAddresses':
+          handleBackFromMyAddresses();
+          return true;
+        case 'addressSelection':
+          handleBackFromAddressSelection();
+          return true;
+        case 'locationSelection':
+          handleBackFromLocationSelection();
+          return true;
+        case 'categoryResults':
+          handleBackFromCategoryResults();
+          return true;
+        case 'exploreDishes':
+          handleBackFromExploreDishes();
+          return true;
+        case 'privacyPolicy':
+          handleBackFromPrivacyPolicy();
+          return true;
+        case 'termsConditions':
+          handleBackFromTermsConditions();
+          return true;
+        case 'help':
+          handleBackFromHelp();
+          return true;
+        case 'otp':
+          handleBackToLogin();
+          return true;
+        default:
+          return false;
+      }
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+
+    return () => backHandler.remove();
+  }, [currentScreen]);
 
   const handleLoginSuccess = (phone: string) => {
     setPhoneNumber(phone);

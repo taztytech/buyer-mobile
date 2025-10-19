@@ -152,6 +152,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isLoadingCategories, setIsLoadingCategories] = React.useState(true);
   const [isLoadingRestaurants, setIsLoadingRestaurants] = React.useState(true);
   const [isLoadingLocation, setIsLoadingLocation] = React.useState(false);
+  const isRequestingPermission = React.useRef(false);
 
   // Track image loading states
   const [loadedBannerImages, setLoadedBannerImages] = React.useState<Set<string>>(new Set());
@@ -277,7 +278,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [isLoadingBanners, isLoadingCategories, isLoadingRestaurants, hasShownLocationModal]);
 
   const handleAllowLocation = async () => {
+    // Prevent multiple simultaneous permission requests
+    if (isRequestingPermission.current) {
+      console.log('[Location] Permission request already in progress, ignoring...');
+      return;
+    }
+
     try {
+      isRequestingPermission.current = true;
       console.log('[Location] Allow Access button clicked!');
       console.log('[Location] Starting permission request...');
 
@@ -339,6 +347,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setIsLoadingLocation(false);
       } else {
         console.log('[Location] Permission denied or not granted:', finalStatus);
+        setHasShownLocationModal(true); // Mark as shown to prevent repeated popups
         Alert.alert(
           'Permission Denied',
           'Location permission is required to show nearby restaurants. Please enable it in your device settings.',
@@ -351,11 +360,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     } catch (error) {
       console.error('[Location] Error requesting permission:', error);
       Alert.alert('Error', 'Failed to get location permission. Please try again.');
+    } finally {
+      isRequestingPermission.current = false;
     }
   };
 
   const handleDenyLocation = () => {
     setShowLocationPopup(false);
+    setHasShownLocationModal(true); // Prevent modal from showing again
     Alert.alert('Location Disabled', 'You can enable location access later from settings.');
   };
 

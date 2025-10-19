@@ -119,17 +119,23 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         });
 
         // Get address from coordinates
-        const addresses = await Location.reverseGeocodeAsync({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
+        try {
+          const addresses = await Location.reverseGeocodeAsync({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          });
 
-        if (addresses.length > 0) {
-          const addr = addresses[0];
-          setLocationName(addr.name || addr.street || 'Current Location');
-          setLocationAddress(
-            `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
-          );
+          if (addresses.length > 0) {
+            const addr = addresses[0];
+            setLocationName(addr.name || addr.street || 'Current Location');
+            setLocationAddress(
+              `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
+            );
+          }
+        } catch (reverseGeoError) {
+          console.log('Reverse geocoding failed for current location');
+          setLocationName('Current Location');
+          setLocationAddress('Current Location');
         }
       }
     } catch (error) {
@@ -152,17 +158,22 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         }
       }
 
-      const addresses = await Location.reverseGeocodeAsync({
-        latitude: newRegion.latitude,
-        longitude: newRegion.longitude,
-      });
+      try {
+        const addresses = await Location.reverseGeocodeAsync({
+          latitude: newRegion.latitude,
+          longitude: newRegion.longitude,
+        });
 
-      if (addresses.length > 0) {
-        const addr = addresses[0];
-        setLocationName(addr.name || addr.street || 'Location');
-        setLocationAddress(
-          `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
-        );
+        if (addresses.length > 0) {
+          const addr = addresses[0];
+          setLocationName(addr.name || addr.street || 'Location');
+          setLocationAddress(
+            `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
+          );
+        }
+      } catch (reverseGeoError) {
+        console.log('Reverse geocoding failed on region change');
+        // Keep the current location name and address
       }
     } catch (error) {
       console.error('Error reverse geocoding:', error);
@@ -224,17 +235,23 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         }
 
         // Get address details
-        const addresses = await Location.reverseGeocodeAsync({
-          latitude: result.latitude,
-          longitude: result.longitude,
-        });
+        try {
+          const addresses = await Location.reverseGeocodeAsync({
+            latitude: result.latitude,
+            longitude: result.longitude,
+          });
 
-        if (addresses.length > 0) {
-          const addr = addresses[0];
-          setLocationName(addr.name || addr.street || searchText);
-          setLocationAddress(
-            `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
-          );
+          if (addresses.length > 0) {
+            const addr = addresses[0];
+            setLocationName(addr.name || addr.street || searchText);
+            setLocationAddress(
+              `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
+            );
+          }
+        } catch (reverseGeoError) {
+          console.log('Reverse geocoding failed, using search text as location name');
+          setLocationName(searchText);
+          setLocationAddress(searchText);
         }
 
         // Dismiss keyboard
