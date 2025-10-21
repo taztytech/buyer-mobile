@@ -108,36 +108,38 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
   const getCurrentLocation = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const location = await Location.getCurrentPositionAsync({});
-        setRegion({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        });
+      // DISABLED: Location permission request to prevent Android system dialog
+      // const { status } = await Location.requestForegroundPermissionsAsync();
+      // if (status === 'granted') {
+      //   const location = await Location.getCurrentPositionAsync({});
+      //   setRegion({
+      //     latitude: location.coords.latitude,
+      //     longitude: location.coords.longitude,
+      //     latitudeDelta: 0.01,
+      //     longitudeDelta: 0.01,
+      //   });
 
-        // Get address from coordinates
-        try {
-          const addresses = await Location.reverseGeocodeAsync({
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          });
+      //   // Get address from coordinates
+      //   try {
+      //     const addresses = await Location.reverseGeocodeAsync({
+      //       latitude: location.coords.latitude,
+      //       longitude: location.coords.longitude,
+      //     });
 
-          if (addresses.length > 0) {
-            const addr = addresses[0];
-            setLocationName(addr.name || addr.street || 'Current Location');
-            setLocationAddress(
-              `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
-            );
-          }
-        } catch (reverseGeoError) {
-          console.log('Reverse geocoding failed for current location');
-          setLocationName('Current Location');
-          setLocationAddress('Current Location');
-        }
-      }
+      //     if (addresses.length > 0) {
+      //       const addr = addresses[0];
+      //       setLocationName(addr.name || addr.street || 'Current Location');
+      //       setLocationAddress(
+      //         `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
+      //       );
+      //     }
+      //   } catch (reverseGeoError) {
+      //     console.log('Reverse geocoding failed for current location');
+      //     setLocationName('Current Location');
+      //     setLocationAddress('Current Location');
+      //   }
+      // }
+      console.log('Current location feature disabled to prevent permission requests');
     } catch (error) {
       console.error('Error getting location:', error);
     }
@@ -146,38 +148,39 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const handleRegionChangeComplete = async (newRegion: Region) => {
     setRegion(newRegion);
 
-    try {
-      // Check and request location permissions before reverse geocoding
-      const { status } = await Location.getForegroundPermissionsAsync();
+    // DISABLED: Location permission and reverse geocoding to prevent Android system dialog
+    // try {
+    //   // Check and request location permissions before reverse geocoding
+    //   const { status } = await Location.getForegroundPermissionsAsync();
 
-      if (status !== 'granted') {
-        const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
-        if (newStatus !== 'granted') {
-          console.log('Location permission denied');
-          return;
-        }
-      }
+    //   if (status !== 'granted') {
+    //     const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
+    //     if (newStatus !== 'granted') {
+    //       console.log('Location permission denied');
+    //       return;
+    //     }
+    //   }
 
-      try {
-        const addresses = await Location.reverseGeocodeAsync({
-          latitude: newRegion.latitude,
-          longitude: newRegion.longitude,
-        });
+    //   try {
+    //     const addresses = await Location.reverseGeocodeAsync({
+    //       latitude: newRegion.latitude,
+    //       longitude: newRegion.longitude,
+    //     });
 
-        if (addresses.length > 0) {
-          const addr = addresses[0];
-          setLocationName(addr.name || addr.street || 'Location');
-          setLocationAddress(
-            `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
-          );
-        }
-      } catch (reverseGeoError) {
-        console.log('Reverse geocoding failed on region change');
-        // Keep the current location name and address
-      }
-    } catch (error) {
-      console.error('Error reverse geocoding:', error);
-    }
+    //     if (addresses.length > 0) {
+    //       const addr = addresses[0];
+    //       setLocationName(addr.name || addr.street || 'Location');
+    //       setLocationAddress(
+    //         `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
+    //       );
+    //     }
+    //   } catch (reverseGeoError) {
+    //     console.log('Reverse geocoding failed on region change');
+    //     // Keep the current location name and address
+    //   }
+    // } catch (error) {
+    //   console.error('Error reverse geocoding:', error);
+    // }
   };
 
   const handleConfirm = () => {
@@ -204,61 +207,64 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     if (!searchText.trim()) return;
 
     try {
-      // Check and request location permissions
-      const { status } = await Location.getForegroundPermissionsAsync();
+      // DISABLED: Location permission and geocoding to prevent Android system dialog
+      // const { status } = await Location.getForegroundPermissionsAsync();
 
-      if (status !== 'granted') {
-        const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
-        if (newStatus !== 'granted') {
-          console.log('Location permission denied');
-          return;
-        }
-      }
+      // if (status !== 'granted') {
+      //   const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
+      //   if (newStatus !== 'granted') {
+      //     console.log('Location permission denied');
+      //     return;
+      //   }
+      // }
 
-      // Use geocoding to search for the location
-      const results = await Location.geocodeAsync(searchText);
+      // // Use geocoding to search for the location
+      // const results = await Location.geocodeAsync(searchText);
 
-      if (results.length > 0) {
-        const result = results[0];
-        const newRegion = {
-          latitude: result.latitude,
-          longitude: result.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        };
+      // if (results.length > 0) {
+      //   const result = results[0];
+      //   const newRegion = {
+      //     latitude: result.latitude,
+      //     longitude: result.longitude,
+      //     latitudeDelta: 0.01,
+      //     longitudeDelta: 0.01,
+      //   };
 
-        setRegion(newRegion);
+      //   setRegion(newRegion);
 
-        // Animate map to new location if map is available
-        if (mapRef.current && isMapAvailable) {
-          mapRef.current.animateToRegion(newRegion, 1000);
-        }
+      //   // Animate map to new location if map is available
+      //   if (mapRef.current && isMapAvailable) {
+      //     mapRef.current.animateToRegion(newRegion, 1000);
+      //   }
 
-        // Get address details
-        try {
-          const addresses = await Location.reverseGeocodeAsync({
-            latitude: result.latitude,
-            longitude: result.longitude,
-          });
+      //   // Get address details
+      //   try {
+      //     const addresses = await Location.reverseGeocodeAsync({
+      //       latitude: result.latitude,
+      //       longitude: result.longitude,
+      //     });
 
-          if (addresses.length > 0) {
-            const addr = addresses[0];
-            setLocationName(addr.name || addr.street || searchText);
-            setLocationAddress(
-              `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
-            );
-          }
-        } catch (reverseGeoError) {
-          console.log('Reverse geocoding failed, using search text as location name');
-          setLocationName(searchText);
-          setLocationAddress(searchText);
-        }
+      //     if (addresses.length > 0) {
+      //       const addr = addresses[0];
+      //       setLocationName(addr.name || addr.street || searchText);
+      //       setLocationAddress(
+      //         `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
+      //       );
+      //     }
+      //   } catch (reverseGeoError) {
+      //     console.log('Reverse geocoding failed, using search text as location name');
+      //     setLocationName(searchText);
+      //     setLocationAddress(searchText);
+      //   }
 
-        // Dismiss keyboard
-        Keyboard.dismiss();
-      } else {
-        console.log('No results found for:', searchText);
-      }
+      //   // Dismiss keyboard
+      //   Keyboard.dismiss();
+      // } else {
+      //   console.log('No results found for:', searchText);
+      // }
+
+      console.log('Location search feature disabled to prevent permission requests');
+      Keyboard.dismiss();
     } catch (error) {
       console.error('Error searching location:', error);
     }
