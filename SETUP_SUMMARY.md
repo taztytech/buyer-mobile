@@ -1,5 +1,27 @@
 # Tazty Project Setup Summary
 
+## ⚠️ CRITICAL - DO NOT REPLACE GRAPHICS ⚠️
+
+**NEVER run `npx expo prebuild --clean` or any command that regenerates native folders!**
+
+### Custom Graphics Location (DO NOT REPLACE):
+- **App Icons**: `android/app/src/main/res/mipmap-*/*.png` (all densities)
+- **Splash Screens**: `android/app/src/main/res/drawable-*/*.png` (all densities)
+- **Source Assets**: `src/assets/app-icon.png`, `src/assets/splash.png`
+
+### Why This Matters:
+- Custom app icons and splash screens are manually placed in Android native folders
+- These are **NOT** auto-generated from `app.json`
+- Running `expo prebuild --clean` will **WIPE OUT** all custom graphics
+- **All Android assets are now committed to git** for safety
+
+### If You Need to Rebuild Android:
+1. ✅ Use: `cd android && ./gradlew :app:assembleRelease` (builds with existing assets)
+2. ❌ Never use: `npx expo prebuild --clean` (destroys custom assets)
+3. If Android folder is lost, restore from git: `git checkout android/`
+
+---
+
 ## ✅ Completed Tasks
 
 ### 1. **Splash Screen** ✨
