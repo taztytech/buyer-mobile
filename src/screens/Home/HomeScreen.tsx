@@ -373,7 +373,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const handleDenyLocation = () => {
     setShowLocationPopup(false);
     setHasShownLocationModal(true); // Prevent modal from showing again
-    Alert.alert('Location Disabled', 'You can enable location access later from settings.');
+
+    // Set default location to Madurai
+    setSelectedLocation({
+      name: DEFAULT_LOCATION.name,
+      address: DEFAULT_LOCATION.address,
+    });
+
+    // Show popup that settings can be done later
+    Alert.alert(
+      'Location Settings',
+      'Default location set to Madurai. You can change this later from settings.',
+      [{ text: 'OK' }]
+    );
   };
 
   const handleLocationClick = () => {
