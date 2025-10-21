@@ -5,12 +5,15 @@
 **NEVER run `npx expo prebuild --clean` or any command that regenerates native folders!**
 
 ### Custom Graphics Location (DO NOT REPLACE):
-- **App Icons**: `android/app/src/main/res/mipmap-*/*.png` (all densities)
-- **Splash Screens**: `android/app/src/main/res/drawable-*/*.png` (all densities)
+- **App Icons**: `android/app/src/main/res/mipmap-*/*.png` (all densities: hdpi, mdpi, xhdpi, xxhdpi, xxxhdpi)
+- **Splash Screens**: `android/app/src/main/res/drawable-*/splashscreen_logo.png` (all densities)
+  - Full-screen splash images (single file per density)
+  - Already optimized and placed for all screen densities
 - **Source Assets**: `src/assets/app-icon.png`, `src/assets/splash.png`
 
 ### Why This Matters:
-- Custom app icons and splash screens are manually placed in Android native folders
+- Custom app icons and splash screens are **manually placed** in Android native folders
+- Splash screen is a **full-screen single image file** (not logo + background color)
 - These are **NOT** auto-generated from `app.json`
 - Running `expo prebuild --clean` will **WIPE OUT** all custom graphics
 - **All Android assets are now committed to git** for safety
