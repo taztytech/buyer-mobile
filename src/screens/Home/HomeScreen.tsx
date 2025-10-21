@@ -255,30 +255,32 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [isLoadingRestaurants, restaurantData, loadedRestaurantImages]);
 
-  // Show location permission modal after home page data loads
-  React.useEffect(() => {
-    const showLocationModal = async () => {
-      console.log('[Location Modal] Checking if should show modal...');
-      console.log('[Location Modal] hasShownLocationModal:', hasShownLocationModal);
-      console.log('[Location Modal] isLoadingBanners:', isLoadingBanners);
-      console.log('[Location Modal] isLoadingCategories:', isLoadingCategories);
-      console.log('[Location Modal] isLoadingRestaurants:', isLoadingRestaurants);
+  // DISABLED: Show location permission modal after home page data loads
+  // Location modal disabled to prevent automatic popup on app load
+  // Users can still manually access location settings from the address bar
+  // React.useEffect(() => {
+  //   const showLocationModal = async () => {
+  //     console.log('[Location Modal] Checking if should show modal...');
+  //     console.log('[Location Modal] hasShownLocationModal:', hasShownLocationModal);
+  //     console.log('[Location Modal] isLoadingBanners:', isLoadingBanners);
+  //     console.log('[Location Modal] isLoadingCategories:', isLoadingCategories);
+  //     console.log('[Location Modal] isLoadingRestaurants:', isLoadingRestaurants);
 
-      // Only show if all data has finished loading and modal hasn't been shown yet this session
-      if (!isLoadingBanners && !isLoadingCategories && !isLoadingRestaurants && !hasShownLocationModal) {
-        console.log('[Location Modal] All data loaded, showing modal in 2 seconds...');
+  //     // Only show if all data has finished loading and modal hasn't been shown yet this session
+  //     if (!isLoadingBanners && !isLoadingCategories && !isLoadingRestaurants && !hasShownLocationModal) {
+  //       console.log('[Location Modal] All data loaded, showing modal in 2 seconds...');
 
-        // Show modal after a 2 second delay for better UX
-        setTimeout(() => {
-          console.log('[Location Modal] Showing modal now!');
-          setShowLocationPopup(true);
-          setHasShownLocationModal(true);
-        }, 2000);
-      }
-    };
+  //       // Show modal after a 2 second delay for better UX
+  //       setTimeout(() => {
+  //         console.log('[Location Modal] Showing modal now!');
+  //         setShowLocationPopup(true);
+  //         setHasShownLocationModal(true);
+  //       }, 2000);
+  //     }
+  //   };
 
-    showLocationModal();
-  }, [isLoadingBanners, isLoadingCategories, isLoadingRestaurants, hasShownLocationModal]);
+  //   showLocationModal();
+  // }, [isLoadingBanners, isLoadingCategories, isLoadingRestaurants, hasShownLocationModal]);
 
   const handleAllowLocation = async () => {
     // Prevent multiple simultaneous permission requests
