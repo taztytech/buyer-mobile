@@ -23,6 +23,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
+import { CartProvider } from '@/context/CartContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -147,6 +148,9 @@ export default function App() {
           return true;
         case 'categoryResults':
           handleBackFromCategoryResults();
+          return true;
+        case 'restaurant':
+          handleBackFromRestaurant();
           return true;
         case 'exploreDishes':
           handleBackFromExploreDishes();
@@ -788,8 +792,9 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      {currentScreen === 'login' ? (
+    <CartProvider>
+      <SafeAreaProvider>
+        {currentScreen === 'login' ? (
         <LoginScreen onLoginSuccess={handleLoginSuccess} />
       ) : currentScreen === 'otp' ? (
         <OTPVerificationScreen
@@ -1109,7 +1114,8 @@ export default function App() {
           )}
         </View>
       )}
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+    </CartProvider>
   );
 }
 

@@ -10,6 +10,8 @@ import { Shimmer } from '@/components/Shimmer';
 import * as Location from 'expo-location';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ViewCartBar } from '@/components/ViewCartBar';
+import { useCart } from '@/context/CartContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -141,6 +143,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToSearch,
   selectedLocation: externalSelectedLocation
 }) => {
+  const { restaurantId, restaurantName } = useCart();
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
   const [hasShownLocationModal, setHasShownLocationModal] = React.useState(false);
   const [showVegModePopup, setShowVegModePopup] = React.useState(false);
@@ -1078,6 +1081,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       </ScrollView>
       </SafeAreaView>
+
+      {/* View Cart Bar - shows when cart has items */}
+      <ViewCartBar
+        onPress={() => {
+          if (restaurantId && onNavigateToRestaurant) {
+            onNavigateToRestaurant(restaurantId, restaurantName);
+          }
+        }}
+      />
     </View>
   );
 };
