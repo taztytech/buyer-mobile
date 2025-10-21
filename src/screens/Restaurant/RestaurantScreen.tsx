@@ -303,63 +303,42 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     const addOnTotalPrice = selectedAddOnObjects.reduce((sum, ao) => sum + ao.price, 0);
     const totalPrice = item.price + addOnTotalPrice;
 
-    setCart(prev => {
-      const existingItem = prev[itemId];
+    const existingItem = cart[itemId];
 
-      // Check if we're editing an existing variant
-      if (editingVariantId) {
-        // Update existing variant
-        return {
-          ...prev,
-          [itemId]: {
-            ...existingItem!,
-            variants: existingItem!.variants!.map(v =>
-              v.id === editingVariantId
-                ? {
-                    ...v,
-                    addOns: selectedAddOns,
-                    addOnNames: addOnNames,
-                    price: totalPrice,
-                    quantity: quantity,
-                  }
-                : v
-            ),
-          },
-        };
-      }
+    // Create new variant
+    const newVariant: CustomizationVariant = {
+      id: editingVariantId || `${itemId}_variant_${Date.now()}`,
+      addOns: selectedAddOns,
+      addOnNames: addOnNames,
+      price: totalPrice,
+      quantity: quantity,
+    };
 
-      // Create new variant
-      const newVariant: CustomizationVariant = {
-        id: `${itemId}_variant_${Date.now()}`,
-        addOns: selectedAddOns,
-        addOnNames: addOnNames,
-        price: totalPrice,
-        quantity: quantity,
-      };
+    let updatedVariants: CustomizationVariant[];
 
-      if (existingItem && existingItem.isCustomizable) {
-        // Add to existing variants
-        return {
-          ...prev,
-          [itemId]: {
-            ...existingItem,
-            variants: [...(existingItem.variants || []), newVariant],
-          },
-        };
-      } else {
-        // Create new customizable cart item
-        return {
-          ...prev,
-          [itemId]: {
-            id: item.id,
-            name: item.name,
-            price: item.price,
-            isVeg: item.isVeg,
-            isCustomizable: true,
-            variants: [newVariant],
-          },
-        };
-      }
+    if (editingVariantId) {
+      // Update existing variant
+      updatedVariants = (existingItem?.variants || []).map(v =>
+        v.id === editingVariantId
+          ? newVariant
+          : v
+      );
+    } else if (existingItem && existingItem.isCustomizable) {
+      // Add to existing variants
+      updatedVariants = [...(existingItem.variants || []), newVariant];
+    } else {
+      // Create first variant
+      updatedVariants = [newVariant];
+    }
+
+    // Update cart with new/updated variants
+    addToCartContext({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      isVeg: item.isVeg,
+      isCustomizable: true,
+      variants: updatedVariants,
     });
 
     // Clear editing state
@@ -384,43 +363,30 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle cart updates from order details screen
   const handleUpdateCartFromOrderDetails = (itemId: string, variantId: string | undefined, newQuantity: number) => {
-    setCart(prev => {
-      const newCart = { ...prev };
+    if (variantId) {
+      // Handle customizable item with variant
+      const item = cart[itemId];
 
-      if (variantId) {
-        // Handle customizable item with variant
-        const item = newCart[itemId];
+      if (item?.variants) {
+        const updatedVariants = item.variants.map(v =>
+          v.id === variantId ? { ...v, quantity: newQuantity } : v
+        ).filter(v => v.quantity > 0); // Remove variants with 0 quantity
 
-        if (item?.variants) {
-          const updatedVariants = item.variants.map(v =>
-            v.id === variantId ? { ...v, quantity: newQuantity } : v
-          ).filter(v => v.quantity > 0); // Remove variants with 0 quantity
-
-          if (updatedVariants.length === 0) {
-            // Remove item entirely if no variants left
-            delete newCart[itemId];
-          } else {
-            newCart[itemId] = {
-              ...item,
-              variants: updatedVariants,
-              quantity: updatedVariants.reduce((sum, v) => sum + v.quantity, 0),
-            };
-          }
-        }
-      } else {
-        // Handle non-customizable item
-        if (newQuantity === 0) {
-          delete newCart[itemId];
+        if (updatedVariants.length === 0) {
+          // Remove item entirely if no variants left
+          removeFromCart(itemId);
         } else {
-          newCart[itemId] = {
-            ...newCart[itemId],
-            quantity: newQuantity,
-          };
+          addToCartContext({
+            ...item,
+            variants: updatedVariants,
+            quantity: updatedVariants.reduce((sum, v) => sum + v.quantity, 0),
+          });
         }
       }
-
-      return newCart;
-    });
+    } else {
+      // Handle non-customizable item
+      updateQuantity(itemId, newQuantity);
+    }
   };
 
   // Toggle description expansion
@@ -440,48 +406,36 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const handleIncrementVariant = (variantId: string) => {
     if (!reviewingItemId) return;
 
-    setCart(prev => {
-      const item = prev[reviewingItemId];
-      if (!item?.variants) return prev;
+    const item = cart[reviewingItemId];
+    if (!item?.variants) return;
 
-      return {
-        ...prev,
-        [reviewingItemId]: {
-          ...item,
-          variants: item.variants.map(v =>
-            v.id === variantId ? { ...v, quantity: v.quantity + 1 } : v
-          ),
-        },
-      };
+    addToCartContext({
+      ...item,
+      variants: item.variants.map(v =>
+        v.id === variantId ? { ...v, quantity: v.quantity + 1 } : v
+      ),
     });
   };
 
   const handleDecrementVariant = (variantId: string) => {
     if (!reviewingItemId) return;
 
-    setCart(prev => {
-      const item = prev[reviewingItemId];
-      if (!item?.variants) return prev;
+    const item = cart[reviewingItemId];
+    if (!item?.variants) return;
 
-      const updatedVariants = item.variants
-        .map(v => v.id === variantId ? { ...v, quantity: v.quantity - 1 } : v)
-        .filter(v => v.quantity > 0);
+    const updatedVariants = item.variants
+      .map(v => v.id === variantId ? { ...v, quantity: v.quantity - 1 } : v)
+      .filter(v => v.quantity > 0);
 
-      // If no variants left, remove the item from cart
-      if (updatedVariants.length === 0) {
-        const newCart = { ...prev };
-        delete newCart[reviewingItemId];
-        return newCart;
-      }
-
-      return {
-        ...prev,
-        [reviewingItemId]: {
-          ...item,
-          variants: updatedVariants,
-        },
-      };
-    });
+    // If no variants left, remove the item from cart
+    if (updatedVariants.length === 0) {
+      removeFromCart(reviewingItemId);
+    } else {
+      addToCartContext({
+        ...item,
+        variants: updatedVariants,
+      });
+    }
   };
 
   const handleEditVariant = (variantId: string) => {
@@ -561,16 +515,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       .find(i => i.id === itemId);
 
     if (item) {
-      setCart(prev => ({
-        ...prev,
-        [item.id]: {
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: quantity,
-          isVeg: item.isVeg,
-        }
-      }));
+      addToCartContext({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: quantity,
+        isVeg: item.isVeg,
+        isCustomizable: false,
+      });
     }
   };
 
