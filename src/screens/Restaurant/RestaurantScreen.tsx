@@ -23,6 +23,7 @@ import { FilterModal, FilterState } from '@/components/FilterModal';
 import { OrderDetailsScreen } from '@/screens/Order/OrderDetailsScreen';
 import { OrderSuccessScreen } from '@/screens/Order/OrderSuccessScreen';
 import { SearchScreen } from './SearchScreen';
+import { useCart } from '@/context/CartContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -133,12 +134,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   restaurantName,
   onBack,
 }) => {
+  const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart } = useCart();
   const [menuSections, setMenuSections] = useState<MenuSection[]>([]);
   const [restaurantData, setRestaurantData] = useState<any>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('Idly');
-  const [cart, setCart] = useState<{ [key: string]: CartItem }>({});
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
@@ -234,17 +235,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Add item to cart (for non-customizable items)
   const addToCart = (item: MenuItem) => {
-    setCart(prev => ({
-      ...prev,
-      [item.id]: {
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: 1,
-        isVeg: item.isVeg,
-        isCustomizable: false,
-      }
-    }));
+    addToCartContext({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      quantity: 1,
+      isVeg: item.isVeg,
+      isCustomizable: false,
+    });
   };
 
   // Increment item quantity
@@ -259,13 +257,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
 
     // For non-customizable items, just increment quantity
-    setCart(prev => ({
-      ...prev,
-      [itemId]: {
-        ...prev[itemId],
-        quantity: (prev[itemId].quantity || 0) + 1,
-      }
-    }));
+    const currentQuantity = cartItem?.quantity || 0;
+    updateQuantity(itemId, currentQuantity + 1);
   };
 
   // Decrement item quantity
@@ -280,19 +273,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
 
     // For non-customizable items, decrement or remove
-    setCart(prev => {
-      const newCart = { ...prev };
-      const quantity = newCart[itemId].quantity || 0;
-      if (quantity === 1) {
-        delete newCart[itemId];
-      } else {
-        newCart[itemId] = {
-          ...newCart[itemId],
-          quantity: quantity - 1,
-        };
-      }
-      return newCart;
-    });
+    const quantity = cartItem?.quantity || 0;
+    updateQuantity(itemId, quantity - 1); // updateQuantity will remove if quantity becomes 0
   };
 
   // Handle opening customization modal
@@ -664,6 +646,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         const restaurant = nestedData;
         console.log('Restaurant data:', restaurant);
         setRestaurantData(restaurant);
+
+        // Set restaurant info in cart context
+        setRestaurantInfo(restaurantId, restaurant.name || restaurantName || 'Restaurant');
 
         // Process categories from API response
         if (restaurant.categories && Array.isArray(restaurant.categories)) {
@@ -1330,7 +1315,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           <OrderSuccessScreen
             onContinue={() => {
               setShowOrderSuccess(false);
-              setCart({}); // Clear the cart after successful order
+              clearCart(); // Clear the cart after successful order
             }}
           />
         </View>
