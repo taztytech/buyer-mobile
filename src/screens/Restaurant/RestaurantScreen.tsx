@@ -170,6 +170,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
+  const orderDetailsSlide = useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
   // Calculate total cart items
   const totalCartItems = Object.values(cart).reduce((sum, item) => {
@@ -609,6 +610,23 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       setActiveCategoryId(menuSections[0].id);
     }
   }, [menuSections]);
+
+  // Animate order details screen slide in/out
+  useEffect(() => {
+    if (showOrderDetails) {
+      Animated.timing(orderDetailsSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(orderDetailsSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showOrderDetails]);
 
   // Animate background when modal opens/closes
   useEffect(() => {
@@ -1305,23 +1323,29 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       />
 
       {/* Order Details Screen */}
-      {showOrderDetails && (
-        <View style={styles.orderDetailsOverlay}>
-          <OrderDetailsScreen
-            restaurantName={restaurantData?.name || restaurantName}
-            deliveryAddress="Chennai | F1, Jeyalakshmi Appartments..."
-            cartItems={getFlattenedCartItems()}
-            onBack={() => setShowOrderDetails(false)}
-            onEditCustomization={handleEditCustomization}
-            onPlaceOrder={() => {
-              setShowOrderDetails(false);
-              setShowOrderSuccess(true);
-            }}
-            showCustomizationModal={showCustomizationModal}
-            onUpdateCart={handleUpdateCartFromOrderDetails}
-          />
-        </View>
-      )}
+      <Animated.View
+        style={[
+          styles.orderDetailsOverlay,
+          {
+            transform: [{ translateX: orderDetailsSlide }],
+          },
+        ]}
+        pointerEvents={showOrderDetails ? 'auto' : 'none'}
+      >
+        <OrderDetailsScreen
+          restaurantName={restaurantData?.name || restaurantName}
+          deliveryAddress="Chennai | F1, Jeyalakshmi Appartments..."
+          cartItems={getFlattenedCartItems()}
+          onBack={() => setShowOrderDetails(false)}
+          onEditCustomization={handleEditCustomization}
+          onPlaceOrder={() => {
+            setShowOrderDetails(false);
+            setShowOrderSuccess(true);
+          }}
+          showCustomizationModal={showCustomizationModal}
+          onUpdateCart={handleUpdateCartFromOrderDetails}
+        />
+      </Animated.View>
 
       {/* Search Screen */}
       {showSearch && (

@@ -833,7 +833,6 @@ export default function App() {
               onNavigateToCategory={handleNavigateToCategoryResults}
               onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
               onNavigateToSearch={handleNavigateToSearch}
-              onNavigateToOrderDetails={() => setCurrentScreen('orderDetail')}
               selectedLocation={selectedLocation}
             />
           </Animated.View>
