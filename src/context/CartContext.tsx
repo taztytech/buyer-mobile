@@ -28,7 +28,8 @@ interface CartContextType {
   getTotalPrice: () => number;
   restaurantId: number | null;
   restaurantName: string;
-  setRestaurantInfo: (id: number, name: string) => void;
+  restaurantLogo: any;
+  setRestaurantInfo: (id: number, name: string, logo?: any) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -37,6 +38,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [cart, setCart] = useState<{ [key: string]: CartItem }>({});
   const [restaurantId, setRestaurantId] = useState<number | null>(null);
   const [restaurantName, setRestaurantName] = useState<string>('');
+  const [restaurantLogo, setRestaurantLogo] = useState<any>(null);
 
   const addToCart = (item: CartItem) => {
     setCart(prev => ({
@@ -71,6 +73,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setCart({});
     setRestaurantId(null);
     setRestaurantName('');
+    setRestaurantLogo(null);
   };
 
   const getTotalItems = () => {
@@ -91,9 +94,10 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, 0);
   };
 
-  const setRestaurantInfo = (id: number, name: string) => {
+  const setRestaurantInfo = (id: number, name: string, logo?: any) => {
     setRestaurantId(id);
     setRestaurantName(name);
+    setRestaurantLogo(logo || null);
   };
 
   return (
@@ -108,6 +112,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         getTotalPrice,
         restaurantId,
         restaurantName,
+        restaurantLogo,
         setRestaurantInfo,
       }}
     >

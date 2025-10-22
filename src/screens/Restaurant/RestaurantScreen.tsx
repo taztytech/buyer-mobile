@@ -599,8 +599,17 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         console.log('Restaurant data:', restaurant);
         setRestaurantData(restaurant);
 
-        // Set restaurant info in cart context
-        setRestaurantInfo(restaurantId, restaurant.name || restaurantName || 'Restaurant');
+        // Set restaurant info in cart context (including logo if available)
+        const restaurantLogoSource = restaurant.logo_url
+          ? { uri: restaurant.logo_url }
+          : restaurant.image
+          ? (typeof restaurant.image === 'string' ? { uri: restaurant.image } : restaurant.image)
+          : null;
+        setRestaurantInfo(
+          restaurantId,
+          restaurant.name || restaurantName || 'Restaurant',
+          restaurantLogoSource
+        );
 
         // Process categories from API response
         if (restaurant.categories && Array.isArray(restaurant.categories)) {

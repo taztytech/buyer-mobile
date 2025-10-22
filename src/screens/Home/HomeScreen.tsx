@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
@@ -143,11 +143,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToSearch,
   selectedLocation: externalSelectedLocation
 }) => {
-  const { restaurantId, restaurantName } = useCart();
+  const { restaurantId, restaurantName, restaurantLogo, getTotalItems } = useCart();
+  const totalCartItems = getTotalItems();
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
   const [hasShownLocationModal, setHasShownLocationModal] = React.useState(false);
   const [showVegModePopup, setShowVegModePopup] = React.useState(false);
   const [currentSlide, setCurrentSlide] = React.useState(0);
+  const [animationTrigger, setAnimationTrigger] = React.useState(0);
+  const appState = React.useRef(AppState.currentState);
+  const [appStateVisible, setAppStateVisible] = React.useState(appState.current);
   const [carouselData, setCarouselData] = React.useState<CarouselItem[]>([]);
   const [categoryData, setCategoryData] = React.useState<CategoryItem[]>([]);
   const [restaurantData, setRestaurantData] = React.useState<Restaurant[]>([]);
@@ -188,6 +192,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     });
     setIsLoadingLocation(false);
   }, []);
+
+  // Trigger cart animation when app comes to foreground
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active' &&
+        totalCartItems > 0
+      ) {
+        // App has come to the foreground, trigger animation
+        setAnimationTrigger(prev => prev + 1);
+      }
+
+      appState.current = nextAppState;
+      setAppStateVisible(appState.current);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [totalCartItems]);
 
   // Check if all banner images are loaded
   React.useEffect(() => {
@@ -925,7 +950,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </View>
 
       {/* Restaurant List */}
-      <View style={styles.restaurantListContainer}>
+      <View style={[
+        styles.restaurantListContainer,
+        totalCartItems > 0 && styles.restaurantListWithCart
+      ]}>
         {showRestaurantShimmer ? (
           <>
             {/* Shimmer for 2 restaurant cards */}
@@ -1103,6 +1131,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             onNavigateToRestaurant(restaurantId, restaurantName);
           }
         }}
+        onViewMenu={() => {
+          if (restaurantId && onNavigateToRestaurant) {
+            onNavigateToRestaurant(restaurantId, restaurantName);
+          }
+        }}
+        restaurantLogo={restaurantLogo}
+        deliveryLocation={selectedLocation.name}
+        animationTrigger={animationTrigger}
       />
     </View>
   );
@@ -1542,6 +1578,9 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     gap: 10,
     backgroundColor: '#F5F5F5',
+  },
+  restaurantListWithCart: {
+    paddingBottom: 160, // Extra padding when cart modal is visible
   },
   restaurantCardWrapper: {
     marginBottom: 10,
