@@ -303,7 +303,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <MaterialIcons name="chevron-left" size={24} color="#000000" />
+          <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Orders</Text>
       </View>

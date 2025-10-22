@@ -47,8 +47,10 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
   };
 
   return (
-    <View style={styles.rootContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
+    <View style={styles.outerContainer}>
+      <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
+        <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
+      </SafeAreaView>
 
       {/* Header */}
       <View style={styles.header}>
@@ -57,13 +59,12 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
           onPress={onBack}
           activeOpacity={0.7}
         >
-          <MaterialIcons name="chevron-left" size={24} color="#FFFFFF" />
+          <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Help</Text>
       </View>
 
-      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['bottom']}>
           <ScrollView
             style={styles.scrollView}
             showsVerticalScrollIndicator={false}
@@ -125,24 +126,22 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
               </View>
             </View>
           </ScrollView>
-        </View>
       </SafeAreaView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  rootContainer: {
+  outerContainer: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#00B14F',
   },
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
+  safeAreaTop: {
+    backgroundColor: '#00B14F',
   },
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFFFFF',
   },
   // Header
   header: {
@@ -158,7 +157,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E4E4E4',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -172,10 +173,12 @@ const styles = StyleSheet.create({
   // Scroll View
   scrollView: {
     flex: 1,
+    backgroundColor: '#F5F5F5',
   },
   scrollContent: {
     paddingHorizontal: 20,
     paddingVertical: 20,
+    backgroundColor: '#F5F5F5',
   },
   // Section
   section: {

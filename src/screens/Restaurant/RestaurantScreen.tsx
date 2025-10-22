@@ -866,18 +866,29 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         {isLoading ? (
           // Show shimmer loading cards while data is loading
           <View style={styles.loadingMenuContainer}>
-            {[1, 2, 3, 4, 5].map((index) => (
-              <View key={`shimmer-${index}`} style={styles.menuItem}>
-                <View style={styles.shimmerItemLeft}>
-                  <Shimmer width={120} height={12} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
-                  <Shimmer width={100} height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 6 }} />
-                  <Shimmer width={70} height={14} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
-                  <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
-                  <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" />
+            {[1, 2].map((sectionIndex) => (
+              <View key={`shimmer-section-${sectionIndex}`} style={styles.menuSection}>
+                {/* Section Header Shimmer */}
+                <View style={styles.sectionHeader}>
+                  <Shimmer width={150} height={18} borderRadius={4} backgroundColor="#E8E8E8" />
+                  <Shimmer width={24} height={24} borderRadius={12} backgroundColor="#E8E8E8" />
                 </View>
-                <View style={styles.itemRight}>
-                  <Shimmer width={155} height={137} borderRadius={16} backgroundColor="#E8E8E8" />
-                </View>
+
+                {/* Menu Items Shimmer */}
+                {[1, 2, 3].map((itemIndex) => (
+                  <View key={`shimmer-item-${sectionIndex}-${itemIndex}`} style={styles.menuItem}>
+                    <View style={styles.shimmerItemLeft}>
+                      <Shimmer width={120} height={12} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
+                      <Shimmer width={100} height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 6 }} />
+                      <Shimmer width={70} height={14} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
+                      <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                      <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" />
+                    </View>
+                    <View style={styles.itemRight}>
+                      <Shimmer width={155} height={137} borderRadius={16} backgroundColor="#E8E8E8" />
+                    </View>
+                  </View>
+                ))}
               </View>
             ))}
           </View>

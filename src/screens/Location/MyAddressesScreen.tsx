@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   StatusBar,
   Alert,
-  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -60,41 +59,6 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
     latitude: number;
     longitude: number;
   } | null>(null);
-
-  // Animation values
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const translateYAnim = useRef(new Animated.Value(0)).current;
-
-  // Animate background when modal opens/closes
-  useEffect(() => {
-    if (showEditModal || showAddAddressForm) {
-      Animated.parallel([
-        Animated.timing(scaleAnim, {
-          toValue: 0.92,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateYAnim, {
-          toValue: 30,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateYAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [showEditModal, showAddAddressForm]);
 
   const getIconForType = (type: 'Home' | 'Work' | 'Other') => {
     switch (type) {
@@ -242,30 +206,19 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
 
   return (
     <View style={styles.outerContainer}>
-      <Animated.View
-        style={[
-          styles.animatedContainer,
-          {
-            transform: [
-              { scale: scaleAnim },
-              { translateY: translateYAnim },
-            ],
-          },
-        ]}
-      >
-        <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
-          <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
-        </SafeAreaView>
+      <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
+        <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
+      </SafeAreaView>
 
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Address</Text>
-        </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Address</Text>
+      </View>
 
-        <SafeAreaView style={styles.container} edges={['bottom']}>
+      <SafeAreaView style={styles.container} edges={['bottom']}>
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
@@ -286,7 +239,6 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
             </TouchableOpacity>
           </View>
         </SafeAreaView>
-      </Animated.View>
 
       {/* Location Selection Screen for Add New - Full screen overlay */}
       {showLocationSelection && (
@@ -340,7 +292,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#00B14F',
   },
   fullScreenOverlay: {
     position: 'absolute',
@@ -350,13 +302,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 1000,
     backgroundColor: '#FFFFFF',
-  },
-  animatedContainer: {
-    flex: 1,
-    backgroundColor: '#00B14F',
-    overflow: 'hidden',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
   },
   safeAreaTop: {
     backgroundColor: '#00B14F',
