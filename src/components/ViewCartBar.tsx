@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Image } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useCart } from '@/context/CartContext';
 
@@ -8,75 +8,17 @@ interface ViewCartBarProps {
   onViewMenu?: () => void;
   restaurantLogo?: any;
   deliveryLocation?: string;
-  animationTrigger?: number;
 }
 
 export const ViewCartBar: React.FC<ViewCartBarProps> = ({
   onPress,
   onViewMenu,
   restaurantLogo,
-  deliveryLocation = "Home",
-  animationTrigger = 0
+  deliveryLocation = "Home"
 }) => {
   const { getTotalItems, getTotalPrice, restaurantName, clearCart } = useCart();
   const totalCartItems = getTotalItems();
   const totalPrice = getTotalPrice();
-
-  // Animation values for slide up from bottom and fade in
-  const slideAnim = useRef(new Animated.Value(300)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  // Function to play the slide-up animation
-  const playAnimation = useCallback(() => {
-    // Reset to starting position
-    slideAnim.setValue(300);
-    fadeAnim.setValue(0);
-
-    // Animate slide up and fade in
-    Animated.parallel([
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 50,
-        friction: 8,
-        delay: 100,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        delay: 100,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [slideAnim, fadeAnim]);
-
-  // Play animation when cart items change or animation is triggered
-  useEffect(() => {
-    if (totalCartItems > 0) {
-      playAnimation();
-    } else {
-      // Animate slide down and fade out when cart is empty
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 300,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [totalCartItems, playAnimation, slideAnim, fadeAnim]);
-
-  // Replay animation when animationTrigger changes (screen focus)
-  useEffect(() => {
-    if (animationTrigger > 0 && totalCartItems > 0) {
-      playAnimation();
-    }
-  }, [animationTrigger, totalCartItems, playAnimation]);
 
   if (totalCartItems === 0) {
     return null;
@@ -87,15 +29,7 @@ export const ViewCartBar: React.FC<ViewCartBarProps> = ({
   };
 
   return (
-    <Animated.View
-      style={[
-        styles.cartBar,
-        {
-          transform: [{ translateY: slideAnim }],
-          opacity: fadeAnim,
-        }
-      ]}
-    >
+    <View style={styles.cartBar}>
       <View style={styles.cartContainer}>
         {/* Header Row: Restaurant Info and Checkout Button */}
         <View style={styles.headerRow}>
@@ -161,7 +95,7 @@ export const ViewCartBar: React.FC<ViewCartBarProps> = ({
           </TouchableOpacity>
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 };
 

@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { AddAddressFormScreen } from './AddAddressFormScreen';
+import { LocationSelectionScreen } from './LocationSelectionScreen';
 
 interface Address {
   id: string;
@@ -51,6 +52,14 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [showLocationSelection, setShowLocationSelection] = useState(false);
+  const [showAddAddressForm, setShowAddAddressForm] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<{
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -58,7 +67,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
 
   // Animate background when modal opens/closes
   useEffect(() => {
-    if (showEditModal) {
+    if (showEditModal || showAddAddressForm) {
       Animated.parallel([
         Animated.timing(scaleAnim, {
           toValue: 0.92,
@@ -85,7 +94,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         }),
       ]).start();
     }
-  }, [showEditModal]);
+  }, [showEditModal, showAddAddressForm]);
 
   const getIconForType = (type: 'Home' | 'Work' | 'Other') => {
     switch (type) {
@@ -135,6 +144,21 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
     );
   };
 
+  // Handle Add New button click
+  const handleAddNew = () => {
+    setShowLocationSelection(true);
+    if (onAddNew) {
+      onAddNew();
+    }
+  };
+
+  // Handle location confirmation from LocationSelectionScreen
+  const handleLocationConfirm = (location: { name: string; address: string; latitude: number; longitude: number }) => {
+    setSelectedLocation(location);
+    setShowLocationSelection(false);
+    setShowAddAddressForm(true);
+  };
+
   // Handle save from edit modal
   const handleSaveAddress = (addressData: any) => {
     if (editingAddressId) {
@@ -152,6 +176,21 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
     }
     setShowEditModal(false);
     setEditingAddressId(null);
+  };
+
+  // Handle save from add address form
+  const handleSaveNewAddress = (addressData: any) => {
+    // Add new address to the list
+    const newAddress: Address = {
+      id: Date.now().toString(),
+      type: addressData.type || 'Home',
+      fullAddress: addressData.fullAddress || selectedLocation?.address || '',
+      isDefault: addressData.isDefault || false,
+    };
+
+    setAddresses(prev => [...prev, newAddress]);
+    setShowAddAddressForm(false);
+    setSelectedLocation(null);
   };
 
   const renderAddressCard = (address: Address) => (
@@ -239,7 +278,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
           <View style={styles.bottomButtonContainer}>
             <TouchableOpacity
               style={styles.addNewButton}
-              onPress={onAddNew}
+              onPress={handleAddNew}
               activeOpacity={0.8}
             >
               <Text style={styles.addNewText}>Add New</Text>
@@ -248,6 +287,16 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
           </View>
         </SafeAreaView>
       </Animated.View>
+
+      {/* Location Selection Screen for Add New - Full screen overlay */}
+      {showLocationSelection && (
+        <View style={styles.fullScreenOverlay}>
+          <LocationSelectionScreen
+            onBack={() => setShowLocationSelection(false)}
+            onLocationConfirm={handleLocationConfirm}
+          />
+        </View>
+      )}
 
       {/* Edit Address Modal */}
       <AddAddressFormScreen
@@ -266,6 +315,24 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         }}
         onSave={handleSaveAddress}
       />
+
+      {/* Add Address Form Modal */}
+      <AddAddressFormScreen
+        visible={showAddAddressForm}
+        locationName={selectedLocation?.name || 'New Address'}
+        locationAddress={selectedLocation?.address || ''}
+        latitude={selectedLocation?.latitude || 12.9716}
+        longitude={selectedLocation?.longitude || 80.2425}
+        onBack={() => {
+          setShowAddAddressForm(false);
+          setShowLocationSelection(true);
+        }}
+        onClose={() => {
+          setShowAddAddressForm(false);
+          setSelectedLocation(null);
+        }}
+        onSave={handleSaveNewAddress}
+      />
     </View>
   );
 };
@@ -274,6 +341,15 @@ const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  fullScreenOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    backgroundColor: '#FFFFFF',
   },
   animatedContainer: {
     flex: 1,
