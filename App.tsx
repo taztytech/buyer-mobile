@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Animated, Dimensions, BackHandler } from 'react-native';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
+import { WelcomeScreen } from '@/screens/Auth/WelcomeScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
@@ -31,7 +32,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'exploreDishes' | 'privacyPolicy' | 'termsConditions' | 'help'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'exploreDishes' | 'privacyPolicy' | 'termsConditions' | 'help'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -167,6 +168,10 @@ export default function App() {
         case 'otp':
           handleBackToLogin();
           return true;
+        case 'welcome':
+          // On welcome screen, go back to OTP
+          setCurrentScreen('otp');
+          return true;
         default:
           return false;
       }
@@ -183,6 +188,12 @@ export default function App() {
   };
 
   const handleOtpSuccess = () => {
+    setCurrentScreen('welcome');
+  };
+
+  const handleWelcomeComplete = (name: string, email: string) => {
+    // TODO: Save user profile data (name and email) to backend/storage
+    console.log('User profile:', { name, email });
     setCurrentScreen('home');
   };
 
@@ -802,6 +813,8 @@ export default function App() {
           onBack={handleBackToLogin}
           onSuccess={handleOtpSuccess}
         />
+      ) : currentScreen === 'welcome' ? (
+        <WelcomeScreen onContinue={handleWelcomeComplete} />
       ) : (
         <View style={styles.container}>
           {/* Keep HomeScreen mounted to preserve state */}
@@ -820,6 +833,7 @@ export default function App() {
               onNavigateToCategory={handleNavigateToCategoryResults}
               onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
               onNavigateToSearch={handleNavigateToSearch}
+              onNavigateToOrderDetails={() => setCurrentScreen('orderDetail')}
               selectedLocation={selectedLocation}
             />
           </Animated.View>

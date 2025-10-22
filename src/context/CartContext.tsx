@@ -30,6 +30,7 @@ interface CartContextType {
   restaurantName: string;
   restaurantLogo: any;
   setRestaurantInfo: (id: number, name: string, logo?: any) => void;
+  checkRestaurantConflict: (newRestaurantId: number) => boolean;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -100,6 +101,16 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setRestaurantLogo(logo || null);
   };
 
+  const checkRestaurantConflict = (newRestaurantId: number): boolean => {
+    // If cart is empty or no restaurant is set, no conflict
+    if (Object.keys(cart).length === 0 || restaurantId === null) {
+      return false;
+    }
+
+    // Check if the new restaurant is different from the current one
+    return restaurantId !== newRestaurantId;
+  };
+
   return (
     <CartContext.Provider
       value={{
@@ -114,6 +125,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         restaurantName,
         restaurantLogo,
         setRestaurantInfo,
+        checkRestaurantConflict,
       }}
     >
       {children}

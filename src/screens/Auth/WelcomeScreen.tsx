@@ -1,0 +1,331 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  StatusBar,
+  Image,
+  Dimensions,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { colors } from '@/theme';
+import { authService } from '@/services/auth.service';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+interface WelcomeScreenProps {
+  onContinue?: (name: string, email: string) => void;
+}
+
+export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleContinue = async () => {
+    // Validation
+    if (!fullName.trim()) {
+      Alert.alert('Required', 'Please enter your full name');
+      return;
+    }
+
+    if (!email.trim()) {
+      Alert.alert('Required', 'Please enter your email address');
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      return;
+    }
+
+    // TODO: Enable API call later
+    // setIsLoading(true);
+
+    // try {
+    //   // Get current user to retrieve phone number
+    //   const currentUser = await authService.getCurrentUser();
+    //   const phoneNumber = currentUser?.phoneNumber;
+
+    //   if (!phoneNumber) {
+    //     Alert.alert('Error', 'Phone number not found. Please login again.');
+    //     setIsLoading(false);
+    //     return;
+    //   }
+
+    //   // Call the update profile API
+    //   const response = await authService.updateProfile({
+    //     name: fullName,
+    //     email: email,
+    //     phone_number: parseInt(phoneNumber, 10),
+    //     status: true,
+    //   });
+
+    //   if (response.success) {
+    //     console.log('[WelcomeScreen] Profile updated successfully');
+    //     // Navigate to home screen
+    //     if (onContinue) {
+    //       onContinue(fullName, email);
+    //     }
+    //   } else {
+    //     // Show error message
+    //     Alert.alert('Error', response.error || 'Failed to update profile. Please try again.');
+    //   }
+    // } catch (error: any) {
+    //   console.error('[WelcomeScreen] Profile update error:', error);
+    //   Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    // } finally {
+    //   setIsLoading(false);
+    // }
+
+    // For now, just navigate directly to home
+    if (onContinue) {
+      onContinue(fullName, email);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
+
+      <View style={styles.mainContainer}>
+        {/* Green Background Section */}
+        <View style={styles.greenSection}>
+          {/* Welcome Title */}
+          <Text style={styles.welcomeTitle}>Welcome</Text>
+
+          {/* Subtitle */}
+          <Text style={styles.welcomeSubtitle}>Enter your name to{'\n'}continue</Text>
+
+          {/* Welcome Illustration */}
+          <Image
+            source={require('@/assets/welcome-screen.png')}
+            style={styles.illustrationImage}
+            resizeMode="contain"
+          />
+        </View>
+
+        {/* White Bottom Sheet */}
+        <View style={styles.bottomSheet}>
+          <KeyboardAvoidingView
+            style={styles.keyboardAvoidingView}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={0}
+          >
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.contentContainer}>
+            <View style={styles.formContainer}>
+              {/* Title */}
+              <Text style={styles.title}>Whats your name</Text>
+              <Text style={styles.subtitle}>Lets get to know you better</Text>
+
+              {/* Full Name Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Full Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your full name"
+                  placeholderTextColor="rgba(0, 30, 31, 0.3)"
+                  value={fullName}
+                  onChangeText={setFullName}
+                  autoCapitalize="words"
+                />
+              </View>
+
+              {/* Email Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your email"
+                  placeholderTextColor="rgba(0, 30, 31, 0.3)"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+              {/* Continue Button */}
+              <TouchableOpacity
+                style={[styles.continueButton, isLoading && styles.continueButtonDisabled]}
+                onPress={handleContinue}
+                activeOpacity={0.8}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.continueButtonText}>CONTINUE</Text>
+                )}
+              </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </View>
+      </SafeAreaView>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#00B14F',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  mainContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  greenSection: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 258,
+    backgroundColor: '#00B14F',
+    paddingHorizontal: 20,
+    zIndex: 1,
+  },
+  welcomeTitle: {
+    position: 'absolute',
+    left: 20,
+    top: 64,
+    width: 181,
+    height: 45,
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 30,
+    lineHeight: 45,
+    color: '#FFFFFF',
+  },
+  welcomeSubtitle: {
+    position: 'absolute',
+    left: 20,
+    top: 113,
+    width: 180,
+    height: 52,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 16,
+    lineHeight: 26,
+    color: '#FFFFFF',
+    opacity: 0.85,
+  },
+  illustrationImage: {
+    position: 'absolute',
+    right: -30,
+    bottom: -23,
+    width: 271.62,
+    height: 204,
+  },
+  bottomSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 258,
+    bottom: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 20,
+    zIndex: 2,
+    elevation: 2,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  contentContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  formContainer: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 24,
+  },
+  title: {
+    width: '100%',
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 24,
+    lineHeight: 36,
+    color: '#001E1F',
+  },
+  subtitle: {
+    width: '100%',
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    lineHeight: 21,
+    color: 'rgba(0, 30, 31, 0.6)',
+  },
+  inputContainer: {
+    width: '100%',
+  },
+  inputLabel: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#001E1F',
+    marginBottom: 8,
+  },
+  input: {
+    width: '100%',
+    height: 60,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#001E1F',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  continueButton: {
+    width: '100%',
+    height: 60,
+    backgroundColor: '#00B14F',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  continueButtonDisabled: {
+    opacity: 0.6,
+  },
+  continueButtonText: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#FFFFFF',
+  },
+});

@@ -391,40 +391,15 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   </TouchableOpacity>
                 </View>
 
-                {/* Delivery Option */}
+                {/* Delivery Duration */}
                 <View style={styles.subsection}>
-                  <Text style={styles.subsectionTitle}>Delivery Option</Text>
-                  <View style={styles.deliveryOptionBox}>
-                    <View style={styles.deliveryOptionContent}>
-                      <Text style={styles.deliveryOptionTitle}>Self Pickup</Text>
-                      <Text style={styles.deliveryOptionSubtitle}>
-                        Delivery fee will be reduced
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={[
-                        styles.toggle,
-                        selfPickup && styles.toggleActive,
-                      ]}
-                      onPress={() => setSelfPickup(!selfPickup)}
-                      activeOpacity={0.7}
-                    >
-                      <View
-                        style={[
-                          styles.toggleCircle,
-                          selfPickup && styles.toggleCircleActive,
-                        ]}
-                      />
-                    </TouchableOpacity>
+                  <Text style={styles.subsectionTitle}>Delivery Duration</Text>
+                  <View style={styles.deliveryTimeBox}>
+                    <MaterialIcons name="access-time" size={20} color="#00B14F" />
+                    <Text style={styles.deliveryTimeText}>
+                      Delivery in <Text style={styles.deliveryTimeBold}>15 - 20 mins</Text>
+                    </Text>
                   </View>
-                </View>
-
-                {/* Delivery Time */}
-                <View style={styles.deliveryTimeBox}>
-                  <MaterialIcons name="access-time" size={20} color="#00B14F" />
-                  <Text style={styles.deliveryTimeText}>
-                    Delivery in <Text style={styles.deliveryTimeBold}>15 - 20 mins</Text>
-                  </Text>
                 </View>
               </View>
             )}

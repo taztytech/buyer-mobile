@@ -39,7 +39,7 @@ export const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({
           <View style={styles.content}>
             <Text style={styles.title}>Order Placed Successfully..!</Text>
             <Text style={styles.subtitle}>
-              Our Delivery will deliver your food soon.
+              Our delivery partner will deliver your food soon.
             </Text>
 
             {/* Continue Button */}

@@ -11,6 +11,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Animated,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -134,7 +135,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   restaurantName,
   onBack,
 }) => {
-  const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart } = useCart();
+  const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, checkRestaurantConflict } = useCart();
   const [menuSections, setMenuSections] = useState<MenuSection[]>([]);
   const [restaurantData, setRestaurantData] = useState<any>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
@@ -235,6 +236,42 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Add item to cart (for non-customizable items)
   const addToCart = (item: MenuItem) => {
+    // Check if there's a restaurant conflict
+    if (checkRestaurantConflict(restaurantId)) {
+      Alert.alert(
+        'Replace cart item?',
+        'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Replace',
+            onPress: () => {
+              // Clear cart and add new item
+              clearCart();
+              setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo);
+              addToCartContext({
+                id: item.id,
+                name: item.name,
+                price: item.price,
+                quantity: 1,
+                isVeg: item.isVeg,
+                isCustomizable: false,
+              });
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    // Set restaurant info if this is the first item
+    if (Object.keys(cart).length === 0) {
+      setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo);
+    }
+
     addToCartContext({
       id: item.id,
       name: item.name,
@@ -279,6 +316,36 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle opening customization modal
   const handleCustomizableItemClick = (item: MenuItem) => {
+    // Check if there's a restaurant conflict
+    if (checkRestaurantConflict(restaurantId)) {
+      Alert.alert(
+        'Replace cart item?',
+        'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Replace',
+            onPress: () => {
+              // Clear cart and open customization modal
+              clearCart();
+              setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo);
+              setSelectedCustomizableItem(item);
+              setShowCustomizationModal(true);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    // Set restaurant info if this is the first item
+    if (Object.keys(cart).length === 0) {
+      setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo);
+    }
+
     setSelectedCustomizableItem(item);
     setShowCustomizationModal(true);
   };
@@ -599,17 +666,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         console.log('Restaurant data:', restaurant);
         setRestaurantData(restaurant);
 
-        // Set restaurant info in cart context (including logo if available)
-        const restaurantLogoSource = restaurant.logo_url
-          ? { uri: restaurant.logo_url }
-          : restaurant.image
-          ? (typeof restaurant.image === 'string' ? { uri: restaurant.image } : restaurant.image)
-          : null;
-        setRestaurantInfo(
-          restaurantId,
-          restaurant.name || restaurantName || 'Restaurant',
-          restaurantLogoSource
-        );
+        // DON'T set restaurant info here - it will be set when adding first item to cart
+        // This prevents overwriting cart restaurant info when viewing different restaurants
 
         // Process categories from API response
         if (restaurant.categories && Array.isArray(restaurant.categories)) {
@@ -755,17 +813,20 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   </Text>
                   <MaterialIcons name="info-outline" size={19} color="#00B14F" />
                 </View>
-                <View style={styles.ratingContainer}>
-                  <View style={styles.ratingBadge}>
-                    <MaterialIcons name="star" size={14} color="#00B14F" />
-                    <Text style={styles.ratingText}>
-                      {restaurantData?.stats?.average_rating || restaurantData?.rating || '0'}
+                {/* Only show rating and reviews if there's at least one review */}
+                {(restaurantData?.stats?.total_reviews > 0 || restaurantData?.total_reviews > 0) && (
+                  <View style={styles.ratingContainer}>
+                    <View style={styles.ratingBadge}>
+                      <MaterialIcons name="star" size={14} color="#00B14F" />
+                      <Text style={styles.ratingText}>
+                        {restaurantData?.stats?.average_rating || restaurantData?.rating || '0'}
+                      </Text>
+                    </View>
+                    <Text style={styles.reviewCountText}>
+                      {restaurantData?.stats?.total_reviews || restaurantData?.total_reviews || '0'} reviews
                     </Text>
                   </View>
-                  <Text style={styles.reviewCountText}>
-                    {restaurantData?.stats?.total_reviews || restaurantData?.total_reviews || '0'} reviews
-                  </Text>
-                </View>
+                )}
               </View>
 
               {/* Dotted Divider */}
@@ -777,8 +838,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
               <View style={styles.restaurantBottomRow}>
                 <Text style={styles.locationText}>
-                  {restaurantData?.locations?.[0]?.street ||
-                   restaurantData?.locations?.[0]?.locality ||
+                  {restaurantData?.locations?.[0]?.locality ||
                    restaurantData?.location?.locality ||
                    'Location'}
                 </Text>
@@ -1635,8 +1695,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   itemName: {
-    fontFamily: 'Poppins',
-    fontWeight: '700',
+    fontFamily: 'Poppins_700Bold',
     fontSize: 18,
     lineHeight: 27,
     textAlign: 'left',
@@ -1656,16 +1715,14 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   bestSellerText: {
-    fontFamily: 'Poppins',
-    fontWeight: '500',
+    fontFamily: 'Poppins_500Medium',
     fontSize: 8,
     lineHeight: 12,
     color: '#000000',
     opacity: 0.85,
   },
   itemPrice: {
-    fontFamily: 'Poppins',
-    fontWeight: '700',
+    fontFamily: 'Poppins_700Bold',
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
@@ -1675,16 +1732,14 @@ const styles = StyleSheet.create({
     width: 150,
   },
   itemDescription: {
-    fontFamily: 'Poppins',
-    fontWeight: '400',
+    fontFamily: 'Poppins_400Regular',
     fontSize: 13,
     lineHeight: 18,
     color: 'rgba(0, 0, 0, 0.6)',
     opacity: 0.85,
   },
   moreButton: {
-    fontFamily: 'Poppins',
-    fontWeight: '500',
+    fontFamily: 'Poppins_500Medium',
     fontSize: 13,
     lineHeight: 18,
     color: '#00B14F',

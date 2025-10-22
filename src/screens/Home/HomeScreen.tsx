@@ -22,6 +22,7 @@ interface HomeScreenProps {
   onNavigateToCategory?: (categoryName: string) => void;
   onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
   onNavigateToSearch?: () => void;
+  onNavigateToOrderDetails?: () => void;
   selectedLocation?: { name: string; address: string };
 }
 
@@ -141,6 +142,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToCategory,
   onNavigateToRestaurant,
   onNavigateToSearch,
+  onNavigateToOrderDetails,
   selectedLocation: externalSelectedLocation
 }) => {
   const { restaurantId, restaurantName, restaurantLogo, getTotalItems } = useCart();
@@ -1087,8 +1089,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* View Cart Bar - shows when cart has items */}
       <ViewCartBar
         onPress={() => {
-          if (restaurantId && onNavigateToRestaurant) {
-            onNavigateToRestaurant(restaurantId, restaurantName);
+          if (onNavigateToOrderDetails) {
+            onNavigateToOrderDetails();
           }
         }}
         onViewMenu={() => {

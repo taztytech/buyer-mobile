@@ -15,7 +15,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PADDING = 20;
 const CARD_GAP = 10;
-const CARD_WIDTH = (SCREEN_WIDTH - PADDING * 2 - CARD_GAP * 2) / 3;
+const NUM_COLUMNS = 3;
+// Calculate card width: total available width minus gaps, divided by number of columns
+const CARD_WIDTH = (SCREEN_WIDTH - PADDING * 2 - CARD_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
+
+// Debug: Log the calculations
+console.log('[Favorites] Screen width:', SCREEN_WIDTH);
+console.log('[Favorites] Card width:', CARD_WIDTH);
+console.log('[Favorites] Total width check:', CARD_WIDTH * NUM_COLUMNS + CARD_GAP * (NUM_COLUMNS - 1));
 
 interface DishCategory {
   id: string;
@@ -236,6 +243,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     columnGap: CARD_GAP,
     rowGap: 20,
+    justifyContent: 'flex-start',
   },
   dishCard: {
     width: CARD_WIDTH,
