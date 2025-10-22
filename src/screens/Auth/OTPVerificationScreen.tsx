@@ -31,7 +31,8 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
 }) => {
   const [otp, setOtp] = useState(['', '', '', '']);
   const [timer, setTimer] = useState(61);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const inputRefs = [
     useRef<TextInput>(null),
     useRef<TextInput>(null),
@@ -81,7 +82,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
       return;
     }
 
-    setIsLoading(true);
+    setIsVerifying(true);
 
     try {
       // Call the verify OTP API
@@ -97,7 +98,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
         }
       } else {
         // Show error message
-        Alert.alert('Error', response.error || 'Invalid OTP. Please try again.');
+        Alert.alert('Incorrect OTP', 'Invalid code. Please enter the correct 4 digit code.');
         // Clear OTP inputs on error
         setOtp(['', '', '', '']);
         inputRefs[0].current?.focus();
@@ -106,7 +107,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
       console.error('Verification error:', error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
-      setIsLoading(false);
+      setIsVerifying(false);
     }
   };
 
@@ -114,7 +115,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
     if (timer > 0) return;
 
     try {
-      setIsLoading(true);
+      setIsResending(true);
 
       // Call the resend OTP API
       const response = await authService.sendOtp(phoneNumber);
@@ -141,7 +142,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
       console.error('Resend OTP error:', error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
-      setIsLoading(false);
+      setIsResending(false);
     }
   };
 
@@ -166,9 +167,9 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
             We have sent a 4 digit code to your number
           </Text>
 
-          {/* Delivery Illustration */}
+          {/* OTP Illustration */}
           <Image
-            source={require('@/assets/login-illustration.png')}
+            source={require('@/assets/OTP-asset.png')}
             style={styles.illustrationImage}
             resizeMode="contain"
           />
@@ -177,8 +178,8 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
         {/* White Bottom Sheet */}
         <View style={styles.bottomSheet}>
           <View style={styles.formContainer}>
-            {/* Mobile Number Label */}
-            <Text style={styles.inputLabel}>MOBILE NUMBER</Text>
+            {/* Verification Code Label */}
+            <Text style={styles.inputLabel}>ENTER VERIFICATION CODE</Text>
 
             {/* OTP Input Row */}
             <View style={styles.otpInputRow}>
@@ -204,13 +205,13 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
             <View style={styles.resendRow}>
               <TouchableOpacity
                 onPress={handleResendCode}
-                disabled={timer > 0 || isLoading}
+                disabled={timer > 0 || isResending}
               >
                 <Text style={[
                   styles.resendText,
-                  timer === 0 && !isLoading && styles.resendTextActive
+                  timer === 0 && !isResending && styles.resendTextActive
                 ]}>
-                  {isLoading ? 'Sending...' : 'Resend Code'}
+                  {isResending ? 'Sending...' : 'Resend Code'}
                 </Text>
               </TouchableOpacity>
               <Text style={styles.timerText}>0.{timer.toString().padStart(2, '0')} s</Text>
@@ -218,14 +219,16 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
 
             {/* VERIFY & PROCEED Button */}
             <TouchableOpacity
-              style={styles.verifyButton}
+              style={[styles.verifyButton, isVerifying && styles.verifyButtonDisabled]}
               onPress={handleVerify}
               activeOpacity={0.8}
-              disabled={isLoading}
+              disabled={isVerifying}
             >
               <View style={styles.verifyButtonContent}>
-                <Text style={styles.verifyButtonText}>VERIFY & PROCEED</Text>
-                <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
+                <Text style={styles.verifyButtonText}>
+                  {isVerifying ? 'VERIFYING...' : 'VERIFY & PROCEED'}
+                </Text>
+                {!isVerifying && <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />}
               </View>
             </TouchableOpacity>
           </View>
@@ -297,7 +300,7 @@ const styles = StyleSheet.create({
   },
   illustrationImage: {
     position: 'absolute',
-    left: 156,
+    left: 103,
     top: 44,
     width: 339.52,
     height: 255,
@@ -361,7 +364,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     height: 21,
-    marginBottom: 24,
+    marginBottom: 0,
   },
   resendText: {
     fontFamily: 'Poppins',
@@ -387,6 +390,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#00B14F',
     borderRadius: 10,
     overflow: 'hidden',
+  },
+  verifyButtonDisabled: {
+    opacity: 0.6,
   },
   verifyButtonContent: {
     flex: 1,
