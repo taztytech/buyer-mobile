@@ -24,6 +24,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
+import { storageService } from '@/services/storage.service';
 import { CartProvider } from '@/context/CartContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -86,7 +87,16 @@ export default function App() {
             const isLoggedIn = await authService.isAuthenticated();
 
             if (isLoggedIn) {
-              setCurrentScreen('home');
+              // Check if user has completed their profile
+              const userData = await authService.getCurrentUser();
+
+              // If user has both name and email, they've completed the welcome screen
+              if (userData?.name && userData?.email) {
+                setCurrentScreen('home');
+              } else {
+                // User is logged in but hasn't completed profile, show welcome screen
+                setCurrentScreen('welcome');
+              }
             }
           })(),
           timeoutPromise
@@ -191,13 +201,47 @@ export default function App() {
     setCurrentScreen('welcome');
   };
 
-  const handleWelcomeComplete = (name: string, email: string) => {
-    // TODO: Save user profile data (name and email) to backend/storage
-    console.log('User profile:', { name, email });
+  const handleWelcomeComplete = async (name: string, email: string) => {
+    // Save user profile data to storage
+    try {
+      const currentUser = await authService.getCurrentUser();
+      if (currentUser) {
+        // Update user data with name and email
+        const updatedUser = {
+          ...currentUser,
+          name,
+          email,
+        };
+        await storageService.saveUser(updatedUser);
+        console.log('[App] User profile saved:', { name, email });
+      }
+    } catch (error) {
+      console.error('[App] Error saving profile:', error);
+    }
+
     setCurrentScreen('home');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Reset all animated values to their initial state
+    homeScreenSlide.setValue(0);
+    profileScreenSlide.setValue(SCREEN_WIDTH);
+    editProfileScreenSlide.setValue(SCREEN_WIDTH);
+    ordersScreenSlide.setValue(SCREEN_WIDTH);
+    orderDetailScreenSlide.setValue(SCREEN_WIDTH);
+    rateOrderScreenSlide.setValue(SCREEN_WIDTH);
+    orderTrackingScreenSlide.setValue(SCREEN_WIDTH);
+    searchScreenSlide.setValue(SCREEN_WIDTH);
+    exploreDishesScreenSlide.setValue(SCREEN_WIDTH);
+    privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
+    termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
+    myAddressesScreenSlide.setValue(SCREEN_WIDTH);
+    addressScreenSlide.setValue(SCREEN_WIDTH);
+    locationScreenSlide.setValue(SCREEN_WIDTH);
+    categoryScreenSlide.setValue(SCREEN_WIDTH);
+    helpScreenSlide.setValue(SCREEN_WIDTH);
+
+    // Reset state
     setCurrentScreen('login');
     setPhoneNumber('');
   };

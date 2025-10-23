@@ -39,6 +39,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
     useRef<TextInput>(null),
     useRef<TextInput>(null),
   ];
+  const autofillTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-focus first input when component mounts
   useEffect(() => {
@@ -57,8 +58,60 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   const handleOtpChange = (value: string, index: number) => {
     // Only allow digits
     const cleaned = value.replace(/\D/g, '');
-    if (cleaned.length > 1) return;
 
+    console.log(`[OTP] Input ${index}: "${value}" -> cleaned: "${cleaned}"`);
+
+    // Handle autofill or paste - when multiple digits are provided in first input
+    if (index === 0 && cleaned.length > 1) {
+      console.log('[OTP] Autofill detected on first input, filling all boxes');
+      // Take exactly 4 digits from the autofilled value
+      const digits = cleaned.slice(0, 4).split('');
+      const newOtp = ['', '', '', ''];
+
+      // Fill in all the digits from the start
+      digits.forEach((digit, i) => {
+        if (i < 4) {
+          newOtp[i] = digit;
+        }
+      });
+
+      setOtp(newOtp);
+
+      // Focus the last input if all 4 digits are filled
+      if (digits.length === 4) {
+        // Small delay to ensure state is updated before blurring
+        setTimeout(() => {
+          inputRefs[3].current?.blur();
+        }, 50);
+      } else {
+        const nextIndex = Math.min(digits.length, 3);
+        inputRefs[nextIndex].current?.focus();
+      }
+      return;
+    }
+
+    // For other inputs, if we get multiple digits, it might be autofill trying to fill each box
+    // In this case, just take the first digit
+    if (cleaned.length > 1) {
+      const newOtp = [...otp];
+      newOtp[index] = cleaned.charAt(0);
+      setOtp(newOtp);
+
+      if (index < 3) {
+        inputRefs[index + 1].current?.focus();
+      }
+      return;
+    }
+
+    // Handle empty value
+    if (cleaned === '') {
+      const newOtp = [...otp];
+      newOtp[index] = '';
+      setOtp(newOtp);
+      return;
+    }
+
+    // Handle single digit input (manual typing)
     const newOtp = [...otp];
     newOtp[index] = cleaned;
     setOtp(newOtp);
@@ -195,8 +248,11 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
                   onChangeText={(value) => handleOtpChange(value, index)}
                   onKeyPress={(e) => handleKeyPress(e, index)}
                   keyboardType="number-pad"
-                  maxLength={1}
+                  maxLength={6}
                   textAlign="center"
+                  textContentType={index === 0 ? 'oneTimeCode' : 'none'}
+                  autoComplete={index === 0 ? 'sms-otp' : 'off'}
+                  importantForAutofill={index === 0 ? 'yes' : 'no'}
                 />
               ))}
             </View>

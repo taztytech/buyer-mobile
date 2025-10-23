@@ -156,33 +156,30 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     setRegion(newRegion);
 
     try {
-      // Check and request location permissions before reverse geocoding
+      // Only check if permission is already granted, don't request it
       const { status } = await Location.getForegroundPermissionsAsync();
 
-      if (status !== 'granted') {
-        const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
-        if (newStatus !== 'granted') {
-          console.log('Location permission denied');
-          return;
-        }
-      }
+      if (status === 'granted') {
+        try {
+          const addresses = await Location.reverseGeocodeAsync({
+            latitude: newRegion.latitude,
+            longitude: newRegion.longitude,
+          });
 
-      try {
-        const addresses = await Location.reverseGeocodeAsync({
-          latitude: newRegion.latitude,
-          longitude: newRegion.longitude,
-        });
-
-        if (addresses.length > 0) {
-          const addr = addresses[0];
-          setLocationName(addr.name || addr.street || 'Location');
-          setLocationAddress(
-            `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
-          );
+          if (addresses.length > 0) {
+            const addr = addresses[0];
+            setLocationName(addr.name || addr.street || 'Location');
+            setLocationAddress(
+              `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
+            );
+          }
+        } catch (reverseGeoError) {
+          console.log('Reverse geocoding failed on region change');
+          // Keep the current location name and address
         }
-      } catch (reverseGeoError) {
-        console.log('Reverse geocoding failed on region change');
-        // Keep the current location name and address
+      } else {
+        // Permission not granted, keep default location name
+        console.log('Location permission not granted, using default location');
       }
     } catch (error) {
       console.error('Error reverse geocoding:', error);
@@ -213,14 +210,12 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     if (!searchText.trim()) return;
 
     try {
+      // Only check if permission is already granted, don't request it
       const { status } = await Location.getForegroundPermissionsAsync();
 
       if (status !== 'granted') {
-        const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
-        if (newStatus !== 'granted') {
-          console.log('Location permission denied');
-          return;
-        }
+        console.log('Location permission not granted for search. Skipping geocoding.');
+        return;
       }
 
       // Use geocoding to search for the location
@@ -293,7 +288,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             style={styles.map}
             region={region}
             onRegionChangeComplete={handleRegionChangeComplete}
-            showsUserLocation={true}
+            showsUserLocation={false}
             showsMyLocationButton={false}
           />
         ) : (
