@@ -1519,7 +1519,7 @@ const styles = StyleSheet.create({
   filterSectionContainer: {
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 10,
+    paddingBottom: 0,
     marginTop: -20,
   },
   scrollContainer: {

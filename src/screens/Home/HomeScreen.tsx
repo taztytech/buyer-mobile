@@ -95,6 +95,12 @@ const fallbackCategoryData: CategoryItem[] = [
     description: 'Sweet desserts',
     icon: require('@/assets/cake.png'),
   },
+  {
+    id: 'view-all',
+    name: 'View All',
+    description: 'See all categories',
+    icon: require('@/assets/Group 1272628220.png'),
+  },
 ];
 
 // Fallback restaurant data if API fails or returns empty
@@ -470,7 +476,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           // Handle categories - use fallback if empty or undefined
           if (whatsOnYourMind && Array.isArray(whatsOnYourMind) && whatsOnYourMind.length > 0) {
-            setCategoryData(whatsOnYourMind);
+            // Add "View All" item at the end
+            const categoriesWithViewAll = [
+              ...whatsOnYourMind,
+              {
+                id: 'view-all',
+                name: 'View All',
+                description: 'See all categories',
+                icon: require('@/assets/Group 1272628220.png'),
+              }
+            ];
+            setCategoryData(categoriesWithViewAll);
           } else {
             setCategoryData(fallbackCategoryData);
           }
