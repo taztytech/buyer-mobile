@@ -38,6 +38,7 @@ export interface Restaurant {
   distance: string;
   image: string;
   isFavorite?: boolean;
+  isVeg?: boolean;
 }
 
 export interface HomeData {

@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useCart } from '@/context/CartContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface ViewCartBarProps {
   onPress: () => void;
@@ -19,6 +21,7 @@ export const ViewCartBar: React.FC<ViewCartBarProps> = ({
   const { getTotalItems, getTotalPrice, restaurantName, clearCart } = useCart();
   const totalCartItems = getTotalItems();
   const totalPrice = getTotalPrice();
+  const insets = useSafeAreaInsets();
 
   if (totalCartItems === 0) {
     return null;
@@ -29,8 +32,9 @@ export const ViewCartBar: React.FC<ViewCartBarProps> = ({
   };
 
   return (
-    <View style={styles.cartBar}>
-      <View style={styles.cartContainer}>
+    <View style={styles.cartBarWrapper}>
+      <View style={[styles.cartBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <View style={styles.cartContainer}>
         {/* Header Row: Restaurant Info and Checkout Button */}
         <View style={styles.headerRow}>
           <View style={styles.restaurantInfo}>
@@ -95,24 +99,30 @@ export const ViewCartBar: React.FC<ViewCartBarProps> = ({
           </TouchableOpacity>
         </View>
       </View>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  cartBar: {
+  cartBarWrapper: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    overflow: 'visible',
+  },
+  cartBar: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.1)',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -8 },
+    shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 20,
+    shadowRadius: 12,
+    elevation: 30,
     paddingTop: 16,
     paddingBottom: 20,
     paddingHorizontal: 20,

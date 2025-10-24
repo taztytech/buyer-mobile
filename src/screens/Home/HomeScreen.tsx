@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
@@ -109,6 +109,7 @@ const fallbackRestaurantData: Restaurant[] = [
     distance: '0.5Kms',
     image: require('@/assets/biriyani.png'),
     isFavorite: false,
+    isVeg: true,
   },
   {
     id: 2,
@@ -120,6 +121,7 @@ const fallbackRestaurantData: Restaurant[] = [
     distance: '1.2Kms',
     image: require('@/assets/burger.png'),
     isFavorite: false,
+    isVeg: false,
   },
   {
     id: 3,
@@ -131,6 +133,7 @@ const fallbackRestaurantData: Restaurant[] = [
     distance: '2.5Kms',
     image: require('@/assets/pizza.png'),
     isFavorite: false,
+    isVeg: false,
   },
 ];
 
@@ -144,6 +147,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   selectedLocation: externalSelectedLocation
 }) => {
   const { restaurantId, restaurantName, restaurantLogo, getTotalItems } = useCart();
+  const insets = useSafeAreaInsets();
   const totalCartItems = getTotalItems();
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
   const [hasShownLocationModal, setHasShownLocationModal] = React.useState(false);
@@ -170,6 +174,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isVegMode, setIsVegMode] = React.useState(false);
   const [tempVegSelection, setTempVegSelection] = React.useState<'all' | 'veg'>('all');
   const [selectedLocation, setSelectedLocation] = React.useState(externalSelectedLocation || { name: DEFAULT_LOCATION.name, address: DEFAULT_LOCATION.address });
+  const [isCategorySectionSticky, setIsCategorySectionSticky] = React.useState(false);
   const flatListRef = React.useRef<FlatList>(null);
 
   // Update local state when external selectedLocation changes
@@ -485,6 +490,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
               image: restaurant.logo_url || restaurant.image,
               isFavorite: false,
+              isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
             }));
 
             console.log('[HomeScreen] Transformed restaurant data:', transformedRestaurants);
@@ -624,6 +630,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     );
   }, [onNavigateToCategory]);
 
+  // Handle scroll to detect when category section becomes sticky
+  const handleScroll = React.useCallback((event: any) => {
+    const scrollY = event.nativeEvent.contentOffset.y;
+    // Category section becomes sticky after header (212px) + carousel (~165px) + section title (~40px)
+    // Total: approximately 400px
+    const threshold = 400;
+    setIsCategorySectionSticky(scrollY > threshold);
+  }, []);
+
   return (
     <View style={styles.outerContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
@@ -635,6 +650,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           bounces={false}
           overScrollMode="never"
           showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
         >
 
       {/* Header with Background Image */}
@@ -815,7 +832,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </View>
 
       {/* Category List */}
-      <View style={styles.categoryListContainer}>
+      <View style={[
+        styles.categoryListContainer,
+        isCategorySectionSticky && styles.categoryListContainerSticky
+      ]}>
         {showCategoryShimmer ? (
           <ScrollView
             horizontal
@@ -912,7 +932,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Restaurant List */}
       <View style={[
         styles.restaurantListContainer,
-        totalCartItems > 0 && styles.restaurantListWithCart
+        totalCartItems > 0 && {
+          paddingBottom: 160 + Math.max(insets.bottom, 0)
+        }
       ]}>
         {showRestaurantShimmer ? (
           <>
@@ -921,27 +943,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <View key={item} style={styles.restaurantCardWrapper}>
                 <View style={styles.restaurantCardShimmer}>
                   {/* Left Side - Image Shimmer */}
-                  <Shimmer width={166} height={153} borderRadius={20} backgroundColor="#E8E8E8" style={styles.restaurantImageShimmer} />
+                  <Shimmer width={130} height={160} borderRadius={16} backgroundColor="#E8E8E8" style={styles.restaurantImageShimmer} />
 
                   {/* Right Side - Details Shimmer */}
                   <View style={styles.restaurantDetailsShimmer}>
+                    {/* Pure Veg Badge */}
+                    <Shimmer width={80} height={18} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+
                     {/* Restaurant Name */}
-                    <Shimmer width="80%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
+                    <Shimmer width="90%" height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+
+                    {/* Rating and Delivery Time */}
+                    <Shimmer width="70%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
                     {/* Cuisine */}
-                    <Shimmer width="60%" height={12} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 12 }} />
-
-                    {/* Rating and Time */}
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                      <Shimmer width={47} height={22} borderRadius={13} backgroundColor="#E8E8E8" />
-                      <Shimmer width={86} height={22} borderRadius={13} backgroundColor="#E8E8E8" />
-                    </View>
+                    <Shimmer width="85%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
                     {/* Location and Distance */}
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <Shimmer width="50%" height={12} borderRadius={4} backgroundColor="#E8E8E8" />
-                      <Shimmer width="30%" height={12} borderRadius={4} backgroundColor="#E8E8E8" />
-                    </View>
+                    <Shimmer width="60%" height={14} borderRadius={4} backgroundColor="#E8E8E8" />
                   </View>
                 </View>
               </View>
@@ -1418,6 +1437,15 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 12,
   },
+  categoryListContainerSticky: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.08)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
   categoryListContent: {
     paddingRight: 20,
     alignItems: 'flex-start',
@@ -1487,6 +1515,7 @@ const styles = StyleSheet.create({
   filterContainer: {
     paddingHorizontal: 20,
     paddingBottom: 16,
+    backgroundColor: '#FFFFFF',
   },
   filterScrollContent: {
     gap: 10,
@@ -1537,7 +1566,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 20,
     gap: 10,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFFFFF',
   },
   restaurantListWithCart: {
     paddingBottom: 160, // Extra padding when cart modal is visible
@@ -1548,26 +1577,19 @@ const styles = StyleSheet.create({
   restaurantCardShimmer: {
     flexDirection: 'row',
     width: '100%',
-    height: 153,
+    height: 160,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 25,
-    elevation: 5,
   },
   restaurantImageShimmer: {
-    borderTopLeftRadius: 20,
-    borderBottomLeftRadius: 20,
-    borderTopRightRadius: 0,
-    borderBottomRightRadius: 0,
+    borderRadius: 16,
   },
   restaurantDetailsShimmer: {
     flex: 1,
-    padding: 12,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
   },
   message: {
     ...typography.bodyLarge,

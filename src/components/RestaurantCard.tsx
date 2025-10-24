@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export interface Restaurant {
   id: string | number;
@@ -12,6 +13,7 @@ export interface Restaurant {
   distance: string;
   image: any;
   isFavorite?: boolean;
+  isVeg?: boolean;
 }
 
 interface RestaurantCardProps {
@@ -56,7 +58,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
       activeOpacity={0.7}
       testID={`restaurant-card-${restaurant.id}`}
     >
-      {/* Left Side - Image */}
+      {/* Left Side - Image with Heart Button */}
       <View style={styles.imageContainer}>
         <Image
           source={getImageSource()}
@@ -73,68 +75,76 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
             }
           }}
         />
+
+        {/* Top Gradient Overlay */}
+        <LinearGradient
+          colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.gradientOverlayTop}
+        />
+
+        {/* Bottom Gradient Overlay */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0, 0, 0, 0.2)', 'rgba(0, 0, 0, 0.5)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.gradientOverlayBottom}
+        />
+
+        {/* Heart Button Overlay */}
+        <TouchableOpacity
+          style={styles.heartButton}
+          onPress={onFavoriteToggle}
+          testID={`favorite-button-${restaurant.id}`}
+        >
+          <MaterialIcons
+            name={restaurant.isFavorite ? 'favorite' : 'favorite-border'}
+            size={24}
+            color={restaurant.isFavorite ? '#FF0000' : '#FFFFFF'}
+          />
+        </TouchableOpacity>
       </View>
 
-      {/* Right Side - Details */}
+      {/* Right Side - Details (Vertically Centered) */}
       <View style={styles.detailsContainer}>
-        {/* Top Content - Name and Cuisine */}
-        <View style={styles.topContent}>
-          {/* Top Section - Name, Cuisine, Favorite */}
-          <View style={styles.topSection}>
-            <View style={styles.nameSection}>
-              <View style={styles.nameRow}>
-                <Text style={styles.restaurantName} numberOfLines={1} ellipsizeMode="tail">
-                  {restaurant.name}
-                </Text>
-                {/* Favorite Button */}
-                <TouchableOpacity
-                  style={styles.favoriteButton}
-                  onPress={onFavoriteToggle}
-                  testID={`favorite-button-${restaurant.id}`}
-                >
-                  <MaterialIcons
-                    name={restaurant.isFavorite ? 'favorite' : 'favorite-border'}
-                    size={17}
-                    color="#000000"
-                  />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.cuisine} numberOfLines={2} ellipsizeMode="tail">
-                {restaurant.cuisine}
-              </Text>
-            </View>
+        {/* Pure Veg Badge */}
+        {restaurant.isVeg && (
+          <View style={styles.pureVegBadge}>
+            <MaterialIcons name="eco" size={14} color="#00B14F" />
+            <Text style={styles.pureVegText}>Pure Veg</Text>
           </View>
+        )}
+
+        {/* Restaurant Name */}
+        <Text style={styles.restaurantName} numberOfLines={2} ellipsizeMode="tail">
+          {restaurant.name}
+        </Text>
+
+        {/* Rating and Delivery Time */}
+        <View style={styles.ratingDeliveryRow}>
+          <View style={styles.ratingContainer}>
+            <MaterialIcons name="star" size={16} color="#00B14F" />
+            <Text style={styles.ratingText}>
+              {restaurant.rating} ({restaurant.rating >= 1 ? `${restaurant.rating.toFixed(1)}K+` : '0'})
+            </Text>
+          </View>
+          <Text style={styles.deliveryDot}>•</Text>
+          <Text style={styles.deliveryText}>{restaurant.deliveryTime}</Text>
         </View>
 
-        {/* Bottom Content - Rating, Delivery, Divider and Location */}
-        <View style={styles.bottomContent}>
-          {/* Rating and Delivery Time */}
-          <View style={styles.metaSection}>
-            <View style={styles.ratingContainer}>
-              <MaterialIcons name="star" size={14} color="#00B14F" />
-              <Text style={styles.ratingText}>{restaurant.rating}</Text>
-            </View>
+        {/* Cuisine */}
+        <Text style={styles.cuisineText} numberOfLines={2} ellipsizeMode="tail">
+          {restaurant.cuisine}
+        </Text>
 
-            <View style={styles.deliveryContainer}>
-              <MaterialIcons name="two-wheeler" size={15} color="#B48300" />
-              <Text style={styles.deliveryText}>{restaurant.deliveryTime}</Text>
-            </View>
-          </View>
-
-          {/* Divider */}
-          <View style={styles.dividerContainer}>
-            {Array.from({ length: 20 }).map((_, index) => (
-              <View key={index} style={styles.dash} />
-            ))}
-          </View>
-
-          {/* Bottom Section - Location and Distance */}
-          <View style={styles.bottomSection}>
-            <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
-              {locationText}
-            </Text>
-            <Text style={styles.distanceText}>{restaurant.distance}</Text>
-          </View>
+        {/* Location and Distance */}
+        <View style={styles.locationRow}>
+          <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
+            {locationText}
+          </Text>
+          <Text style={styles.distanceDot}>•</Text>
+          <Text style={styles.distanceText}>{restaurant.distance}</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -144,195 +154,140 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 0,
+    alignItems: 'stretch',
     width: '100%',
-    height: 153,
+    height: 160,
     backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 2,
-    borderRadius: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 8,
   },
   // Left Side - Image
   imageContainer: {
-    width: 166,
-    height: 153,
-    borderTopLeftRadius: 20,
-    borderBottomLeftRadius: 20,
-    overflow: 'hidden',
+    width: 130,
+    height: 160,
+    position: 'relative',
     backgroundColor: '#F5F5F5',
+    borderRadius: 16,
   },
   image: {
-    width: 166,
-    height: 153,
-    backgroundColor: 'transparent',
+    width: 130,
+    height: 160,
+    borderRadius: 16,
   },
-  // Right Side - Details Container
+  gradientOverlayTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  gradientOverlayBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+  },
+  heartButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 4,
+    zIndex: 10,
+  },
+  // Right Side - Details Container (Vertically Centered)
   detailsContainer: {
     flex: 1,
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    padding: 10,
-    minHeight: 137,
-  },
-  // Top Content Wrapper
-  topContent: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    alignSelf: 'stretch',
-  },
-  // Bottom Content Wrapper
-  bottomContent: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    alignSelf: 'stretch',
-    gap: 6,
-    marginTop: 15,
-  },
-  // Top Section
-  topSection: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    padding: 0,
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
     gap: 4,
-    alignSelf: 'stretch',
   },
-  nameSection: {
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    padding: 0,
-    alignSelf: 'stretch',
-    gap: 2,
-  },
-  nameRow: {
+  // Pure Veg Badge
+  pureVegBadge: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    alignSelf: 'stretch',
+    gap: 4,
+    marginBottom: 2,
   },
+  pureVegText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#00B14F',
+  },
+  // Restaurant Name
   restaurantName: {
-    flex: 1,
-    fontFamily: 'Poppins',
-    fontWeight: '600',
+    fontFamily: 'Poppins_700Bold',
     fontSize: 18,
-    lineHeight: 27,
-    textAlign: 'left',
+    lineHeight: 24,
     color: '#000000',
-    opacity: 0.85,
-    paddingRight: 8,
+    marginBottom: 2,
   },
-  cuisine: {
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 11,
-    lineHeight: 16,
-    color: 'rgba(0, 0, 0, 0.5)',
-    opacity: 0.85,
-    width: '100%',
-  },
-  favoriteButton: {
+  // Rating and Delivery Row
+  ratingDeliveryRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 4,
-    width: 25,
-    height: 25,
-    borderRadius: 13,
-  },
-  // Meta Section - Rating and Delivery
-  metaSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 0,
-    gap: 10,
-    alignSelf: 'stretch',
+    gap: 6,
+    marginBottom: 2,
   },
   ratingContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 4,
     gap: 4,
-    minWidth: 47,
-    height: 22,
-    backgroundColor: 'rgba(0, 128, 74, 0.1)',
-    borderRadius: 13,
   },
   ratingText: {
-    fontFamily: 'Poppins',
-    fontWeight: '400',
+    fontFamily: 'Poppins_500Medium',
     fontSize: 14,
-    lineHeight: 14,
-    color: '#00B14F',
-    opacity: 0.85,
+    lineHeight: 20,
+    color: '#000000',
   },
-  deliveryContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 4,
-    gap: 4,
-    width: 86,
-    height: 23,
-    backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 6,
-    borderBottomRightRadius: 6,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
+  deliveryDot: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    color: '#000000',
   },
   deliveryText: {
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    fontSize: 10,
-    lineHeight: 15,
-    color: '#B48300',
-    opacity: 0.85,
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#000000',
   },
-  // Divider
-  dividerContainer: {
+  // Cuisine
+  cuisineText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#666666',
+    marginBottom: 2,
+  },
+  // Location Row
+  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    alignSelf: 'stretch',
-    height: 1,
-  },
-  dash: {
-    width: 5,
-    height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  // Bottom Section
-  bottomSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 0,
-    gap: 10,
-    alignSelf: 'stretch',
+    gap: 6,
   },
   locationText: {
-    flex: 1,
-    fontFamily: 'Poppins',
-    fontWeight: '400',
+    fontFamily: 'Poppins_400Regular',
     fontSize: 11,
     lineHeight: 16,
-    color: 'rgba(0, 0, 0, 0.5)',
-    opacity: 0.85,
-    paddingRight: 8,
+    color: '#666666',
+    flex: 1,
+  },
+  distanceDot: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 11,
+    color: '#666666',
   },
   distanceText: {
-    fontFamily: 'Poppins',
-    fontWeight: '500',
+    fontFamily: 'Poppins_400Regular',
     fontSize: 11,
     lineHeight: 16,
-    color: '#00B14F',
-    opacity: 0.85,
-    flexShrink: 0,
+    color: '#666666',
   },
 });

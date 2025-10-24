@@ -13,7 +13,7 @@ import {
   Animated,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiService } from '@/services/api.service';
 import { Shimmer } from '@/components/Shimmer';
@@ -136,6 +136,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   onBack,
 }) => {
   const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, checkRestaurantConflict } = useCart();
+  const insets = useSafeAreaInsets();
   const [menuSections, setMenuSections] = useState<MenuSection[]>([]);
   const [restaurantData, setRestaurantData] = useState<any>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
@@ -940,7 +941,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         </SafeAreaView>
 
         {/* Menu Sections */}
-        <View style={[styles.menuContent, totalCartItems > 0 && styles.menuContentWithCart]}>
+        <View style={[
+          styles.menuContent,
+          totalCartItems > 0 && {
+            paddingBottom: 120 + Math.max(insets.bottom, 0)
+          }
+        ]}>
         {isLoading ? (
           // Show shimmer loading cards while data is loading
           <View style={styles.loadingMenuContainer}>
