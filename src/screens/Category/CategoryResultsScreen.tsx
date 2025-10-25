@@ -15,11 +15,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { apiService } from '@/services/api.service';
+import { API_CONFIG } from '@/config/api.config';
+import { Shimmer } from '@/components/Shimmer';
+import { RestaurantCard } from '@/components/RestaurantCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+interface CategoryItem {
+  id: number | string;
+  name: string;
+  description?: string;
+  icon?: any;
+}
+
 interface CategoryResultsScreenProps {
   categoryName: string;
+  categories?: CategoryItem[];
   onBack?: () => void;
   onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
 }
@@ -49,82 +60,69 @@ interface RestaurantItem {
   isFavorite: boolean;
 }
 
-const CATEGORIES = ['Explore', 'Briyani', 'South Indian', 'Pizza', 'Burger', 'Cakes'];
+// Fallback categories if none provided
+const FALLBACK_CATEGORIES = ['Biryani', 'South Indian', 'Pizza', 'Burger', 'Cakes'];
 
-const TOP_RATED_DATA: TopRatedItem[] = [
-  {
-    id: '1',
-    name: 'Dindigul Thalapka..',
-    rating: 4.5,
-    deliveryTime: '10 - 15 mins',
-    image: require('@/assets/biriyani.png'),
-  },
-  {
-    id: '2',
-    name: 'Moihaideen Bri...',
-    rating: 4.5,
-    deliveryTime: '20 - 25 mins',
-    image: require('@/assets/biriyani.png'),
-  },
-  {
-    id: '3',
-    name: 'Sharief Briyani',
-    rating: 4.5,
-    deliveryTime: '20 - 25 mins',
-    image: require('@/assets/biriyani.png'),
-  },
-];
+// Shimmer Restaurant Card Component - Matching HomeScreen style
+const ShimmerRestaurantCard = () => (
+  <View style={styles.restaurantCardShimmer}>
+    {/* Left Side - Image Shimmer */}
+    <Shimmer width={130} height={160} borderRadius={16} backgroundColor="#E8E8E8" style={styles.restaurantImageShimmer} />
 
-const RESTAURANT_DATA: RestaurantItem[] = [
-  {
-    id: '1',
-    name: 'Dinidigul Thalapakatti',
-    cuisine: 'Burgers, Pizza, Chicken Wings Rolls & Wrap',
-    rating: 4.5,
-    deliveryTime: '10 - 15 mins',
-    location: 'Keelkattalai',
-    distance: '0.5Kms',
-    image: require('@/assets/biriyani.png'),
-    isFavorite: false,
-  },
-  {
-    id: '2',
-    name: 'Dominoz',
-    cuisine: 'Burgers, Pizza, Chicken Wings Rolls & Wrap',
-    rating: 4.5,
-    deliveryTime: '10 - 15 mins',
-    location: 'Keelkattalai',
-    distance: '0.5Kms',
-    image: require('@/assets/biriyani.png'),
-    isFavorite: false,
-  },
-  {
-    id: '3',
-    name: 'KFC',
-    cuisine: 'Burgers, Pizza, Chicken Wings Rolls & Wrap',
-    rating: 4.5,
-    deliveryTime: '10 - 15 mins',
-    location: 'Keelkattalai',
-    distance: '0.5Kms',
-    image: require('@/assets/biriyani.png'),
-    isFavorite: false,
-  },
-];
+    {/* Right Side - Details Shimmer */}
+    <View style={styles.restaurantDetailsShimmer}>
+      {/* Pure Veg Badge */}
+      <Shimmer width={80} height={18} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+
+      {/* Restaurant Name */}
+      <Shimmer width="90%" height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+
+      {/* Rating and Delivery Time */}
+      <Shimmer width="70%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+
+      {/* Cuisine */}
+      <Shimmer width="85%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+
+      {/* Location and Distance */}
+      <Shimmer width="60%" height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+    </View>
+  </View>
+);
+
+// Shimmer Top Rated Card Component
+const ShimmerTopRatedCard = () => (
+  <View style={styles.topRatedCard}>
+    {/* Image Shimmer */}
+    <View style={styles.topRatedImageContainer}>
+      <Shimmer width={140} height={139} borderRadius={20} backgroundColor="#E8E8E8" />
+    </View>
+    {/* Info Shimmer */}
+    <View style={styles.topRatedInfo}>
+      {/* Name */}
+      <Shimmer width={100} height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+      {/* Delivery Time */}
+      <Shimmer width={80} height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+    </View>
+  </View>
+);
+
 
 export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
   categoryName,
+  categories,
   onBack,
   onNavigateToRestaurant,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(categoryName);
   const [restaurants, setRestaurants] = useState<RestaurantItem[]>([]);
+  const [topRatedRestaurants, setTopRatedRestaurants] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch restaurants data from API
-  useEffect(() => {
-    fetchRestaurants();
-  }, [selectedCategory]);
+  // Use provided categories or fallback
+  const displayCategories = categories && categories.length > 0
+    ? categories.filter(cat => cat.name !== 'View All').map(cat => cat.name)
+    : FALLBACK_CATEGORIES;
 
   const fetchRestaurants = async () => {
     try {
@@ -136,29 +134,79 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
       const radius = 5;
 
       const query = selectedCategory.toLowerCase();
+      const apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`;
+      const fullUrl = `${API_CONFIG.BASE_URL}${apiEndpoint}`;
 
-      const response = await apiService.get(
-        `/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`
-      );
+      console.log(`\n📍 Category API Call: ${selectedCategory}`);
+      console.log(`🔗 Full URL: ${fullUrl}`);
+      console.log(`📋 Query: ${query} | Lat: ${lat} | Lng: ${lng} | Radius: ${radius}km`);
+
+      const response = await apiService.get(apiEndpoint);
+
+      console.log(`✅ Response Success: ${response.data?.success}`);
+      console.log(`📊 Restaurants Found: ${response.data?.data?.restaurants?.length || 0}`);
+      console.log(`🌟 Top Rated Restaurants: ${response.data?.data?.top_rated_restaurants?.length || 0}`);
 
       if (response.data?.success && response.data?.data?.restaurants) {
+        // Transform API data to match RestaurantCard interface
         const restaurantsData = response.data.data.restaurants.map((restaurant: any) => ({
-          ...restaurant,
+          id: restaurant.id,
+          name: restaurant.name,
+          cuisine: restaurant.description || 'Restaurant',
+          rating: restaurant.rating || 0,
+          deliveryTime: restaurant.delivery_time || '25-30 mins',
+          location: restaurant.location,
+          distance: restaurant.distance ? `${restaurant.distance.toFixed(1)}Kms` : '0Kms',
+          image: restaurant.logo_url || restaurant.image,
           isFavorite: false,
+          isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
         }));
+
+        console.log(`📝 Restaurant List:`);
+        restaurantsData.slice(0, 5).forEach((r: any, i: number) => {
+          console.log(`   ${i + 1}. ${r.name} (ID: ${r.id})`);
+        });
+        if (restaurantsData.length > 5) {
+          console.log(`   ... and ${restaurantsData.length - 5} more`);
+        }
+        console.log(''); // Empty line for readability
+
         setRestaurants(restaurantsData);
+
+        // Handle top rated restaurants if available
+        if (response.data?.data?.top_rated_restaurants && response.data.data.top_rated_restaurants.length > 0) {
+          const topRatedData = response.data.data.top_rated_restaurants.map((restaurant: any) => ({
+            id: restaurant.id.toString(),
+            name: restaurant.name,
+            rating: restaurant.rating || 0,
+            deliveryTime: restaurant.delivery_time || '25-30 mins',
+            image: restaurant.logo_url,
+          }));
+          setTopRatedRestaurants(topRatedData);
+          console.log(`🌟 Top Rated List: ${topRatedData.map((r: any) => r.name).join(', ')}\n`);
+        } else {
+          setTopRatedRestaurants([]);
+        }
+      } else {
+        console.log(`⚠️ No restaurants found or API failed\n`);
+        setRestaurants([]);
+        setTopRatedRestaurants([]);
       }
     } catch (error) {
+      console.error('Error fetching restaurants:', error);
+      setRestaurants([]);
+      setTopRatedRestaurants([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const toggleFavorite = (id: number) => {
-    setRestaurants(prev =>
-      prev.map(r => (r.id === id ? { ...r, isFavorite: !r.isFavorite } : r))
-    );
-  };
+
+  // Fetch restaurants data from API
+  useEffect(() => {
+    fetchRestaurants();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory]);
 
   return (
     <View style={styles.outerContainer}>
@@ -193,84 +241,71 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           </View>
         </View>
 
-        {/* Explore + Categories Section with Images */}
+        {/* Categories Section with Images */}
         <View style={styles.categorySection}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoryScroll}
           >
-            {CATEGORIES.map((category, index) => {
+            {displayCategories.map((category, index) => {
               // Map category names to their images
               const categoryImages: { [key: string]: any } = {
-                'Briyani': require('@/assets/biriyani.png'),
+                'Biryani': require('@/assets/biriyani.png'),
                 'South Indian': require('@/assets/idlies.png'),
                 'Pizza': require('@/assets/pizza.png'),
                 'Burger': require('@/assets/burger.png'),
+                'Cakes': require('@/assets/cake.png'),
               };
 
+              // Find the category object to get icon
+              const categoryObj = categories?.find(cat => cat.name === category);
+
+              // Determine the image source - use API icon if available, otherwise fallback to local
+              let imageSource;
+              if (categoryObj?.icon) {
+                // Check if icon is a string (URL) or a require() object
+                if (typeof categoryObj.icon === 'string') {
+                  imageSource = { uri: categoryObj.icon };
+                } else {
+                  imageSource = categoryObj.icon;
+                }
+              } else {
+                // Fallback to local images
+                imageSource = categoryImages[category];
+              }
+
               return (
-                <View key={category} style={styles.categoryItemWrapper}>
-                  {index === 0 ? (
-                    // Explore button with arrow icon
-                    <TouchableOpacity
-                      style={styles.exploreButton}
-                      onPress={() => setSelectedCategory(category)}
+                <View key={`${category}-${index}`} style={styles.categoryItemWrapper}>
+                  <TouchableOpacity
+                    onPress={() => setSelectedCategory(category)}
+                    style={styles.categoryItem}
+                  >
+                    {imageSource && (
+                      <Image
+                        source={imageSource}
+                        style={styles.categoryFoodImage}
+                        resizeMode="contain"
+                      />
+                    )}
+                    <Text
+                      style={[
+                        styles.categoryText,
+                        selectedCategory === category && styles.selectedCategoryText,
+                      ]}
                     >
-                      <View style={styles.exploreIconContainer}>
-                        <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
-                      </View>
-                      <Text style={styles.categoryText}>{category}</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    // Regular category with image above
-                    <TouchableOpacity
-                      onPress={() => setSelectedCategory(category)}
-                      style={styles.categoryItem}
-                    >
-                      {categoryImages[category] && (
-                        <Image
-                          source={categoryImages[category]}
-                          style={styles.categoryFoodImage}
-                          resizeMode="contain"
-                        />
-                      )}
-                      <Text
-                        style={[
-                          styles.categoryText,
-                          selectedCategory === category && styles.selectedCategoryText,
-                        ]}
-                      >
-                        {category}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+                      {category}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               );
             })}
           </ScrollView>
         </View>
 
-        {/* Line with selected category indicator */}
+        {/* Line separator */}
         <View style={styles.lineContainer}>
           <View style={styles.fullLine} />
-          <View
-            style={[
-              styles.selectedLine,
-              {
-                left:
-                  selectedCategory === 'Briyani'
-                    ? 90
-                    : selectedCategory === 'South Indian'
-                    ? 157
-                    : selectedCategory === 'Pizza'
-                    ? 262
-                    : selectedCategory === 'Burger'
-                    ? 344
-                    : 90,
-              },
-            ]}
-          />
         </View>
 
         {/* Filter Buttons */}
@@ -297,51 +332,80 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Top Rated Section */}
-        <View style={styles.sectionTitleContainer}>
-          <LinearGradient
-            colors={['rgba(0, 0, 0, 0)', '#000000']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.sectionTitleLine}
-          />
-          <Text style={styles.sectionTitle}>Top Rated</Text>
-          <LinearGradient
-            colors={['#000000', 'rgba(0, 0, 0, 0)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.sectionTitleLine}
-          />
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.topRatedScroll}
-        >
-          {TOP_RATED_DATA.map(item => (
-            <View key={item.id} style={styles.topRatedCard}>
-              <View style={styles.topRatedImageContainer}>
-                <Image source={item.image} style={styles.topRatedImage} resizeMode="cover" />
-                <View style={styles.topRatedRatingBadge}>
-                  <MaterialIcons name="star" size={10} color="#00B14F" />
-                  <Text style={styles.topRatedRatingText}>{item.rating}</Text>
-                </View>
-              </View>
-              <View style={styles.topRatedInfo}>
-                <View style={styles.topRatedNameRow}>
-                  <Text style={styles.topRatedName} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                </View>
-                <View style={styles.topRatedDeliveryRow}>
-                  <MaterialIcons name="two-wheeler" size={15} color="#00B14F" />
-                  <Text style={styles.topRatedDeliveryText}>{item.deliveryTime}</Text>
-                </View>
-              </View>
+        {/* Top Rated Section - Show shimmer while loading, show data if available, hide if no data */}
+        {isLoading || topRatedRestaurants.length > 0 ? (
+          <>
+            <View style={styles.sectionTitleContainer}>
+              <LinearGradient
+                colors={['rgba(0, 0, 0, 0)', '#000000']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.sectionTitleLine}
+              />
+              <Text style={styles.sectionTitle}>Top Rated</Text>
+              <LinearGradient
+                colors={['#000000', 'rgba(0, 0, 0, 0)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.sectionTitleLine}
+              />
             </View>
-          ))}
-        </ScrollView>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.topRatedScroll}
+            >
+              {isLoading ? (
+                // Show 5 shimmer cards while loading
+                <>
+                  <ShimmerTopRatedCard />
+                  <ShimmerTopRatedCard />
+                  <ShimmerTopRatedCard />
+                  <ShimmerTopRatedCard />
+                  <ShimmerTopRatedCard />
+                </>
+              ) : (
+                // Show actual data
+                topRatedRestaurants.map(item => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.topRatedCard}
+                    onPress={() => {
+                      if (onNavigateToRestaurant) {
+                        onNavigateToRestaurant(parseInt(item.id), item.name);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.topRatedImageContainer}>
+                      <Image
+                        source={typeof item.image === 'string' ? { uri: item.image } : item.image}
+                        style={styles.topRatedImage}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.topRatedRatingBadge}>
+                        <MaterialIcons name="star" size={10} color="#00B14F" />
+                        <Text style={styles.topRatedRatingText}>{item.rating}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.topRatedInfo}>
+                      <View style={styles.topRatedNameRow}>
+                        <Text style={styles.topRatedName} numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                      </View>
+                      <View style={styles.topRatedDeliveryRow}>
+                        <MaterialIcons name="two-wheeler" size={15} color="#00B14F" />
+                        <Text style={styles.topRatedDeliveryText}>{item.deliveryTime}</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          </>
+        ) : null}
 
         {/* Restaurants Near You Section */}
         <View style={styles.sectionTitleContainer}>
@@ -362,81 +426,27 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
 
         <View style={styles.restaurantList}>
           {isLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#00B14F" />
-              <Text style={styles.loadingText}>Loading restaurants...</Text>
-            </View>
+            <>
+              <ShimmerRestaurantCard />
+              <ShimmerRestaurantCard />
+              <ShimmerRestaurantCard />
+            </>
           ) : restaurants.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No restaurants found</Text>
             </View>
           ) : (
             restaurants.map(restaurant => (
-              <TouchableOpacity
-                key={restaurant.id}
-                style={styles.restaurantCard}
-                onPress={() => {
-                  if (onNavigateToRestaurant) {
-                    onNavigateToRestaurant(restaurant.id, restaurant.name);
-                  }
-                }}
-                activeOpacity={0.9}
-              >
-                {/* Image Section */}
-                <View style={styles.restaurantImageContainer}>
-                  <Image
-                    source={{ uri: restaurant.logo_url }}
-                    style={styles.restaurantImage}
-                    resizeMode="cover"
-                  />
-                  {/* Favorite Button */}
-                  <TouchableOpacity
-                    style={styles.favoriteButton}
-                    onPress={() => toggleFavorite(restaurant.id)}
-                  >
-                    <MaterialIcons
-                      name={restaurant.isFavorite ? 'favorite' : 'favorite-border'}
-                      size={17}
-                      color="#FFFFFF"
-                    />
-                  </TouchableOpacity>
-                  {/* Delivery Time Badge */}
-                  <View style={styles.deliveryBadge}>
-                    <MaterialIcons name="two-wheeler" size={15} color="#000080" />
-                    <Text style={styles.deliveryBadgeText}>{restaurant.delivery_time}</Text>
-                  </View>
-                </View>
-
-                {/* Details Section */}
-                <View style={styles.restaurantDetails}>
-                  <View style={styles.restaurantTopRow}>
-                    <View style={styles.restaurantInfo}>
-                      <Text style={styles.restaurantName} numberOfLines={1}>
-                        {restaurant.name}
-                      </Text>
-                      <Text style={styles.restaurantCuisine} numberOfLines={2}>
-                        {restaurant.description}
-                      </Text>
-                    </View>
-                    <View style={styles.ratingBadge}>
-                      <MaterialIcons name="star" size={14} color="#00B14F" />
-                      <Text style={styles.ratingText}>{restaurant.rating || '0'}</Text>
-                    </View>
-                  </View>
-
-                  {/* Dotted Divider */}
-                  <View style={styles.dividerContainer}>
-                    {Array.from({ length: 30 }).map((_, index) => (
-                      <View key={index} style={styles.dash} />
-                    ))}
-                  </View>
-
-                  <View style={styles.restaurantBottomRow}>
-                    <Text style={styles.locationText}>{restaurant.location.locality}</Text>
-                    <Text style={styles.distanceText}>{restaurant.distance.toFixed(1)}Kms</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
+              <View key={restaurant.id} style={styles.restaurantCardWrapper}>
+                <RestaurantCard
+                  restaurant={restaurant}
+                  onPress={() => {
+                    if (onNavigateToRestaurant) {
+                      onNavigateToRestaurant(restaurant.id, restaurant.name);
+                    }
+                  }}
+                />
+              </View>
             ))
           )}
         </View>
@@ -715,143 +725,28 @@ const styles = StyleSheet.create({
   // Restaurant List
   restaurantList: {
     paddingHorizontal: 20,
-    gap: 22,
     paddingBottom: 20,
   },
-  restaurantCard: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 2,
-    borderRadius: 20,
+  restaurantCardWrapper: {
+    marginBottom: 10,
   },
-  restaurantImageContainer: {
+  restaurantCardShimmer: {
+    flexDirection: 'row',
     width: '100%',
-    height: 124,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    height: 160,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     overflow: 'hidden',
-    position: 'relative',
+    marginBottom: 10,
   },
-  restaurantImage: {
-    width: '100%',
-    height: '100%',
+  restaurantImageShimmer: {
+    borderRadius: 16,
   },
-  favoriteButton: {
-    position: 'absolute',
-    top: 6,
-    right: 9,
-    width: 25,
-    height: 25,
-    borderRadius: 13,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deliveryBadge: {
-    position: 'absolute',
-    top: 0,
-    left: 23,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    gap: 4,
-    backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 6,
-    borderBottomRightRadius: 6,
-  },
-  deliveryBadgeText: {
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    fontSize: 10,
-    lineHeight: 15,
-    color: '#000080',
-    opacity: 0.85,
-  },
-  restaurantDetails: {
-    padding: 10,
-    gap: 10,
-  },
-  restaurantTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  restaurantInfo: {
+  restaurantDetailsShimmer: {
     flex: 1,
-    gap: 2,
-  },
-  restaurantName: {
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-    fontSize: 18,
-    lineHeight: 27,
-    textAlign: 'left',
-    color: '#000000',
-    opacity: 0.85,
-  },
-  restaurantCuisine: {
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 12,
-    lineHeight: 18,
-    color: 'rgba(0, 0, 0, 0.5)',
-    opacity: 0.85,
-  },
-  ratingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    gap: 4,
-    backgroundColor: 'rgba(0, 128, 74, 0.1)',
-    borderRadius: 13,
-  },
-  ratingText: {
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#00B14F',
-    opacity: 0.85,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    alignSelf: 'stretch',
-    height: 1,
-  },
-  dash: {
-    width: 8,
-    height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  restaurantBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  locationText: {
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 13,
-    lineHeight: 20,
-    color: 'rgba(0, 0, 0, 0.5)',
-    opacity: 0.85,
-  },
-  distanceText: {
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    fontSize: 13,
-    lineHeight: 20,
-    color: '#00B14F',
-    opacity: 0.85,
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
   },
   loadingContainer: {
     flex: 1,

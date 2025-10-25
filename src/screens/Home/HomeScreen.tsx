@@ -13,6 +13,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ViewCartBar } from '@/components/ViewCartBar';
 import { useCart } from '@/context/CartContext';
+import { useVegMode } from '@/context/VegModeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -24,6 +25,7 @@ interface HomeScreenProps {
   onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
   onNavigateToSearch?: () => void;
   selectedLocation?: { name: string; address: string };
+  onCategoriesLoaded?: (categories: CategoryItem[]) => void;
 }
 
 interface CarouselItem {
@@ -151,9 +153,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToCategory,
   onNavigateToRestaurant,
   onNavigateToSearch,
-  selectedLocation: externalSelectedLocation
+  selectedLocation: externalSelectedLocation,
+  onCategoriesLoaded
 }) => {
   const { restaurantId, restaurantName, restaurantLogo, getTotalItems } = useCart();
+  const { vegMode, setVegMode, isVegModeEnabled } = useVegMode();
   const insets = useSafeAreaInsets();
   const totalCartItems = getTotalItems();
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
@@ -178,13 +182,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showBannerShimmer, setShowBannerShimmer] = React.useState(true);
   const [showCategoryShimmer, setShowCategoryShimmer] = React.useState(true);
   const [showRestaurantShimmer, setShowRestaurantShimmer] = React.useState(true);
-  const [isVegMode, setIsVegMode] = React.useState(false);
-  const [tempVegSelection, setTempVegSelection] = React.useState<'all' | 'veg'>('all');
+  const [tempVegSelection, setTempVegSelection] = React.useState<'pure' | 'all'>('pure');
   const [selectedLocation, setSelectedLocation] = React.useState(externalSelectedLocation || { name: DEFAULT_LOCATION.name, address: DEFAULT_LOCATION.address });
   const [isCategorySectionSticky, setIsCategorySectionSticky] = React.useState(false);
   const flatListRef = React.useRef<FlatList>(null);
   const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
   const [hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
+  const isInitialVegModeLoad = React.useRef(true);
 
   // Update local state when external selectedLocation changes
   React.useEffect(() => {
@@ -336,6 +340,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [hasShownLocationModal, hasDefaultAddress, isLoadingLocation]);
 
+  // Reload home data when veg mode changes
+  React.useEffect(() => {
+    // Skip initial load when vegMode is loaded from storage
+    if (isInitialVegModeLoad.current) {
+      isInitialVegModeLoad.current = false;
+      return;
+    }
+
+    // Reload data with current coordinates when veg mode changes
+    const coords = defaultAddressCoords || { latitude: DEFAULT_LOCATION.latitude, longitude: DEFAULT_LOCATION.longitude };
+    fetchHomeData(coords.latitude, coords.longitude);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vegMode]);
+
   const handleAllowLocation = async () => {
     // Prevent multiple simultaneous permission requests
     if (isRequestingPermission.current) {
@@ -413,12 +431,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const handleVegModeToggle = () => {
-    setTempVegSelection(isVegMode ? 'veg' : 'all');
-    setShowVegModePopup(true);
+    if (isVegModeEnabled) {
+      // Turning OFF - directly disable without showing popup
+      setVegMode('off');
+    } else {
+      // Turning ON - show popup to choose between 'pure' or 'all'
+      setTempVegSelection('pure');
+      setShowVegModePopup(true);
+    }
   };
 
   const handleApplyVegMode = () => {
-    setIsVegMode(tempVegSelection === 'veg');
+    setVegMode(tempVegSelection);
     setShowVegModePopup(false);
   };
 
@@ -464,7 +488,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       const lat = latitude ?? DEFAULT_LOCATION.latitude;
       const lng = longitude ?? DEFAULT_LOCATION.longitude;
 
-      const response = await homeService.getHomeData(lat, lng);
+      const response = await homeService.getHomeData(lat, lng, vegMode);
 
         if (response.success && response.data) {
           // The API returns data nested as: { data: { data: { promotional_banner: {...} } } }
@@ -509,8 +533,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               }
             ];
             setCategoryData(categoriesWithViewAll);
+            onCategoriesLoaded?.(categoriesWithViewAll);
           } else {
             setCategoryData(fallbackCategoryData);
+            onCategoriesLoaded?.(fallbackCategoryData);
           }
 
           // Handle restaurants - use fallback if empty or undefined
@@ -536,18 +562,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         } else {
           setCarouselData(fallbackCarouselData);
           setCategoryData(fallbackCategoryData);
+          onCategoriesLoaded?.(fallbackCategoryData);
           setRestaurantData(fallbackRestaurantData);
         }
       } catch (error) {
         setCarouselData(fallbackCarouselData);
         setCategoryData(fallbackCategoryData);
+        onCategoriesLoaded?.(fallbackCategoryData);
         setRestaurantData(fallbackRestaurantData);
       } finally {
         setIsLoadingBanners(false);
         setIsLoadingCategories(false);
         setIsLoadingRestaurants(false);
       }
-  }, []);
+  }, [vegMode]);
 
   const handleLogout = async () => {
     Alert.alert(
@@ -789,8 +817,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 testID="veg-mode-toggle"
               >
                 <Text style={styles.vegModeLabel}>VEG{'\n'}MODE</Text>
-                <View style={[styles.vegToggle, isVegMode && styles.vegToggleActive]}>
-                  <View style={[styles.vegToggleThumb, isVegMode && styles.vegToggleThumbActive]} />
+                <View style={[styles.vegToggle, isVegModeEnabled && styles.vegToggleActive]}>
+                  <View style={[styles.vegToggleThumb, isVegModeEnabled && styles.vegToggleThumbActive]} />
                 </View>
               </TouchableOpacity>
             </>
@@ -1005,16 +1033,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       onNavigateToRestaurant(restaurant.id, restaurant.name);
                     }
                   }}
-                  onFavoriteToggle={() => {
-                    // Handle favorite toggle
-                    setRestaurantData(prev =>
-                      prev.map(r =>
-                        r.id === restaurant.id
-                          ? { ...r, isFavorite: !r.isFavorite }
-                          : r
-                      )
-                    );
-                  }}
                   onImageLoad={() => {
                     setLoadedRestaurantImages(prev => new Set(prev).add(restaurant.id.toString()));
                   }}
@@ -1089,7 +1107,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         >
           <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
             <View style={styles.vegModalContent}>
-              {/* All Restaurants Option */}
+              {/* Pure Veg Option - Only veg restaurants */}
+              <TouchableOpacity
+                style={styles.vegOption}
+                onPress={() => setTempVegSelection('pure')}
+                testID="veg-option-pure"
+              >
+                <View style={styles.radioButton}>
+                  {tempVegSelection === 'pure' && <View style={styles.radioButtonSelected} />}
+                </View>
+                <Text style={styles.vegOptionText}>Pure Veg</Text>
+              </TouchableOpacity>
+
+              {/* All Option - All restaurants but only veg items */}
               <TouchableOpacity
                 style={styles.vegOption}
                 onPress={() => setTempVegSelection('all')}
@@ -1098,19 +1128,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <View style={styles.radioButton}>
                   {tempVegSelection === 'all' && <View style={styles.radioButtonSelected} />}
                 </View>
-                <Text style={styles.vegOptionText}>All Restaurants</Text>
-              </TouchableOpacity>
-
-              {/* Pure Veg Option */}
-              <TouchableOpacity
-                style={styles.vegOption}
-                onPress={() => setTempVegSelection('veg')}
-                testID="veg-option-veg"
-              >
-                <View style={styles.radioButton}>
-                  {tempVegSelection === 'veg' && <View style={styles.radioButtonSelected} />}
-                </View>
-                <Text style={styles.vegOptionText}>Pure Veg</Text>
+                <Text style={styles.vegOptionText}>All (Veg Items)</Text>
               </TouchableOpacity>
 
               {/* Apply Button */}

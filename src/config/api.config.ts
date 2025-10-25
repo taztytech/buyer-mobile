@@ -34,6 +34,10 @@ export const API_CONFIG = {
     // Buyer endpoints
     BUYER: {
       HOME: '/api/buyer/home',
+      SEARCH: '/api/buyer/search',
+      FAVORITES_RESTAURANTS: '/api/buyer/favorites/restaurants',
+      FAVORITES_ITEMS: '/api/buyer/favorites/items',
+      FAVORITES_ALL: '/api/buyer/favorites/all',
     },
     // Add more endpoint groups as needed
   },

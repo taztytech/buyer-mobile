@@ -25,6 +25,8 @@ import { OrderDetailsScreen } from '@/screens/Order/OrderDetailsScreen';
 import { OrderSuccessScreen } from '@/screens/Order/OrderSuccessScreen';
 import { SearchScreen } from './SearchScreen';
 import { useCart } from '@/context/CartContext';
+import { useVegMode } from '@/context/VegModeContext';
+import { favoritesService } from '@/services/favorites.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -44,6 +46,7 @@ interface MenuItem {
   isSpicy: boolean;
   isBestSeller: boolean;
   isCustomizable: boolean;
+  isFavorite?: boolean;
 }
 
 interface MenuSection {
@@ -136,6 +139,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   onBack,
 }) => {
   const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, checkRestaurantConflict } = useCart();
+  const { vegMode } = useVegMode();
   const insets = useSafeAreaInsets();
   const [menuSections, setMenuSections] = useState<MenuSection[]>([]);
   const [restaurantData, setRestaurantData] = useState<any>(null);
@@ -163,6 +167,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const [activeDietaryFilter, setActiveDietaryFilter] = useState<'veg' | 'non-veg' | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showOrderSuccess, setShowOrderSuccess] = useState(false);
+  const [togglingFavoriteItemId, setTogglingFavoriteItemId] = useState<string | null>(null);
 
   const scrollViewRef = React.useRef<ScrollView>(null);
   const sectionRefs = React.useRef<{ [key: string]: View | null }>({});
@@ -184,6 +189,72 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   // Handle image load
   const handleImageLoad = (itemId: string) => {
     setLoadedImages(prev => new Set(prev).add(itemId));
+  };
+
+  // Handle favorite toggle for menu items
+  const handleToggleFavoriteItem = async (sectionId: string, itemId: string) => {
+    if (togglingFavoriteItemId === itemId) return; // Prevent multiple simultaneous calls
+
+    setTogglingFavoriteItemId(itemId);
+
+    // Find the item to get its current favorite state
+    const section = menuSections.find(s => s.id === sectionId);
+    const item = section?.items.find(i => i.id === itemId);
+    const previousState = item?.isFavorite || false;
+
+    // Optimistic update
+    setMenuSections(prev =>
+      prev.map(section =>
+        section.id === sectionId
+          ? {
+              ...section,
+              items: section.items.map(item =>
+                item.id === itemId ? { ...item, isFavorite: !item.isFavorite } : item
+              ),
+            }
+          : section
+      )
+    );
+
+    try {
+      const response = await favoritesService.toggleFavoriteItem(itemId);
+
+      if (!response.success) {
+        // Revert on failure
+        setMenuSections(prev =>
+          prev.map(section =>
+            section.id === sectionId
+              ? {
+                  ...section,
+                  items: section.items.map(item =>
+                    item.id === itemId ? { ...item, isFavorite: previousState } : item
+                  ),
+                }
+              : section
+          )
+        );
+        console.error('Failed to toggle favorite item:', response.error);
+      } else {
+        console.log(`✅ Favorite item toggled: ${item?.name} - ${!previousState ? 'Added' : 'Removed'}`);
+      }
+    } catch (error) {
+      // Revert on error
+      setMenuSections(prev =>
+        prev.map(section =>
+          section.id === sectionId
+            ? {
+                ...section,
+                items: section.items.map(item =>
+                  item.id === itemId ? { ...item, isFavorite: previousState } : item
+                ),
+              }
+            : section
+        )
+      );
+      console.error('Error toggling favorite item:', error);
+    } finally {
+      setTogglingFavoriteItemId(null);
+    }
   };
 
   // Get total quantity for an item (works for both customizable and non-customizable)
@@ -549,21 +620,31 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
   };
 
-  // Get filtered menu sections based on active dietary filter
+  // Get filtered menu sections based on active dietary filter and global veg mode
   const getFilteredMenuSections = (): MenuSection[] => {
-    if (!activeDietaryFilter) {
-      return menuSections;
-    }
-
     return menuSections
       .map(section => ({
         ...section,
         items: section.items.filter(item => {
-          if (activeDietaryFilter === 'veg') {
-            return item.isVeg === true;
-          } else if (activeDietaryFilter === 'non-veg') {
-            return item.isVeg === false;
+          // First apply global veg mode filter
+          if (vegMode === 'all') {
+            // When veg mode is 'all', show only veg items
+            if (!item.isVeg) {
+              return false;
+            }
           }
+          // vegMode 'pure' is handled at restaurant level (API filters restaurants)
+          // vegMode 'off' shows everything
+
+          // Then apply local dietary filter if active
+          if (activeDietaryFilter) {
+            if (activeDietaryFilter === 'veg') {
+              return item.isVeg === true;
+            } else if (activeDietaryFilter === 'non-veg') {
+              return item.isVeg === false;
+            }
+          }
+
           return true;
         })
       }))
@@ -1054,8 +1135,20 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
                   {/* Like and Share Buttons */}
                   <View style={styles.itemActions}>
-                    <TouchableOpacity style={styles.actionButton}>
-                      <MaterialIcons name="favorite-border" size={17} color="rgba(0, 0, 0, 0.5)" />
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleToggleFavoriteItem(section.id, item.id)}
+                      disabled={togglingFavoriteItemId === item.id}
+                    >
+                      {togglingFavoriteItemId === item.id ? (
+                        <ActivityIndicator size="small" color="rgba(0, 0, 0, 0.5)" />
+                      ) : (
+                        <MaterialIcons
+                          name={item.isFavorite ? 'favorite' : 'favorite-border'}
+                          size={17}
+                          color={item.isFavorite ? '#FF0000' : 'rgba(0, 0, 0, 0.5)'}
+                        />
+                      )}
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionButton}>
                       <MaterialIcons name="share" size={17} color="rgba(0, 0, 0, 0.5)" />

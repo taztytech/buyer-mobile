@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { favoritesService } from '@/services/favorites.service';
 
 export interface Restaurant {
   id: string | number;
@@ -29,6 +30,14 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
   onFavoriteToggle,
   onImageLoad,
 }) => {
+  const [isFavorite, setIsFavorite] = useState(restaurant.isFavorite || false);
+  const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
+
+  // Update internal state when prop changes
+  useEffect(() => {
+    setIsFavorite(restaurant.isFavorite || false);
+  }, [restaurant.isFavorite]);
+
   // Handle location - convert object to string if needed
   const locationText = typeof restaurant.location === 'string'
     ? restaurant.location
@@ -45,6 +54,40 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
     } else {
       // Default fallback
       return restaurant.image;
+    }
+  };
+
+  // Handle favorite toggle with API call
+  const handleFavoriteToggle = async () => {
+    if (isTogglingFavorite) return; // Prevent multiple simultaneous calls
+
+    setIsTogglingFavorite(true);
+
+    // Optimistic update
+    const previousState = isFavorite;
+    setIsFavorite(!isFavorite);
+
+    try {
+      const response = await favoritesService.toggleFavoriteRestaurant(restaurant.id);
+
+      if (!response.success) {
+        // Revert on failure
+        setIsFavorite(previousState);
+        console.error('Failed to toggle favorite:', response.error);
+      } else {
+        console.log(`✅ Favorite toggled for ${restaurant.name}: ${!previousState ? 'Added' : 'Removed'}`);
+      }
+
+      // Call parent callback if provided
+      if (onFavoriteToggle) {
+        onFavoriteToggle();
+      }
+    } catch (error) {
+      // Revert on error
+      setIsFavorite(previousState);
+      console.error('Error toggling favorite:', error);
+    } finally {
+      setIsTogglingFavorite(false);
     }
   };
 
@@ -89,14 +132,19 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
         {/* Heart Button Overlay */}
         <TouchableOpacity
           style={styles.heartButton}
-          onPress={onFavoriteToggle}
+          onPress={handleFavoriteToggle}
+          disabled={isTogglingFavorite}
           testID={`favorite-button-${restaurant.id}`}
         >
-          <MaterialIcons
-            name={restaurant.isFavorite ? 'favorite' : 'favorite-border'}
-            size={24}
-            color={restaurant.isFavorite ? '#FF0000' : '#FFFFFF'}
-          />
+          {isTogglingFavorite ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <MaterialIcons
+              name={isFavorite ? 'favorite' : 'favorite-border'}
+              size={24}
+              color={isFavorite ? '#FF0000' : '#FFFFFF'}
+            />
+          )}
         </TouchableOpacity>
       </View>
 

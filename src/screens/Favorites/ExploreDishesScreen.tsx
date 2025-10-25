@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,12 @@ import {
   ScrollView,
   Image,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { favoritesService } from '@/services/favorites.service';
+import { Shimmer } from '@/components/Shimmer';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PADDING = 20;
@@ -19,123 +22,120 @@ const NUM_COLUMNS = 3;
 // Calculate card width: total available width minus gaps, divided by number of columns
 const CARD_WIDTH = (SCREEN_WIDTH - PADDING * 2 - CARD_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 
-interface DishCategory {
-  id: string;
+interface FavoriteItem {
+  id: string | number;
   name: string;
-  image: any;
+  image: string;
+  restaurant_name?: string;
 }
 
-interface Restaurant {
-  id: string;
+interface FavoriteRestaurant {
+  id: string | number;
   name: string;
-  image: any;
+  logo_url: string;
 }
 
 interface ExploreDishesScreenProps {
   onBack?: () => void;
-  onSelectCategory?: (category: DishCategory) => void;
-  onSelectRestaurant?: (restaurant: Restaurant) => void;
+  onSelectItem?: (item: FavoriteItem) => void;
+  onSelectRestaurant?: (restaurantId: number | string, restaurantName: string) => void;
 }
+
+// Shimmer Card Component
+const ShimmerCard = () => (
+  <View style={styles.dishCard}>
+    <View style={styles.dishImageContainer}>
+      <Shimmer width={CARD_WIDTH - 30} height={60} borderRadius={8} backgroundColor="#E8E8E8" />
+    </View>
+    <View style={styles.dishLabelContainer}>
+      <Shimmer width={CARD_WIDTH - 20} height={16} borderRadius={4} backgroundColor="#E8E8E8" />
+    </View>
+  </View>
+);
 
 export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
   onBack,
-  onSelectCategory,
+  onSelectItem,
   onSelectRestaurant,
 }) => {
-  const dishCategories: DishCategory[] = [
-    {
-      id: '1',
-      name: 'Briyani',
-      image: require('@/assets/biriyani.png'),
-    },
-    {
-      id: '2',
-      name: 'South Indian',
-      image: require('@/assets/idlies.png'),
-    },
-    {
-      id: '3',
-      name: 'Pizza',
-      image: require('@/assets/pizza.png'),
-    },
-    {
-      id: '4',
-      name: 'Burger',
-      image: require('@/assets/burger.png'),
-    },
-    {
-      id: '5',
-      name: 'Cake',
-      image: require('@/assets/cake.png'),
-    },
-    {
-      id: '6',
-      name: 'Idlies',
-      image: require('@/assets/idlies.png'),
-    },
-  ];
+  const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
+  const [favoriteRestaurants, setFavoriteRestaurants] = useState<FavoriteRestaurant[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const favoriteRestaurants: Restaurant[] = [
-    {
-      id: '1',
-      name: 'Zam Zam',
-      image: require('@/assets/dummy-restaurent.png'),
-    },
-    {
-      id: '2',
-      name: 'KFC',
-      image: require('@/assets/dummy-restaurent.png'),
-    },
-    {
-      id: '3',
-      name: 'Dominos',
-      image: require('@/assets/dummy-restaurent.png'),
-    },
-    {
-      id: '4',
-      name: 'Burger King',
-      image: require('@/assets/dummy-restaurent.png'),
-    },
-    {
-      id: '5',
-      name: 'Pizza Hut',
-      image: require('@/assets/dummy-restaurent.png'),
-    },
-    {
-      id: '6',
-      name: 'Subway',
-      image: require('@/assets/dummy-restaurent.png'),
-    },
-  ];
+  useEffect(() => {
+    fetchFavorites();
+  }, []);
 
-  const renderDishCard = (item: DishCategory) => (
+  const fetchFavorites = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const response = await favoritesService.getAllFavorites();
+
+      if (response.success && response.data) {
+        console.log('✅ Favorites loaded successfully');
+
+        // Extract favorite items
+        if (response.data.favorite_items && Array.isArray(response.data.favorite_items)) {
+          setFavoriteItems(response.data.favorite_items);
+          console.log(`📦 Favorite Items: ${response.data.favorite_items.length}`);
+        }
+
+        // Extract favorite restaurants
+        if (response.data.favorite_restaurants && Array.isArray(response.data.favorite_restaurants)) {
+          setFavoriteRestaurants(response.data.favorite_restaurants);
+          console.log(`🏪 Favorite Restaurants: ${response.data.favorite_restaurants.length}`);
+        }
+      } else {
+        setError(response.error || 'Failed to load favorites');
+        console.error('❌ Failed to load favorites:', response.error);
+      }
+    } catch (error) {
+      setError('An error occurred while loading favorites');
+      console.error('Error fetching favorites:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const renderItemCard = (item: FavoriteItem) => (
     <TouchableOpacity
       key={item.id}
       style={styles.dishCard}
-      onPress={() => onSelectCategory && onSelectCategory(item)}
+      onPress={() => onSelectItem && onSelectItem(item)}
       activeOpacity={0.7}
     >
       <View style={styles.dishImageContainer}>
-        <Image source={item.image} style={styles.dishImage} />
+        <Image
+          source={{ uri: item.image }}
+          style={styles.dishImage}
+          resizeMode="contain"
+        />
       </View>
       <View style={styles.dishLabelContainer}>
-        <Text style={styles.dishName}>{item.name}</Text>
+        <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
       </View>
     </TouchableOpacity>
   );
 
-  const renderRestaurantCard = (item: Restaurant) => (
+  const renderRestaurantCard = (item: FavoriteRestaurant) => (
     <TouchableOpacity
       key={item.id}
       style={styles.dishCard}
-      onPress={() => onSelectRestaurant && onSelectRestaurant(item)}
+      onPress={() => onSelectRestaurant && onSelectRestaurant(item.id, item.name)}
       activeOpacity={0.7}
     >
       <View style={styles.dishImageContainer}>
-        <Image source={item.image} style={styles.dishImage} />
+        <Image
+          source={{ uri: item.logo_url }}
+          style={styles.dishImage}
+          resizeMode="contain"
+        />
       </View>
       <View style={styles.dishLabelContainer}>
-        <Text style={styles.dishName}>{item.name}</Text>
+        <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -159,21 +159,70 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Favorite Food Items Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Favorite Food Items</Text>
-            <View style={styles.gridContainer}>
-              {dishCategories.map((item) => renderDishCard(item))}
-            </View>
-          </View>
+          {isLoading ? (
+            <>
+              {/* Shimmer for Favorite Items */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Favorite Food Items</Text>
+                <View style={styles.gridContainer}>
+                  {[1, 2, 3, 4, 5, 6].map((item) => (
+                    <ShimmerCard key={`item-shimmer-${item}`} />
+                  ))}
+                </View>
+              </View>
 
-          {/* Favorite Restaurants Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Favorite Restaurants</Text>
-            <View style={styles.gridContainer}>
-              {favoriteRestaurants.map((item) => renderRestaurantCard(item))}
+              {/* Shimmer for Favorite Restaurants */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Favorite Restaurants</Text>
+                <View style={styles.gridContainer}>
+                  {[1, 2, 3, 4, 5, 6].map((item) => (
+                    <ShimmerCard key={`restaurant-shimmer-${item}`} />
+                  ))}
+                </View>
+              </View>
+            </>
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <MaterialIcons name="error-outline" size={48} color="rgba(0, 0, 0, 0.3)" />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={fetchFavorites}>
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
             </View>
-          </View>
+          ) : (
+            <>
+              {/* Favorite Food Items Section */}
+              {favoriteItems.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Favorite Food Items</Text>
+                  <View style={styles.gridContainer}>
+                    {favoriteItems.map((item) => renderItemCard(item))}
+                  </View>
+                </View>
+              )}
+
+              {/* Favorite Restaurants Section */}
+              {favoriteRestaurants.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Favorite Restaurants</Text>
+                  <View style={styles.gridContainer}>
+                    {favoriteRestaurants.map((item) => renderRestaurantCard(item))}
+                  </View>
+                </View>
+              )}
+
+              {/* Empty State */}
+              {favoriteItems.length === 0 && favoriteRestaurants.length === 0 && (
+                <View style={styles.emptyContainer}>
+                  <MaterialIcons name="favorite-border" size={64} color="rgba(0, 0, 0, 0.2)" />
+                  <Text style={styles.emptyTitle}>No Favorites Yet</Text>
+                  <Text style={styles.emptyText}>
+                    Start adding your favorite restaurants and dishes!
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -280,6 +329,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 15,
     paddingBottom: 4,
+    paddingHorizontal: 4,
     zIndex: 1,
   },
   dishName: {
@@ -289,5 +339,51 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#000000',
     opacity: 0.85,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  errorText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: 'rgba(0, 0, 0, 0.5)',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#00B14F',
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 80,
+  },
+  emptyTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#000000',
+    marginTop: 16,
+    opacity: 0.7,
+  },
+  emptyText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: 'rgba(0, 0, 0, 0.5)',
+    marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: 40,
   },
 });

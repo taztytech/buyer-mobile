@@ -26,6 +26,7 @@ import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
 import { storageService } from '@/services/storage.service';
 import { CartProvider } from '@/context/CartContext';
+import { VegModeProvider } from '@/context/VegModeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -39,6 +40,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedLocation, setSelectedLocation] = React.useState({ name: 'Madurai', address: 'Madurai, Tamil Nadu, India' });
   const [selectedCategory, setSelectedCategory] = React.useState('Briyani');
+  const [categoryData, setCategoryData] = React.useState<any[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
   const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category'>('home');
@@ -402,36 +404,10 @@ export default function App() {
   const handleNavigateToCategoryResults = (categoryName: string) => {
     setSelectedCategory(categoryName);
     setCurrentScreen('categoryResults');
-
-    Animated.parallel([
-      Animated.timing(homeScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(categoryScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const handleBackFromCategoryResults = () => {
-    Animated.parallel([
-      Animated.timing(homeScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(categoryScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('home');
-    });
+    setCurrentScreen('home');
   };
 
   // Restaurant Navigation from Category
@@ -855,8 +831,9 @@ export default function App() {
   }
 
   return (
-    <CartProvider>
-      <SafeAreaProvider>
+    <VegModeProvider>
+      <CartProvider>
+        <SafeAreaProvider>
         {currentScreen === 'login' ? (
         <LoginScreen onLoginSuccess={handleLoginSuccess} />
       ) : currentScreen === 'otp' ? (
@@ -886,6 +863,7 @@ export default function App() {
               onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
               onNavigateToSearch={handleNavigateToSearch}
               selectedLocation={selectedLocation}
+              onCategoriesLoaded={setCategoryData}
             />
           </Animated.View>
 
@@ -1154,22 +1132,17 @@ export default function App() {
             />
           </Animated.View>
 
-          {/* Always render CategoryResultsScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.categoryOverlay,
-              {
-                transform: [{ translateX: categoryScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'categoryResults' || currentScreen === 'restaurant' ? 'auto' : 'none'}
-          >
-            <CategoryResultsScreen
-              categoryName={selectedCategory}
-              onBack={handleBackFromCategoryResults}
-              onNavigateToRestaurant={handleNavigateToRestaurantFromCategory}
-            />
-          </Animated.View>
+          {/* Conditionally render CategoryResultsScreen only when needed */}
+          {currentScreen === 'categoryResults' && (
+            <View style={styles.categoryOverlay}>
+              <CategoryResultsScreen
+                categoryName={selectedCategory}
+                categories={categoryData}
+                onBack={handleBackFromCategoryResults}
+                onNavigateToRestaurant={handleNavigateToRestaurantFromCategory}
+              />
+            </View>
+          )}
 
           {/* Conditionally render RestaurantScreen only when needed */}
           {currentScreen === 'restaurant' && (
@@ -1183,8 +1156,9 @@ export default function App() {
           )}
         </View>
       )}
-      </SafeAreaProvider>
-    </CartProvider>
+        </SafeAreaProvider>
+      </CartProvider>
+    </VegModeProvider>
   );
 }
 

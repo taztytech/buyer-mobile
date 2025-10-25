@@ -50,14 +50,32 @@ export interface HomeData {
 class HomeService {
   /**
    * Fetch home page data
+   * @param latitude - User's latitude
+   * @param longitude - User's longitude
+   * @param vegMode - Veg mode filter: 'off' | 'pure' | 'all'
    */
-  async getHomeData(latitude?: number, longitude?: number): Promise<ApiResponse<HomeData>> {
+  async getHomeData(
+    latitude?: number,
+    longitude?: number,
+    vegMode?: 'off' | 'pure' | 'all'
+  ): Promise<ApiResponse<HomeData>> {
     try {
-      // Build query params if location is provided
-      let endpoint = API_CONFIG.ENDPOINTS.BUYER.HOME;
+      // Build query params
+      const params = new URLSearchParams();
+
       if (latitude !== undefined && longitude !== undefined) {
-        endpoint = `${endpoint}?latitude=${latitude}&longitude=${longitude}`;
+        params.append('latitude', latitude.toString());
+        params.append('longitude', longitude.toString());
       }
+
+      if (vegMode && vegMode !== 'off') {
+        params.append('veg_mode', vegMode);
+      }
+
+      const queryString = params.toString();
+      const endpoint = queryString
+        ? `${API_CONFIG.ENDPOINTS.BUYER.HOME}?${queryString}`
+        : API_CONFIG.ENDPOINTS.BUYER.HOME;
 
       const response = await apiService.get<HomeData>(endpoint);
 

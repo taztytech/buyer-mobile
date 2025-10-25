@@ -12,6 +12,7 @@ const STORAGE_KEYS = {
   TOKEN_EXPIRY: '@tazty_token_expiry',
   USER_DATA: '@tazty_user_data',
   IS_LOGGED_IN: '@tazty_is_logged_in',
+  VEG_MODE: '@tazty_veg_mode',
 };
 
 export interface TokenData {
@@ -128,6 +129,28 @@ class StorageService {
   }
 
   /**
+   * Save veg mode preference
+   */
+  async saveVegMode(mode: 'off' | 'pure' | 'all'): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.VEG_MODE, mode);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get veg mode preference
+   */
+  async getVegMode(): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem(STORAGE_KEYS.VEG_MODE);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
    * Clear all stored data (logout)
    */
   async clearAll(): Promise<void> {
@@ -139,6 +162,7 @@ class StorageService {
         STORAGE_KEYS.USER_DATA,
         STORAGE_KEYS.IS_LOGGED_IN,
       ]);
+      // Note: VEG_MODE is not cleared on logout - it persists
     } catch (error) {
       throw error;
     }
