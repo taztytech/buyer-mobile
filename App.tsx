@@ -50,7 +50,6 @@ export default function App() {
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const editProfileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const ordersScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const orderDetailScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const rateOrderScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const orderTrackingScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -234,7 +233,6 @@ export default function App() {
     homeScreenSlide.setValue(0);
     profileScreenSlide.setValue(SCREEN_WIDTH);
     editProfileScreenSlide.setValue(SCREEN_WIDTH);
-    ordersScreenSlide.setValue(SCREEN_WIDTH);
     orderDetailScreenSlide.setValue(SCREEN_WIDTH);
     rateOrderScreenSlide.setValue(SCREEN_WIDTH);
     orderTrackingScreenSlide.setValue(SCREEN_WIDTH);
@@ -459,36 +457,10 @@ export default function App() {
   // Orders Navigation
   const handleNavigateToOrders = () => {
     setCurrentScreen('orders');
-
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(ordersScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const handleBackFromOrders = () => {
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(ordersScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('profile');
-    });
+    setCurrentScreen('profile');
   };
 
   // Order Detail Navigation
@@ -926,26 +898,20 @@ export default function App() {
             />
           </Animated.View>
 
-          {/* Always render OrdersScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.ordersOverlay,
-              {
-                transform: [{ translateX: ordersScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'orders' || currentScreen === 'orderDetail' || currentScreen === 'rateOrder' || currentScreen === 'orderTracking' ? 'auto' : 'none'}
-          >
-            <OrdersScreen
-              onBack={handleBackFromOrders}
-              onOrderDetails={handleNavigateToOrderDetail}
-              onReorder={(orderId) => {}}
-              onRateOrder={handleNavigateToRateOrder}
-              onTrackOrder={handleNavigateToOrderTracking}
-              onHelp={(orderId) => {}}
-              onViewMore={() => {}}
-            />
-          </Animated.View>
+          {/* Conditionally render OrdersScreen only when visible */}
+          {currentScreen === 'orders' && (
+            <View style={styles.ordersOverlay}>
+              <OrdersScreen
+                onBack={handleBackFromOrders}
+                onOrderDetails={handleNavigateToOrderDetail}
+                onReorder={(orderId) => {}}
+                onRateOrder={handleNavigateToRateOrder}
+                onTrackOrder={handleNavigateToOrderTracking}
+                onHelp={(orderId) => {}}
+                onViewMore={() => {}}
+              />
+            </View>
+          )}
 
           {/* Always render OrderDetailScreen, positioned off-screen initially */}
           <Animated.View
