@@ -36,6 +36,34 @@ interface RestaurantScreenProps {
   onBack?: () => void;
 }
 
+interface AddOn {
+  id: string;
+  name: string;
+  price: number;
+  isVeg: boolean;
+  discount?: string;
+}
+
+interface CustomizationOption {
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  is_default: boolean;
+}
+
+interface CustomizationGroup {
+  id: number;
+  name: string;
+  description: string;
+  min_selections: number;
+  max_selections: number;
+  input_type: string;
+  is_mandatory: boolean;
+  options: CustomizationOption[];
+}
+
 interface MenuItem {
   id: string;
   name: string;
@@ -47,6 +75,8 @@ interface MenuItem {
   isBestSeller: boolean;
   isCustomizable: boolean;
   isFavorite?: boolean;
+  addOns?: AddOn[];
+  customizations?: CustomizationGroup[];
 }
 
 interface MenuSection {
@@ -762,7 +792,34 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           const sections: MenuSection[] = restaurant.categories.map((category: any, index: number) => {
             // Process items in this category
             const items: MenuItem[] = (category.items || []).map((item: any) => {
-              const menuItem = {
+              if (item.has_customizations || item.customizations) {
+                console.log('🔍 Processing item:', item.name, 'ID:', item.id, 'has_customizations:', item.has_customizations);
+                console.log('📋 Customizations data:', JSON.stringify(item.customizations, null, 2));
+                console.log('🔍 Full item data:', JSON.stringify(item, null, 2));
+              }
+
+              // Parse customizations/add-ons from API
+              // The API returns customization groups with options inside
+              let addOns: AddOn[] = [];
+              if (item.customizations && Array.isArray(item.customizations)) {
+                // Flatten all options from all customization groups
+                item.customizations.forEach((group: any) => {
+                  if (group.options && Array.isArray(group.options)) {
+                    group.options.forEach((option: any) => {
+                      addOns.push({
+                        id: option.id?.toString() || Math.random().toString(),
+                        name: option.name || '',
+                        price: parseFloat(option.price || 0),
+                        isVeg: option.is_veg !== false, // Default to true if not specified
+                        discount: option.discount || undefined,
+                      });
+                    });
+                  }
+                });
+                console.log('✅ Parsed add-ons from', item.customizations.length, 'groups:', addOns.length, 'options');
+              }
+
+              const menuItem: MenuItem = {
                 id: item.id.toString(),
                 name: item.name,
                 price: parseFloat(item.price?.base_price || 0),
@@ -775,6 +832,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 isBestSeller: item.is_recommended || false,
                 isCustomizable: item.has_customizations || false,
                 isFavorite: item.is_favorite || false,
+                addOns: addOns.length > 0 ? addOns : undefined,
+                customizations: item.customizations,
               };
               return menuItem;
             });
@@ -1338,14 +1397,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       {/* Customization Modal */}
       <CustomizationModal
         visible={showCustomizationModal}
-        item={selectedCustomizableItem ? {
-          ...selectedCustomizableItem,
-          addOns: [
-            { id: '1', name: 'Gulab Jamun', price: 50, isVeg: true },
-            { id: '2', name: 'Kesari', price: 50, isVeg: true, discount: 'Save Upto 25%' },
-            { id: '3', name: 'Milk Halwa', price: 50, isVeg: true },
-          ],
-        } : null}
+        item={selectedCustomizableItem}
         preselectedAddOns={preselectedAddOns}
         onClose={() => {
           // Just close the modal and reset editing state
