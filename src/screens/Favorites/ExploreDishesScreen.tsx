@@ -17,8 +17,8 @@ import { Shimmer } from '@/components/Shimmer';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PADDING = 20;
-const CARD_GAP = 10;
-const NUM_COLUMNS = 3;
+const CARD_GAP = 16;
+const NUM_COLUMNS = 2;
 // Calculate card width: total available width minus gaps, divided by number of columns
 const CARD_WIDTH = (SCREEN_WIDTH - PADDING * 2 - CARD_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 
@@ -49,13 +49,8 @@ interface ExploreDishesScreenProps {
 
 // Shimmer Card Component
 const ShimmerCard = () => (
-  <View style={styles.dishCard}>
-    <View style={styles.dishImageContainer}>
-      <Shimmer width={CARD_WIDTH - 30} height={60} borderRadius={8} backgroundColor="#E8E8E8" />
-    </View>
-    <View style={styles.dishLabelContainer}>
-      <Shimmer width={CARD_WIDTH - 20} height={16} borderRadius={4} backgroundColor="#E8E8E8" />
-    </View>
+  <View style={styles.shimmerCard}>
+    <Shimmer width={CARD_WIDTH} height={150} borderRadius={12} backgroundColor="#E8E8E8" />
   </View>
 );
 
@@ -64,38 +59,50 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
   onSelectItem,
   onSelectRestaurant,
 }) => {
+  console.log('🎯 ExploreDishesScreen component mounted');
+
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
   const [favoriteRestaurants, setFavoriteRestaurants] = useState<FavoriteRestaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch on mount
   useEffect(() => {
+    console.log('🔄 useEffect triggered, calling fetchFavorites');
     fetchFavorites();
   }, []);
 
   const fetchFavorites = async () => {
+    console.log('📞 fetchFavorites called');
     try {
       setIsLoading(true);
       setError(null);
 
+      console.log('🌐 Calling favoritesService.getAllFavorites()');
       const response = await favoritesService.getAllFavorites();
+
+      console.log('🔍 Full Response:', JSON.stringify(response, null, 2));
 
       if (response.success && response.data) {
         // The API returns nested data: response.data.data.data
         const actualData = response.data.data?.data || response.data;
+        console.log('📦 Actual Data:', JSON.stringify(actualData, null, 2));
 
-        // Extract favorite items (API returns "items", not "favorite_items")
-        const items = actualData.items || actualData.favorite_items;
+        // Extract favorite items - need to go one level deeper
+        const items = actualData.data?.items || actualData.items || actualData.favorite_items;
+        console.log('🍔 Items found:', items?.length || 0);
         if (items && Array.isArray(items)) {
           setFavoriteItems(items);
         }
 
-        // Extract favorite restaurants (API returns "restaurants", not "favorite_restaurants")
-        const restaurants = actualData.restaurants || actualData.favorite_restaurants;
+        // Extract favorite restaurants - need to go one level deeper
+        const restaurants = actualData.data?.restaurants || actualData.restaurants || actualData.favorite_restaurants;
+        console.log('🏪 Restaurants found:', restaurants?.length || 0);
         if (restaurants && Array.isArray(restaurants)) {
           setFavoriteRestaurants(restaurants);
         }
       } else {
+        console.log('❌ Response failed or no data');
         setError(response.error || 'Failed to load favorites');
       }
     } catch (error) {
@@ -117,13 +124,11 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
         onPress={() => onSelectItem && onSelectItem(item)}
         activeOpacity={0.7}
       >
-        <View style={styles.dishImageContainer}>
-          <Image
-            source={{ uri: imageUrl }}
-            style={styles.dishImage}
-            resizeMode="contain"
-          />
-        </View>
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.dishImage}
+          resizeMode="cover"
+        />
         <View style={styles.dishLabelContainer}>
           <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
         </View>
@@ -138,13 +143,11 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
       onPress={() => onSelectRestaurant && onSelectRestaurant(item.id, item.name)}
       activeOpacity={0.7}
     >
-      <View style={styles.dishImageContainer}>
-        <Image
-          source={{ uri: item.logo_url }}
-          style={styles.dishImage}
-          resizeMode="contain"
-        />
-      </View>
+      <Image
+        source={{ uri: item.logo_url }}
+        style={styles.dishImage}
+        resizeMode="cover"
+      />
       <View style={styles.dishLabelContainer}>
         <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
       </View>
@@ -176,7 +179,7 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Favorite Food Items</Text>
                 <View style={styles.gridContainer}>
-                  {[1, 2, 3, 4, 5, 6].map((item) => (
+                  {[1, 2, 3, 4].map((item) => (
                     <ShimmerCard key={`item-shimmer-${item}`} />
                   ))}
                 </View>
@@ -186,7 +189,7 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Favorite Restaurants</Text>
                 <View style={styles.gridContainer}>
-                  {[1, 2, 3, 4, 5, 6].map((item) => (
+                  {[1, 2, 3, 4].map((item) => (
                     <ShimmerCard key={`restaurant-shimmer-${item}`} />
                   ))}
                 </View>
@@ -297,19 +300,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     columnGap: CARD_GAP,
-    rowGap: 20,
+    rowGap: CARD_GAP,
     justifyContent: 'flex-start',
+  },
+  shimmerCard: {
+    width: CARD_WIDTH,
+    height: 150,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   dishCard: {
     width: CARD_WIDTH,
-    height: 103,
+    height: 150,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 0,
+      height: 2,
     },
     shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowRadius: 8,
     elevation: 5,
   },
   dishImageContainer: {
@@ -317,36 +330,30 @@ const styles = StyleSheet.create({
     height: 79,
     backgroundColor: '#C9F5C6',
     borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 22,
+    overflow: 'hidden',
     marginBottom: -9,
     zIndex: 2,
   },
   dishImage: {
-    width: CARD_WIDTH - 30,
-    height: 60,
-    resizeMode: 'contain',
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   dishLabelContainer: {
-    width: CARD_WIDTH,
-    height: 37,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 44,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 15,
-    paddingBottom: 4,
-    paddingHorizontal: 4,
-    zIndex: 1,
+    paddingHorizontal: 8,
   },
   dishName: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 12,
-    lineHeight: 18,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    lineHeight: 20,
     textAlign: 'center',
     color: '#000000',
     opacity: 0.85,

@@ -54,7 +54,6 @@ export default function App() {
   const rateOrderScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const orderTrackingScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const searchScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const exploreDishesScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const privacyPolicyScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const termsConditionsScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const myAddressesScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -242,7 +241,6 @@ export default function App() {
     rateOrderScreenSlide.setValue(SCREEN_WIDTH);
     orderTrackingScreenSlide.setValue(SCREEN_WIDTH);
     searchScreenSlide.setValue(SCREEN_WIDTH);
-    exploreDishesScreenSlide.setValue(SCREEN_WIDTH);
     privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
     termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
     myAddressesScreenSlide.setValue(SCREEN_WIDTH);
@@ -547,36 +545,10 @@ export default function App() {
   // Explore Dishes (Favorites) Navigation
   const handleNavigateToExploreDishes = () => {
     setCurrentScreen('exploreDishes');
-
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(exploreDishesScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const handleBackFromExploreDishes = () => {
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(exploreDishesScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('profile');
-    });
+    setCurrentScreen('profile');
   };
 
   // Privacy Policy Navigation
@@ -1049,22 +1021,16 @@ export default function App() {
             />
           </Animated.View>
 
-          {/* Always render ExploreDishesScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.exploreDishesOverlay,
-              {
-                transform: [{ translateX: exploreDishesScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'exploreDishes' ? 'auto' : 'none'}
-          >
-            <ExploreDishesScreen
-              onBack={handleBackFromExploreDishes}
-              onSelectCategory={(category) => console.log('Selected category:', category)}
-              onSelectRestaurant={(restaurant) => console.log('Selected restaurant:', restaurant)}
-            />
-          </Animated.View>
+          {/* Conditionally render ExploreDishesScreen only when visible */}
+          {currentScreen === 'exploreDishes' && (
+            <View style={styles.exploreDishesOverlay}>
+              <ExploreDishesScreen
+                onBack={handleBackFromExploreDishes}
+                onSelectCategory={(category) => console.log('Selected category:', category)}
+                onSelectRestaurant={(restaurant) => console.log('Selected restaurant:', restaurant)}
+              />
+            </View>
+          )}
 
           {/* Always render Privacy Policy Screen, positioned off-screen initially */}
           <Animated.View
