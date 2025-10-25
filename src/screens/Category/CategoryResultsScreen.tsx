@@ -135,17 +135,8 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
 
       const query = selectedCategory.toLowerCase();
       const apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`;
-      const fullUrl = `${API_CONFIG.BASE_URL}${apiEndpoint}`;
-
-      console.log(`\n📍 Category API Call: ${selectedCategory}`);
-      console.log(`🔗 Full URL: ${fullUrl}`);
-      console.log(`📋 Query: ${query} | Lat: ${lat} | Lng: ${lng} | Radius: ${radius}km`);
 
       const response = await apiService.get(apiEndpoint);
-
-      console.log(`✅ Response Success: ${response.data?.success}`);
-      console.log(`📊 Restaurants Found: ${response.data?.data?.restaurants?.length || 0}`);
-      console.log(`🌟 Top Rated Restaurants: ${response.data?.data?.top_rated_restaurants?.length || 0}`);
 
       if (response.data?.success && response.data?.data?.restaurants) {
         // Transform API data to match RestaurantCard interface
@@ -162,15 +153,6 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
         }));
 
-        console.log(`📝 Restaurant List:`);
-        restaurantsData.slice(0, 5).forEach((r: any, i: number) => {
-          console.log(`   ${i + 1}. ${r.name} (ID: ${r.id})`);
-        });
-        if (restaurantsData.length > 5) {
-          console.log(`   ... and ${restaurantsData.length - 5} more`);
-        }
-        console.log(''); // Empty line for readability
-
         setRestaurants(restaurantsData);
 
         // Handle top rated restaurants if available
@@ -183,17 +165,14 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
             image: restaurant.logo_url,
           }));
           setTopRatedRestaurants(topRatedData);
-          console.log(`🌟 Top Rated List: ${topRatedData.map((r: any) => r.name).join(', ')}\n`);
         } else {
           setTopRatedRestaurants([]);
         }
       } else {
-        console.log(`⚠️ No restaurants found or API failed\n`);
         setRestaurants([]);
         setTopRatedRestaurants([]);
       }
     } catch (error) {
-      console.error('Error fetching restaurants:', error);
       setRestaurants([]);
       setTopRatedRestaurants([]);
     } finally {

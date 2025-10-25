@@ -81,8 +81,6 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
       const response = await favoritesService.getAllFavorites();
 
       if (response.success && response.data) {
-        console.log('✅ Favorites loaded successfully');
-
         // The API returns nested data: response.data.data.data
         const actualData = response.data.data?.data || response.data;
 
@@ -90,18 +88,15 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
         const items = actualData.items || actualData.favorite_items;
         if (items && Array.isArray(items)) {
           setFavoriteItems(items);
-          console.log(`📦 Favorite Items: ${items.length}`);
         }
 
         // Extract favorite restaurants (API returns "restaurants", not "favorite_restaurants")
         const restaurants = actualData.restaurants || actualData.favorite_restaurants;
         if (restaurants && Array.isArray(restaurants)) {
           setFavoriteRestaurants(restaurants);
-          console.log(`🏪 Favorite Restaurants: ${restaurants.length}`);
         }
       } else {
         setError(response.error || 'Failed to load favorites');
-        console.error('❌ Failed to load favorites:', response.error);
       }
     } catch (error) {
       setError('An error occurred while loading favorites');
