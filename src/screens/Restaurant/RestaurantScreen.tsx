@@ -147,6 +147,10 @@ interface CustomizationVariant {
   id: string;
   addOns: string[];
   addOnNames?: string[];
+  customizationGroups?: Array<{
+    group_id: number;
+    selected_option_ids: number[];
+  }>;
   price: number;
   quantity: number;
 }
@@ -301,11 +305,16 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const getFlattenedCartItems = () => {
     const flattenedItems: any[] = [];
 
+    console.log('🔄 [getFlattenedCartItems] Cart:', cart);
+
     Object.values(cart).forEach(cartItem => {
+      console.log('   Processing cart item:', cartItem.name, 'isCustomizable:', cartItem.isCustomizable);
+
       if (cartItem.isCustomizable && cartItem.variants) {
         // For customizable items, add each variant as a separate line item
         cartItem.variants.forEach(variant => {
-          flattenedItems.push({
+          console.log('      Variant:', variant);
+          const item = {
             id: cartItem.id,  // Original item ID
             variantId: variant.id,  // Variant ID
             addOnIds: variant.addOns,  // Array of add-on IDs
@@ -313,23 +322,31 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             price: variant.price,
             quantity: variant.quantity,
             isVeg: cartItem.isVeg,
+            image: cartItem.image,
+            // Always include customizations text
             customizations: variant.addOnNames?.length
               ? variant.addOnNames.join(', ')
-              : 'No customizations',
-          });
+              : '',
+          };
+          console.log('      Flattened item:', item);
+          flattenedItems.push(item);
         });
       } else {
         // For regular items, add as-is
-        flattenedItems.push({
+        const item = {
           id: cartItem.id,
           name: cartItem.name,
           price: cartItem.price,
           quantity: cartItem.quantity || 0,
           isVeg: cartItem.isVeg,
-        });
+          image: cartItem.image,
+        };
+        console.log('      Flattened item:', item);
+        flattenedItems.push(item);
       }
     });
 
+    console.log('✅ [getFlattenedCartItems] Result:', flattenedItems);
     return flattenedItems;
   };
 
@@ -377,6 +394,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       price: item.price,
       quantity: 1,
       isVeg: item.isVeg,
+      image: item.image,
       isCustomizable: false,
     });
   };
@@ -457,17 +475,48 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
     if (!item) return;
 
-    // Get add-on objects (mocked for now - in real app this would come from item.addOns)
-    const availableAddOns = [
-      { id: '1', name: 'Gulab Jamun', price: 50, isVeg: true },
-      { id: '2', name: 'Kesari', price: 50, isVeg: true },
-      { id: '3', name: 'Milk Halwa', price: 50, isVeg: true },
-    ];
+    // Get all available options from customization groups
+    const allOptions: Array<{ id: string; name: string; price: number }> = [];
 
-    const selectedAddOnObjects = availableAddOns.filter(ao => selectedAddOns.includes(ao.id));
+    if (item.customizations) {
+      item.customizations.forEach(group => {
+        group.options.forEach(option => {
+          allOptions.push({
+            id: option.id.toString(),
+            name: option.name,
+            price: Number(option.price) || 0,
+          });
+        });
+      });
+    }
+
+    const selectedAddOnObjects = allOptions.filter(ao => selectedAddOns.includes(ao.id));
     const addOnNames = selectedAddOnObjects.map(ao => ao.name);
-    const addOnTotalPrice = selectedAddOnObjects.reduce((sum, ao) => sum + ao.price, 0);
-    const totalPrice = item.price + addOnTotalPrice;
+    const addOnTotalPrice = selectedAddOnObjects.reduce((sum, ao) => sum + Number(ao.price), 0);
+    const totalPrice = Number(item.price) + addOnTotalPrice;
+
+    console.log('💰 [Price Calculation]');
+    console.log('   Base price:', item.price, '→', Number(item.price));
+    console.log('   Add-ons:', selectedAddOnObjects);
+    console.log('   Add-on total:', addOnTotalPrice);
+    console.log('   Total price:', totalPrice);
+
+    // Build customization groups array for API
+    const customizationGroups: Array<{ group_id: number; selected_option_ids: number[] }> = [];
+    if (item.customizations) {
+      item.customizations.forEach(group => {
+        const selectedInGroup = group.options
+          .filter(opt => selectedAddOns.includes(opt.id.toString()))
+          .map(opt => opt.id);
+
+        if (selectedInGroup.length > 0) {
+          customizationGroups.push({
+            group_id: group.id,
+            selected_option_ids: selectedInGroup
+          });
+        }
+      });
+    }
 
     const existingItem = cart[itemId];
 
@@ -476,6 +525,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       id: editingVariantId || `${itemId}_variant_${Date.now()}`,
       addOns: selectedAddOns,
       addOnNames: addOnNames,
+      customizationGroups: customizationGroups,
       price: totalPrice,
       quantity: quantity,
     };
@@ -503,6 +553,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       name: item.name,
       price: item.price,
       isVeg: item.isVeg,
+      image: item.image,
       isCustomizable: true,
       variants: updatedVariants,
     });
@@ -1454,12 +1505,17 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         pointerEvents={showOrderDetails ? 'auto' : 'none'}
       >
         <OrderDetailsScreen
+          restaurantId={restaurantId}
           restaurantName={restaurantData?.name || restaurantName}
           deliveryAddress="Chennai | F1, Jeyalakshmi Appartments..."
           cartItems={getFlattenedCartItems()}
           onBack={() => setShowOrderDetails(false)}
           onEditCustomization={handleEditCustomization}
           onPlaceOrder={() => {
+            setShowOrderDetails(false);
+            setShowOrderSuccess(true);
+          }}
+          onOrderSuccess={(orderId) => {
             setShowOrderDetails(false);
             setShowOrderSuccess(true);
           }}
@@ -1537,6 +1593,7 @@ const styles = StyleSheet.create({
     borderColor: '#E4E4E4',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 10,
   },
   restaurantCard: {
     backgroundColor: '#FFFFFF',

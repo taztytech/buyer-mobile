@@ -9,6 +9,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { AddressResponse } from '@/services/address.service';
 
 interface Address {
   id: string;
@@ -20,7 +21,7 @@ interface Address {
 interface AddressSelectionModalProps {
   visible: boolean;
   onClose: () => void;
-  addresses: Address[];
+  addresses: AddressResponse[];
   selectedAddressId?: string;
   onSelectAddress: (addressId: string) => void;
   onAddNewAddress: () => void;
@@ -70,6 +71,22 @@ export const AddressSelectionModal: React.FC<AddressSelectionModalProps> = ({
     }
   };
 
+  const formatAddress = (address: AddressResponse): string => {
+    const parts = [
+      address.address1,
+      address.address2,
+      address.address3,
+      address.city,
+      address.state,
+      address.pincode,
+    ].filter(Boolean);
+    return parts.join(', ');
+  };
+
+  const getAddressLabel = (type: string): string => {
+    return type.charAt(0).toUpperCase() + type.slice(1);
+  };
+
   return (
     <Modal
       visible={visible}
@@ -109,7 +126,7 @@ export const AddressSelectionModal: React.FC<AddressSelectionModalProps> = ({
                   <TouchableOpacity
                     key={address.id}
                     style={styles.addressItem}
-                    onPress={() => handleSelectAddress(address.id)}
+                    onPress={() => handleSelectAddress(address.id.toString())}
                     activeOpacity={0.7}
                   >
                     <View style={styles.addressLeft}>
@@ -121,15 +138,15 @@ export const AddressSelectionModal: React.FC<AddressSelectionModalProps> = ({
                         />
                       </View>
                       <View style={styles.addressInfo}>
-                        <Text style={styles.addressLabel}>{address.label}</Text>
-                        <Text style={styles.addressText}>{address.fullAddress}</Text>
+                        <Text style={styles.addressLabel}>{getAddressLabel(address.type)}</Text>
+                        <Text style={styles.addressText}>{formatAddress(address)}</Text>
                       </View>
                     </View>
                     <View style={[
                       styles.radioButton,
-                      selectedId === address.id && styles.radioButtonSelected
+                      selectedId === address.id.toString() && styles.radioButtonSelected
                     ]}>
-                      {selectedId === address.id && (
+                      {selectedId === address.id.toString() && (
                         <View style={styles.radioButtonInner} />
                       )}
                     </View>

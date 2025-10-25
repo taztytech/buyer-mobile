@@ -152,16 +152,26 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
         console.log('🧹 Clearing local cart...');
         clearCart();
 
+        // Get order data - API returns data nested under 'order' key
+        const orderData = orderResponse.data.order || orderResponse.data;
+        const orderNumber = orderData.order_number || orderData.orderNumber || 'N/A';
+        const orderId = orderData.id || orderData.order_id;
+
+        console.log('   Order Number:', orderNumber);
+        console.log('   Order ID:', orderId);
+
         // Show success message
         Alert.alert(
           'Order Placed!',
-          `Your order #${orderResponse.data.order_number} has been placed successfully.`,
+          orderNumber !== 'N/A'
+            ? `Your order #${orderNumber} has been placed successfully.`
+            : 'Your order has been placed successfully.',
           [
             {
               text: 'OK',
               onPress: () => {
-                if (onOrderSuccess) {
-                  onOrderSuccess(orderResponse.data.order_id);
+                if (onOrderSuccess && orderId) {
+                  onOrderSuccess(orderId);
                 }
               },
             },

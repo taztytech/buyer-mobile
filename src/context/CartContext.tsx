@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 export interface CartVariant {
-  variantId: string;
-  variantName: string;
+  id: string;
+  variantId?: string;
+  variantName?: string;
+  addOns?: string[];
+  addOnNames?: string[];
   quantity: number;
   price: number;
 }

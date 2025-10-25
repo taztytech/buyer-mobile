@@ -9,12 +9,17 @@ import {
   TextInput,
   StatusBar,
   Animated,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { PaymentModal } from '@/components/PaymentModal';
 import { AddressSelectionModal } from '@/components/AddressSelectionModal';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
+import { ordersService } from '@/services/orders.service';
+import { addressService, AddressResponse } from '@/services/address.service';
+import { useCart } from '@/context/CartContext';
 
 interface CartItem {
   id: string;
@@ -29,25 +34,30 @@ interface CartItem {
 
 interface OrderDetailsScreenProps {
   restaurantName?: string;
+  restaurantId?: number;
   deliveryAddress?: string;
   cartItems?: CartItem[];
   onBack?: () => void;
   onEditCustomization?: (itemId: string, variantId: string, currentAddOnIds: string[]) => void;
   onPlaceOrder?: () => void;
+  onOrderSuccess?: (orderId: number) => void;
   showCustomizationModal?: boolean;
   onUpdateCart?: (itemId: string, variantId: string | undefined, newQuantity: number) => void;
 }
 
 export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   restaurantName = 'KFC',
+  restaurantId,
   deliveryAddress = 'Chennai | F1, Jeyalakshmi Appartments...',
   cartItems = [],
   onBack,
   onEditCustomization,
   onPlaceOrder,
+  onOrderSuccess,
   showCustomizationModal = false,
   onUpdateCart,
 }) => {
+  const { cart, clearCart } = useCart();
   const [orderExpanded, setOrderExpanded] = useState(true);
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
   const [tipExpanded, setTipExpanded] = useState(true);
@@ -66,31 +76,63 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState('1');
   const [showLocationSelection, setShowLocationSelection] = useState(false);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [addresses, setAddresses] = useState<AddressResponse[]>([]);
+  const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
 
-  // Sample addresses
-  const addresses = [
-    {
-      id: '1',
-      type: 'home' as const,
-      label: 'Home',
-      fullAddress: 'Vigneshwar Nagar, Nanganallur, Tamilnadu, India',
-    },
-    {
-      id: '2',
-      type: 'work' as const,
-      label: 'Work',
-      fullAddress: 'Vigneshwar Nagar, Nanganallur, Tamilnadu, India',
-    },
-  ];
+  const selectedAddress = addresses.find(addr => addr.id.toString() === selectedAddressId);
 
-  const selectedAddress = addresses.find(addr => addr.id === selectedAddressId);
+  // Helper function to format address for display
+  const formatAddress = (address: AddressResponse): string => {
+    const parts = [
+      address.address1,
+      address.address2,
+      address.address3,
+      address.city,
+      address.state,
+      address.pincode,
+    ].filter(Boolean);
+    return parts.join(', ');
+  };
 
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
 
+  // Fetch addresses from API
+  useEffect(() => {
+    fetchAddresses();
+  }, []);
+
+  const fetchAddresses = async () => {
+    try {
+      setIsLoadingAddresses(true);
+      const response = await addressService.getAddresses();
+
+      if (response.success && response.data) {
+        setAddresses(response.data);
+
+        // Set the default address as selected, or first address if no default
+        const defaultAddress = response.data.find(addr => addr.is_default);
+        if (defaultAddress) {
+          setSelectedAddressId(defaultAddress.id.toString());
+        } else if (response.data.length > 0) {
+          setSelectedAddressId(response.data[0].id.toString());
+        }
+      } else {
+        Alert.alert('Error', response.error || 'Failed to load addresses');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to load addresses');
+    } finally {
+      setIsLoadingAddresses(false);
+    }
+  };
+
   // Sync local cart items with parent cart items
   useEffect(() => {
+    console.log('🔄 [OrderDetailsScreen] Cart items updated:', cartItems?.length);
+    console.log('   Cart items:', cartItems);
     setLocalCartItems(cartItems);
   }, [cartItems]);
 
@@ -131,6 +173,152 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       ]).start();
     }
   }, [showPaymentModal, showAddressModal, showLocationSelection, showCustomizationModal]);
+
+  const handlePlaceOrder = async () => {
+    console.log('🚀 [OrderDetailsScreen] Starting order placement...');
+    console.log('🏪 Restaurant ID:', restaurantId);
+    console.log('📍 Selected Address ID:', selectedAddressId);
+    console.log('🛒 Cart Items:', Object.keys(cart).length);
+    console.log('💰 Payment Method:', selectedPayment);
+    console.log('📝 Notes:', notes);
+
+    if (!restaurantId) {
+      console.error('❌ No restaurant ID');
+      Alert.alert('Error', 'Restaurant information is missing');
+      return;
+    }
+
+    if (Object.keys(cart).length === 0) {
+      console.error('❌ Cart is empty');
+      Alert.alert('Error', 'Your cart is empty');
+      return;
+    }
+
+    setIsPlacingOrder(true);
+
+    try {
+      console.log('📦 Step 1: Adding items to server cart...');
+      const cartItems = Object.values(cart);
+      console.log('   Total items to add:', cartItems.length);
+
+      // Step 1: Add all cart items to the server cart
+      for (let i = 0; i < cartItems.length; i++) {
+        const item = cartItems[i];
+        console.log(`   Adding item ${i + 1}/${cartItems.length}:`, item.name);
+
+        // Handle regular items
+        if (!item.isCustomizable || !item.variants) {
+          const addToCartRequest = {
+            restaurant_id: restaurantId,
+            item_id: parseInt(item.id),
+            quantity: item.quantity || 1,
+            special_instructions: notes,
+          };
+          console.log('      Regular item request:', addToCartRequest);
+
+          const addResult = await ordersService.addToCart(addToCartRequest);
+
+          if (!addResult.success) {
+            console.error('      ❌ Failed to add item:', addResult.error);
+            throw new Error(`Failed to add ${item.name} to cart: ${addResult.error}`);
+          }
+          console.log('      ✅ Item added successfully');
+        } else {
+          // Handle items with variants/customizations
+          console.log('      Item has', item.variants?.length, 'variants');
+          for (const variant of item.variants || []) {
+            // Build customizations array from stored customization groups
+            const customizations = [];
+            if (variant.customizationGroups && variant.customizationGroups.length > 0) {
+              variant.customizationGroups.forEach(group => {
+                customizations.push({
+                  customization_group_id: group.group_id,
+                  selected_options: group.selected_option_ids
+                });
+              });
+            }
+
+            const addToCartRequest = {
+              restaurant_id: restaurantId,
+              item_id: parseInt(item.id),
+              quantity: variant.quantity,
+              customizations: customizations.length > 0 ? customizations : undefined,
+              special_instructions: notes,
+            };
+            console.log('      Variant request with customizations:', addToCartRequest);
+
+            const addResult = await ordersService.addToCart(addToCartRequest);
+
+            if (!addResult.success) {
+              console.error('      ❌ Failed to add variant:', addResult.error);
+              throw new Error(`Failed to add customization to cart: ${addResult.error}`);
+            }
+            console.log('      ✅ Variant added successfully');
+          }
+        }
+      }
+
+      console.log('✅ All items added to server cart');
+      console.log('🎯 Step 2: Creating order...');
+
+      // Step 2: Create order with COD payment
+      const paymentMethod = selectedPayment === 'online' ? 'online' : 'cod';
+      const createOrderRequest = {
+        delivery_address_id: parseInt(selectedAddressId),
+        payment_method: paymentMethod as 'cod' | 'online',
+        notes: notes || undefined,
+      };
+      console.log('   Order request:', createOrderRequest);
+
+      const orderResponse = await ordersService.createOrder(createOrderRequest);
+
+      if (orderResponse.success && orderResponse.data) {
+        console.log('✅ Order created successfully!');
+        console.log('   Order details:', orderResponse.data);
+
+        // Clear local cart
+        console.log('🧹 Clearing local cart...');
+        clearCart();
+
+        // Get order data - API returns data nested under 'order' key
+        const orderData = orderResponse.data.order || orderResponse.data;
+        const orderNumber = orderData.order_number || orderData.orderNumber || 'N/A';
+        const orderId = orderData.id || orderData.order_id;
+
+        console.log('   Order Number:', orderNumber);
+        console.log('   Order ID:', orderId);
+
+        // Show success message
+        Alert.alert(
+          'Order Placed!',
+          orderNumber !== 'N/A'
+            ? `Your order #${orderNumber} has been placed successfully.`
+            : 'Your order has been placed successfully.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                if (onOrderSuccess && orderId) {
+                  onOrderSuccess(orderId);
+                } else if (onPlaceOrder) {
+                  onPlaceOrder();
+                }
+              },
+            },
+          ]
+        );
+      } else {
+        console.error('❌ Order creation failed:', orderResponse.error);
+        Alert.alert('Error', orderResponse.error || 'Failed to place order');
+      }
+    } catch (error: any) {
+      console.error('❌ [OrderDetailsScreen] Error placing order:', error);
+      Alert.alert('Error', error.message || 'Failed to place order');
+    } finally {
+      setIsPlacingOrder(false);
+      console.log('🏁 Order placement process completed');
+    }
+  };
 
   const handleIncrement = (itemId: string, variantId?: string) => {
     // Find current item first to get proper quantity
@@ -192,8 +380,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
   // Calculate totals
   const itemTotal = localCartItems.reduce((sum, item) => {
-    return sum + (item.price * item.quantity);
+    const price = Number(item.price) || 0;
+    const quantity = Number(item.quantity) || 0;
+    const subtotal = price * quantity;
+    console.log(`   ${item.name}: ₹${price} × ${quantity} = ₹${subtotal}`);
+    return sum + subtotal;
   }, 0);
+
+  console.log('📊 [Bill Details] Item Total:', itemTotal);
 
   const gstAndCharges = Math.round(itemTotal * 0.18); // 18% GST
   const deliveryFee = selfPickup ? 0 : 29;
@@ -218,9 +412,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       <View style={styles.container}>
         <LocationSelectionScreen
           onBack={() => setShowLocationSelection(false)}
-          onLocationConfirm={(location) => {
-            // TODO: Add the new address to the addresses list
+          onLocationConfirm={async (location) => {
             setShowLocationSelection(false);
+            // Refresh addresses after adding new one
+            await fetchAddresses();
           }}
         />
       </View>
@@ -302,21 +497,29 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                           </View>
                           <Text style={styles.orderItemName}>{item.name}</Text>
                         </View>
-                        {item.customizations && (
+                        {/* Show customization row for all customizable items */}
+                        {item.variantId && (
                           <TouchableOpacity
                             style={styles.customizationsRow}
                             onPress={() => {
-                              if (onEditCustomization && item.variantId && item.addOnIds) {
-                                onEditCustomization(item.id, item.variantId, item.addOnIds);
+                              if (onEditCustomization && item.variantId) {
+                                onEditCustomization(item.id, item.variantId, item.addOnIds || []);
                               }
                             }}
                             activeOpacity={0.7}
                           >
-                            <Text style={styles.orderItemCustomizations}>{item.customizations}</Text>
+                            <Text style={styles.orderItemCustomizations} numberOfLines={1} ellipsizeMode="tail">
+                              {item.customizations && item.customizations.trim() !== ''
+                                ? item.customizations
+                                : 'No add-ons selected'}
+                            </Text>
                             <MaterialIcons name="keyboard-arrow-down" size={16} color="rgba(0, 0, 0, 0.5)" />
                           </TouchableOpacity>
                         )}
-                        <Text style={styles.orderItemPrice}>₹{item.price}</Text>
+                        {/* Only show unit price for non-customizable items */}
+                        {!item.variantId && (
+                          <Text style={styles.orderItemPrice}>₹{item.price}</Text>
+                        )}
                       </View>
                       <View style={styles.quantityControl}>
                         <TouchableOpacity onPress={() => handleDecrement(item.id, item.variantId)} activeOpacity={0.7}>
@@ -383,7 +586,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                     <View style={styles.deliveryAtContent}>
                       <MaterialIcons name="location-on" size={20} color="#00B14F" />
                       <Text style={styles.deliveryAtText} numberOfLines={1}>
-                        {selectedAddress?.fullAddress || deliveryAddress}
+                        {selectedAddress ? formatAddress(selectedAddress) : deliveryAddress}
                       </Text>
                     </View>
                     <MaterialIcons name="expand-more" size={20} color="rgba(0, 0, 0, 0.5)" />
@@ -623,12 +826,22 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.placeOrderButton}
+              style={[styles.placeOrderButton, isPlacingOrder && styles.placeOrderButtonDisabled]}
               activeOpacity={0.8}
-              onPress={onPlaceOrder}
+              onPress={handlePlaceOrder}
+              disabled={isPlacingOrder}
             >
-              <Text style={styles.placeOrderButtonText}>Place Order</Text>
-              <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+              {isPlacingOrder ? (
+                <>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={styles.placeOrderButtonText}>Placing Order...</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.placeOrderButtonText}>Place Order</Text>
+                  <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+                </>
+              )}
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -794,14 +1007,17 @@ const styles = StyleSheet.create({
   customizationsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
     marginBottom: 4,
+    paddingVertical: 2,
+    maxWidth: '85%',
   },
   orderItemCustomizations: {
     fontFamily: 'Poppins',
     fontSize: 11,
     lineHeight: 16,
-    color: 'rgba(0, 0, 0, 0.5)',
+    color: '#00B14F',
+    marginRight: 4,
+    flexShrink: 1,
   },
   orderItemPrice: {
     fontFamily: 'Poppins',
@@ -1201,5 +1417,8 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: '#FFFFFF',
     marginRight: 8,
+  },
+  placeOrderButtonDisabled: {
+    opacity: 0.6,
   },
 });
