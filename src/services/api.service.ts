@@ -231,6 +231,14 @@ class ApiService {
 
       const responseData = await response.json();
 
+      // Log response details for debugging
+      if (endpoint.includes('/favorites/all')) {
+        console.log('🔍 API Response Details:');
+        console.log('  Status:', response.status);
+        console.log('  OK:', response.ok);
+        console.log('  Response Data:', JSON.stringify(responseData, null, 2));
+      }
+
       if (!response.ok) {
         return {
           success: false,

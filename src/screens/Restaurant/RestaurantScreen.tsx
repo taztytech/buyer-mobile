@@ -774,6 +774,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 isSpicy: false, // API doesn't provide this info
                 isBestSeller: item.is_recommended || false,
                 isCustomizable: item.has_customizations || false,
+                isFavorite: item.is_favorite || false,
               };
               return menuItem;
             });

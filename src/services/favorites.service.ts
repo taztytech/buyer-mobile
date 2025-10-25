@@ -83,9 +83,12 @@ class FavoritesService {
   async getAllFavorites(): Promise<ApiResponse<any>> {
     try {
       const endpoint = '/api/buyer/favorites/all';
+      console.log('🔍 Fetching all favorites from:', endpoint);
       const response = await apiService.get<any>(endpoint);
+      console.log('📥 Get all favorites response:', JSON.stringify(response, null, 2));
       return response;
     } catch (error: any) {
+      console.error('❌ Error in getAllFavorites:', error);
       return {
         success: false,
         error: error.message || 'Failed to fetch all favorites',

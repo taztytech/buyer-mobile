@@ -25,7 +25,13 @@ const CARD_WIDTH = (SCREEN_WIDTH - PADDING * 2 - CARD_GAP * (NUM_COLUMNS - 1)) /
 interface FavoriteItem {
   id: string | number;
   name: string;
-  image: string;
+  images?: string[];
+  image?: string;
+  restaurant?: {
+    id: number;
+    name: string;
+    logo_url: string;
+  };
   restaurant_name?: string;
 }
 
@@ -77,16 +83,21 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
       if (response.success && response.data) {
         console.log('✅ Favorites loaded successfully');
 
-        // Extract favorite items
-        if (response.data.favorite_items && Array.isArray(response.data.favorite_items)) {
-          setFavoriteItems(response.data.favorite_items);
-          console.log(`📦 Favorite Items: ${response.data.favorite_items.length}`);
+        // The API returns nested data: response.data.data.data
+        const actualData = response.data.data?.data || response.data;
+
+        // Extract favorite items (API returns "items", not "favorite_items")
+        const items = actualData.items || actualData.favorite_items;
+        if (items && Array.isArray(items)) {
+          setFavoriteItems(items);
+          console.log(`📦 Favorite Items: ${items.length}`);
         }
 
-        // Extract favorite restaurants
-        if (response.data.favorite_restaurants && Array.isArray(response.data.favorite_restaurants)) {
-          setFavoriteRestaurants(response.data.favorite_restaurants);
-          console.log(`🏪 Favorite Restaurants: ${response.data.favorite_restaurants.length}`);
+        // Extract favorite restaurants (API returns "restaurants", not "favorite_restaurants")
+        const restaurants = actualData.restaurants || actualData.favorite_restaurants;
+        if (restaurants && Array.isArray(restaurants)) {
+          setFavoriteRestaurants(restaurants);
+          console.log(`🏪 Favorite Restaurants: ${restaurants.length}`);
         }
       } else {
         setError(response.error || 'Failed to load favorites');
@@ -100,25 +111,30 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
     }
   };
 
-  const renderItemCard = (item: FavoriteItem) => (
-    <TouchableOpacity
-      key={item.id}
-      style={styles.dishCard}
-      onPress={() => onSelectItem && onSelectItem(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.dishImageContainer}>
-        <Image
-          source={{ uri: item.image }}
-          style={styles.dishImage}
-          resizeMode="contain"
-        />
-      </View>
-      <View style={styles.dishLabelContainer}>
-        <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const renderItemCard = (item: FavoriteItem) => {
+    // Get the first image from images array, or fallback to image field
+    const imageUrl = item.images && item.images.length > 0 ? item.images[0] : item.image;
+
+    return (
+      <TouchableOpacity
+        key={item.id}
+        style={styles.dishCard}
+        onPress={() => onSelectItem && onSelectItem(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.dishImageContainer}>
+          <Image
+            source={{ uri: imageUrl }}
+            style={styles.dishImage}
+            resizeMode="contain"
+          />
+        </View>
+        <View style={styles.dishLabelContainer}>
+          <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const renderRestaurantCard = (item: FavoriteRestaurant) => (
     <TouchableOpacity

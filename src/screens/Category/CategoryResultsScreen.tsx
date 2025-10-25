@@ -158,7 +158,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           location: restaurant.location,
           distance: restaurant.distance ? `${restaurant.distance.toFixed(1)}Kms` : '0Kms',
           image: restaurant.logo_url || restaurant.image,
-          isFavorite: false,
+          isFavorite: restaurant.is_favorite || false,
           isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
         }));
 
