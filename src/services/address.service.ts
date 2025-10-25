@@ -22,10 +22,10 @@ export interface AddAddressRequest {
 }
 
 export interface AddressResponse {
-  id: string;
+  id: number;
   address1: string;
   address2?: string;
-  address3?: string;
+  address3?: string | null;
   city: string;
   state: string;
   pincode: string;
@@ -86,7 +86,7 @@ class AddressService {
     addressData: Partial<AddAddressRequest>
   ): Promise<ApiResponse<AddressResponse>> {
     try {
-      const response = await apiService.put<AddressResponse>(
+      const response = await apiService.patch<AddressResponse>(
         `${API_CONFIG.ENDPOINTS.USER.ADDRESS}/${addressId}`,
         addressData
       );

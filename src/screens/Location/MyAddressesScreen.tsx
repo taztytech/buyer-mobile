@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,17 +7,29 @@ import {
   TouchableOpacity,
   StatusBar,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { AddAddressFormScreen } from './AddAddressFormScreen';
 import { LocationSelectionScreen } from './LocationSelectionScreen';
+import { addressService, AddressResponse } from '@/services/address.service';
 
 interface Address {
   id: string;
-  type: 'Home' | 'Work' | 'Other';
+  type: 'home' | 'work' | 'other';
   fullAddress: string;
   isDefault: boolean;
+  // Individual address components
+  address1: string;
+  address2?: string;
+  address3?: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+  latitude: number;
+  longitude: number;
+  alternate_phone_number?: number;
 }
 
 interface MyAddressesScreenProps {
@@ -25,6 +37,7 @@ interface MyAddressesScreenProps {
   onAddNew?: () => void;
   onEdit?: (addressId: string) => void;
   onDelete?: (addressId: string) => void;
+  visible?: boolean; // To track when screen becomes visible
 }
 
 export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
@@ -32,23 +45,11 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
   onAddNew,
   onEdit,
   onDelete,
+  visible = true,
 }) => {
   // State for managing addresses
-  const [addresses, setAddresses] = useState<Address[]>([
-    {
-      id: '1',
-      type: 'Home',
-      fullAddress: 'Vigneshwar Nagar, Nanganallur, Tamilnadu, India',
-      isDefault: true,
-    },
-    {
-      id: '2',
-      type: 'Work',
-      fullAddress: 'Vigneshwar Nagar, Nanganallur, Tamilnadu, India',
-      isDefault: false,
-    },
-  ]);
-
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [showLocationSelection, setShowLocationSelection] = useState(false);
@@ -60,17 +61,68 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
     longitude: number;
   } | null>(null);
 
-  const getIconForType = (type: 'Home' | 'Work' | 'Other') => {
+  // Fetch addresses on initial mount
+  useEffect(() => {
+    fetchAddresses();
+  }, []);
+
+  // Refetch addresses whenever the screen becomes visible
+  useEffect(() => {
+    if (visible) {
+      fetchAddresses();
+    }
+  }, [visible]);
+
+  const fetchAddresses = async () => {
+    setIsLoading(true);
+    try {
+      const response = await addressService.getAddresses();
+
+      if (response.success && response.data) {
+        // Transform API response to Address format
+        const addressList: Address[] = response.data.map((addr: AddressResponse) => ({
+          id: addr.id.toString(),
+          type: addr.type,
+          fullAddress: `${addr.address1}${addr.address2 ? ', ' + addr.address2 : ''}${addr.address3 ? ', ' + addr.address3 : ''}, ${addr.city}, ${addr.state} - ${addr.pincode}`,
+          isDefault: addr.is_default,
+          // Store individual components for editing
+          address1: addr.address1,
+          address2: addr.address2,
+          address3: addr.address3,
+          city: addr.city,
+          state: addr.state,
+          pincode: addr.pincode,
+          latitude: addr.latitude,
+          longitude: addr.longitude,
+          alternate_phone_number: addr.alternate_phone_number,
+        }));
+
+        setAddresses(addressList);
+      } else {
+        console.error('[MyAddressesScreen] Failed to fetch addresses:', response.error);
+      }
+    } catch (error) {
+      console.error('[MyAddressesScreen] Error fetching addresses:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getIconForType = (type: 'home' | 'work' | 'other') => {
     switch (type) {
-      case 'Home':
+      case 'home':
         return 'home';
-      case 'Work':
+      case 'work':
         return 'work';
-      case 'Other':
+      case 'other':
         return 'location-on';
       default:
         return 'location-on';
     }
+  };
+
+  const formatAddressType = (type: 'home' | 'work' | 'other') => {
+    return type.charAt(0).toUpperCase() + type.slice(1);
   };
 
   // Handle edit address
@@ -83,12 +135,12 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
   };
 
   // Handle delete address
-  const handleDelete = (addressId: string) => {
+  const handleDelete = async (addressId: string) => {
     const address = addresses.find(addr => addr.id === addressId);
 
     Alert.alert(
       'Delete Address',
-      `Are you sure you want to delete ${address?.type} address?`,
+      `Are you sure you want to delete ${formatAddressType(address?.type || 'other')} address?`,
       [
         {
           text: 'Cancel',
@@ -97,10 +149,23 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            setAddresses(prev => prev.filter(addr => addr.id !== addressId));
-            if (onDelete) {
-              onDelete(addressId);
+          onPress: async () => {
+            try {
+              const response = await addressService.deleteAddress(addressId);
+
+              if (response.success) {
+                // Refresh the address list after deletion
+                await fetchAddresses();
+                Alert.alert('Success', 'Address deleted successfully');
+                if (onDelete) {
+                  onDelete(addressId);
+                }
+              } else {
+                Alert.alert('Error', response.error || 'Failed to delete address');
+              }
+            } catch (error) {
+              console.error('[MyAddressesScreen] Delete error:', error);
+              Alert.alert('Error', 'An unexpected error occurred while deleting the address');
             }
           },
         },
@@ -124,35 +189,17 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
   };
 
   // Handle save from edit modal
-  const handleSaveAddress = (addressData: any) => {
-    if (editingAddressId) {
-      // Update existing address
-      setAddresses(prev => prev.map(addr =>
-        addr.id === editingAddressId
-          ? {
-              ...addr,
-              fullAddress: addressData.fullAddress || addr.fullAddress,
-              type: addressData.tag || addr.type,
-              isDefault: addressData.isDefault !== undefined ? addressData.isDefault : addr.isDefault
-            }
-          : addr
-      ));
-    }
+  const handleSaveAddress = async (addressData: any) => {
+    // Refresh the address list from API
+    await fetchAddresses();
     setShowEditModal(false);
     setEditingAddressId(null);
   };
 
   // Handle save from add address form
-  const handleSaveNewAddress = (addressData: any) => {
-    // Add new address to the list
-    const newAddress: Address = {
-      id: Date.now().toString(),
-      type: addressData.type || 'Home',
-      fullAddress: addressData.fullAddress || selectedLocation?.address || '',
-      isDefault: addressData.isDefault || false,
-    };
-
-    setAddresses(prev => [...prev, newAddress]);
+  const handleSaveNewAddress = async (addressData: any) => {
+    // Refresh the address list from API
+    await fetchAddresses();
     setShowAddAddressForm(false);
     setSelectedLocation(null);
   };
@@ -175,7 +222,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
           />
         </View>
         <View style={styles.addressTextContainer}>
-          <Text style={styles.addressType}>{address.type}</Text>
+          <Text style={styles.addressType}>{formatAddressType(address.type)}</Text>
           <Text style={styles.addressText}>{address.fullAddress}</Text>
         </View>
       </View>
@@ -224,7 +271,20 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {addresses.map((address) => renderAddressCard(address))}
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#00B14F" />
+                <Text style={styles.loadingText}>Loading addresses...</Text>
+              </View>
+            ) : addresses.length > 0 ? (
+              addresses.map((address) => renderAddressCard(address))
+            ) : (
+              <View style={styles.emptyContainer}>
+                <MaterialIcons name="location-off" size={64} color="#CCC" />
+                <Text style={styles.emptyText}>No saved addresses yet</Text>
+                <Text style={styles.emptySubtext}>Add your first address to get started</Text>
+              </View>
+            )}
           </ScrollView>
 
           {/* Add New Button - Fixed at bottom */}
@@ -251,22 +311,40 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
       )}
 
       {/* Edit Address Modal */}
-      <AddAddressFormScreen
-        visible={showEditModal}
-        locationName="Edit Address"
-        locationAddress={addresses.find(a => a.id === editingAddressId)?.fullAddress || ''}
-        latitude={12.9716}
-        longitude={80.2425}
-        onBack={() => {
-          setShowEditModal(false);
-          setEditingAddressId(null);
-        }}
-        onClose={() => {
-          setShowEditModal(false);
-          setEditingAddressId(null);
-        }}
-        onSave={handleSaveAddress}
-      />
+      {editingAddressId && (() => {
+        const editAddress = addresses.find(a => a.id === editingAddressId);
+        return (
+          <AddAddressFormScreen
+            visible={showEditModal}
+            editMode={true}
+            addressId={editingAddressId}
+            locationName="Edit Address"
+            locationAddress={editAddress?.fullAddress || ''}
+            latitude={editAddress?.latitude || 0}
+            longitude={editAddress?.longitude || 0}
+            initialData={{
+              houseNo: editAddress?.address1 || '',
+              building: editAddress?.address2 || '',
+              locality: editAddress?.address3 || '',
+              city: editAddress?.city || '',
+              state: editAddress?.state || '',
+              pincode: editAddress?.pincode?.toString() || '',
+              alternateMobile: editAddress?.alternate_phone_number?.toString() || '',
+              isDefault: editAddress?.isDefault || false,
+              tag: editAddress?.type || 'home',
+            }}
+            onBack={() => {
+              setShowEditModal(false);
+              setEditingAddressId(null);
+            }}
+            onClose={() => {
+              setShowEditModal(false);
+              setEditingAddressId(null);
+            }}
+            onSave={handleSaveAddress}
+          />
+        );
+      })()}
 
       {/* Add Address Form Modal */}
       <AddAddressFormScreen
@@ -451,5 +529,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: 12,
+  },
+  loadingText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#666',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: 12,
+  },
+  emptyText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#666',
+  },
+  emptySubtext: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
   },
 });

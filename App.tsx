@@ -197,8 +197,16 @@ export default function App() {
     setCurrentScreen('otp');
   };
 
-  const handleOtpSuccess = () => {
-    setCurrentScreen('welcome');
+  const handleOtpSuccess = (isExistingUser: boolean) => {
+    if (isExistingUser) {
+      // Existing user - go directly to home
+      console.log('[App] Existing user detected, navigating to home');
+      setCurrentScreen('home');
+    } else {
+      // New user - show welcome screen for profile completion
+      console.log('[App] New user detected, navigating to welcome screen');
+      setCurrentScreen('welcome');
+    }
   };
 
   const handleWelcomeComplete = async (name: string, email: string) => {
@@ -915,6 +923,7 @@ export default function App() {
             pointerEvents={currentScreen === 'addressSelection' || currentScreen === 'locationSelection' ? 'auto' : 'none'}
           >
             <AddressSelectionScreen
+              visible={currentScreen === 'addressSelection'}
               onBack={handleBackFromAddressSelection}
               onUseCurrentLocation={() => handleNavigateToLocationSelection()}
               onSearch={(query) => handleNavigateToLocationSelection(query)}
@@ -1052,6 +1061,7 @@ export default function App() {
             pointerEvents={currentScreen === 'myAddresses' ? 'auto' : 'none'}
           >
             <MyAddressesScreen
+              visible={currentScreen === 'myAddresses'}
               onBack={handleBackFromMyAddresses}
               onAddNew={() => console.log('Add New Address')}
               onEdit={(addressId) => console.log('Edit Address:', addressId)}

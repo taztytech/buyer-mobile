@@ -21,7 +21,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 interface OTPVerificationScreenProps {
   phoneNumber?: string;
   onBack?: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (isExistingUser: boolean) => void;
 }
 
 export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
@@ -141,13 +141,14 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
       // Call the verify OTP API
       const response = await authService.verifyOtp(phoneNumber, otpCode);
 
-      if (response.success) {
+      if (response.success && response.data) {
         // OTP verified successfully
         console.log('Login successful:', response.data);
+        console.log('Existing user:', response.data.existing_user);
 
-        // Navigate to home screen
+        // Navigate based on existing_user status
         if (onSuccess) {
-          onSuccess();
+          onSuccess(response.data.existing_user);
         }
       } else {
         // Show error message

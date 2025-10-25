@@ -27,6 +27,20 @@ interface AddAddressFormScreenProps {
   onBack?: () => void;
   onSave?: (addressData: any) => void;
   onClose?: () => void;
+  // Edit mode props
+  editMode?: boolean;
+  addressId?: string;
+  initialData?: {
+    houseNo?: string;
+    building?: string;
+    locality?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    alternateMobile?: string;
+    isDefault?: boolean;
+    tag?: 'home' | 'work' | 'other';
+  };
 }
 
 export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
@@ -38,6 +52,9 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   onBack,
   onSave,
   onClose,
+  editMode = false,
+  addressId,
+  initialData,
 }) => {
   const [houseNo, setHouseNo] = useState('');
   const [building, setBuilding] = useState('');
@@ -51,15 +68,43 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const slideAnim = useRef(new Animated.Value(1000)).current;
 
+  // Pre-fill form when in edit mode
+  useEffect(() => {
+    if (visible && editMode && initialData) {
+      setHouseNo(initialData.houseNo || '');
+      setBuilding(initialData.building || '');
+      setLocality(initialData.locality || '');
+      setCity(initialData.city || '');
+      setState(initialData.state || '');
+      setPincode(initialData.pincode || '');
+      setAlternateMobile(initialData.alternateMobile || '');
+      setIsDefault(initialData.isDefault || false);
+      if (initialData.tag) {
+        const tagCapitalized = initialData.tag.charAt(0).toUpperCase() + initialData.tag.slice(1) as 'Home' | 'Work' | 'Other';
+        setSelectedTag(tagCapitalized);
+      }
+    } else if (visible && !editMode) {
+      // Reset form for add mode
+      setHouseNo('');
+      setBuilding('');
+      setLocality('');
+      setCity('');
+      setState('');
+      setPincode('');
+      setAlternateMobile('');
+      setIsDefault(false);
+      setSelectedTag('Home');
+    }
+  }, [visible, editMode, initialData]);
+
   useEffect(() => {
     if (visible) {
       // Reset and start slide-up animation when modal becomes visible
       slideAnim.setValue(1000);
-      Animated.spring(slideAnim, {
+      Animated.timing(slideAnim, {
         toValue: 0,
+        duration: 300,
         useNativeDriver: true,
-        tension: 65,
-        friction: 11,
       }).start();
     } else {
       slideAnim.setValue(1000);
@@ -111,11 +156,18 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         is_default: isDefault,
       };
 
-      // Call API
-      const response = await addressService.addAddress(addressData);
+      let response;
+
+      if (editMode && addressId) {
+        // Call update API
+        response = await addressService.updateAddress(addressId, addressData);
+      } else {
+        // Call add API
+        response = await addressService.addAddress(addressData);
+      }
 
       if (response.success) {
-        Alert.alert('Success', 'Address added successfully', [
+        Alert.alert('Success', editMode ? 'Address updated successfully' : 'Address added successfully', [
           {
             text: 'OK',
             onPress: () => {
@@ -126,10 +178,10 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           },
         ]);
       } else {
-        Alert.alert('Error', response.error || 'Failed to add address');
+        Alert.alert('Error', response.error || (editMode ? 'Failed to update address' : 'Failed to add address'));
       }
     } catch (error) {
-      console.error('[AddAddressForm] Error adding address:', error);
+      console.error(`[AddAddressForm] Error ${editMode ? 'updating' : 'adding'} address:`, error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -178,9 +230,9 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           <View style={styles.header}>
             <View style={styles.locationHeader}>
               <MaterialIcons name="location-on" size={28} color="#00B14F" />
-              <Text style={styles.locationName}>{locationName}</Text>
+              <Text style={styles.locationName}>{editMode ? 'Edit Address' : locationName}</Text>
             </View>
-            <Text style={styles.locationAddress}>{locationAddress}</Text>
+            {!editMode && <Text style={styles.locationAddress}>{locationAddress}</Text>}
             <TouchableOpacity style={styles.relocateButton} onPress={onBack}>
               <MaterialIcons name="my-location" size={20} color="#00B14F" />
             </TouchableOpacity>
@@ -377,7 +429,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <>
-                <Text style={styles.continueButtonText}>Continue</Text>
+                <Text style={styles.continueButtonText}>{editMode ? 'Update' : 'Continue'}</Text>
                 <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
               </>
             )}

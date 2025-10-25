@@ -72,48 +72,42 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
       return;
     }
 
-    // TODO: Enable API call later
-    // setIsLoading(true);
+    setIsLoading(true);
 
-    // try {
-    //   // Get current user to retrieve phone number
-    //   const currentUser = await authService.getCurrentUser();
-    //   const phoneNumber = currentUser?.phoneNumber;
+    try {
+      // Get current user to retrieve phone number
+      const currentUser = await authService.getCurrentUser();
+      const phoneNumber = currentUser?.phoneNumber;
 
-    //   if (!phoneNumber) {
-    //     Alert.alert('Error', 'Phone number not found. Please login again.');
-    //     setIsLoading(false);
-    //     return;
-    //   }
+      if (!phoneNumber) {
+        Alert.alert('Error', 'Phone number not found. Please login again.');
+        setIsLoading(false);
+        return;
+      }
 
-    //   // Call the update profile API
-    //   const response = await authService.updateProfile({
-    //     name: fullName,
-    //     email: email,
-    //     phone_number: parseInt(phoneNumber, 10),
-    //     status: true,
-    //   });
+      // Call the create profile API with the exact format required
+      const response = await authService.createProfile({
+        name: fullName,
+        email: email,
+        phone_number: parseInt(phoneNumber, 10),
+        status: true,
+      });
 
-    //   if (response.success) {
-    //     console.log('[WelcomeScreen] Profile updated successfully');
-    //     // Navigate to home screen
-    //     if (onContinue) {
-    //       onContinue(fullName, email);
-    //     }
-    //   } else {
-    //     // Show error message
-    //     Alert.alert('Error', response.error || 'Failed to update profile. Please try again.');
-    //   }
-    // } catch (error: any) {
-    //   console.error('[WelcomeScreen] Profile update error:', error);
-    //   Alert.alert('Error', 'An unexpected error occurred. Please try again.');
-    // } finally {
-    //   setIsLoading(false);
-    // }
-
-    // For now, just navigate directly to home
-    if (onContinue) {
-      onContinue(fullName, email);
+      if (response.success) {
+        console.log('[WelcomeScreen] Profile created successfully');
+        // Navigate to home screen
+        if (onContinue) {
+          onContinue(fullName, email);
+        }
+      } else {
+        // Show error message
+        Alert.alert('Error', response.error || 'Failed to create profile. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('[WelcomeScreen] Profile creation error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 

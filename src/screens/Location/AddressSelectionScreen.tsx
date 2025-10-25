@@ -8,19 +8,22 @@ import {
   StatusBar,
   FlatList,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import { addressService, AddressResponse } from '@/services/address.service';
 
 interface SavedAddress {
   id: string;
-  type: 'Home' | 'Work' | 'Other';
+  type: 'home' | 'work' | 'other';
   address: string;
   city: string;
   distance?: string;
   latitude: number;
   longitude: number;
+  isDefault: boolean;
 }
 
 interface AddressSelectionScreenProps {
@@ -29,6 +32,7 @@ interface AddressSelectionScreenProps {
   onUseCurrentLocation?: () => void;
   onSelectAddress?: (address: SavedAddress) => void;
   onSearch?: (searchQuery: string) => void;
+  visible?: boolean; // To track when screen becomes visible
 }
 
 export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
@@ -37,33 +41,53 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
   onUseCurrentLocation,
   onSelectAddress,
   onSearch,
+  visible = true,
 }) => {
   const [searchText, setSearchText] = useState('');
   const [currentLocationName, setCurrentLocationName] = useState('Getting location...');
-  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([
-    {
-      id: '1',
-      type: 'Home',
-      address: 'Vigneshwar Nagar, Nanganallur',
-      city: 'Chennai',
-      distance: '0 m',
-      latitude: 12.9716,
-      longitude: 80.2425,
-    },
-    {
-      id: '2',
-      type: 'Work',
-      address: 'Anna Nagar',
-      city: 'Chennai',
-      distance: '5.2 km',
-      latitude: 13.0850,
-      longitude: 80.2101,
-    },
-  ]);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
+  // Fetch addresses on initial mount
   useEffect(() => {
     getCurrentLocationName();
+    fetchAddresses();
   }, []);
+
+  // Refetch addresses whenever the screen becomes visible
+  useEffect(() => {
+    if (visible) {
+      fetchAddresses();
+    }
+  }, [visible]);
+
+  const fetchAddresses = async () => {
+    setIsLoading(true);
+    try {
+      const response = await addressService.getAddresses();
+
+      if (response.success && response.data) {
+        // Transform API response to SavedAddress format
+        const addresses: SavedAddress[] = response.data.map((addr: AddressResponse) => ({
+          id: addr.id.toString(),
+          type: addr.type,
+          address: `${addr.address1}${addr.address2 ? ', ' + addr.address2 : ''}${addr.address3 ? ', ' + addr.address3 : ''}`,
+          city: addr.city,
+          latitude: addr.latitude,
+          longitude: addr.longitude,
+          isDefault: addr.is_default,
+        }));
+
+        setSavedAddresses(addresses);
+      } else {
+        console.error('[AddressSelectionScreen] Failed to fetch addresses:', response.error);
+      }
+    } catch (error) {
+      console.error('[AddressSelectionScreen] Error fetching addresses:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const getCurrentLocationName = async () => {
     try {
@@ -112,17 +136,21 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
     }
   };
 
-  const getIconForType = (type: 'Home' | 'Work' | 'Other') => {
+  const getIconForType = (type: 'home' | 'work' | 'other') => {
     switch (type) {
-      case 'Home':
+      case 'home':
         return 'home';
-      case 'Work':
+      case 'work':
         return 'work';
-      case 'Other':
+      case 'other':
         return 'location-on';
       default:
         return 'location-on';
     }
+  };
+
+  const formatAddressType = (type: 'home' | 'work' | 'other') => {
+    return type.charAt(0).toUpperCase() + type.slice(1);
   };
 
   const renderAddressItem = ({ item }: { item: SavedAddress }) => (
@@ -135,7 +163,14 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         <MaterialIcons name={getIconForType(item.type)} size={24} color="#00B14F" />
       </View>
       <View style={styles.addressInfo}>
-        <Text style={styles.addressName}>{item.type}</Text>
+        <View style={styles.addressNameRow}>
+          <Text style={styles.addressName}>{formatAddressType(item.type)}</Text>
+          {item.isDefault && (
+            <View style={styles.defaultBadge}>
+              <Text style={styles.defaultBadgeText}>Default</Text>
+            </View>
+          )}
+        </View>
         <Text style={styles.addressCity}>{item.address}</Text>
       </View>
       {item.distance && (
@@ -200,7 +235,12 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
           </View>
 
           {/* Saved Addresses */}
-          {savedAddresses.length > 0 && (
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#00B14F" />
+              <Text style={styles.loadingText}>Loading addresses...</Text>
+            </View>
+          ) : savedAddresses.length > 0 ? (
             <View style={styles.recentSection}>
               <Text style={styles.recentTitle}>SAVED ADDRESSES</Text>
 
@@ -213,6 +253,12 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
                   ItemSeparatorComponent={() => <View style={styles.divider} />}
                 />
               </View>
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <MaterialIcons name="location-off" size={48} color="#CCC" />
+              <Text style={styles.emptyText}>No saved addresses yet</Text>
+              <Text style={styles.emptySubtext}>Add a new address to get started</Text>
             </View>
           )}
         </ScrollView>
@@ -371,11 +417,28 @@ const styles = StyleSheet.create({
   addressInfo: {
     flex: 1,
   },
+  addressNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   addressName: {
     fontFamily: 'Poppins',
     fontSize: 16,
     fontWeight: '600',
     color: '#001E1F',
+  },
+  defaultBadge: {
+    backgroundColor: '#00B14F',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  defaultBadgeText: {
+    fontFamily: 'Poppins',
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#FFFFFF',
   },
   addressCity: {
     fontFamily: 'Poppins',
@@ -388,6 +451,34 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins',
     fontSize: 12,
     fontWeight: '400',
+    color: '#999',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  loadingText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#666',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 8,
+  },
+  emptyText: {
+    fontFamily: 'Poppins',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  emptySubtext: {
+    fontFamily: 'Poppins',
+    fontSize: 13,
     color: '#999',
   },
   footer: {

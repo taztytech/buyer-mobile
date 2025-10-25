@@ -35,6 +35,7 @@ export interface VerifyOtpResponse {
   access_token: string;
   refresh_token: string;
   expires_in?: number;
+  existing_user: boolean;
 }
 
 export interface UpdateProfileRequest {
@@ -50,6 +51,22 @@ export interface UpdateProfileResponse {
     phoneNumber: string;
     name?: string;
     email?: string;
+  };
+}
+
+export interface CreateProfileRequest {
+  name: string;
+  email: string;
+  phone_number: number;
+  status: boolean;
+}
+
+export interface CreateProfileResponse {
+  user: {
+    id: string;
+    phoneNumber: string;
+    name: string;
+    email: string;
   };
 }
 
@@ -197,6 +214,40 @@ class AuthService {
       return {
         success: false,
         error: error.message || 'Failed to update profile',
+        message: error.message,
+      };
+    }
+  }
+
+  /**
+   * Create user profile for new users
+   */
+  async createProfile(data: CreateProfileRequest): Promise<ApiResponse<CreateProfileResponse>> {
+    try {
+      const response = await apiService.patch<CreateProfileResponse>(
+        API_CONFIG.ENDPOINTS.USER.PROFILE,
+        data
+      );
+
+      // If creation successful, update stored user data
+      if (response.success && response.data?.user) {
+        const currentUser = await storageService.getUser();
+        const updatedUser = {
+          ...currentUser,
+          id: response.data.user.id,
+          phoneNumber: response.data.user.phoneNumber,
+          name: response.data.user.name,
+          email: response.data.user.email,
+        };
+        await storageService.saveUser(updatedUser);
+        console.log('[AuthService] Profile created successfully');
+      }
+
+      return response;
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to create profile',
         message: error.message,
       };
     }
