@@ -43,6 +43,7 @@ interface FavoriteRestaurant {
 }
 
 interface ExploreDishesScreenProps {
+  visible?: boolean;
   onBack?: () => void;
   onSelectItem?: (item: FavoriteItem) => void;
   onSelectRestaurant?: (restaurantId: number | string, restaurantName: string) => void;
@@ -56,6 +57,7 @@ const ShimmerCard = () => (
 );
 
 export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
+  visible = false,
   onBack,
   onSelectItem,
   onSelectRestaurant,
@@ -68,11 +70,15 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
   const [togglingRestaurantId, setTogglingRestaurantId] = useState<string | number | null>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
-  // Fetch on mount
+  // Only fetch when screen becomes visible for the first time
   useEffect(() => {
-    fetchFavorites();
-  }, []);
+    if (visible && !hasLoadedOnce) {
+      fetchFavorites();
+      setHasLoadedOnce(true);
+    }
+  }, [visible, hasLoadedOnce]);
 
   const fetchFavorites = async (isRefresh: boolean = false) => {
     try {

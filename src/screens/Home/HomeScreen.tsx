@@ -903,7 +903,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <View key={item} style={styles.categoryItem}>
                 {/* Image Shimmer */}
                 <View style={styles.categoryImageContainer}>
-                  <Shimmer width={74} height={59} borderRadius={12} backgroundColor="#E8E8E8" />
+                  <Shimmer width={59} height={59} borderRadius={30} backgroundColor="#E8E8E8" />
                 </View>
                 {/* Text Shimmer */}
                 <Shimmer width={60} height={12} borderRadius={6} backgroundColor="#E8E8E8" />
@@ -1496,7 +1496,7 @@ const styles = StyleSheet.create({
   },
   categoryItem: {
     width: 74,
-    marginRight: 14,
+    marginRight: 8,
     alignItems: 'center',
     justifyContent: 'flex-start',
   },

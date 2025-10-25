@@ -45,7 +45,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
   onAddNew,
   onEdit,
   onDelete,
-  visible = true,
+  visible = false,
 }) => {
   // State for managing addresses
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -60,16 +60,13 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
     latitude: number;
     longitude: number;
   } | null>(null);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
-  // Fetch addresses on initial mount
+  // Only fetch when screen becomes visible for the first time
   useEffect(() => {
-    fetchAddresses();
-  }, []);
-
-  // Refetch addresses whenever the screen becomes visible
-  useEffect(() => {
-    if (visible) {
+    if (visible && !hasLoadedOnce) {
       fetchAddresses();
+      setHasLoadedOnce(true);
     }
   }, [visible]);
 

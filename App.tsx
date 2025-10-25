@@ -50,10 +50,12 @@ export default function App() {
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const editProfileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const ordersScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const orderDetailScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const rateOrderScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const orderTrackingScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const searchScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const exploreDishesScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const privacyPolicyScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const termsConditionsScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const myAddressesScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -457,10 +459,34 @@ export default function App() {
   // Orders Navigation
   const handleNavigateToOrders = () => {
     setCurrentScreen('orders');
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(ordersScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   const handleBackFromOrders = () => {
     setCurrentScreen('profile');
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(ordersScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   // Order Detail Navigation
@@ -483,6 +509,7 @@ export default function App() {
   };
 
   const handleBackFromOrderDetail = () => {
+    setCurrentScreen('orders');
     Animated.parallel([
       Animated.timing(ordersScreenSlide, {
         toValue: 0,
@@ -494,9 +521,7 @@ export default function App() {
         duration: 180,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setCurrentScreen('orders');
-    });
+    ]).start();
   };
 
   // My Addresses Navigation
@@ -537,10 +562,34 @@ export default function App() {
   // Explore Dishes (Favorites) Navigation
   const handleNavigateToExploreDishes = () => {
     setCurrentScreen('exploreDishes');
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(exploreDishesScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   const handleBackFromExploreDishes = () => {
     setCurrentScreen('profile');
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(exploreDishesScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   // Privacy Policy Navigation
@@ -898,20 +947,27 @@ export default function App() {
             />
           </Animated.View>
 
-          {/* Conditionally render OrdersScreen only when visible */}
-          {currentScreen === 'orders' && (
-            <View style={styles.ordersOverlay}>
-              <OrdersScreen
-                onBack={handleBackFromOrders}
-                onOrderDetails={handleNavigateToOrderDetail}
-                onReorder={(orderId) => {}}
-                onRateOrder={handleNavigateToRateOrder}
-                onTrackOrder={handleNavigateToOrderTracking}
-                onHelp={(orderId) => {}}
-                onViewMore={() => {}}
-              />
-            </View>
-          )}
+          {/* Always render OrdersScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.ordersOverlay,
+              {
+                transform: [{ translateX: ordersScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'orders' || currentScreen === 'orderDetail' || currentScreen === 'rateOrder' || currentScreen === 'orderTracking' ? 'auto' : 'none'}
+          >
+            <OrdersScreen
+              visible={currentScreen === 'orders' || currentScreen === 'orderDetail' || currentScreen === 'rateOrder' || currentScreen === 'orderTracking'}
+              onBack={handleBackFromOrders}
+              onOrderDetails={handleNavigateToOrderDetail}
+              onReorder={(orderId) => {}}
+              onRateOrder={handleNavigateToRateOrder}
+              onTrackOrder={handleNavigateToOrderTracking}
+              onHelp={(orderId) => {}}
+              onViewMore={() => {}}
+            />
+          </Animated.View>
 
           {/* Always render OrderDetailScreen, positioned off-screen initially */}
           <Animated.View
@@ -923,15 +979,19 @@ export default function App() {
             ]}
             pointerEvents={currentScreen === 'orderDetail' ? 'auto' : 'none'}
           >
-            <OrderDetailScreen
-              orderId={selectedOrderId}
-              onBack={handleBackFromOrderDetail}
-              onChatWithUs={() => {}}
-              onThankDriver={() => {}}
-              onRateOrder={() => {}}
-              onReorder={() => {}}
-              onDownloadInvoice={() => {}}
-            />
+            {currentScreen === 'orderDetail' && (
+              <OrderDetailScreen
+                key={selectedOrderId}
+                orderId={selectedOrderId}
+                visible={true}
+                onBack={handleBackFromOrderDetail}
+                onChatWithUs={() => {}}
+                onThankDriver={() => {}}
+                onRateOrder={() => {}}
+                onReorder={() => {}}
+                onDownloadInvoice={() => {}}
+              />
+            )}
           </Animated.View>
 
           {/* Always render RateOrderScreen, positioned off-screen initially */}
@@ -1031,26 +1091,33 @@ export default function App() {
             />
           </Animated.View>
 
-          {/* Conditionally render ExploreDishesScreen only when visible */}
-          {currentScreen === 'exploreDishes' && (
-            <View style={styles.exploreDishesOverlay}>
-              <ExploreDishesScreen
-                onBack={handleBackFromExploreDishes}
-                onSelectItem={(item) => {
-                  // Navigate to category results screen to show restaurants with this dish
-                  setSelectedCategory(item.name);
-                  setCategoryCameFrom('favorites');
-                  setCurrentScreen('categoryResults');
-                }}
-                onSelectRestaurant={(restaurantId, restaurantName) => {
-                  setSelectedRestaurantId(Number(restaurantId));
-                  setSelectedRestaurantName(restaurantName);
-                  setRestaurantCameFrom('favorites');
-                  setCurrentScreen('restaurant');
-                }}
-              />
-            </View>
-          )}
+          {/* Always render ExploreDishesScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.exploreDishesOverlay,
+              {
+                transform: [{ translateX: exploreDishesScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'exploreDishes' ? 'auto' : 'none'}
+          >
+            <ExploreDishesScreen
+              visible={currentScreen === 'exploreDishes'}
+              onBack={handleBackFromExploreDishes}
+              onSelectItem={(item) => {
+                // Navigate to category results screen to show restaurants with this dish
+                setSelectedCategory(item.name);
+                setCategoryCameFrom('favorites');
+                setCurrentScreen('categoryResults');
+              }}
+              onSelectRestaurant={(restaurantId, restaurantName) => {
+                setSelectedRestaurantId(Number(restaurantId));
+                setSelectedRestaurantName(restaurantName);
+                setRestaurantCameFrom('favorites');
+                setCurrentScreen('restaurant');
+              }}
+            />
+          </Animated.View>
 
           {/* Always render Privacy Policy Screen, positioned off-screen initially */}
           <Animated.View

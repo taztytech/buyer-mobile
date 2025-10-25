@@ -34,6 +34,7 @@ interface Order {
 }
 
 interface OrdersScreenProps {
+  visible?: boolean;
   onBack?: () => void;
   onOrderDetails?: (orderId: string) => void;
   onReorder?: (orderId: string) => void;
@@ -44,6 +45,7 @@ interface OrdersScreenProps {
 }
 
 export const OrdersScreen: React.FC<OrdersScreenProps> = ({
+  visible = false,
   onBack,
   onOrderDetails,
   onReorder,
@@ -57,10 +59,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    // Only fetch when screen becomes visible for the first time
+    if (visible && !hasLoadedOnce) {
+      fetchOrders();
+      setHasLoadedOnce(true);
+    }
+  }, [visible, hasLoadedOnce]);
 
   const fetchOrders = async () => {
     try {
@@ -70,7 +77,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       const response = await ordersService.getOrders(20, 0);
 
       if (response.success && response.data) {
-        setOrders(response.data.orders || []);
+        // API returns orders in response.data.data array
+        const ordersArray = response.data.data || response.data.orders || [];
+        setOrders(ordersArray);
       } else {
         setError(response.error || 'Failed to load orders');
       }
@@ -220,7 +229,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  const renderOrderCard = (order: OrderListItem) => {
+  const renderOrderCard = (order: any) => {
     const statusConfig = {
       delivered: {
         label: 'Delivered',
@@ -245,6 +254,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     const mappedStatus = mapStatus(order.status);
     const status = statusConfig[mappedStatus];
 
+    // Get location from delivery address
+    const location = order.delivery_address?.city || 'Unknown';
+    const totalAmount = order.summary?.total_amount || 0;
+
     return (
       <TouchableOpacity
         key={order.id}
@@ -262,12 +275,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             />
             <View style={styles.restaurantDetails}>
               <Text style={styles.restaurantName}>{order.restaurant.name}</Text>
-              <Text style={styles.restaurantLocation}>{order.restaurant.location}</Text>
+              <Text style={styles.restaurantLocation}>{location}</Text>
             </View>
           </View>
           <View style={styles.orderMeta}>
             <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
-            <Text style={styles.orderAmount}>₹{order.total_amount}</Text>
+            <Text style={styles.orderAmount}>₹{totalAmount}</Text>
           </View>
         </View>
 
@@ -282,38 +295,20 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
         {/* Order Items */}
         <View style={styles.itemsContainer}>
-          {order.items.length === 1 ? (
-            // Single item with green dot
-            <View style={styles.singleItem}>
-              <View style={[
-                styles.vegIndicator,
-                !order.items[0].is_veg && { borderColor: '#DC2626' }
-              ]}>
-                <View style={[
-                  styles.vegDot,
-                  !order.items[0].is_veg && { backgroundColor: '#DC2626' }
-                ]} />
+          {/* Show first 2 items */}
+          <View style={styles.multipleItems}>
+            {order.items.slice(0, 2).map((item: any) => (
+              <View key={item.id} style={styles.itemRow}>
+                <Text style={styles.itemName}>{item.quantity}x {item.item_name}</Text>
               </View>
-              <Text style={styles.itemName}>{order.items[0].name}</Text>
-            </View>
-          ) : (
-            // Multiple items with images (show max 2)
-            <View style={styles.multipleItems}>
-              {order.items.slice(0, 2).map((item) => (
-                <View key={item.id} style={styles.itemRow}>
-                  {item.image && (
-                    <Image source={{ uri: item.image }} style={styles.itemImage} />
-                  )}
-                  <Text style={styles.itemName}>{item.name}</Text>
-                </View>
-              ))}
-              {order.items.length > 2 && (
-                <Text style={styles.moreItemsText}>
-                  +{order.items.length - 2} more items
-                </Text>
-              )}
-            </View>
-          )}
+            ))}
+            {/* Show +X more items if there are more than 2 */}
+            {order.items.length > 2 && (
+              <Text style={styles.moreItemsText}>
+                +{order.items.length - 2} more item{order.items.length - 2 > 1 ? 's' : ''}
+              </Text>
+            )}
+          </View>
         </View>
 
         {/* Action Buttons */}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,16 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { ordersService } from '@/services/orders.service';
+import { Shimmer } from '@/components/Shimmer';
 
 interface OrderDetailScreenProps {
   orderId?: string;
+  visible?: boolean;
   onBack?: () => void;
   onChatWithUs?: () => void;
   onThankDriver?: () => void;
@@ -22,7 +26,8 @@ interface OrderDetailScreenProps {
 }
 
 export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
-  orderId = '123',
+  orderId,
+  visible = false,
   onBack,
   onChatWithUs,
   onThankDriver,
@@ -30,8 +35,50 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   onReorder,
   onDownloadInvoice,
 }) => {
-  // Mock data - replace with actual data from API
-  const orderData = {
+  const [orderData, setOrderData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch order details function
+  const fetchOrderDetails = useCallback(async () => {
+    if (!orderId) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const response = await ordersService.getOrderById(Number(orderId));
+
+      if (response.success && response.data) {
+        setOrderData(response.data);
+      } else {
+        setError(response.error || 'Failed to load order details');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load order details');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [orderId]);
+
+  // Reset loading state when orderId changes
+  useEffect(() => {
+    if (orderId) {
+      setIsLoading(true);
+      setOrderData(null);
+      setError(null);
+    }
+  }, [orderId]);
+
+  // Fetch order details when screen becomes visible or orderId changes
+  useEffect(() => {
+    if (visible && orderId) {
+      fetchOrderDetails();
+    }
+  }, [visible, orderId, fetchOrderDetails]);
+
+  // Mock data fallback (for reference)
+  const mockOrderData = {
     status: 'delivered',
     driver: {
       name: 'John Peter',
@@ -61,6 +108,29 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     paymentMethod: 'Paid By UPI',
   };
 
+  // Helper function to format date
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: '2-digit'
+    });
+  };
+
+  // Helper function to map status
+  const getStatusDisplay = (status: string) => {
+    const statusMap: { [key: string]: { title: string; color: string } } = {
+      'delivered': { title: 'Your order was delivered!', color: '#00B14F' },
+      'confirmed': { title: 'Order confirmed!', color: '#00B14F' },
+      'preparing': { title: 'Order is being prepared', color: '#F59E0B' },
+      'out_for_delivery': { title: 'Order is on the way!', color: '#F59E0B' },
+      'pending_payment': { title: 'Payment pending', color: '#DC2626' },
+      'cancelled': { title: 'Order cancelled', color: '#DC2626' },
+    };
+    return statusMap[status] || { title: 'Order status', color: '#00B14F' };
+  };
+
   return (
     <View style={styles.outerContainer}>
       <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
@@ -84,56 +154,105 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       </View>
 
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Delivery Status Card */}
-          <View style={styles.card}>
-            <Text style={styles.statusTitle}>Your order was delivered!</Text>
-
-            {/* Driver Info */}
-            <View style={styles.driverSection}>
-              <Image source={orderData.driver.avatar} style={styles.driverAvatar} />
-              <View style={styles.driverInfo}>
-                <Text style={styles.driverName}>{orderData.driver.name}</Text>
-                <Text style={styles.driverLabel}>Your delivery driver</Text>
-              </View>
-            </View>
-
-            {/* Thank Driver Button */}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#00B14F" />
+            <Text style={styles.loadingText}>Loading order details...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <MaterialIcons name="error-outline" size={64} color="rgba(0, 0, 0, 0.2)" />
+            <Text style={styles.errorTitle}>Failed to load order</Text>
+            <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity
-              style={styles.thankButton}
-              onPress={onThankDriver}
-              activeOpacity={0.8}
+              style={styles.retryButton}
+              onPress={fetchOrderDetails}
+              activeOpacity={0.7}
             >
-              <MaterialIcons name="thumb-up" size={20} color="#FFFFFF" />
-              <Text style={styles.thankButtonText}>Thank Driver</Text>
+              <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
           </View>
+        ) : !orderData ? (
+          <View style={styles.errorContainer}>
+            <MaterialIcons name="receipt-long" size={64} color="rgba(0, 0, 0, 0.2)" />
+            <Text style={styles.errorTitle}>Order not found</Text>
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+          {/* Delivery Status Card */}
+          <View style={styles.card}>
+            <View style={styles.statusHeader}>
+              <MaterialIcons
+                name={orderData.status === 'delivered' ? 'check-circle' :
+                      orderData.status === 'cancelled' ? 'cancel' :
+                      'access-time'}
+                size={24}
+                color={getStatusDisplay(orderData.status).color}
+              />
+              <Text style={styles.statusTitle}>{getStatusDisplay(orderData.status).title}</Text>
+            </View>
 
-          {/* Order Info Card */}
+            {/* Driver Info - only show if tracking data available */}
+            {orderData.tracking && orderData.tracking.length > 0 && orderData.tracking[0].agent_name && (
+              <>
+                <View style={styles.driverSection}>
+                  {orderData.tracking[0].agent_photo_url ? (
+                    <Image
+                      source={{ uri: orderData.tracking[0].agent_photo_url }}
+                      style={styles.driverAvatar}
+                    />
+                  ) : (
+                    <View style={[styles.driverAvatar, styles.driverAvatarPlaceholder]}>
+                      <MaterialIcons name="person" size={32} color="#999" />
+                    </View>
+                  )}
+                  <View style={styles.driverInfo}>
+                    <Text style={styles.driverName}>{orderData.tracking[0].agent_name}</Text>
+                    <Text style={styles.driverLabel}>Your delivery driver</Text>
+                    {orderData.tracking[0].agent_phone && (
+                      <Text style={styles.driverPhone}>{orderData.tracking[0].agent_phone}</Text>
+                    )}
+                  </View>
+                </View>
+
+                {/* Thank Driver Button - only show for delivered orders */}
+                {orderData.status === 'delivered' && (
+                  <TouchableOpacity
+                    style={styles.thankButton}
+                    onPress={onThankDriver}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons name="thumb-up" size={20} color="#FFFFFF" />
+                    <Text style={styles.thankButtonText}>Thank Driver</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </View>
+
+          {/* Restaurant Info Card */}
           <View style={styles.card}>
             <View style={styles.orderHeader}>
               <View style={styles.restaurantInfo}>
-                <Image source={orderData.restaurant.logo} style={styles.restaurantLogo} />
+                <Image
+                  source={{ uri: orderData.restaurant.logo_url }}
+                  style={styles.restaurantLogo}
+                  defaultSource={require('@/assets/dummy-restaurent.png')}
+                />
                 <View style={styles.restaurantDetails}>
                   <Text style={styles.restaurantName}>{orderData.restaurant.name}</Text>
-                  <Text style={styles.restaurantLocation}>{orderData.restaurant.location}</Text>
-                  {orderData.items.map((item) => (
-                    <View key={item.id} style={styles.itemRow}>
-                      <View style={styles.vegIndicator}>
-                        <View style={styles.vegDot} />
-                      </View>
-                      <Text style={styles.itemName}>{item.name}</Text>
-                    </View>
-                  ))}
+                  <Text style={styles.restaurantLocation}>
+                    {orderData.delivery_address?.city || 'Location'}
+                  </Text>
                 </View>
               </View>
               <View style={styles.orderMeta}>
-                <Text style={styles.orderDate}>{orderData.date}</Text>
-                <Text style={styles.orderAmount}>₹{orderData.total}</Text>
+                <Text style={styles.orderDate}>{formatDate(orderData.created_at)}</Text>
+                <Text style={styles.orderAmount}>₹{orderData.summary.total_amount}</Text>
               </View>
             </View>
 
@@ -158,17 +277,74 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             </View>
           </View>
 
+          {/* Item Details Card */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Item Details</Text>
+            <View style={styles.itemDetailsContainer}>
+              {orderData.items.map((item: any, index: number) => (
+                <View key={item.id}>
+                  <View style={styles.itemDetailRow}>
+                    <View style={styles.itemDetailLeft}>
+                      <Text style={styles.itemDetailName}>
+                        {item.quantity}x {item.item_name}
+                      </Text>
+                      {item.customizations && item.customizations.length > 0 && (
+                        <View style={styles.customizationsContainer}>
+                          {item.customizations.map((customization: any, idx: number) => (
+                            <Text key={idx} style={styles.customizationText}>
+                              {customization.customization_group_name}:{' '}
+                              {customization.selected_options.map((opt: any) => opt.name).join(', ')}
+                            </Text>
+                          ))}
+                        </View>
+                      )}
+                      {item.variants && item.variants.length > 0 && (
+                        <View style={styles.customizationsContainer}>
+                          {item.variants.map((variant: any, idx: number) => (
+                            <Text key={idx} style={styles.customizationText}>
+                              {variant.variant_group_name}: {variant.selected_variant.name}
+                            </Text>
+                          ))}
+                        </View>
+                      )}
+                      {item.special_instructions && (
+                        <Text style={styles.specialInstructionsText}>
+                          Note: {item.special_instructions}
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={styles.itemDetailPrice}>₹{item.total_price}</Text>
+                  </View>
+                  {index < orderData.items.length - 1 && <View style={styles.itemDivider} />}
+                </View>
+              ))}
+            </View>
+          </View>
+
           {/* Delivery Address Card */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Delivery Address</Text>
             <View style={styles.addressRow}>
               <MaterialIcons name="location-on" size={24} color="#00B14F" />
-              <Text style={styles.addressText}>{orderData.deliveryAddress.address}</Text>
+              <Text style={styles.addressText}>
+                {[
+                  orderData.delivery_address?.address1,
+                  orderData.delivery_address?.address2,
+                  orderData.delivery_address?.address3,
+                  orderData.delivery_address?.city,
+                  orderData.delivery_address?.state,
+                  orderData.delivery_address?.pincode,
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
+              </Text>
             </View>
             <View style={styles.dashedDivider} />
             <View style={styles.addressRow}>
               <MaterialIcons name="phone" size={24} color="#00B14F" />
-              <Text style={styles.addressText}>{orderData.deliveryAddress.phone}</Text>
+              <Text style={styles.addressText}>
+                {orderData.delivery_address?.alternate_phone_number || 'N/A'}
+              </Text>
             </View>
           </View>
 
@@ -176,40 +352,46 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           <View style={styles.card}>
             <View style={styles.billHeader}>
               <Text style={styles.sectionTitle}>Bill Summary</Text>
-              <TouchableOpacity
-                style={styles.invoiceButton}
-                onPress={onDownloadInvoice}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="download" size={18} color="#00B14F" />
-                <Text style={styles.invoiceButtonText}>Invoice</Text>
-              </TouchableOpacity>
+              {orderData.invoice?.available && (
+                <TouchableOpacity
+                  style={styles.invoiceButton}
+                  onPress={onDownloadInvoice}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="download" size={18} color="#00B14F" />
+                  <Text style={styles.invoiceButtonText}>Invoice</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.billItems}>
               <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Item Total</Text>
-                <Text style={styles.billValue}>₹{orderData.billSummary.itemTotal}</Text>
+                <Text style={styles.billLabel}>Subtotal</Text>
+                <Text style={styles.billValue}>₹{orderData.summary.subtotal}</Text>
               </View>
               <View style={styles.billRow}>
-                <Text style={styles.billLabel}>GST and Restaurant Charges</Text>
-                <Text style={styles.billValue}>₹{orderData.billSummary.gstAndCharges}</Text>
+                <Text style={styles.billLabel}>GST and Charges</Text>
+                <Text style={styles.billValue}>₹{orderData.summary.tax_amount}</Text>
               </View>
               <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Delivery Partner Fee</Text>
-                <Text style={styles.billValue}>₹{orderData.billSummary.deliveryFee}</Text>
+                <Text style={styles.billLabel}>Delivery Fee</Text>
+                <Text style={styles.billValue}>₹{orderData.summary.delivery_fee}</Text>
               </View>
-              <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Platform Fee</Text>
-                <Text style={styles.billValue}>₹{orderData.billSummary.platformFee}</Text>
-              </View>
+              {orderData.summary.discount_amount > 0 && (
+                <View style={styles.billRow}>
+                  <Text style={styles.billLabel}>Discount</Text>
+                  <Text style={[styles.billValue, { color: '#00B14F' }]}>
+                    -₹{orderData.summary.discount_amount}
+                  </Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.dashedDivider} />
 
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>To Pay</Text>
-              <Text style={styles.totalValue}>₹{orderData.billSummary.toPay}</Text>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalValue}>₹{orderData.summary.total_amount}</Text>
             </View>
           </View>
 
@@ -218,12 +400,23 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             <Text style={styles.sectionTitle}>Payment Method</Text>
             <View style={styles.paymentRow}>
               <View style={styles.paymentIcon}>
-                <MaterialIcons name="account-balance-wallet" size={24} color="#00B14F" />
+                <MaterialIcons
+                  name={orderData.payment_method === 'cod' ? 'money' : 'account-balance-wallet'}
+                  size={24}
+                  color="#00B14F"
+                />
               </View>
-              <Text style={styles.paymentText}>{orderData.paymentMethod}</Text>
+              <Text style={styles.paymentText}>
+                {orderData.payment_method === 'cod' ? 'Cash on Delivery' :
+                 orderData.payment_method === 'online' ? 'Paid Online' :
+                 orderData.payment_method === 'upi' ? 'Paid by UPI' :
+                 orderData.payment_method.toUpperCase()}
+                {orderData.payment_status && ` (${orderData.payment_status})`}
+              </Text>
             </View>
           </View>
         </ScrollView>
+        )}
       </SafeAreaView>
     </View>
   );
@@ -293,13 +486,18 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
   },
+  statusHeader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
   statusTitle: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 20,
     color: '#001E1F',
     lineHeight: 30,
-    textAlign: 'center',
-    marginBottom: 16,
   },
   driverSection: {
     flexDirection: 'row',
@@ -555,5 +753,113 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#001E1F',
     lineHeight: 24,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: 'rgba(0, 0, 0, 0.6)',
+    marginTop: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  errorTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#001E1F',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  errorText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: 'rgba(0, 0, 0, 0.6)',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 24,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    backgroundColor: '#00B14F',
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  driverAvatarPlaceholder: {
+    backgroundColor: '#F0F0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  driverPhone: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginTop: 2,
+  },
+  moreItemsText: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginTop: 4,
+  },
+  itemDetailsContainer: {
+    gap: 8,
+  },
+  itemDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  itemDetailLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  itemDetailName: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#001E1F',
+    lineHeight: 21,
+  },
+  itemDetailPrice: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#001E1F',
+    lineHeight: 21,
+  },
+  customizationsContainer: {
+    marginTop: 2,
+    gap: 1,
+  },
+  customizationText: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    color: 'rgba(0, 30, 31, 0.6)',
+    lineHeight: 18,
+  },
+  specialInstructionsText: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    color: 'rgba(0, 30, 31, 0.8)',
+    lineHeight: 18,
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  itemDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    marginVertical: 8,
   },
 });
