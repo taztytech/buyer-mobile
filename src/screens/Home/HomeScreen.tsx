@@ -363,38 +363,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         const userLatitude = location.coords.latitude;
         const userLongitude = location.coords.longitude;
 
-        // Get address from coordinates using reverse geocoding
-        try {
-          const addresses = await Location.reverseGeocodeAsync({
-            latitude: userLatitude,
-            longitude: userLongitude,
-          });
-
-          if (addresses.length > 0) {
-            const addr = addresses[0];
-            const locationName = addr.district || addr.city || addr.subregion || 'Current Location';
-            const locationAddress = [
-              addr.street,
-              addr.district,
-              addr.city,
-              addr.region,
-              addr.country
-            ].filter(Boolean).join(', ');
-
-            // Update the selected location display
-            setSelectedLocation({
-              name: locationName,
-              address: locationAddress || 'Location detected',
-            });
-          }
-        } catch (error) {
-          // Still update with coordinates if reverse geocoding fails
-          setSelectedLocation({
-            name: 'Current Location',
-            address: `${userLatitude.toFixed(4)}, ${userLongitude.toFixed(4)}`,
-          });
-        }
-
+        // Don't update the location display - keep showing default or saved address
+        // Instead, use the coordinates to fetch nearby restaurants
         setIsLoadingLocation(false);
 
         // Reload home page data with user's actual location
@@ -663,7 +633,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         }}
         activeOpacity={0.7}
       >
-        <View style={styles.categoryImageContainer}>
+        <View style={[
+          styles.categoryImageContainer,
+          isViewAll && styles.viewAllImageContainer
+        ]}>
           <Image
             source={imageSource}
             style={isViewAll ? styles.viewAllImage : styles.categoryImage}
@@ -1515,6 +1488,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 6,
+  },
+  viewAllImageContainer: {
+    justifyContent: 'flex-end',
+    paddingBottom: 5,
   },
   categoryImage: {
     width: '100%',

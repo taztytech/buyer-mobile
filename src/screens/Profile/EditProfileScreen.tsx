@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,38 +7,112 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { authService } from '@/services/auth.service';
 
 interface EditProfileScreenProps {
   onBack?: () => void;
-  onSave?: (data: { name: string; phone: string; email?: string; alternatePhone?: string }) => void;
+  onSave?: (data: { name: string; phone: string; email?: string }) => void;
   initialName?: string;
   initialPhone?: string;
   initialEmail?: string;
-  initialAlternatePhone?: string;
 }
 
 export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
   onBack,
   onSave,
-  initialName = 'Ranjith',
-  initialPhone = '8965715421',
-  initialEmail = 'example@gmail.com',
-  initialAlternatePhone = '8965715421',
+  initialName = '',
+  initialPhone = '',
+  initialEmail = '',
 }) => {
   const [name, setName] = useState(initialName);
   const [phone, setPhone] = useState(initialPhone);
   const [email, setEmail] = useState(initialEmail);
-  const [alternatePhone, setAlternatePhone] = useState(initialAlternatePhone);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleUpdate = () => {
-    if (onSave) {
-      onSave({ name, phone, email, alternatePhone });
+  // Fetch profile data on mount
+  useEffect(() => {
+    const fetchProfile = async () => {
+      setIsLoading(true);
+      try {
+        // First try to get data from API
+        const response = await authService.getProfile();
+
+        if (response.success && response.data?.user) {
+          const user = response.data.user;
+          setName(user.name || '');
+          setPhone(user.phoneNumber || '');
+          setEmail(user.email || '');
+          // Alternate phone not available in current API response
+        } else {
+          // If API fails, try to get data from storage as fallback
+          const currentUser = await authService.getCurrentUser();
+          if (currentUser) {
+            setName(currentUser.name || '');
+            setPhone(currentUser.phoneNumber || '');
+            setEmail(currentUser.email || '');
+          }
+        }
+      } catch (error) {
+        // On error, try to load from storage
+        try {
+          const currentUser = await authService.getCurrentUser();
+          if (currentUser) {
+            setName(currentUser.name || '');
+            setPhone(currentUser.phoneNumber || '');
+            setEmail(currentUser.email || '');
+          }
+        } catch (storageError) {
+          // Silent fail - form will be empty
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, []);
+
+  const handleUpdate = async () => {
+    // Validate required fields
+    if (!name.trim()) {
+      Alert.alert('Validation Error', 'Name is required');
+      return;
     }
-    if (onBack) {
-      onBack();
+
+    setIsSaving(true);
+    try {
+      const response = await authService.updateProfile({
+        name: name.trim(),
+        email: email.trim() || undefined,
+      });
+
+      if (response.success) {
+        Alert.alert('Success', 'Profile updated successfully', [
+          {
+            text: 'OK',
+            onPress: () => {
+              if (onSave) {
+                onSave({ name, phone, email });
+              }
+              if (onBack) {
+                onBack();
+              }
+            },
+          },
+        ]);
+      } else {
+        Alert.alert('Error', response.error || 'Failed to update profile');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -57,93 +131,87 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
       </View>
 
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Mobile Number */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Mobile Number</Text>
-            <View style={styles.phoneRow}>
-              <View style={styles.countryCodeBox}>
-                <Text style={styles.flagEmoji}>🇮🇳</Text>
-                <Text style={styles.countryCode}>+91</Text>
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#00B14F" />
+            <Text style={styles.loadingText}>Loading profile...</Text>
+          </View>
+        ) : (
+          <>
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Mobile Number */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Mobile Number</Text>
+                <View style={styles.phoneRow}>
+                  <View style={styles.countryCodeBox}>
+                    <Text style={styles.flagEmoji}>🇮🇳</Text>
+                    <Text style={styles.countryCode}>+91</Text>
+                  </View>
+                  <View style={styles.phoneInputBox}>
+                    <TextInput
+                      style={styles.phoneInput}
+                      value={phone}
+                      placeholder="Enter mobile number"
+                      placeholderTextColor="rgba(0, 0, 0, 0.3)"
+                      keyboardType="phone-pad"
+                      editable={false}
+                    />
+                    <MaterialIcons name="check-circle" size={24} color="#00B14F" />
+                  </View>
+                </View>
               </View>
-              <View style={styles.phoneInputBox}>
+
+              {/* Name */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Name</Text>
                 <TextInput
-                  style={styles.phoneInput}
-                  value={phone}
-                  onChangeText={setPhone}
-                  placeholder="Enter mobile number"
+                  style={styles.textInput}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Enter your name"
                   placeholderTextColor="rgba(0, 0, 0, 0.3)"
-                  keyboardType="phone-pad"
                 />
-                <MaterialIcons name="check-circle" size={24} color="#00B14F" />
               </View>
-            </View>
-          </View>
 
-          {/* Name */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              style={styles.textInput}
-              value={name}
-              onChangeText={setName}
-              placeholder="Enter your name"
-              placeholderTextColor="rgba(0, 0, 0, 0.3)"
-            />
-          </View>
-
-          {/* Email (Optional) */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email (optional)</Text>
-            <TextInput
-              style={styles.textInput}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Enter your email"
-              placeholderTextColor="rgba(0, 0, 0, 0.3)"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-
-          {/* Alternate Mobile Number (Optional) */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Alternate Mobile Number (Optional)</Text>
-            <View style={styles.phoneRow}>
-              <View style={styles.countryCodeBox}>
-                <Text style={styles.flagEmoji}>🇮🇳</Text>
-                <Text style={styles.countryCode}>+91</Text>
-              </View>
-              <View style={styles.phoneInputBox}>
+              {/* Email (Optional) */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Email (optional)</Text>
                 <TextInput
-                  style={styles.phoneInput}
-                  value={alternatePhone}
-                  onChangeText={setAlternatePhone}
-                  placeholder="Enter alternate mobile number"
+                  style={styles.textInput}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="Enter your email"
                   placeholderTextColor="rgba(0, 0, 0, 0.3)"
-                  keyboardType="phone-pad"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
                 />
-                <MaterialIcons name="check-circle" size={24} color="#00B14F" />
               </View>
-            </View>
-          </View>
-        </ScrollView>
+            </ScrollView>
 
-        {/* Update Button - Fixed at bottom */}
-        <View style={styles.bottomButtonContainer}>
-          <TouchableOpacity
-            style={styles.updateButton}
-            onPress={handleUpdate}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.updateButtonText}>Update</Text>
-            <MaterialIcons name="arrow-forward" size={24} color="#000000" />
-          </TouchableOpacity>
-        </View>
+            {/* Update Button - Fixed at bottom */}
+            <View style={styles.bottomButtonContainer}>
+              <TouchableOpacity
+                style={[styles.updateButton, isSaving && styles.updateButtonDisabled]}
+                onPress={handleUpdate}
+                activeOpacity={0.8}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#000000" />
+                ) : (
+                  <>
+                    <Text style={styles.updateButtonText}>Update</Text>
+                    <MaterialIcons name="arrow-forward" size={24} color="#000000" />
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </SafeAreaView>
     </View>
   );
@@ -260,6 +328,18 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     backgroundColor: '#F5F5F5',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    gap: 12,
+  },
+  loadingText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#666',
+  },
   updateButton: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -269,6 +349,9 @@ const styles = StyleSheet.create({
     gap: 10,
     backgroundColor: '#E5E5E5',
     borderRadius: 10,
+  },
+  updateButtonDisabled: {
+    opacity: 0.6,
   },
   updateButtonText: {
     fontFamily: 'Poppins',

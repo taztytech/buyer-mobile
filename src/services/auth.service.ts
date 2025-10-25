@@ -182,6 +182,36 @@ class AuthService {
   }
 
   /**
+   * Get user profile
+   */
+  async getProfile(): Promise<ApiResponse<UpdateProfileResponse>> {
+    try {
+      const response = await apiService.get<UpdateProfileResponse>(
+        API_CONFIG.ENDPOINTS.USER.PROFILE
+      );
+
+      // If fetch successful, update stored user data
+      if (response.success && response.data?.user) {
+        const updatedUser = {
+          id: response.data.user.id,
+          phoneNumber: response.data.user.phoneNumber,
+          name: response.data.user.name,
+          email: response.data.user.email,
+        };
+        await storageService.saveUser(updatedUser);
+      }
+
+      return response;
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch profile',
+        message: error.message,
+      };
+    }
+  }
+
+  /**
    * Update user profile
    */
   async updateProfile(data: UpdateProfileRequest): Promise<ApiResponse<UpdateProfileResponse>> {

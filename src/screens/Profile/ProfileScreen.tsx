@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { storageService } from '@/services/storage.service';
 
 interface ProfileScreenProps {
   onBack?: () => void;
@@ -35,6 +36,25 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onLogout,
 }) => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [userName, setUserName] = useState('User');
+  const [userPhone, setUserPhone] = useState('');
+
+  // Fetch user data from storage on component mount
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const userData = await storageService.getUser();
+        if (userData) {
+          setUserName(userData.name || 'User');
+          setUserPhone(userData.phoneNumber || '');
+        }
+      } catch (error) {
+        // Silent fail - keep default values
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   // Menu item component
   const MenuItem = ({
@@ -107,8 +127,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
               {/* Name and Phone */}
               <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>RANJITH</Text>
-                <Text style={styles.profilePhone}>+91 78459 65231</Text>
+                <Text style={styles.profileName}>{userName.toUpperCase()}</Text>
+                <Text style={styles.profilePhone}>{userPhone ? `+91 ${userPhone}` : ''}</Text>
               </View>
             </View>
 

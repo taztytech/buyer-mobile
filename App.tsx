@@ -37,7 +37,7 @@ export default function App() {
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [selectedLocation, setSelectedLocation] = React.useState({ name: 'Chennai', address: 'Vigneshwar Nagar, Nanganallur, Tamilnadu,...' });
+  const [selectedLocation, setSelectedLocation] = React.useState({ name: 'Madurai', address: 'Madurai, Tamil Nadu, India' });
   const [selectedCategory, setSelectedCategory] = React.useState('Briyani');
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
