@@ -59,7 +59,6 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     // Debounce the search
     debounceTimer.current = setTimeout(async () => {
       try {
-        console.log('🔍 Searching for:', searchQuery);
         const response = await searchService.getSearchSuggestions(searchQuery);
 
         if (response.success && response.data) {
@@ -75,10 +74,8 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           }));
 
           const combined = [...items, ...restaurants];
-          console.log('✅ Search results:', combined.length);
           setSearchResults(combined);
         } else {
-          console.log('❌ Search failed:', response.error);
           setSearchResults([]);
         }
       } catch (error) {

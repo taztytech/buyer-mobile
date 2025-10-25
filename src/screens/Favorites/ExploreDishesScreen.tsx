@@ -60,8 +60,6 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
   onSelectItem,
   onSelectRestaurant,
 }) => {
-  console.log('🎯 ExploreDishesScreen component mounted');
-
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
   const [favoriteRestaurants, setFavoriteRestaurants] = useState<FavoriteRestaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,12 +71,10 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
 
   // Fetch on mount
   useEffect(() => {
-    console.log('🔄 useEffect triggered, calling fetchFavorites');
     fetchFavorites();
   }, []);
 
   const fetchFavorites = async (isRefresh: boolean = false) => {
-    console.log('📞 fetchFavorites called');
     try {
       if (isRefresh) {
         setIsRefreshing(true);
@@ -87,19 +83,14 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
       }
       setError(null);
 
-      console.log('🌐 Calling favoritesService.getAllFavorites()');
       const response = await favoritesService.getAllFavorites();
-
-      console.log('🔍 Full Response:', JSON.stringify(response, null, 2));
 
       if (response.success && response.data) {
         // The API returns nested data: response.data.data.data
         const actualData = response.data.data?.data || response.data;
-        console.log('📦 Actual Data:', JSON.stringify(actualData, null, 2));
 
         // Extract favorite items - need to go one level deeper
         const items = actualData.data?.items || actualData.items || actualData.favorite_items;
-        console.log('🍔 Items found:', items?.length || 0);
         if (items && Array.isArray(items)) {
           setFavoriteItems(items);
         } else {
@@ -108,14 +99,12 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
 
         // Extract favorite restaurants - need to go one level deeper
         const restaurants = actualData.data?.restaurants || actualData.restaurants || actualData.favorite_restaurants;
-        console.log('🏪 Restaurants found:', restaurants?.length || 0);
         if (restaurants && Array.isArray(restaurants)) {
           setFavoriteRestaurants(restaurants);
         } else {
           setFavoriteRestaurants([]);
         }
       } else {
-        console.log('❌ Response failed or no data');
         setError(response.error || 'Failed to load favorites');
       }
     } catch (error) {
@@ -137,15 +126,11 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
     setTogglingItemId(itemId);
 
     try {
-      console.log(`🔄 Toggling favorite for item ${itemId}`);
       const response = await favoritesService.toggleFavoriteItem(itemId);
 
       if (response.success) {
-        console.log(`✅ Item ${itemId} removed from favorites`);
         // Refresh the favorites list smoothly
         await fetchFavorites(true);
-      } else {
-        console.error('Failed to toggle favorite item:', response.error);
       }
     } catch (error) {
       console.error('Error toggling favorite item:', error);
@@ -161,15 +146,11 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
     setTogglingRestaurantId(restaurantId);
 
     try {
-      console.log(`🔄 Toggling favorite for restaurant ${restaurantId}`);
       const response = await favoritesService.toggleFavoriteRestaurant(restaurantId);
 
       if (response.success) {
-        console.log(`✅ Restaurant ${restaurantId} removed from favorites`);
         // Refresh the favorites list smoothly
         await fetchFavorites(true);
-      } else {
-        console.error('Failed to toggle favorite restaurant:', response.error);
       }
     } catch (error) {
       console.error('Error toggling favorite restaurant:', error);

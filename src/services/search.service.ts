@@ -44,14 +44,10 @@ class SearchService {
         limit: 10,
       });
 
-      console.log('🔍 Search API Response:', JSON.stringify(response, null, 2));
-
       if (response.success && response.data) {
         // Extract suggestions from response
         const data = response.data.data || response.data;
         const suggestions = data.suggestions || [];
-
-        console.log('📊 Suggestions:', suggestions.length);
 
         // Separate items and restaurants based on type field
         const items = suggestions
@@ -75,9 +71,6 @@ class SearchService {
             description: s.description,
           }));
 
-        console.log('🍔 Items:', items.length);
-        console.log('🏪 Restaurants:', restaurants.length);
-
         return {
           success: true,
           data: {
@@ -92,7 +85,6 @@ class SearchService {
         error: response.error || 'Failed to fetch search suggestions',
       };
     } catch (error: any) {
-      console.error('🔍 Search API Error:', error);
       return {
         success: false,
         error: error.message || 'Failed to fetch search suggestions',

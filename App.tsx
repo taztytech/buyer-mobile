@@ -43,8 +43,8 @@ export default function App() {
   const [categoryData, setCategoryData] = React.useState<any[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
-  const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search'>('home');
-  const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search'>('home');
+  const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites'>('home');
+  const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
@@ -202,11 +202,9 @@ export default function App() {
   const handleOtpSuccess = (isExistingUser: boolean) => {
     if (isExistingUser) {
       // Existing user - go directly to home
-      console.log('[App] Existing user detected, navigating to home');
       setCurrentScreen('home');
     } else {
       // New user - show welcome screen for profile completion
-      console.log('[App] New user detected, navigating to welcome screen');
       setCurrentScreen('welcome');
     }
   };
@@ -223,10 +221,9 @@ export default function App() {
           email,
         };
         await storageService.saveUser(updatedUser);
-        console.log('[App] User profile saved:', { name, email });
       }
     } catch (error) {
-      console.error('[App] Error saving profile:', error);
+      console.error('Error saving profile:', error);
     }
 
     setCurrentScreen('home');
@@ -415,6 +412,8 @@ export default function App() {
         duration: 200,
         useNativeDriver: true,
       }).start();
+    } else if (categoryCameFrom === 'favorites') {
+      setCurrentScreen('exploreDishes');
     } else {
       setCurrentScreen('home');
     }
@@ -422,7 +421,6 @@ export default function App() {
 
   // Restaurant Navigation from Category
   const handleNavigateToRestaurantFromCategory = (restaurantId: number, restaurantName: string) => {
-    console.log('[App.tsx] handleNavigateToRestaurantFromCategory called with ID:', restaurantId, 'Name:', restaurantName);
     setSelectedRestaurantId(restaurantId);
     setSelectedRestaurantName(restaurantName);
     setRestaurantCameFrom('category');
@@ -431,12 +429,10 @@ export default function App() {
 
   // Restaurant Navigation from Home
   const handleNavigateToRestaurantFromHome = (restaurantId: number, restaurantName: string) => {
-    console.log('[App.tsx] handleNavigateToRestaurantFromHome called with ID:', restaurantId, 'Name:', restaurantName);
     setSelectedRestaurantId(restaurantId);
     setSelectedRestaurantName(restaurantName);
     setRestaurantCameFrom('home');
     setCurrentScreen('restaurant');
-    console.log('[App.tsx] State updated, currentScreen:', 'restaurant', 'restaurantId:', restaurantId);
   };
 
   // Back from Restaurant (dynamic based on where we came from)
@@ -453,6 +449,8 @@ export default function App() {
         duration: 200,
         useNativeDriver: true,
       }).start();
+    } else if (restaurantCameFrom === 'favorites') {
+      setCurrentScreen('exploreDishes');
     } else {
       setCurrentScreen('categoryResults');
     }
@@ -941,11 +939,11 @@ export default function App() {
             <OrdersScreen
               onBack={handleBackFromOrders}
               onOrderDetails={handleNavigateToOrderDetail}
-              onReorder={(orderId) => console.log('Reorder:', orderId)}
+              onReorder={(orderId) => {}}
               onRateOrder={handleNavigateToRateOrder}
               onTrackOrder={handleNavigateToOrderTracking}
-              onHelp={(orderId) => console.log('Help:', orderId)}
-              onViewMore={() => console.log('View More Orders')}
+              onHelp={(orderId) => {}}
+              onViewMore={() => {}}
             />
           </Animated.View>
 
@@ -962,11 +960,11 @@ export default function App() {
             <OrderDetailScreen
               orderId={selectedOrderId}
               onBack={handleBackFromOrderDetail}
-              onChatWithUs={() => console.log('Chat with us')}
-              onThankDriver={() => console.log('Thank Driver')}
-              onRateOrder={() => console.log('Rate Order')}
-              onReorder={() => console.log('Reorder')}
-              onDownloadInvoice={() => console.log('Download Invoice')}
+              onChatWithUs={() => {}}
+              onThankDriver={() => {}}
+              onRateOrder={() => {}}
+              onReorder={() => {}}
+              onDownloadInvoice={() => {}}
             />
           </Animated.View>
 
@@ -983,7 +981,6 @@ export default function App() {
             <RateOrderScreen
               onBack={handleBackFromRateOrder}
               onSubmit={(data) => {
-                console.log('Rating submitted:', data);
                 handleBackFromRateOrder();
               }}
             />
@@ -1001,7 +998,7 @@ export default function App() {
           >
             <OrderTrackingScreen
               onBack={handleBackFromOrderTracking}
-              onCallPartner={() => console.log('Call Partner')}
+              onCallPartner={() => {}}
             />
           </Animated.View>
 
@@ -1018,11 +1015,9 @@ export default function App() {
             <SearchScreen
               onBack={handleBackFromSearch}
               onSelectResult={(result) => {
-                console.log('Selected:', result);
                 handleBackFromSearch();
               }}
               onSelectItem={(itemId, itemName) => {
-                console.log('[App.tsx] Search - Selected dish:', itemId, itemName);
                 // Navigate to category results screen to show restaurants with this dish
                 setSelectedCategory(itemName);
                 setCategoryCameFrom('search');
@@ -1036,7 +1031,6 @@ export default function App() {
                 }).start();
               }}
               onSelectRestaurant={(restaurantId, restaurantName) => {
-                console.log('[App.tsx] Search - Selected restaurant:', restaurantId, restaurantName);
                 setSelectedRestaurantId(restaurantId);
                 setSelectedRestaurantName(restaurantName);
                 setRestaurantCameFrom('search');
@@ -1065,9 +1059,9 @@ export default function App() {
             <MyAddressesScreen
               visible={currentScreen === 'myAddresses'}
               onBack={handleBackFromMyAddresses}
-              onAddNew={() => console.log('Add New Address')}
-              onEdit={(addressId) => console.log('Edit Address:', addressId)}
-              onDelete={(addressId) => console.log('Delete Address:', addressId)}
+              onAddNew={() => {}}
+              onEdit={(addressId) => {}}
+              onDelete={(addressId) => {}}
             />
           </Animated.View>
 
@@ -1076,8 +1070,18 @@ export default function App() {
             <View style={styles.exploreDishesOverlay}>
               <ExploreDishesScreen
                 onBack={handleBackFromExploreDishes}
-                onSelectCategory={(category) => console.log('Selected category:', category)}
-                onSelectRestaurant={(restaurant) => console.log('Selected restaurant:', restaurant)}
+                onSelectItem={(item) => {
+                  // Navigate to category results screen to show restaurants with this dish
+                  setSelectedCategory(item.name);
+                  setCategoryCameFrom('favorites');
+                  setCurrentScreen('categoryResults');
+                }}
+                onSelectRestaurant={(restaurantId, restaurantName) => {
+                  setSelectedRestaurantId(Number(restaurantId));
+                  setSelectedRestaurantName(restaurantName);
+                  setRestaurantCameFrom('favorites');
+                  setCurrentScreen('restaurant');
+                }}
               />
             </View>
           )}
@@ -1142,7 +1146,6 @@ export default function App() {
             <EditProfileScreen
               onBack={handleBackFromEditProfile}
               onSave={(data) => {
-                console.log('Save profile data:', data);
                 handleBackFromEditProfile();
               }}
             />
