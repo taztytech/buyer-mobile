@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,12 @@ import {
   TextInput,
   StatusBar,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { ordersService, OrderListItem } from '@/services/orders.service';
+import { Shimmer } from '@/components/Shimmer';
 
 interface OrderItem {
   id: string;
@@ -51,9 +54,62 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 }) => {
   const [searchText, setSearchText] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [orders, setOrders] = useState<OrderListItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data
-  const orders: Order[] = [
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const response = await ordersService.getOrders(20, 0);
+
+      if (response.success && response.data) {
+        setOrders(response.data.orders || []);
+      } else {
+        setError(response.error || 'Failed to load orders');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load orders');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Format date to match the design
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: '2-digit'
+    });
+  };
+
+  // Map API status to UI status
+  const mapStatus = (status: string): 'delivered' | 'cancelled' | 'ongoing' => {
+    const statusMap: { [key: string]: 'delivered' | 'cancelled' | 'ongoing' } = {
+      'delivered': 'delivered',
+      'completed': 'delivered',
+      'cancelled': 'cancelled',
+      'rejected': 'cancelled',
+      'pending': 'ongoing',
+      'confirmed': 'ongoing',
+      'preparing': 'ongoing',
+      'ready': 'ongoing',
+      'out_for_delivery': 'ongoing',
+    };
+    return statusMap[status.toLowerCase()] || 'ongoing';
+  };
+
+  // Mock data kept for fallback (commented out)
+  /*
+  const mockOrders: Order[] = [
     {
       id: '0',
       restaurantName: 'KFC',
@@ -132,6 +188,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       ],
     },
   ];
+  */
 
   const handleReorder = (orderId: string) => {
     if (onReorder) {
@@ -163,7 +220,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  const renderOrderCard = (order: Order) => {
+  const renderOrderCard = (order: OrderListItem) => {
     const statusConfig = {
       delivered: {
         label: 'Delivered',
@@ -185,27 +242,32 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       },
     };
 
-    const status = statusConfig[order.status];
+    const mappedStatus = mapStatus(order.status);
+    const status = statusConfig[mappedStatus];
 
     return (
       <TouchableOpacity
         key={order.id}
         style={styles.orderCard}
         activeOpacity={0.7}
-        onPress={() => handleOrderPress(order.id)}
+        onPress={() => handleOrderPress(order.id.toString())}
       >
         {/* Header Row */}
         <View style={styles.orderHeader}>
           <View style={styles.restaurantInfo}>
-            <Image source={order.restaurantLogo} style={styles.restaurantLogo} />
+            <Image
+              source={{ uri: order.restaurant.logo_url }}
+              style={styles.restaurantLogo}
+              defaultSource={require('@/assets/dummy-restaurent.png')}
+            />
             <View style={styles.restaurantDetails}>
-              <Text style={styles.restaurantName}>{order.restaurantName}</Text>
-              <Text style={styles.restaurantLocation}>{order.restaurantLocation}</Text>
+              <Text style={styles.restaurantName}>{order.restaurant.name}</Text>
+              <Text style={styles.restaurantLocation}>{order.restaurant.location}</Text>
             </View>
           </View>
           <View style={styles.orderMeta}>
-            <Text style={styles.orderDate}>{order.orderDate}</Text>
-            <Text style={styles.orderAmount}>₹{order.totalAmount}</Text>
+            <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
+            <Text style={styles.orderAmount}>₹{order.total_amount}</Text>
           </View>
         </View>
 
@@ -223,8 +285,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           {order.items.length === 1 ? (
             // Single item with green dot
             <View style={styles.singleItem}>
-              <View style={styles.vegIndicator}>
-                <View style={styles.vegDot} />
+              <View style={[
+                styles.vegIndicator,
+                !order.items[0].is_veg && { borderColor: '#DC2626' }
+              ]}>
+                <View style={[
+                  styles.vegDot,
+                  !order.items[0].is_veg && { backgroundColor: '#DC2626' }
+                ]} />
               </View>
               <Text style={styles.itemName}>{order.items[0].name}</Text>
             </View>
@@ -234,7 +302,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
               {order.items.slice(0, 2).map((item) => (
                 <View key={item.id} style={styles.itemRow}>
                   {item.image && (
-                    <Image source={item.image} style={styles.itemImage} />
+                    <Image source={{ uri: item.image }} style={styles.itemImage} />
                   )}
                   <Text style={styles.itemName}>{item.name}</Text>
                 </View>
@@ -250,11 +318,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
-          {order.status === 'ongoing' ? (
+          {mappedStatus === 'ongoing' ? (
             <>
               <TouchableOpacity
                 style={styles.rateButton}
-                onPress={() => handleHelp(order.id)}
+                onPress={() => handleHelp(order.id.toString())}
                 activeOpacity={0.7}
               >
                 <MaterialIcons name="help-outline" size={18} color="#001E1F" />
@@ -262,7 +330,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.reorderButton}
-                onPress={() => handleTrackOrder(order.id)}
+                onPress={() => handleTrackOrder(order.id.toString())}
                 activeOpacity={0.8}
               >
                 <MaterialIcons name="location-on" size={18} color="#FFFFFF" />
@@ -273,7 +341,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             <>
               <TouchableOpacity
                 style={styles.rateButton}
-                onPress={() => handleRateOrder(order.id)}
+                onPress={() => handleRateOrder(order.id.toString())}
                 activeOpacity={0.7}
               >
                 <MaterialIcons name="star-outline" size={18} color="#001E1F" />
@@ -281,7 +349,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.reorderButton}
-                onPress={() => handleReorder(order.id)}
+                onPress={() => handleReorder(order.id.toString())}
                 activeOpacity={0.8}
               >
                 <MaterialIcons name="refresh" size={18} color="#FFFFFF" />
@@ -339,19 +407,55 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         bounces={false}
         overScrollMode="never"
       >
-        {orders.map((order) => renderOrderCard(order))}
+        {isLoading ? (
+          // Loading shimmer
+          <>
+            {[1, 2, 3].map((i) => (
+              <View key={i} style={styles.orderCard}>
+                <Shimmer width="100%" height={200} borderRadius={20} />
+              </View>
+            ))}
+          </>
+        ) : error ? (
+          // Error state
+          <View style={styles.emptyState}>
+            <MaterialIcons name="error-outline" size={64} color="rgba(0, 0, 0, 0.2)" />
+            <Text style={styles.emptyTitle}>Failed to load orders</Text>
+            <Text style={styles.emptyText}>{error}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={fetchOrders}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : orders.length === 0 ? (
+          // Empty state
+          <View style={styles.emptyState}>
+            <MaterialIcons name="receipt-long" size={64} color="rgba(0, 0, 0, 0.2)" />
+            <Text style={styles.emptyTitle}>No Orders Yet</Text>
+            <Text style={styles.emptyText}>
+              Your order history will appear here once you place an order
+            </Text>
+          </View>
+        ) : (
+          <>
+            {orders.map((order) => renderOrderCard(order))}
 
-        {/* View More Button */}
-        <TouchableOpacity
-          style={styles.viewMoreButton}
-          onPress={onViewMore}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.viewMoreText}>View more orders</Text>
-        </TouchableOpacity>
+            {/* View More Button */}
+            <TouchableOpacity
+              style={styles.viewMoreButton}
+              onPress={onViewMore}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.viewMoreText}>View more orders</Text>
+            </TouchableOpacity>
 
-        {/* App Version */}
-        <Text style={styles.appVersion}>App Version 1.2</Text>
+            {/* App Version */}
+            <Text style={styles.appVersion}>App Version 1.2</Text>
+          </>
+        )}
       </ScrollView>
 
       </SafeAreaView>
@@ -622,5 +726,38 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     marginTop: 24,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#001E1F',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 24,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    backgroundColor: '#00B14F',
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#FFFFFF',
   },
 });
