@@ -264,8 +264,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           )
         );
         console.error('Failed to toggle favorite item:', response.error);
-      } else {
-        console.log(`✅ Favorite item toggled: ${item?.name} - ${!previousState ? 'Added' : 'Removed'}`);
       }
     } catch (error) {
       // Revert on error
@@ -792,12 +790,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           const sections: MenuSection[] = restaurant.categories.map((category: any, index: number) => {
             // Process items in this category
             const items: MenuItem[] = (category.items || []).map((item: any) => {
-              if (item.has_customizations || item.customizations) {
-                console.log('🔍 Processing item:', item.name, 'ID:', item.id, 'has_customizations:', item.has_customizations);
-                console.log('📋 Customizations data:', JSON.stringify(item.customizations, null, 2));
-                console.log('🔍 Full item data:', JSON.stringify(item, null, 2));
-              }
-
               // Parse customizations/add-ons from API
               // The API returns customization groups with options inside
               let addOns: AddOn[] = [];
@@ -816,7 +808,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     });
                   }
                 });
-                console.log('✅ Parsed add-ons from', item.customizations.length, 'groups:', addOns.length, 'options');
               }
 
               const menuItem: MenuItem = {
