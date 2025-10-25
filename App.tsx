@@ -43,7 +43,8 @@ export default function App() {
   const [categoryData, setCategoryData] = React.useState<any[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
-  const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category'>('home');
+  const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search'>('home');
+  const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search'>('home');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
@@ -401,11 +402,22 @@ export default function App() {
   // Category Results Navigation
   const handleNavigateToCategoryResults = (categoryName: string) => {
     setSelectedCategory(categoryName);
+    setCategoryCameFrom('home');
     setCurrentScreen('categoryResults');
   };
 
   const handleBackFromCategoryResults = () => {
-    setCurrentScreen('home');
+    if (categoryCameFrom === 'search') {
+      setCurrentScreen('search');
+      // Re-open search screen with animation
+      Animated.timing(searchScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      setCurrentScreen('home');
+    }
   };
 
   // Restaurant Navigation from Category
@@ -431,6 +443,16 @@ export default function App() {
   const handleBackFromRestaurant = () => {
     if (restaurantCameFrom === 'home') {
       setCurrentScreen('home');
+    } else if (restaurantCameFrom === 'category') {
+      setCurrentScreen('categoryResults');
+    } else if (restaurantCameFrom === 'search') {
+      setCurrentScreen('search');
+      // Re-open search screen with animation
+      Animated.timing(searchScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
     } else {
       setCurrentScreen('categoryResults');
     }
@@ -998,6 +1020,34 @@ export default function App() {
               onSelectResult={(result) => {
                 console.log('Selected:', result);
                 handleBackFromSearch();
+              }}
+              onSelectItem={(itemId, itemName) => {
+                console.log('[App.tsx] Search - Selected dish:', itemId, itemName);
+                // Navigate to category results screen to show restaurants with this dish
+                setSelectedCategory(itemName);
+                setCategoryCameFrom('search');
+                setCurrentScreen('categoryResults');
+
+                // Close search screen with animation
+                Animated.timing(searchScreenSlide, {
+                  toValue: SCREEN_WIDTH,
+                  duration: 200,
+                  useNativeDriver: true,
+                }).start();
+              }}
+              onSelectRestaurant={(restaurantId, restaurantName) => {
+                console.log('[App.tsx] Search - Selected restaurant:', restaurantId, restaurantName);
+                setSelectedRestaurantId(restaurantId);
+                setSelectedRestaurantName(restaurantName);
+                setRestaurantCameFrom('search');
+                setCurrentScreen('restaurant');
+
+                // Close search screen with animation
+                Animated.timing(searchScreenSlide, {
+                  toValue: SCREEN_WIDTH,
+                  duration: 200,
+                  useNativeDriver: true,
+                }).start();
               }}
             />
           </Animated.View>
