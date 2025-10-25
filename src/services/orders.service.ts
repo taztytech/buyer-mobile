@@ -102,9 +102,12 @@ class OrdersService {
    */
   async addToCart(request: AddToCartRequest): Promise<ApiResponse<any>> {
     try {
+      console.log('📦 [OrdersService] Adding item to cart:', JSON.stringify(request, null, 2));
       const response = await apiService.post('/api/buyer/cart/add', request);
+      console.log('📦 [OrdersService] Add to cart response:', JSON.stringify(response, null, 2));
       return response;
     } catch (error: any) {
+      console.error('❌ [OrdersService] Error adding to cart:', error);
       return {
         success: false,
         error: error.message || 'Failed to add item to cart',
@@ -117,9 +120,12 @@ class OrdersService {
    */
   async getCart(): Promise<ApiResponse<Cart>> {
     try {
+      console.log('🛒 [OrdersService] Fetching cart...');
       const response = await apiService.get<any>('/api/buyer/cart');
+      console.log('🛒 [OrdersService] Get cart response:', JSON.stringify(response, null, 2));
       return response;
     } catch (error: any) {
+      console.error('❌ [OrdersService] Error fetching cart:', error);
       return {
         success: false,
         error: error.message || 'Failed to fetch cart',
@@ -189,9 +195,24 @@ class OrdersService {
    */
   async createOrder(request: CreateOrderRequest): Promise<ApiResponse<Order>> {
     try {
+      console.log('🎯 [OrdersService] Creating order with request:', JSON.stringify(request, null, 2));
       const response = await apiService.post<any>('/api/buyer/orders', request);
+      console.log('🎯 [OrdersService] Create order response:', JSON.stringify(response, null, 2));
+
+      if (response.success) {
+        console.log('✅ [OrdersService] Order created successfully!');
+        console.log('   - Order ID:', response.data?.order_id);
+        console.log('   - Order Number:', response.data?.order_number);
+        console.log('   - Status:', response.data?.status);
+        console.log('   - Payment Status:', response.data?.payment_status);
+        console.log('   - Total Amount:', response.data?.total_amount);
+      } else {
+        console.error('❌ [OrdersService] Order creation failed:', response.error);
+      }
+
       return response;
     } catch (error: any) {
+      console.error('❌ [OrdersService] Error creating order:', error);
       return {
         success: false,
         error: error.message || 'Failed to create order',
@@ -211,9 +232,23 @@ class OrdersService {
       const params: any = { limit, offset };
       if (status) params.status = status;
 
+      console.log('📋 [OrdersService] Fetching orders with params:', params);
       const response = await apiService.get<any>('/api/buyer/orders', params);
+      console.log('📋 [OrdersService] Get orders response:', JSON.stringify(response, null, 2));
+
+      if (response.success && response.data) {
+        const orderCount = response.data.orders?.length || 0;
+        console.log(`✅ [OrdersService] Found ${orderCount} orders`);
+        if (orderCount > 0) {
+          console.log('   First order:', response.data.orders[0]);
+        }
+      } else {
+        console.error('❌ [OrdersService] Failed to fetch orders:', response.error);
+      }
+
       return response;
     } catch (error: any) {
+      console.error('❌ [OrdersService] Error fetching orders:', error);
       return {
         success: false,
         error: error.message || 'Failed to fetch orders',
