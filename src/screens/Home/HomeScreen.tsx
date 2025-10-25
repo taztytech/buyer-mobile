@@ -5,6 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
 import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/home.service';
+import { addressService } from '@/services/address.service';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { Shimmer } from '@/components/Shimmer';
 import * as Location from 'expo-location';
@@ -182,6 +183,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [selectedLocation, setSelectedLocation] = React.useState(externalSelectedLocation || { name: DEFAULT_LOCATION.name, address: DEFAULT_LOCATION.address });
   const [isCategorySectionSticky, setIsCategorySectionSticky] = React.useState(false);
   const flatListRef = React.useRef<FlatList>(null);
+  const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
+  const [hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
 
   // Update local state when external selectedLocation changes
   React.useEffect(() => {
@@ -190,15 +193,74 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [externalSelectedLocation]);
 
-  // Initialize with default location on app load
-  // Location permission is only requested when user explicitly clicks to change location
+  // Fetch default address on component mount
   React.useEffect(() => {
-    // Always use default location on startup
-    setSelectedLocation({
-      name: DEFAULT_LOCATION.name,
-      address: DEFAULT_LOCATION.address,
-    });
-    setIsLoadingLocation(false);
+    const fetchDefaultAddress = async () => {
+      try {
+        const response = await addressService.getAddresses();
+
+        if (response.success && response.data) {
+          // Find the default address
+          const defaultAddress = response.data.find(addr => addr.is_default);
+
+          if (defaultAddress) {
+            // User has a default address saved
+            setHasDefaultAddress(true);
+            setDefaultAddressCoords({
+              latitude: defaultAddress.latitude,
+              longitude: defaultAddress.longitude,
+            });
+
+            // Format address type (home -> Home, work -> Work, other -> Other)
+            const formattedType = defaultAddress.type.charAt(0).toUpperCase() + defaultAddress.type.slice(1);
+
+            // Update selected location display
+            setSelectedLocation({
+              name: formattedType,
+              address: `${defaultAddress.address1}${defaultAddress.address2 ? ', ' + defaultAddress.address2 : ''}${defaultAddress.address3 ? ', ' + defaultAddress.address3 : ''}, ${defaultAddress.city}`,
+            });
+
+            // Fetch home data with default address coordinates
+            await fetchHomeData(defaultAddress.latitude, defaultAddress.longitude);
+          } else {
+            // No default address, use fallback location
+            setHasDefaultAddress(false);
+            setSelectedLocation({
+              name: DEFAULT_LOCATION.name,
+              address: DEFAULT_LOCATION.address,
+            });
+
+            // Fetch home data with default Madurai coordinates
+            await fetchHomeData();
+          }
+        } else {
+          // API failed, use fallback location
+          setHasDefaultAddress(false);
+          setSelectedLocation({
+            name: DEFAULT_LOCATION.name,
+            address: DEFAULT_LOCATION.address,
+          });
+
+          // Fetch home data with default Madurai coordinates
+          await fetchHomeData();
+        }
+      } catch (error) {
+        // Error fetching addresses, use fallback location
+        setHasDefaultAddress(false);
+        setSelectedLocation({
+          name: DEFAULT_LOCATION.name,
+          address: DEFAULT_LOCATION.address,
+        });
+
+        // Fetch home data with default Madurai coordinates
+        await fetchHomeData();
+      } finally {
+        setIsLoadingLocation(false);
+      }
+    };
+
+    fetchDefaultAddress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
@@ -215,7 +277,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       } else {
         // Fallback: Hide shimmer after 3 seconds even if images haven't loaded
         const timeout = setTimeout(() => {
-          console.log('[Shimmer] Banner timeout - hiding shimmer');
           setShowBannerShimmer(false);
         }, 3000);
         return () => clearTimeout(timeout);
@@ -236,7 +297,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       } else {
         // Fallback: Hide shimmer after 3 seconds even if images haven't loaded
         const timeout = setTimeout(() => {
-          console.log('[Shimmer] Category timeout - hiding shimmer');
           setShowCategoryShimmer(false);
         }, 3000);
         return () => clearTimeout(timeout);
@@ -257,7 +317,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       } else {
         // Fallback: Hide shimmer after 3 seconds even if images haven't loaded
         const timeout = setTimeout(() => {
-          console.log('[Shimmer] Restaurant timeout - hiding shimmer');
           setShowRestaurantShimmer(false);
         }, 3000);
         return () => clearTimeout(timeout);
@@ -268,53 +327,47 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [isLoadingRestaurants, restaurantData, loadedRestaurantImages]);
 
-  // Show location permission modal as soon as home page loads
+  // Show location permission modal only if no default address exists
   React.useEffect(() => {
-    // Only show if modal hasn't been shown yet this session
-    if (!hasShownLocationModal) {
-      console.log('[Location Modal] Showing modal on home page load');
+    // Only show if modal hasn't been shown yet this session AND user has no default address
+    if (!hasShownLocationModal && !hasDefaultAddress && !isLoadingLocation) {
       setShowLocationPopup(true);
       setHasShownLocationModal(true);
     }
-  }, [hasShownLocationModal]);
+  }, [hasShownLocationModal, hasDefaultAddress, isLoadingLocation]);
 
   const handleAllowLocation = async () => {
     // Prevent multiple simultaneous permission requests
     if (isRequestingPermission.current) {
-      console.log('[Location] Permission request already in progress, ignoring...');
       return;
     }
 
     try {
       isRequestingPermission.current = true;
-      console.log('[Location] Allow Access button clicked!');
-      console.log('[Location] Starting permission request...');
 
       // Close the custom modal first
       setShowLocationPopup(false);
 
       // First check current permission status
       const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
-      console.log('[Location] Existing permission status:', existingStatus);
 
       let finalStatus = existingStatus;
 
       // Request permission (will show Android system dialog)
-      console.log('[Location] Requesting foreground permission - system dialog should appear now...');
       const { status } = await Location.requestForegroundPermissionsAsync();
       finalStatus = status;
-      console.log('[Location] Permission request result:', status);
 
       if (finalStatus === 'granted') {
-        console.log('[Location] Permission granted, getting current position...');
         const location = await Location.getCurrentPositionAsync({});
-        console.log('[Location] Current location:', location);
+
+        const userLatitude = location.coords.latitude;
+        const userLongitude = location.coords.longitude;
 
         // Get address from coordinates using reverse geocoding
         try {
           const addresses = await Location.reverseGeocodeAsync({
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
+            latitude: userLatitude,
+            longitude: userLongitude,
           });
 
           if (addresses.length > 0) {
@@ -328,8 +381,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               addr.country
             ].filter(Boolean).join(', ');
 
-            console.log('[Location] Detected location:', locationName, locationAddress);
-
             // Update the selected location display
             setSelectedLocation({
               name: locationName,
@@ -337,17 +388,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             });
           }
         } catch (error) {
-          console.error('[Location] Error reverse geocoding:', error);
           // Still update with coordinates if reverse geocoding fails
           setSelectedLocation({
             name: 'Current Location',
-            address: `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`,
+            address: `${userLatitude.toFixed(4)}, ${userLongitude.toFixed(4)}`,
           });
         }
 
         setIsLoadingLocation(false);
+
+        // Reload home page data with user's actual location
+        await fetchHomeData(userLatitude, userLongitude);
       } else {
-        console.log('[Location] Permission denied or not granted:', finalStatus);
         setHasShownLocationModal(true); // Mark as shown to prevent repeated popups
         Alert.alert(
           'Permission Denied',
@@ -359,7 +411,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         );
       }
     } catch (error) {
-      console.error('[Location] Error requesting permission:', error);
       Alert.alert('Error', 'Failed to get location permission. Please try again.');
     } finally {
       isRequestingPermission.current = false;
@@ -409,7 +460,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         .map(item => item.id.toString());
 
       if (localImageIds.length > 0) {
-        console.log('[Category] Marking local images as loaded:', localImageIds);
         setLoadedCategoryImages(prev => {
           const newSet = new Set(prev);
           localImageIds.forEach(id => newSet.add(id));
@@ -424,7 +474,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         .map(item => item.id.toString());
 
       if (localImageIds.length > 0) {
-        console.log('[Restaurant] Marking local images as loaded:', localImageIds);
         setLoadedRestaurantImages(prev => {
           const newSet = new Set(prev);
           localImageIds.forEach(id => newSet.add(id));
@@ -434,15 +483,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [categoryData, restaurantData]);
 
-  // Fetch home data on component mount
-  React.useEffect(() => {
-    const fetchHomeData = async () => {
-      try {
-        setIsLoadingBanners(true);
-        setIsLoadingCategories(true);
-        setIsLoadingRestaurants(true);
+  // Fetch home data function - can be called multiple times
+  const fetchHomeData = React.useCallback(async (latitude?: number, longitude?: number) => {
+    try {
+      setIsLoadingBanners(true);
+      setIsLoadingCategories(true);
+      setIsLoadingRestaurants(true);
 
-        const response = await homeService.getHomeData();
+      // Use provided coordinates or default Madurai location
+      const lat = latitude ?? DEFAULT_LOCATION.latitude;
+      const lng = longitude ?? DEFAULT_LOCATION.longitude;
+
+      const response = await homeService.getHomeData(lat, lng);
 
         if (response.success && response.data) {
           // The API returns data nested as: { data: { data: { promotional_banner: {...} } } }
@@ -493,8 +545,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           // Handle restaurants - use fallback if empty or undefined
           if (nearbyRestaurants && Array.isArray(nearbyRestaurants) && nearbyRestaurants.length > 0) {
-            console.log('[HomeScreen] Restaurant data from API:', nearbyRestaurants);
-
             // Transform API data to match our Restaurant interface
             const transformedRestaurants = nearbyRestaurants.map((restaurant: any) => ({
               id: restaurant.id,
@@ -509,10 +559,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
             }));
 
-            console.log('[HomeScreen] Transformed restaurant data:', transformedRestaurants);
             setRestaurantData(transformedRestaurants);
           } else {
-            console.log('[HomeScreen] Using fallback restaurant data');
             setRestaurantData(fallbackRestaurantData);
           }
         } else {
@@ -521,7 +569,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           setRestaurantData(fallbackRestaurantData);
         }
       } catch (error) {
-        console.error('[HomeScreen] Error fetching home data:', error);
         setCarouselData(fallbackCarouselData);
         setCategoryData(fallbackCategoryData);
         setRestaurantData(fallbackRestaurantData);
@@ -530,9 +577,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setIsLoadingCategories(false);
         setIsLoadingRestaurants(false);
       }
-    };
-
-    fetchHomeData();
   }, []);
 
   const handleLogout = async () => {
@@ -548,17 +592,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
-            setIsLoggingOut(true);
             try {
               await authService.logout();
               if (onLogout) {
                 onLogout();
               }
             } catch (error) {
-              console.error('Logout error:', error);
               Alert.alert('Error', 'Failed to logout. Please try again.');
-            } finally {
-              setIsLoadingBanners(false);
             }
           },
         },
@@ -610,6 +650,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const renderCategoryItem = React.useCallback(({ item }: { item: CategoryItem }) => {
     const imageSource = typeof item.icon === 'string' ? { uri: item.icon } : item.icon;
+    const isViewAll = item.id === 'view-all' || item.name === 'View All';
 
     return (
       <TouchableOpacity
@@ -625,15 +666,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <View style={styles.categoryImageContainer}>
           <Image
             source={imageSource}
-            style={styles.categoryImage}
+            style={isViewAll ? styles.viewAllImage : styles.categoryImage}
             resizeMode="contain"
             testID={`category-image-${item.id}`}
             onLoad={() => {
-              console.log('[Category] Image loaded:', item.name);
               setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
             }}
             onError={(error) => {
-              console.error('[Category] Image load error:', item.name, error.nativeEvent.error);
               // Mark as loaded anyway to not block shimmer
               setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
             }}
@@ -989,9 +1028,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <RestaurantCard
                   restaurant={restaurant}
                   onPress={() => {
-                    console.log('[HomeScreen] Restaurant card pressed:', restaurant.name, 'ID:', restaurant.id);
                     if (onNavigateToRestaurant) {
-                      console.log('[HomeScreen] Calling onNavigateToRestaurant with ID:', restaurant.id, 'Name:', restaurant.name);
                       onNavigateToRestaurant(restaurant.id, restaurant.name);
                     }
                   }}
@@ -1482,6 +1519,18 @@ const styles = StyleSheet.create({
   categoryImage: {
     width: '100%',
     height: '100%',
+    shadowColor: '#000000',
+    shadowOffset: {
+      width: -6,
+      height: -2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  viewAllImage: {
+    width: 45,
+    height: 45,
     shadowColor: '#000000',
     shadowOffset: {
       width: -6,

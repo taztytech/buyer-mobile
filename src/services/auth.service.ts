@@ -131,8 +131,6 @@ class AuthService {
 
         // 3. Set tokens in API service (in-memory)
         apiService.setTokens(response.data.access_token, response.data.refresh_token);
-
-        console.log('[AuthService] Session initialized successfully');
       }
 
       return response;
@@ -156,13 +154,11 @@ class AuthService {
       // Clear tokens and user data regardless of API response
       await apiService.clearTokens();
 
-      console.log('[AuthService] Logout successful');
       return response;
     } catch (error: any) {
       // Clear tokens even if API call fails
       await apiService.clearTokens();
 
-      console.log('[AuthService] Logout completed (with error)');
       return {
         success: false,
         error: error.message || 'Failed to logout',
@@ -206,7 +202,6 @@ class AuthService {
           email: response.data.user.email,
         };
         await storageService.saveUser(updatedUser);
-        console.log('[AuthService] Profile updated successfully');
       }
 
       return response;
@@ -240,7 +235,6 @@ class AuthService {
           email: response.data.user.email,
         };
         await storageService.saveUser(updatedUser);
-        console.log('[AuthService] Profile created successfully');
       }
 
       return response;

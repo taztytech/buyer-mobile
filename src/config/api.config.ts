@@ -58,9 +58,5 @@ export const APP_CONFIG = {
 
 // Helper to build full API URL
 export const buildApiUrl = (endpoint: string): string => {
-  const url = `${API_CONFIG.BASE_URL}${endpoint}`;
-  console.log('[API] Building URL:', url);
-  console.log('[API] Base URL:', API_CONFIG.BASE_URL);
-  console.log('[API] Endpoint:', endpoint);
-  return url;
+  return `${API_CONFIG.BASE_URL}${endpoint}`;
 };

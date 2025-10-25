@@ -67,7 +67,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
       if (response.success) {
         // OTP sent successfully, navigate to OTP screen
-        console.log('OTP sent successfully:', response.message);
         if (onLoginSuccess) {
           onLoginSuccess(phoneNumber);
         }
@@ -76,7 +75,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         Alert.alert('Error', response.error || 'Failed to send OTP. Please try again.');
       }
     } catch (error: any) {
-      console.error('Login error:', error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
@@ -84,14 +82,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   };
 
   const handleGoogleLogin = () => {
-    console.log('Login with Google');
     // TODO: Implement Google login
   };
 
   const handleLinkPress = (url: string) => {
-    Linking.openURL(url).catch(err =>
-      console.error('Failed to open URL:', err)
-    );
+    Linking.openURL(url).catch(err => {});
   };
 
   return (

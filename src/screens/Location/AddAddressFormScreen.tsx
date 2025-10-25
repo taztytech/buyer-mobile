@@ -181,7 +181,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         Alert.alert('Error', response.error || (editMode ? 'Failed to update address' : 'Failed to add address'));
       }
     } catch (error) {
-      console.error(`[AddAddressForm] Error ${editMode ? 'updating' : 'adding'} address:`, error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);

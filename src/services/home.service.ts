@@ -51,11 +51,15 @@ class HomeService {
   /**
    * Fetch home page data
    */
-  async getHomeData(): Promise<ApiResponse<HomeData>> {
+  async getHomeData(latitude?: number, longitude?: number): Promise<ApiResponse<HomeData>> {
     try {
-      const response = await apiService.get<HomeData>(
-        API_CONFIG.ENDPOINTS.BUYER.HOME
-      );
+      // Build query params if location is provided
+      let endpoint = API_CONFIG.ENDPOINTS.BUYER.HOME;
+      if (latitude !== undefined && longitude !== undefined) {
+        endpoint = `${endpoint}?latitude=${latitude}&longitude=${longitude}`;
+      }
+
+      const response = await apiService.get<HomeData>(endpoint);
 
       return response;
     } catch (error: any) {

@@ -94,7 +94,6 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
       });
 
       if (response.success) {
-        console.log('[WelcomeScreen] Profile created successfully');
         // Navigate to home screen
         if (onContinue) {
           onContinue(fullName, email);
@@ -104,7 +103,6 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
         Alert.alert('Error', response.error || 'Failed to create profile. Please try again.');
       }
     } catch (error: any) {
-      console.error('[WelcomeScreen] Profile creation error:', error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);

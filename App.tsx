@@ -928,8 +928,10 @@ export default function App() {
               onUseCurrentLocation={() => handleNavigateToLocationSelection()}
               onSearch={(query) => handleNavigateToLocationSelection(query)}
               onSelectAddress={(address) => {
+                // Capitalize the type (home -> Home, work -> Work, other -> Other)
+                const formattedType = address.type.charAt(0).toUpperCase() + address.type.slice(1);
                 setSelectedLocation({
-                  name: address.type,
+                  name: formattedType,
                   address: `${address.address}, ${address.city}`,
                 });
                 handleBackFromAddressSelection();

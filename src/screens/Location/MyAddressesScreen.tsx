@@ -98,11 +98,8 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         }));
 
         setAddresses(addressList);
-      } else {
-        console.error('[MyAddressesScreen] Failed to fetch addresses:', response.error);
       }
     } catch (error) {
-      console.error('[MyAddressesScreen] Error fetching addresses:', error);
     } finally {
       setIsLoading(false);
     }
@@ -164,7 +161,6 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
                 Alert.alert('Error', response.error || 'Failed to delete address');
               }
             } catch (error) {
-              console.error('[MyAddressesScreen] Delete error:', error);
               Alert.alert('Error', 'An unexpected error occurred while deleting the address');
             }
           },
@@ -347,22 +343,24 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
       })()}
 
       {/* Add Address Form Modal */}
-      <AddAddressFormScreen
-        visible={showAddAddressForm}
-        locationName={selectedLocation?.name || 'New Address'}
-        locationAddress={selectedLocation?.address || ''}
-        latitude={selectedLocation?.latitude || 12.9716}
-        longitude={selectedLocation?.longitude || 80.2425}
-        onBack={() => {
-          setShowAddAddressForm(false);
-          setShowLocationSelection(true);
-        }}
-        onClose={() => {
-          setShowAddAddressForm(false);
-          setSelectedLocation(null);
-        }}
-        onSave={handleSaveNewAddress}
-      />
+      {showAddAddressForm && selectedLocation && (
+        <AddAddressFormScreen
+          visible={showAddAddressForm}
+          locationName={selectedLocation.name}
+          locationAddress={selectedLocation.address}
+          latitude={selectedLocation.latitude}
+          longitude={selectedLocation.longitude}
+          onBack={() => {
+            setShowAddAddressForm(false);
+            setShowLocationSelection(true);
+          }}
+          onClose={() => {
+            setShowAddAddressForm(false);
+            setSelectedLocation(null);
+          }}
+          onSave={handleSaveNewAddress}
+        />
+      )}
     </View>
   );
 };

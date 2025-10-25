@@ -149,7 +149,6 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         setRestaurants(restaurantsData);
       }
     } catch (error) {
-      console.error('Error fetching restaurants:', error);
     } finally {
       setIsLoading(false);
     }

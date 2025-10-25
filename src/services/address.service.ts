@@ -51,7 +51,6 @@ class AddressService {
 
       return response;
     } catch (error) {
-      console.error('[AddressService] Add address error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to add address',
@@ -70,7 +69,6 @@ class AddressService {
 
       return response;
     } catch (error) {
-      console.error('[AddressService] Get addresses error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to fetch addresses',
@@ -93,7 +91,6 @@ class AddressService {
 
       return response;
     } catch (error) {
-      console.error('[AddressService] Update address error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to update address',
@@ -112,7 +109,6 @@ class AddressService {
 
       return response;
     } catch (error) {
-      console.error('[AddressService] Delete address error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to delete address',

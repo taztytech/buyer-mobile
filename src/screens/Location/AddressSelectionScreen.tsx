@@ -79,11 +79,8 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         }));
 
         setSavedAddresses(addresses);
-      } else {
-        console.error('[AddressSelectionScreen] Failed to fetch addresses:', response.error);
       }
     } catch (error) {
-      console.error('[AddressSelectionScreen] Error fetching addresses:', error);
     } finally {
       setIsLoading(false);
     }
@@ -109,7 +106,6 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         setCurrentLocationName('Location permission required');
       }
     } catch (error) {
-      console.error('Error getting current location:', error);
       setCurrentLocationName('Unable to get location');
     }
   };
@@ -122,11 +118,8 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         if (onUseCurrentLocation) {
           onUseCurrentLocation();
         }
-      } else {
-        console.log('Location permission denied');
       }
     } catch (error) {
-      console.error('Error requesting location permission:', error);
     }
   };
 

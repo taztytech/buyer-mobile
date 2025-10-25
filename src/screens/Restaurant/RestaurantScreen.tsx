@@ -181,8 +181,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     return sum + (item.quantity || 0);
   }, 0);
 
-  console.log('[RestaurantScreen] Component render - restaurantId:', restaurantId, 'name:', restaurantName);
-
   // Handle image load
   const handleImageLoad = (itemId: string) => {
     setLoadedImages(prev => new Set(prev).add(itemId));
@@ -513,7 +511,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     // 1. Find the variant
     // 2. Pre-select its add-ons in the customization modal
     // 3. Allow editing
-    console.log('Edit variant:', variantId);
   };
 
   const handleAddNewCustomisation = () => {
@@ -597,11 +594,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Fetch restaurant details from API
   useEffect(() => {
-    console.log('[RestaurantScreen] useEffect triggered with restaurantId:', restaurantId);
     if (restaurantId) {
       fetchRestaurantDetails();
-    } else {
-      console.log('[RestaurantScreen] No restaurantId provided, skipping API call');
     }
   }, [restaurantId]);
 
@@ -661,7 +655,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   }, [showDetailModal, showCustomizationModal, showCustomisationsReviewModal, showFilterModal]);
 
   const fetchRestaurantDetails = async () => {
-    console.log('[RestaurantScreen] fetchRestaurantDetails called for ID:', restaurantId);
     try {
       setIsLoading(true);
 
@@ -669,20 +662,15 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       const lat = 9.9352300;
       const lng = 78.1304040;
 
-      console.log('[RestaurantScreen] Making API call to:', `/api/buyer/restaurants/${restaurantId}?lat=${lat}&lng=${lng}&include_items=true`);
-
       const response = await apiService.get(
         `/api/buyer/restaurants/${restaurantId}?lat=${lat}&lng=${lng}&include_items=true`
       );
-
-      console.log('Restaurant API Response:', JSON.stringify(response.data, null, 2));
 
       // Handle nested data structure: response.data.data.data
       const nestedData = response.data?.data?.data || response.data?.data;
 
       if (nestedData) {
         const restaurant = nestedData;
-        console.log('Restaurant data:', restaurant);
         setRestaurantData(restaurant);
 
         // DON'T set restaurant info here - it will be set when adding first item to cart
@@ -690,11 +678,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
         // Process categories from API response
         if (restaurant.categories && Array.isArray(restaurant.categories)) {
-          console.log('Processing categories:', restaurant.categories.length);
-
           const sections: MenuSection[] = restaurant.categories.map((category: any, index: number) => {
-            console.log(`Category ${index}:`, category.name, 'Items:', category.items?.length || 0);
-
             // Process items in this category
             const items: MenuItem[] = (category.items || []).map((item: any) => {
               const menuItem = {
@@ -710,7 +694,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 isBestSeller: item.is_recommended || false,
                 isCustomizable: item.has_customizations || false,
               };
-              console.log(`  Item:`, menuItem.name, `Price: ${menuItem.price}`);
               return menuItem;
             });
 
@@ -722,15 +705,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             };
           });
 
-          console.log('Menu sections created:', sections.length);
           setMenuSections(sections);
-        } else {
-          console.log('No categories found in restaurant data');
         }
       }
     } catch (error) {
-      console.error('Error fetching restaurant details:', error);
-    } finally {
+    } finally{
       setIsLoading(false);
     }
   };
@@ -1323,7 +1302,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           setFilters(newFilters);
           setShowFilterModal(false);
           // TODO: Apply filters to menu items
-          console.log('Filters applied:', newFilters);
         }}
         initialFilters={filters}
       />

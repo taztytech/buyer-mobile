@@ -59,11 +59,8 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
     // Only allow digits
     const cleaned = value.replace(/\D/g, '');
 
-    console.log(`[OTP] Input ${index}: "${value}" -> cleaned: "${cleaned}"`);
-
     // Handle autofill or paste - when multiple digits are provided in first input
     if (index === 0 && cleaned.length > 1) {
-      console.log('[OTP] Autofill detected on first input, filling all boxes');
       // Take exactly 4 digits from the autofilled value
       const digits = cleaned.slice(0, 4).split('');
       const newOtp = ['', '', '', ''];
@@ -143,8 +140,6 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
 
       if (response.success && response.data) {
         // OTP verified successfully
-        console.log('Login successful:', response.data);
-        console.log('Existing user:', response.data.existing_user);
 
         // Navigate based on existing_user status
         if (onSuccess) {
@@ -158,7 +153,6 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
         inputRefs[0].current?.focus();
       }
     } catch (error: any) {
-      console.error('Verification error:', error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsVerifying(false);
@@ -181,7 +175,6 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
         inputRefs[0].current?.focus();
 
         Alert.alert('Success', 'OTP has been resent to your phone number.');
-        console.log('OTP resent successfully');
       } else {
         // Show error message with better context
         const errorMessage = response.error || 'Failed to resend OTP';
@@ -190,10 +183,8 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
           : errorMessage;
 
         Alert.alert('Error', detailedMessage);
-        console.error('Resend OTP failed:', response.error);
       }
     } catch (error: any) {
-      console.error('Resend OTP error:', error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsResending(false);
@@ -201,9 +192,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   };
 
   const handleLinkPress = (url: string) => {
-    Linking.openURL(url).catch(err =>
-      console.error('Failed to open URL:', err)
-    );
+    Linking.openURL(url).catch(err => {});
   };
 
   return (

@@ -33,9 +33,8 @@ class ApiService {
     try {
       this.accessToken = await storageService.getAccessToken();
       this.refreshToken = await storageService.getRefreshToken();
-      console.log('[API] Service initialized with stored tokens');
     } catch (error) {
-      console.error('[API] Error initializing service:', error);
+      // Silent fail
     }
   }
 
@@ -94,12 +93,9 @@ class ApiService {
       const refreshToken = this.refreshToken || await storageService.getRefreshToken();
 
       if (!refreshToken) {
-        console.error('[API] No refresh token available');
         await this.clearTokens();
         return false;
       }
-
-      console.log('[API] Attempting to refresh access token');
 
       const url = buildApiUrl('/authentication/refresh-token');
       const response = await fetch(url, {
@@ -118,8 +114,6 @@ class ApiService {
         const newRefreshToken = data.data?.refresh_token || data.data?.refreshToken;
 
         if (!newAccessToken) {
-          console.error('[API] Token refresh response missing access_token/accessToken');
-          console.log('[API] Response data:', JSON.stringify(data, null, 2));
           await this.clearTokens();
           return false;
         }
@@ -134,15 +128,12 @@ class ApiService {
           expiresIn: data.data?.expires_in || data.data?.expiresIn || 3600,
         });
 
-        console.log('[API] Access token refreshed successfully');
         return true;
       } else {
-        console.error('[API] Token refresh failed:', data.message);
         await this.clearTokens();
         return false;
       }
     } catch (error) {
-      console.error('[API] Error refreshing token:', error);
       await this.clearTokens();
       return false;
     }
@@ -211,10 +202,6 @@ class ApiService {
         config.body = JSON.stringify(data);
       }
 
-      console.log('[API] Request:', method, url);
-      console.log('[API] Headers:', headers);
-      console.log('[API] Body:', config.body);
-
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
@@ -225,16 +212,12 @@ class ApiService {
 
       clearTimeout(timeoutId);
 
-      console.log('[API] Response status:', response.status);
-
       // Handle 401 Unauthorized - attempt token refresh
       if (response.status === 401) {
-        console.log('[API] Received 401, attempting token refresh');
         const refreshed = await this.refreshAccessToken();
 
         if (refreshed) {
           // Retry the original request with new token
-          console.log('[API] Retrying request with refreshed token');
           return this.request<T>(method, endpoint, data, customHeaders);
         } else {
           // Refresh failed, return unauthorized error
@@ -247,7 +230,6 @@ class ApiService {
       }
 
       const responseData = await response.json();
-      console.log('[API] Response data:', responseData);
 
       if (!response.ok) {
         return {
@@ -263,9 +245,6 @@ class ApiService {
         message: responseData.message,
       };
     } catch (error: any) {
-      console.error('[API] Request error:', error);
-      console.error('[API] Error name:', error.name);
-      console.error('[API] Error message:', error.message);
       const apiError = this.handleError(error);
       return {
         success: false,

@@ -38,15 +38,12 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
   const getImageSource = () => {
     if (typeof restaurant.image === 'string') {
       // Remote URL
-      console.log('[RestaurantCard] Loading remote image:', restaurant.image);
       return { uri: restaurant.image };
     } else if (typeof restaurant.image === 'number') {
       // Local require()
-      console.log('[RestaurantCard] Loading local image');
       return restaurant.image;
     } else {
       // Default fallback
-      console.log('[RestaurantCard] Using default image');
       return restaurant.image;
     }
   };
@@ -65,11 +62,8 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
           style={styles.image}
           resizeMode="cover"
           testID={`restaurant-image-${restaurant.id}`}
-          onError={(error) => {
-            console.error('[RestaurantCard] Image load error for', restaurant.name, ':', error.nativeEvent.error);
-          }}
+          onError={(error) => {}}
           onLoad={() => {
-            console.log('[RestaurantCard] Image loaded successfully for', restaurant.name);
             if (onImageLoad) {
               onImageLoad();
             }

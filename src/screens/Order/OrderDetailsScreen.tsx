@@ -220,7 +220,6 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           onBack={() => setShowLocationSelection(false)}
           onLocationConfirm={(location) => {
             // TODO: Add the new address to the addresses list
-            console.log('New address:', location);
             setShowLocationSelection(false);
           }}
         />

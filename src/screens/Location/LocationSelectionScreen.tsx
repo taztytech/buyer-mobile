@@ -26,9 +26,7 @@ try {
   MapView = MapViewModule.default;
   PROVIDER_GOOGLE = MapViewModule.PROVIDER_GOOGLE;
   isMapAvailable = true;
-  console.log('✅ Google Maps loaded successfully!');
 } catch (error) {
-  console.log('ℹ️ Maps not available in Expo Go. Build required for maps.');
   isMapAvailable = false;
 }
 
@@ -140,15 +138,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             );
           }
         } catch (reverseGeoError) {
-          console.log('Reverse geocoding failed for current location');
           setLocationName('Current Location');
           setLocationAddress('Current Location');
         }
-      } else {
-        console.log('Location permission denied');
       }
     } catch (error) {
-      console.error('Error getting location:', error);
     }
   };
 
@@ -174,15 +168,12 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             );
           }
         } catch (reverseGeoError) {
-          console.log('Reverse geocoding failed on region change');
           // Keep the current location name and address
         }
       } else {
         // Permission not granted, keep default location name
-        console.log('Location permission not granted, using default location');
       }
     } catch (error) {
-      console.error('Error reverse geocoding:', error);
     }
   };
 
@@ -214,7 +205,6 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       const { status } = await Location.getForegroundPermissionsAsync();
 
       if (status !== 'granted') {
-        console.log('Location permission not granted for search. Skipping geocoding.');
         return;
       }
 
@@ -252,18 +242,14 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             );
           }
         } catch (reverseGeoError) {
-          console.log('Reverse geocoding failed, using search text as location name');
           setLocationName(searchText);
           setLocationAddress(searchText);
         }
 
         // Dismiss keyboard
         Keyboard.dismiss();
-      } else {
-        console.log('No results found for:', searchText);
       }
     } catch (error) {
-      console.error('Error searching location:', error);
       Keyboard.dismiss();
     }
   };

@@ -36,7 +36,6 @@ class StorageService {
     try {
       // Validate tokens are not undefined or null
       if (!tokenData.accessToken || !tokenData.refreshToken) {
-        console.error('[StorageService] Cannot save undefined tokens');
         throw new Error('Access token and refresh token are required');
       }
 
@@ -47,10 +46,7 @@ class StorageService {
         [STORAGE_KEYS.REFRESH_TOKEN, tokenData.refreshToken],
         [STORAGE_KEYS.TOKEN_EXPIRY, expiryTime.toString()],
       ]);
-
-      console.log('[StorageService] Tokens saved successfully');
     } catch (error) {
-      console.error('[StorageService] Error saving tokens:', error);
       throw error;
     }
   }
@@ -62,7 +58,6 @@ class StorageService {
     try {
       return await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
     } catch (error) {
-      console.error('[StorageService] Error getting access token:', error);
       return null;
     }
   }
@@ -74,7 +69,6 @@ class StorageService {
     try {
       return await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
     } catch (error) {
-      console.error('[StorageService] Error getting refresh token:', error);
       return null;
     }
   }
@@ -89,7 +83,6 @@ class StorageService {
 
       return Date.now() >= parseInt(expiryTime, 10);
     } catch (error) {
-      console.error('[StorageService] Error checking token expiry:', error);
       return true;
     }
   }
@@ -103,10 +96,7 @@ class StorageService {
         [STORAGE_KEYS.USER_DATA, JSON.stringify(userData)],
         [STORAGE_KEYS.IS_LOGGED_IN, 'true'],
       ]);
-
-      console.log('[StorageService] User data saved successfully');
     } catch (error) {
-      console.error('[StorageService] Error saving user data:', error);
       throw error;
     }
   }
@@ -119,7 +109,6 @@ class StorageService {
       const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
       return userData ? JSON.parse(userData) : null;
     } catch (error) {
-      console.error('[StorageService] Error getting user data:', error);
       return null;
     }
   }
@@ -134,7 +123,6 @@ class StorageService {
 
       return isLoggedIn === 'true' && accessToken !== null;
     } catch (error) {
-      console.error('[StorageService] Error checking login status:', error);
       return false;
     }
   }
@@ -151,10 +139,7 @@ class StorageService {
         STORAGE_KEYS.USER_DATA,
         STORAGE_KEYS.IS_LOGGED_IN,
       ]);
-
-      console.log('[StorageService] All data cleared successfully');
     } catch (error) {
-      console.error('[StorageService] Error clearing data:', error);
       throw error;
     }
   }
