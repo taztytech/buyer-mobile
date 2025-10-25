@@ -79,7 +79,6 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           setSearchResults([]);
         }
       } catch (error) {
-        console.error('Error searching:', error);
         setSearchResults([]);
       } finally {
         setIsLoading(false);

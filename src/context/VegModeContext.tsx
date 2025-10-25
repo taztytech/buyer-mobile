@@ -24,7 +24,7 @@ export const VegModeProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setVegModeState(savedMode as VegModeType);
         }
       } catch (error) {
-        console.error('Error loading veg mode:', error);
+        // Silent fail
       } finally {
         setIsLoaded(true);
       }
@@ -38,7 +38,7 @@ export const VegModeProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setVegModeState(mode);
       await storageService.saveVegMode(mode);
     } catch (error) {
-      console.error('Error saving veg mode:', error);
+      // Silent fail
     }
   };
 

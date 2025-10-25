@@ -73,9 +73,6 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
       if (!response.success) {
         // Revert on failure
         setIsFavorite(previousState);
-        console.error('Failed to toggle favorite:', response.error);
-      } else {
-        console.log(`✅ Favorite toggled for ${restaurant.name}: ${!previousState ? 'Added' : 'Removed'}`);
       }
 
       // Call parent callback if provided
@@ -85,7 +82,6 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
     } catch (error) {
       // Revert on error
       setIsFavorite(previousState);
-      console.error('Error toggling favorite:', error);
     } finally {
       setIsTogglingFavorite(false);
     }

@@ -109,7 +109,6 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
       }
     } catch (error) {
       setError('An error occurred while loading favorites');
-      console.error('Error fetching favorites:', error);
     } finally {
       if (isRefresh) {
         setIsRefreshing(false);
@@ -133,7 +132,7 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
         await fetchFavorites(true);
       }
     } catch (error) {
-      console.error('Error toggling favorite item:', error);
+      // Silent fail
     } finally {
       setTogglingItemId(null);
     }
@@ -153,7 +152,7 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
         await fetchFavorites(true);
       }
     } catch (error) {
-      console.error('Error toggling favorite restaurant:', error);
+      // Silent fail
     } finally {
       setTogglingRestaurantId(null);
     }

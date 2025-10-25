@@ -257,8 +257,21 @@ class ApiService {
   /**
    * GET request
    */
-  async get<T>(endpoint: string, customHeaders?: Record<string, string>): Promise<ApiResponse<T>> {
-    return this.request<T>('GET', endpoint, null, customHeaders);
+  async get<T>(endpoint: string, params?: Record<string, any>, customHeaders?: Record<string, string>): Promise<ApiResponse<T>> {
+    // Build query string from params if provided
+    let url = endpoint;
+    if (params && Object.keys(params).length > 0) {
+      const queryString = Object.entries(params)
+        .filter(([_, value]) => value !== undefined && value !== null)
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+        .join('&');
+
+      if (queryString) {
+        url = `${endpoint}?${queryString}`;
+      }
+    }
+
+    return this.request<T>('GET', url, null, customHeaders);
   }
 
   /**

@@ -267,7 +267,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               : section
           )
         );
-        console.error('Failed to toggle favorite item:', response.error);
       }
     } catch (error) {
       // Revert on error
@@ -283,7 +282,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             : section
         )
       );
-      console.error('Error toggling favorite item:', error);
     } finally {
       setTogglingFavoriteItemId(null);
     }
@@ -305,15 +303,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const getFlattenedCartItems = () => {
     const flattenedItems: any[] = [];
 
-    console.log('🔄 [getFlattenedCartItems] Cart:', cart);
-
     Object.values(cart).forEach(cartItem => {
-      console.log('   Processing cart item:', cartItem.name, 'isCustomizable:', cartItem.isCustomizable);
-
       if (cartItem.isCustomizable && cartItem.variants) {
         // For customizable items, add each variant as a separate line item
         cartItem.variants.forEach(variant => {
-          console.log('      Variant:', variant);
           const item = {
             id: cartItem.id,  // Original item ID
             variantId: variant.id,  // Variant ID
@@ -328,7 +321,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               ? variant.addOnNames.join(', ')
               : '',
           };
-          console.log('      Flattened item:', item);
           flattenedItems.push(item);
         });
       } else {
@@ -341,12 +333,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           isVeg: cartItem.isVeg,
           image: cartItem.image,
         };
-        console.log('      Flattened item:', item);
         flattenedItems.push(item);
       }
     });
 
-    console.log('✅ [getFlattenedCartItems] Result:', flattenedItems);
     return flattenedItems;
   };
 
@@ -494,12 +484,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     const addOnNames = selectedAddOnObjects.map(ao => ao.name);
     const addOnTotalPrice = selectedAddOnObjects.reduce((sum, ao) => sum + Number(ao.price), 0);
     const totalPrice = Number(item.price) + addOnTotalPrice;
-
-    console.log('💰 [Price Calculation]');
-    console.log('   Base price:', item.price, '→', Number(item.price));
-    console.log('   Add-ons:', selectedAddOnObjects);
-    console.log('   Add-on total:', addOnTotalPrice);
-    console.log('   Total price:', totalPrice);
 
     // Build customization groups array for API
     const customizationGroups: Array<{ group_id: number; selected_option_ids: number[] }> = [];

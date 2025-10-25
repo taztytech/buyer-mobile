@@ -131,8 +131,6 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
   // Sync local cart items with parent cart items
   useEffect(() => {
-    console.log('🔄 [OrderDetailsScreen] Cart items updated:', cartItems?.length);
-    console.log('   Cart items:', cartItems);
     setLocalCartItems(cartItems);
   }, [cartItems]);
 
@@ -175,21 +173,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   }, [showPaymentModal, showAddressModal, showLocationSelection, showCustomizationModal]);
 
   const handlePlaceOrder = async () => {
-    console.log('🚀 [OrderDetailsScreen] Starting order placement...');
-    console.log('🏪 Restaurant ID:', restaurantId);
-    console.log('📍 Selected Address ID:', selectedAddressId);
-    console.log('🛒 Cart Items:', Object.keys(cart).length);
-    console.log('💰 Payment Method:', selectedPayment);
-    console.log('📝 Notes:', notes);
-
     if (!restaurantId) {
-      console.error('❌ No restaurant ID');
       Alert.alert('Error', 'Restaurant information is missing');
       return;
     }
 
     if (Object.keys(cart).length === 0) {
-      console.error('❌ Cart is empty');
       Alert.alert('Error', 'Your cart is empty');
       return;
     }
@@ -197,14 +186,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     setIsPlacingOrder(true);
 
     try {
-      console.log('📦 Step 1: Adding items to server cart...');
       const cartItems = Object.values(cart);
-      console.log('   Total items to add:', cartItems.length);
 
       // Step 1: Add all cart items to the server cart
       for (let i = 0; i < cartItems.length; i++) {
         const item = cartItems[i];
-        console.log(`   Adding item ${i + 1}/${cartItems.length}:`, item.name);
 
         // Handle regular items
         if (!item.isCustomizable || !item.variants) {
@@ -214,18 +200,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             quantity: item.quantity || 1,
             special_instructions: notes,
           };
-          console.log('      Regular item request:', addToCartRequest);
 
           const addResult = await ordersService.addToCart(addToCartRequest);
 
           if (!addResult.success) {
-            console.error('      ❌ Failed to add item:', addResult.error);
             throw new Error(`Failed to add ${item.name} to cart: ${addResult.error}`);
           }
-          console.log('      ✅ Item added successfully');
         } else {
           // Handle items with variants/customizations
-          console.log('      Item has', item.variants?.length, 'variants');
           for (const variant of item.variants || []) {
             // Build customizations array from stored customization groups
             const customizations = [];
@@ -245,21 +227,15 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               customizations: customizations.length > 0 ? customizations : undefined,
               special_instructions: notes,
             };
-            console.log('      Variant request with customizations:', addToCartRequest);
 
             const addResult = await ordersService.addToCart(addToCartRequest);
 
             if (!addResult.success) {
-              console.error('      ❌ Failed to add variant:', addResult.error);
               throw new Error(`Failed to add customization to cart: ${addResult.error}`);
             }
-            console.log('      ✅ Variant added successfully');
           }
         }
       }
-
-      console.log('✅ All items added to server cart');
-      console.log('🎯 Step 2: Creating order...');
 
       // Step 2: Create order with COD payment
       const paymentMethod = selectedPayment === 'online' ? 'online' : 'cod';
@@ -268,25 +244,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         payment_method: paymentMethod as 'cod' | 'online',
         notes: notes || undefined,
       };
-      console.log('   Order request:', createOrderRequest);
 
       const orderResponse = await ordersService.createOrder(createOrderRequest);
 
       if (orderResponse.success && orderResponse.data) {
-        console.log('✅ Order created successfully!');
-        console.log('   Order details:', orderResponse.data);
-
         // Clear local cart
-        console.log('🧹 Clearing local cart...');
         clearCart();
 
         // Get order data - API returns data nested under 'order' key
         const orderData = orderResponse.data.order || orderResponse.data;
         const orderNumber = orderData.order_number || orderData.orderNumber || 'N/A';
         const orderId = orderData.id || orderData.order_id;
-
-        console.log('   Order Number:', orderNumber);
-        console.log('   Order ID:', orderId);
 
         // Show success message
         Alert.alert(
@@ -308,15 +276,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           ]
         );
       } else {
-        console.error('❌ Order creation failed:', orderResponse.error);
         Alert.alert('Error', orderResponse.error || 'Failed to place order');
       }
     } catch (error: any) {
-      console.error('❌ [OrderDetailsScreen] Error placing order:', error);
       Alert.alert('Error', error.message || 'Failed to place order');
     } finally {
       setIsPlacingOrder(false);
-      console.log('🏁 Order placement process completed');
     }
   };
 
@@ -383,11 +348,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     const price = Number(item.price) || 0;
     const quantity = Number(item.quantity) || 0;
     const subtotal = price * quantity;
-    console.log(`   ${item.name}: ₹${price} × ${quantity} = ₹${subtotal}`);
     return sum + subtotal;
   }, 0);
-
-  console.log('📊 [Bill Details] Item Total:', itemTotal);
 
   const gstAndCharges = Math.round(itemTotal * 0.18); // 18% GST
   const deliveryFee = selfPickup ? 0 : 29;
