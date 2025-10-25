@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { favoritesService } from '@/services/favorites.service';
 import { Shimmer } from '@/components/Shimmer';
 
@@ -65,6 +66,10 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
   const [favoriteRestaurants, setFavoriteRestaurants] = useState<FavoriteRestaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [togglingItemId, setTogglingItemId] = useState<string | number | null>(null);
+  const [togglingRestaurantId, setTogglingRestaurantId] = useState<string | number | null>(null);
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Fetch on mount
   useEffect(() => {
@@ -72,10 +77,14 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
     fetchFavorites();
   }, []);
 
-  const fetchFavorites = async () => {
+  const fetchFavorites = async (isRefresh: boolean = false) => {
     console.log('📞 fetchFavorites called');
     try {
-      setIsLoading(true);
+      if (isRefresh) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
       setError(null);
 
       console.log('🌐 Calling favoritesService.getAllFavorites()');
@@ -93,6 +102,8 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
         console.log('🍔 Items found:', items?.length || 0);
         if (items && Array.isArray(items)) {
           setFavoriteItems(items);
+        } else {
+          setFavoriteItems([]);
         }
 
         // Extract favorite restaurants - need to go one level deeper
@@ -100,6 +111,8 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
         console.log('🏪 Restaurants found:', restaurants?.length || 0);
         if (restaurants && Array.isArray(restaurants)) {
           setFavoriteRestaurants(restaurants);
+        } else {
+          setFavoriteRestaurants([]);
         }
       } else {
         console.log('❌ Response failed or no data');
@@ -109,13 +122,72 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
       setError('An error occurred while loading favorites');
       console.error('Error fetching favorites:', error);
     } finally {
-      setIsLoading(false);
+      if (isRefresh) {
+        setIsRefreshing(false);
+      } else {
+        setIsLoading(false);
+      }
     }
+  };
+
+  // Handle toggling favorite for an item
+  const handleToggleFavoriteItem = async (itemId: string | number) => {
+    if (togglingItemId) return; // Prevent multiple simultaneous calls
+
+    setTogglingItemId(itemId);
+
+    try {
+      console.log(`🔄 Toggling favorite for item ${itemId}`);
+      const response = await favoritesService.toggleFavoriteItem(itemId);
+
+      if (response.success) {
+        console.log(`✅ Item ${itemId} removed from favorites`);
+        // Refresh the favorites list smoothly
+        await fetchFavorites(true);
+      } else {
+        console.error('Failed to toggle favorite item:', response.error);
+      }
+    } catch (error) {
+      console.error('Error toggling favorite item:', error);
+    } finally {
+      setTogglingItemId(null);
+    }
+  };
+
+  // Handle toggling favorite for a restaurant
+  const handleToggleFavoriteRestaurant = async (restaurantId: string | number) => {
+    if (togglingRestaurantId) return; // Prevent multiple simultaneous calls
+
+    setTogglingRestaurantId(restaurantId);
+
+    try {
+      console.log(`🔄 Toggling favorite for restaurant ${restaurantId}`);
+      const response = await favoritesService.toggleFavoriteRestaurant(restaurantId);
+
+      if (response.success) {
+        console.log(`✅ Restaurant ${restaurantId} removed from favorites`);
+        // Refresh the favorites list smoothly
+        await fetchFavorites(true);
+      } else {
+        console.error('Failed to toggle favorite restaurant:', response.error);
+      }
+    } catch (error) {
+      console.error('Error toggling favorite restaurant:', error);
+    } finally {
+      setTogglingRestaurantId(null);
+    }
+  };
+
+  // Handle image load
+  const handleImageLoad = (id: string) => {
+    setLoadedImages((prev) => new Set([...prev, id]));
   };
 
   const renderItemCard = (item: FavoriteItem) => {
     // Get the first image from images array, or fallback to image field
     const imageUrl = item.images && item.images.length > 0 ? item.images[0] : item.image;
+    const imageId = `item-${item.id}`;
+    const isImageLoaded = loadedImages.has(imageId);
 
     return (
       <TouchableOpacity
@@ -124,11 +196,43 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
         onPress={() => onSelectItem && onSelectItem(item)}
         activeOpacity={0.7}
       >
+        {/* Image with loading shimmer */}
+        {!isImageLoaded && (
+          <View style={styles.imageShimmer}>
+            <Shimmer width="100%" height={150} borderRadius={12} backgroundColor="#E8E8E8" />
+          </View>
+        )}
         <Image
           source={{ uri: imageUrl }}
-          style={styles.dishImage}
+          style={[styles.dishImage, !isImageLoaded && styles.hiddenImage]}
           resizeMode="cover"
+          onLoad={() => handleImageLoad(imageId)}
         />
+
+        {/* Top Gradient Overlay */}
+        <LinearGradient
+          colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.gradientOverlayTop}
+        />
+
+        {/* Heart Icon (Clickable to remove from favorites) */}
+        <TouchableOpacity
+          style={styles.heartIcon}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleToggleFavoriteItem(item.id);
+          }}
+          disabled={togglingItemId === item.id}
+        >
+          {togglingItemId === item.id ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <MaterialIcons name="favorite" size={24} color="#FF0000" />
+          )}
+        </TouchableOpacity>
+
         <View style={styles.dishLabelContainer}>
           <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
         </View>
@@ -136,23 +240,60 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
     );
   };
 
-  const renderRestaurantCard = (item: FavoriteRestaurant) => (
-    <TouchableOpacity
-      key={item.id}
-      style={styles.dishCard}
-      onPress={() => onSelectRestaurant && onSelectRestaurant(item.id, item.name)}
-      activeOpacity={0.7}
-    >
-      <Image
-        source={{ uri: item.logo_url }}
-        style={styles.dishImage}
-        resizeMode="cover"
-      />
-      <View style={styles.dishLabelContainer}>
-        <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const renderRestaurantCard = (item: FavoriteRestaurant) => {
+    const imageId = `restaurant-${item.id}`;
+    const isImageLoaded = loadedImages.has(imageId);
+
+    return (
+      <TouchableOpacity
+        key={item.id}
+        style={styles.dishCard}
+        onPress={() => onSelectRestaurant && onSelectRestaurant(item.id, item.name)}
+        activeOpacity={0.7}
+      >
+        {/* Image with loading shimmer */}
+        {!isImageLoaded && (
+          <View style={styles.imageShimmer}>
+            <Shimmer width="100%" height={150} borderRadius={12} backgroundColor="#E8E8E8" />
+          </View>
+        )}
+        <Image
+          source={{ uri: item.logo_url }}
+          style={[styles.dishImage, !isImageLoaded && styles.hiddenImage]}
+          resizeMode="cover"
+          onLoad={() => handleImageLoad(imageId)}
+        />
+
+        {/* Top Gradient Overlay */}
+        <LinearGradient
+          colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.gradientOverlayTop}
+        />
+
+        {/* Heart Icon (Clickable to remove from favorites) */}
+        <TouchableOpacity
+          style={styles.heartIcon}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleToggleFavoriteRestaurant(item.id);
+          }}
+          disabled={togglingRestaurantId === item.id}
+        >
+          {togglingRestaurantId === item.id ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <MaterialIcons name="favorite" size={24} color="#FF0000" />
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.dishLabelContainer}>
+          <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.outerContainer}>
@@ -325,19 +466,37 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  dishImageContainer: {
-    width: CARD_WIDTH,
-    height: 79,
-    backgroundColor: '#C9F5C6',
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginBottom: -9,
-    zIndex: 2,
-  },
   dishImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
+  },
+  imageShimmer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+  },
+  hiddenImage: {
+    opacity: 0,
+  },
+  gradientOverlayTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  heartIcon: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 4,
+    zIndex: 10,
   },
   dishLabelContainer: {
     position: 'absolute',
