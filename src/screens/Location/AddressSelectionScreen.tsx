@@ -424,14 +424,18 @@ const styles = StyleSheet.create({
   defaultBadge: {
     backgroundColor: '#00B14F',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   defaultBadgeText: {
     fontFamily: 'Poppins',
     fontSize: 10,
     fontWeight: '500',
     color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 12,
   },
   addressCity: {
     fontFamily: 'Poppins',

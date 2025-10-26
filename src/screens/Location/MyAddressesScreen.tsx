@@ -60,13 +60,11 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
     latitude: number;
     longitude: number;
   } | null>(null);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
-  // Only fetch when screen becomes visible for the first time
+  // Fetch addresses whenever screen becomes visible
   useEffect(() => {
-    if (visible && !hasLoadedOnce) {
+    if (visible) {
       fetchAddresses();
-      setHasLoadedOnce(true);
     }
   }, [visible]);
 
@@ -191,56 +189,60 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
 
   // Handle save from add address form
   const handleSaveNewAddress = async (addressData: any) => {
-    // Refresh the address list from API
-    await fetchAddresses();
+    // Close all modals FIRST (synchronously)
     setShowAddAddressForm(false);
     setSelectedLocation(null);
+    setShowEditModal(false);
+    setEditingAddressId(null);
+
+    // Then refresh the address list from API
+    await fetchAddresses();
+
+    // Show success alert after modal is closed and data refreshed
+    Alert.alert('Success', 'Address added successfully');
   };
 
   const renderAddressCard = (address: Address) => (
-    <View key={address.id} style={styles.addressCard}>
-      {address.isDefault && (
-        <View style={styles.defaultBadge}>
-          <Text style={styles.defaultBadgeText}>Default</Text>
-        </View>
-      )}
-
-      {/* Address Info Row */}
-      <View style={styles.addressInfoRow}>
-        <View style={styles.iconContainer}>
-          <MaterialIcons
-            name={getIconForType(address.type)}
-            size={24}
-            color="#00B14F"
-          />
-        </View>
-        <View style={styles.addressTextContainer}>
-          <Text style={styles.addressType}>{formatAddressType(address.type)}</Text>
-          <Text style={styles.addressText}>{address.fullAddress}</Text>
-        </View>
-      </View>
-
-      {/* Divider */}
-      <View style={styles.divider} />
-
-      {/* Action Buttons Row */}
-      <View style={styles.actionButtonsRow}>
+    <View key={address.id}>
+      <View style={styles.addressItem}>
+        {/* Delete button - Top Right */}
         <TouchableOpacity
-          style={styles.editButton}
-          onPress={() => handleEdit(address.id)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.actionButtonText}>EDIT</Text>
-        </TouchableOpacity>
-        <View style={styles.verticalDivider} />
-        <TouchableOpacity
-          style={styles.deleteButton}
+          style={styles.deleteIconButton}
           onPress={() => handleDelete(address.id)}
           activeOpacity={0.7}
         >
-          <Text style={styles.actionButtonText}>Delete</Text>
+          <MaterialIcons name="delete-outline" size={24} color="#FF0000" />
+        </TouchableOpacity>
+
+        {/* Address Content - Full Width */}
+        <TouchableOpacity
+          style={styles.addressContent}
+          onPress={() => handleEdit(address.id)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.addressIconContainer}>
+            <MaterialIcons
+              name={getIconForType(address.type)}
+              size={24}
+              color="#00B14F"
+            />
+          </View>
+          <View style={styles.addressInfo}>
+            <View style={styles.addressNameRow}>
+              <Text style={styles.addressName}>{formatAddressType(address.type)}</Text>
+              {address.isDefault && (
+                <View style={styles.defaultBadge}>
+                  <Text style={styles.defaultBadgeText}>Default</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.addressText}>{address.fullAddress}</Text>
+          </View>
         </TouchableOpacity>
       </View>
+      {addresses.indexOf(address) !== addresses.length - 1 && (
+        <View style={styles.divider} />
+      )}
     </View>
   );
 
@@ -255,7 +257,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Address</Text>
+        <Text style={styles.headerTitle}>Saved Address</Text>
       </View>
 
       <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -270,7 +272,9 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
                 <Text style={styles.loadingText}>Loading addresses...</Text>
               </View>
             ) : addresses.length > 0 ? (
-              addresses.map((address) => renderAddressCard(address))
+              <View style={styles.addressesList}>
+                {addresses.map((address) => renderAddressCard(address))}
+              </View>
             ) : (
               <View style={styles.emptyContainer}>
                 <MaterialIcons name="location-off" size={64} color="#CCC" />
@@ -304,7 +308,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
       )}
 
       {/* Edit Address Modal */}
-      {editingAddressId && (() => {
+      {showEditModal && editingAddressId && (() => {
         const editAddress = addresses.find(a => a.id === editingAddressId);
         return (
           <AddAddressFormScreen
@@ -414,94 +418,78 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    gap: 14,
     paddingBottom: 24,
   },
-  addressCard: {
+  addressesList: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    gap: 10,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  addressItem: {
     position: 'relative',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
-  defaultBadge: {
+  deleteIconButton: {
     position: 'absolute',
-    right: 0,
-    top: 0,
-    backgroundColor: '#00B14F',
-    paddingHorizontal: 7,
-    paddingVertical: 8,
-    borderBottomLeftRadius: 6,
-    borderTopRightRadius: 20,
-    zIndex: 3,
+    top: 16,
+    right: 16,
+    padding: 4,
+    zIndex: 1,
   },
-  defaultBadgeText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 9,
-    lineHeight: 14,
-    textAlign: 'center',
-    color: '#FFFFFF',
-    opacity: 0.85,
-  },
-  addressInfoRow: {
+  addressContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 16,
+    paddingRight: 32,
   },
-  iconContainer: {
+  addressIconContainer: {
     width: 40,
     height: 40,
-    backgroundColor: 'rgba(0, 128, 74, 0.1)',
-    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  addressTextContainer: {
+  addressInfo: {
     flex: 1,
-    gap: 2,
   },
-  addressType: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 14,
-    lineHeight: 21,
+  addressNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addressName: {
+    fontFamily: 'Poppins',
+    fontSize: 16,
+    fontWeight: '600',
     color: '#001E1F',
+  },
+  defaultBadge: {
+    backgroundColor: '#00B14F',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  defaultBadgeText: {
+    fontFamily: 'Poppins',
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 12,
   },
   addressText: {
     fontFamily: 'Poppins',
-    fontSize: 12,
-    lineHeight: 18,
-    color: 'rgba(0, 30, 31, 0.6)',
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#666',
+    marginTop: 2,
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-  },
-  actionButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 21,
-  },
-  editButton: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  deleteButton: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  actionButtonText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 13,
-    lineHeight: 20,
-    textAlign: 'center',
-    color: '#001E1F',
-    opacity: 0.85,
-  },
-  verticalDivider: {
-    width: 1,
-    height: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: '#F0F0F0',
+    marginHorizontal: 16,
   },
   bottomButtonContainer: {
     paddingHorizontal: 20,
