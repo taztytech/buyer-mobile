@@ -173,7 +173,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   onBack,
 }) => {
   const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, checkRestaurantConflict } = useCart();
-  const { vegMode } = useVegMode();
+  const { vegMode, setVegMode } = useVegMode();
   const insets = useSafeAreaInsets();
   const [menuSections, setMenuSections] = useState<MenuSection[]>([]);
   const [restaurantData, setRestaurantData] = useState<any>(null);
@@ -717,6 +717,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const filteredMenuSections = getFilteredMenuSections();
   const hasNoFilteredItems = activeDietaryFilter && filteredMenuSections.length === 0;
   const hasNoItemsAtAll = !isLoading && menuSections.length === 0;
+  const hasNoVegItems = vegMode === 'all' && filteredMenuSections.length === 0 && menuSections.length > 0;
 
   // Handle adding item from detail modal
   const handleAddFromDetail = (itemId: string, quantity: number) => {
@@ -845,6 +846,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 });
               }
 
+              // Determine if item is vegetarian
+              // Check multiple possible fields from API
+              const isVeg =
+                item.dietary_preference?.toLowerCase() === 'veg' ||
+                item.dietary_preference?.toLowerCase() === 'vegetarian' ||
+                item.is_veg === true ||
+                item.is_veg === 1;
+
               const menuItem: MenuItem = {
                 id: item.id.toString(),
                 name: item.name,
@@ -853,7 +862,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 image: item.images && item.images.length > 0
                   ? { uri: item.images[0] }
                   : require('@/assets/biriyani.png'),
-                isVeg: item.dietary_preference?.toLowerCase() === 'veg' || item.is_veg === true,
+                isVeg: isVeg,
                 isSpicy: false, // API doesn't provide this info
                 isBestSeller: item.is_recommended || false,
                 isCustomizable: item.has_customizations || false,
@@ -1129,6 +1138,23 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             <Text style={styles.noItemsMessage}>
               This restaurant hasn't added any menu items yet. Please check back later.
             </Text>
+          </View>
+        ) : hasNoVegItems ? (
+          <View style={styles.noItemsContainer}>
+            <MaterialIcons name="eco" size={48} color="#00B14F" />
+            <Text style={styles.noItemsTitle}>No vegetarian items</Text>
+            <Text style={styles.noItemsMessage}>
+              This restaurant doesn't have vegetarian items. Turn off veg mode to see all items.
+            </Text>
+            <TouchableOpacity
+              style={styles.turnOffVegModeButton}
+              onPress={async () => {
+                await setVegMode('off');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.turnOffVegModeButtonText}>Turn Off Veg Mode</Text>
+            </TouchableOpacity>
           </View>
         ) : hasNoFilteredItems ? (
           <View style={styles.noItemsContainer}>
@@ -2296,6 +2322,20 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: 'rgba(0, 0, 0, 0.6)',
     opacity: 0.85,
+    textAlign: 'center',
+  },
+  turnOffVegModeButton: {
+    marginTop: 20,
+    backgroundColor: '#00B14F',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  turnOffVegModeButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#FFFFFF',
     textAlign: 'center',
   },
 });

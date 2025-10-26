@@ -250,7 +250,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                       <MaterialIcons name="check" size={16} color="#00B14F" />
                     )}
                   </TouchableOpacity>
-                  <Text style={styles.checkboxLabel}>Make is as default</Text>
+                  <Text style={styles.checkboxLabel}>Set as default</Text>
                 </View>
               </View>
               <TextInput

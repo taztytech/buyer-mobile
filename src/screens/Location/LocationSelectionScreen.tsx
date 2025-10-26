@@ -43,27 +43,73 @@ interface LocationSelectionScreenProps {
   onBack?: () => void;
   onLocationConfirm?: (location: { name: string; address: string; latitude: number; longitude: number }) => void;
   initialSearchQuery?: string;
+  editingAddress?: any;
+  initialLatitude?: number;
+  initialLongitude?: number;
 }
 
 export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = ({
   onBack,
   onLocationConfirm,
+  editingAddress,
   initialSearchQuery = '',
+  initialLatitude,
+  initialLongitude,
 }) => {
   const [region, setRegion] = useState<Region>({
-    latitude: 12.9716, // Default to Chennai
-    longitude: 80.2425,
+    latitude: initialLatitude ? parseFloat(String(initialLatitude)) : 12.9716, // Use provided lat/lng or default to Chennai
+    longitude: initialLongitude ? parseFloat(String(initialLongitude)) : 80.2425,
     latitudeDelta: 0.01,
     longitudeDelta: 0.01,
   });
 
-  const [locationName, setLocationName] = useState('Kannan Nagar');
-  const [locationAddress, setLocationAddress] = useState('Vigneshwar Nagar, Nanganallur, Tamilnadu, India');
+  const [locationName, setLocationName] = useState(
+    editingAddress?.city || 'Kannan Nagar'
+  );
+  const [locationAddress, setLocationAddress] = useState(
+    editingAddress ?
+      [editingAddress.address1, editingAddress.address2, editingAddress.address3, editingAddress.city, editingAddress.state, editingAddress.pincode]
+        .filter(Boolean)
+        .join(', ')
+      : 'Vigneshwar Nagar, Nanganallur, Tamilnadu, India'
+  );
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [searchText, setSearchText] = useState(initialSearchQuery);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const bottomPosition = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<any>(null);
+
+  // Update region and location info when editing address changes
+  useEffect(() => {
+    if (editingAddress && editingAddress.latitude && editingAddress.longitude) {
+      const newRegion = {
+        latitude: parseFloat(editingAddress.latitude),
+        longitude: parseFloat(editingAddress.longitude),
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      setRegion(newRegion);
+
+      // Animate map to the location if map is available
+      if (mapRef.current && isMapAvailable) {
+        setTimeout(() => {
+          mapRef.current?.animateToRegion(newRegion, 1000);
+        }, 100);
+      }
+
+      // Set location name and address from editing address
+      setLocationName(editingAddress.city || 'Location');
+      const fullAddress = [
+        editingAddress.address1,
+        editingAddress.address2,
+        editingAddress.address3,
+        editingAddress.city,
+        editingAddress.state,
+        editingAddress.pincode
+      ].filter(Boolean).join(', ');
+      setLocationAddress(fullAddress);
+    }
+  }, [editingAddress]);
 
   useEffect(() => {
     // If initial search query is provided, trigger search on mount
@@ -355,10 +401,23 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         {/* Address Form Modal */}
         <AddAddressFormScreen
           visible={showAddressForm}
+          editMode={!!editingAddress}
+          addressId={editingAddress?.id?.toString()}
           locationName={locationName}
           locationAddress={locationAddress}
           latitude={region.latitude}
           longitude={region.longitude}
+          initialData={editingAddress ? {
+            houseNo: editingAddress.address1 || '',
+            building: editingAddress.address2 || '',
+            locality: editingAddress.address3 || '',
+            city: editingAddress.city || '',
+            state: editingAddress.state || '',
+            pincode: editingAddress.pincode?.toString() || '',
+            alternateMobile: editingAddress.alternate_phone_number?.toString() || '',
+            isDefault: editingAddress.is_default || false,
+            tag: editingAddress.type || 'home',
+          } : undefined}
           onBack={() => setShowAddressForm(false)}
           onSave={handleAddressSave}
           onClose={() => setShowAddressForm(false)}

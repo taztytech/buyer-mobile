@@ -47,6 +47,7 @@ export default function App() {
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
   const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses'>('home');
+  const [editingAddress, setEditingAddress] = React.useState<any>(null);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -492,12 +493,15 @@ export default function App() {
   };
 
   const handleBackFromMyAddresses = () => {
+    // Reset location screen position
+    locationScreenSlide.setValue(SCREEN_WIDTH);
+    setEditingAddress(null);
     setCurrentScreen('profile');
   };
 
   const handleNavigateToAddressSelectionFromMyAddresses = () => {
-    console.log('🔵 handleNavigateToAddressSelectionFromMyAddresses called');
     setAddressSelectionCameFrom('myAddresses');
+    setEditingAddress(null); // Clear any editing address
     setCurrentScreen('locationSelection');
 
     // Animate the location screen in
@@ -506,8 +510,19 @@ export default function App() {
       duration: 300,
       useNativeDriver: true,
     }).start();
+  };
 
-    console.log('🔵 currentScreen set to locationSelection with animation');
+  const handleEditAddressFromMyAddresses = (address: any) => {
+    setAddressSelectionCameFrom('myAddresses');
+    setEditingAddress(address); // Store the address being edited
+    setCurrentScreen('locationSelection');
+
+    // Animate the location screen in
+    Animated.timing(locationScreenSlide, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
   };
 
   // Explore Dishes (Favorites) Navigation
@@ -792,6 +807,9 @@ export default function App() {
           >
             <LocationSelectionScreen
               initialSearchQuery={searchQuery}
+              editingAddress={editingAddress}
+              initialLatitude={editingAddress?.latitude}
+              initialLongitude={editingAddress?.longitude}
               onBack={handleBackFromLocationSelection}
               onLocationConfirm={handleLocationConfirm}
             />
@@ -903,6 +921,7 @@ export default function App() {
                 visible={true}
                 onBack={handleBackFromMyAddresses}
                 onAddNew={handleNavigateToAddressSelectionFromMyAddresses}
+                onEditAddress={handleEditAddressFromMyAddresses}
               />
             </View>
           )}

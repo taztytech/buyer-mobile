@@ -386,22 +386,24 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           </>
         ) : null}
 
-        {/* Restaurants Near You Section */}
-        <View style={styles.sectionTitleContainer}>
-          <LinearGradient
-            colors={['rgba(0, 0, 0, 0)', '#000000']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.sectionTitleLine}
-          />
-          <Text style={styles.sectionTitle}>Restaurants Near You</Text>
-          <LinearGradient
-            colors={['#000000', 'rgba(0, 0, 0, 0)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.sectionTitleLine}
-          />
-        </View>
+        {/* Restaurants Near You Section - Only show title if loading or has data */}
+        {(isLoading || restaurants.length > 0) && (
+          <View style={styles.sectionTitleContainer}>
+            <LinearGradient
+              colors={['rgba(0, 0, 0, 0)', '#000000']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.sectionTitleLine}
+            />
+            <Text style={styles.sectionTitle}>Restaurants Near You</Text>
+            <LinearGradient
+              colors={['#000000', 'rgba(0, 0, 0, 0)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.sectionTitleLine}
+            />
+          </View>
+        )}
 
         <View style={styles.restaurantList}>
           {isLoading ? (
@@ -411,8 +413,12 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
               <ShimmerRestaurantCard />
             </>
           ) : restaurants.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No restaurants found</Text>
+            <View style={styles.noResultsContainer}>
+              <MaterialIcons name="search-off" size={64} color="rgba(0, 0, 0, 0.3)" />
+              <Text style={styles.noResultsTitle}>No restaurants found</Text>
+              <Text style={styles.noResultsMessage}>
+                We couldn't find any restaurants for "{selectedCategory}". Try searching for something else.
+              </Text>
             </View>
           ) : (
             restaurants.map(restaurant => (
@@ -740,16 +746,28 @@ const styles = StyleSheet.create({
     color: '#000000',
     opacity: 0.6,
   },
-  emptyContainer: {
+  noResultsContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 80,
+    paddingHorizontal: 40,
+    gap: 12,
   },
-  emptyText: {
-    fontFamily: 'Poppins',
-    fontSize: 16,
+  noResultsTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    lineHeight: 27,
     color: '#000000',
-    opacity: 0.6,
+    opacity: 0.85,
+    marginTop: 8,
+  },
+  noResultsMessage: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    lineHeight: 21,
+    color: 'rgba(0, 0, 0, 0.6)',
+    opacity: 0.85,
+    textAlign: 'center',
   },
 });

@@ -16,12 +16,14 @@ import { addressService, AddressResponse } from '@/services/address.service';
 interface MyAddressesScreenProps {
   onBack?: () => void;
   onAddNew?: () => void;
+  onEditAddress?: (address: AddressResponse) => void;
   visible?: boolean;
 }
 
 export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
   onBack,
   onAddNew,
+  onEditAddress,
   visible = false,
 }) => {
   const [addresses, setAddresses] = useState<AddressResponse[]>([]);
@@ -132,13 +134,6 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
               {addresses.map((address, index) => (
                 <View key={address.id}>
                   <View style={styles.addressCard}>
-                    <TouchableOpacity
-                      style={styles.deleteButton}
-                      onPress={() => handleDelete(address.id)}
-                    >
-                      <MaterialIcons name="delete-outline" size={24} color="#FF0000" />
-                    </TouchableOpacity>
-
                     <View style={styles.addressContent}>
                       <View style={styles.iconContainer}>
                         <MaterialIcons
@@ -158,6 +153,28 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
                           )}
                         </View>
                         <Text style={styles.addressText}>{formatAddress(address)}</Text>
+
+                        {/* Edit and Delete buttons */}
+                        <View style={styles.actionButtons}>
+                          <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => {
+                              if (onEditAddress) {
+                                onEditAddress(address);
+                              }
+                            }}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          >
+                            <Text style={styles.editText}>Edit</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => handleDelete(address.id)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          >
+                            <Text style={styles.deleteText}>Delete</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   </View>
@@ -172,15 +189,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.addButton}
-            onPress={() => {
-              console.log('🟢 Add New button pressed');
-              console.log('🟢 onAddNew function:', onAddNew);
-              if (onAddNew) {
-                onAddNew();
-              } else {
-                console.log('🔴 onAddNew is undefined!');
-              }
-            }}
+            onPress={onAddNew}
           >
             <Text style={styles.addButtonText}>Add New</Text>
             <MaterialIcons name="add" size={24} color="#FFFFFF" />
@@ -267,22 +276,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   addressCard: {
-    position: 'relative',
     paddingHorizontal: 16,
     paddingVertical: 16,
-  },
-  deleteButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    padding: 4,
-    zIndex: 1,
   },
   addressContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    paddingRight: 32,
   },
   iconContainer: {
     width: 40,
@@ -321,6 +321,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     lineHeight: 18,
+    marginBottom: 8,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 4,
+  },
+  actionButton: {
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  editText: {
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    color: '#00B14F',
+  },
+  deleteText: {
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    color: '#FF0000',
   },
   divider: {
     height: 1,
