@@ -27,6 +27,7 @@ import { apiService } from '@/services/api.service';
 import { storageService } from '@/services/storage.service';
 import { CartProvider } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
+import { ConfirmationProvider } from '@/context/ConfirmationContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -710,7 +711,8 @@ export default function App() {
   return (
     <VegModeProvider>
       <CartProvider>
-        <SafeAreaProvider>
+        <ConfirmationProvider>
+          <SafeAreaProvider>
         {currentScreen === 'login' ? (
         <LoginScreen onLoginSuccess={handleLoginSuccess} />
       ) : currentScreen === 'otp' ? (
@@ -1032,6 +1034,7 @@ export default function App() {
         </View>
       )}
         </SafeAreaProvider>
+        </ConfirmationProvider>
       </CartProvider>
     </VegModeProvider>
   );

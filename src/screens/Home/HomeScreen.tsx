@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ViewCartBar } from '@/components/ViewCartBar';
 import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -158,6 +159,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 }) => {
   const { restaurantId, restaurantName, restaurantLogo, getTotalItems } = useCart();
   const { vegMode, setVegMode, isVegModeEnabled } = useVegMode();
+  const { showConfirmation } = useConfirmation();
   const insets = useSafeAreaInsets();
   const totalCartItems = getTotalItems();
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
@@ -394,17 +396,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         await fetchHomeData(userLatitude, userLongitude);
       } else {
         setHasShownLocationModal(true); // Mark as shown to prevent repeated popups
-        Alert.alert(
-          'Permission Denied',
-          'Location permission is required to show nearby restaurants. Please enable it in your device settings.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => Location.requestForegroundPermissionsAsync() }
-          ]
-        );
+        showConfirmation({
+          title: 'Permission Denied',
+          message: 'Location permission is required to show nearby restaurants. Please enable it in your device settings.',
+          confirmText: 'Open Settings',
+          cancelText: 'Cancel',
+          onConfirm: () => Location.requestForegroundPermissionsAsync(),
+        });
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to get location permission. Please try again.');
+      showConfirmation({
+        title: 'Error',
+        message: 'Failed to get location permission. Please try again.',
+        confirmText: 'OK',
+        cancelText: 'Cancel',
+        onConfirm: () => {},
+      });
     } finally {
       isRequestingPermission.current = false;
     }
@@ -421,11 +428,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     });
 
     // Show popup that settings can be done later
-    Alert.alert(
-      'Location Settings',
-      'Default location set to Madurai. You can change this later from settings.',
-      [{ text: 'OK' }]
-    );
+    showConfirmation({
+      title: 'Location Settings',
+      message: 'Default location set to Madurai. You can change this later from settings.',
+      confirmText: 'OK',
+      cancelText: 'Close',
+      onConfirm: () => {},
+    });
   };
 
   const handleLocationClick = () => {
@@ -583,30 +592,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [vegMode]);
 
   const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await authService.logout();
-              if (onLogout) {
-                onLogout();
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to logout. Please try again.');
-            }
-          },
-        },
-      ]
-    );
+    showConfirmation({
+      title: 'Logout',
+      message: 'Are you sure you want to logout?',
+      confirmText: 'Logout',
+      cancelText: 'Cancel',
+      confirmButtonColor: '#FF0000',
+      onConfirm: async () => {
+        try {
+          await authService.logout();
+          if (onLogout) {
+            onLogout();
+          }
+        } catch (error) {
+          showConfirmation({
+            title: 'Error',
+            message: 'Failed to logout. Please try again.',
+            confirmText: 'OK',
+            cancelText: 'Cancel',
+            onConfirm: () => {},
+          });
+        }
+      },
+    });
   };
 
   const onViewRef = React.useRef((viewableItems: any) => {

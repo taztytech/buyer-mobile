@@ -27,6 +27,7 @@ import { SearchScreen } from './SearchScreen';
 import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { favoritesService } from '@/services/favorites.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -174,6 +175,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 }) => {
   const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, checkRestaurantConflict } = useCart();
   const { vegMode, setVegMode } = useVegMode();
+  const { showConfirmation } = useConfirmation();
   const insets = useSafeAreaInsets();
   const [menuSections, setMenuSections] = useState<MenuSection[]>([]);
   const [restaurantData, setRestaurantData] = useState<any>(null);
@@ -344,32 +346,26 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const addToCart = (item: MenuItem) => {
     // Check if there's a restaurant conflict
     if (checkRestaurantConflict(restaurantId)) {
-      Alert.alert(
-        'Replace cart item?',
-        'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Replace',
-            onPress: () => {
-              // Clear cart and add new item
-              clearCart();
-              setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo);
-              addToCartContext({
-                id: item.id,
-                name: item.name,
-                price: item.price,
-                quantity: 1,
-                isVeg: item.isVeg,
-                isCustomizable: false,
-              });
-            },
-          },
-        ]
-      );
+      showConfirmation({
+        title: 'Replace cart item?',
+        message: 'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
+        confirmText: 'Replace',
+        cancelText: 'Cancel',
+        confirmButtonColor: '#FF0000',
+        onConfirm: () => {
+          // Clear cart and add new item
+          clearCart();
+          setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo);
+          addToCartContext({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: 1,
+            isVeg: item.isVeg,
+            isCustomizable: false,
+          });
+        },
+      });
       return;
     }
 
@@ -425,26 +421,20 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const handleCustomizableItemClick = (item: MenuItem) => {
     // Check if there's a restaurant conflict
     if (checkRestaurantConflict(restaurantId)) {
-      Alert.alert(
-        'Replace cart item?',
-        'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Replace',
-            onPress: () => {
-              // Clear cart and open customization modal
-              clearCart();
-              setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo);
-              setSelectedCustomizableItem(item);
-              setShowCustomizationModal(true);
-            },
-          },
-        ]
-      );
+      showConfirmation({
+        title: 'Replace cart item?',
+        message: 'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
+        confirmText: 'Replace',
+        cancelText: 'Cancel',
+        confirmButtonColor: '#FF0000',
+        onConfirm: () => {
+          // Clear cart and open customization modal
+          clearCart();
+          setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo);
+          setSelectedCustomizableItem(item);
+          setShowCustomizationModal(true);
+        },
+      });
       return;
     }
 
