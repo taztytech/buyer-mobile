@@ -826,28 +826,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* TEST BUTTON - Remove after testing */}
-              <TouchableOpacity
-                style={{
-                  backgroundColor: '#FF0000',
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 8,
-                  marginRight: 8,
-                }}
-                onPress={() => {
-                  showConfirmation({
-                    title: 'Test Modal',
-                    message: 'This is your custom confirmation modal! 🎉',
-                    confirmText: 'Awesome!',
-                    cancelText: 'Close',
-                    onConfirm: () => console.log('Confirmed!'),
-                  });
-                }}
-              >
-                <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>TEST</Text>
-              </TouchableOpacity>
-
               {/* VEG Mode Toggle */}
               <TouchableOpacity
                 style={styles.vegModeContainer}
