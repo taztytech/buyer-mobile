@@ -59,15 +59,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   useEffect(() => {
-    // Only fetch when screen becomes visible for the first time
-    if (visible && !hasLoadedOnce) {
+    // Fetch fresh data whenever screen becomes visible
+    if (visible) {
       fetchOrders();
-      setHasLoadedOnce(true);
     }
-  }, [visible, hasLoadedOnce]);
+  }, [visible]);
 
   const fetchOrders = async () => {
     try {

@@ -799,14 +799,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   style={styles.searchBar}
                 >
                   <MaterialIcons name="search" size={24} color="#FFFFFF" />
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search Restaurants & foods.."
-                    placeholderTextColor="rgba(255, 255, 255, 0.7)"
-                    cursorColor="#FFFFFF"
-                    editable={false}
-                    pointerEvents="none"
-                  />
+                  <Text style={styles.searchInput} numberOfLines={1}>
+                    Search Restaurants & foods..
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -1274,10 +1269,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins',
     fontWeight: '400',
     fontSize: 14,
-    color: '#FFFFFF',
+    color: 'rgba(255, 255, 255, 0.7)',
     paddingVertical: 0,
     textAlignVertical: 'center',
-    includeFontPadding: false,
   },
   vegModeContainer: {
     width: 46,

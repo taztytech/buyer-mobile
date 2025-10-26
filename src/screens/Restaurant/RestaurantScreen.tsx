@@ -853,7 +853,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 image: item.images && item.images.length > 0
                   ? { uri: item.images[0] }
                   : require('@/assets/biriyani.png'),
-                isVeg: item.dietary_preference === 'veg',
+                isVeg: item.dietary_preference?.toLowerCase() === 'veg' || item.is_veg === true,
                 isSpicy: false, // API doesn't provide this info
                 isBestSeller: item.is_recommended || false,
                 isCustomizable: item.has_customizations || false,
