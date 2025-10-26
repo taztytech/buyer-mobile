@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { storageService } from '@/services/storage.service';
 import { authService } from '@/services/auth.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface ProfileScreenProps {
   visible?: boolean;
@@ -38,6 +39,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onTermsConditions,
   onLogout,
 }) => {
+  const { showConfirmation } = useConfirmation();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [userName, setUserName] = useState('User');
   const [userPhone, setUserPhone] = useState('');
@@ -79,6 +81,32 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       fetchUserData();
     }
   }, [visible]);
+
+  const handleLogout = () => {
+    showConfirmation({
+      title: 'Logout',
+      message: 'Are you sure you want to logout from your account?',
+      confirmText: 'Logout',
+      cancelText: 'Cancel',
+      confirmButtonColor: '#FF0000',
+      onConfirm: async () => {
+        try {
+          await authService.logout();
+          if (onLogout) {
+            onLogout();
+          }
+        } catch (error) {
+          showConfirmation({
+            title: 'Error',
+            message: 'Failed to logout. Please try again.',
+            confirmText: 'OK',
+            cancelText: 'Close',
+            onConfirm: () => {},
+          });
+        }
+      },
+    });
+  };
 
   // Menu item component
   const MenuItem = ({
@@ -212,7 +240,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           {/* Logout Button */}
           <TouchableOpacity
             style={styles.logoutButton}
-            onPress={onLogout}
+            onPress={handleLogout}
             activeOpacity={0.8}
           >
             <Text style={styles.logoutText}>LOGOUT</Text>
