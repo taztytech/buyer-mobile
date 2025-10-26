@@ -634,6 +634,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   onLoad={() => {
                     setLoadedBannerImages(prev => new Set(prev).add(item.id));
                   }}
+                  fadeDuration={0}
+                  progressiveRenderingEnabled={true}
                 />
               </View>
             </View>
@@ -682,6 +684,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               // Mark as loaded anyway to not block shimmer
               setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
             }}
+            fadeDuration={0}
+            progressiveRenderingEnabled={true}
           />
         </View>
         <Text style={styles.categoryName} testID={`category-name-${item.id}`}>
@@ -715,6 +719,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          removeClippedSubviews={true}
+          decelerationRate="fast"
         >
 
       {/* Header with Background Image */}
@@ -1025,14 +1031,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             ))}
           </>
         ) : (
-          <>
-            {restaurantData.map((restaurant) => (
-              <View key={restaurant.id} style={styles.restaurantCardWrapper}>
+          <FlatList
+            data={restaurantData}
+            renderItem={({ item: restaurant }) => (
+              <View style={styles.restaurantCardWrapper}>
                 <RestaurantCard
                   restaurant={restaurant}
                   onPress={() => {
                     if (onNavigateToRestaurant) {
-                      onNavigateToRestaurant(restaurant.id, restaurant.name);
+                      const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
+                      onNavigateToRestaurant(restaurantId, restaurant.name);
                     }
                   }}
                   onImageLoad={() => {
@@ -1040,8 +1048,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   }}
                 />
               </View>
-            ))}
-          </>
+            )}
+            keyExtractor={(restaurant) => restaurant.id.toString()}
+            scrollEnabled={false}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={5}
+            windowSize={5}
+            initialNumToRender={3}
+            updateCellsBatchingPeriod={50}
+          />
         )}
       </View>
 

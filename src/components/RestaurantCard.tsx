@@ -24,7 +24,7 @@ interface RestaurantCardProps {
   onImageLoad?: () => void;
 }
 
-export const RestaurantCard: React.FC<RestaurantCardProps> = ({
+export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   restaurant,
   onPress,
   onFavoriteToggle,
@@ -107,6 +107,8 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
               onImageLoad();
             }
           }}
+          fadeDuration={0}
+          progressiveRenderingEnabled={true}
         />
 
         {/* Top Gradient Overlay */}
@@ -187,7 +189,15 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
       </View>
     </TouchableOpacity>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison function for React.memo
+  // Return true if props are equal (skip re-render)
+  return (
+    prevProps.restaurant.id === nextProps.restaurant.id &&
+    prevProps.restaurant.isFavorite === nextProps.restaurant.isFavorite &&
+    prevProps.restaurant.name === nextProps.restaurant.name
+  );
+});
 
 const styles = StyleSheet.create({
   card: {

@@ -961,6 +961,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         scrollEventThrottle={16}
         bounces={false}
         overScrollMode="never"
+        removeClippedSubviews={true}
+        decelerationRate="fast"
       >
         {/* Header Image with Overlay */}
         <ImageBackground
@@ -1289,6 +1291,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                       style={styles.itemImage}
                       resizeMode="cover"
                       onLoad={() => handleImageLoad(item.id)}
+                      fadeDuration={0}
+                      progressiveRenderingEnabled={true}
                     />
                   </TouchableOpacity>
 
