@@ -190,19 +190,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
   const isInitialVegModeLoad = React.useRef(true);
 
-  // Dismiss keyboard when component mounts
+  // Dismiss keyboard when component mounts (only once)
   React.useEffect(() => {
-    // Dismiss immediately
     Keyboard.dismiss();
-
-    // Also dismiss whenever keyboard shows
-    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
-      Keyboard.dismiss();
-    });
-
-    return () => {
-      keyboardDidShowListener.remove();
-    };
   }, []);
 
   // Update local state when external selectedLocation changes

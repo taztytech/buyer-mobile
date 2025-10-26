@@ -11,8 +11,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { storageService } from '@/services/storage.service';
+import { authService } from '@/services/auth.service';
 
 interface ProfileScreenProps {
+  visible?: boolean;
   onBack?: () => void;
   onEditProfile?: () => void;
   onMyOrders?: () => void;
@@ -25,6 +27,7 @@ interface ProfileScreenProps {
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
+  visible = true,
   onBack,
   onEditProfile,
   onMyOrders,
@@ -39,22 +42,43 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [userName, setUserName] = useState('User');
   const [userPhone, setUserPhone] = useState('');
 
-  // Fetch user data from storage on component mount
+  // Fetch user data from API whenever screen becomes visible
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const userData = await storageService.getUser();
-        if (userData) {
-          setUserName(userData.name || 'User');
-          setUserPhone(userData.phoneNumber || '');
-        }
-      } catch (error) {
-        // Silent fail - keep default values
-      }
-    };
+    if (visible) {
+      const fetchUserData = async () => {
+        try {
+          // First try to get data from API
+          const response = await authService.getProfile();
 
-    fetchUserData();
-  }, []);
+          if (response.success && response.data?.user) {
+            const user = response.data.user;
+            setUserName(user.name || 'User');
+            setUserPhone(user.phoneNumber || '');
+          } else {
+            // If API fails, try to get data from storage as fallback
+            const userData = await storageService.getUser();
+            if (userData) {
+              setUserName(userData.name || 'User');
+              setUserPhone(userData.phoneNumber || '');
+            }
+          }
+        } catch (error) {
+          // On error, try to load from storage
+          try {
+            const userData = await storageService.getUser();
+            if (userData) {
+              setUserName(userData.name || 'User');
+              setUserPhone(userData.phoneNumber || '');
+            }
+          } catch (storageError) {
+            // Silent fail - keep default values
+          }
+        }
+      };
+
+      fetchUserData();
+    }
+  }, [visible]);
 
   // Menu item component
   const MenuItem = ({

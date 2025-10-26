@@ -61,12 +61,10 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
     longitude: number;
   } | null>(null);
 
-  // Fetch addresses whenever screen becomes visible
+  // Fetch addresses when component mounts
   useEffect(() => {
-    if (visible) {
-      fetchAddresses();
-    }
-  }, [visible]);
+    fetchAddresses();
+  }, []);
 
   const fetchAddresses = async () => {
     setIsLoading(true);

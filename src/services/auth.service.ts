@@ -184,21 +184,36 @@ class AuthService {
   /**
    * Get user profile
    */
-  async getProfile(): Promise<ApiResponse<UpdateProfileResponse>> {
+  async getProfile(): Promise<ApiResponse<any>> {
     try {
-      const response = await apiService.get<UpdateProfileResponse>(
+      const response = await apiService.get<any>(
         API_CONFIG.ENDPOINTS.USER.PROFILE
       );
 
       // If fetch successful, update stored user data
-      if (response.success && response.data?.user) {
+      // API returns user data directly in response.data (not response.data.user)
+      if (response.success && response.data) {
         const updatedUser = {
-          id: response.data.user.id,
-          phoneNumber: response.data.user.phoneNumber,
-          name: response.data.user.name,
-          email: response.data.user.email,
+          id: response.data.id?.toString() || '',
+          phoneNumber: response.data.phone_number?.toString() || '',
+          name: response.data.name || '',
+          email: response.data.email || '',
         };
         await storageService.saveUser(updatedUser);
+
+        // Transform response to match expected format for screens
+        return {
+          success: true,
+          data: {
+            user: {
+              id: response.data.id?.toString() || '',
+              phoneNumber: response.data.phone_number?.toString() || '',
+              name: response.data.name || '',
+              email: response.data.email || '',
+            }
+          },
+          message: response.message,
+        };
       }
 
       return response;

@@ -49,19 +49,11 @@ export default function App() {
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const editProfileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const ordersScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const orderDetailScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const rateOrderScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const orderTrackingScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const searchScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const exploreDishesScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const privacyPolicyScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const termsConditionsScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const myAddressesScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const addressScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const categoryScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const helpScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
   const [fontsLoaded] = useFonts({
@@ -233,17 +225,11 @@ export default function App() {
     // Reset all animated values to their initial state
     homeScreenSlide.setValue(0);
     profileScreenSlide.setValue(SCREEN_WIDTH);
-    editProfileScreenSlide.setValue(SCREEN_WIDTH);
-    orderDetailScreenSlide.setValue(SCREEN_WIDTH);
-    rateOrderScreenSlide.setValue(SCREEN_WIDTH);
-    orderTrackingScreenSlide.setValue(SCREEN_WIDTH);
     searchScreenSlide.setValue(SCREEN_WIDTH);
     privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
     termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
-    myAddressesScreenSlide.setValue(SCREEN_WIDTH);
     addressScreenSlide.setValue(SCREEN_WIDTH);
     locationScreenSlide.setValue(SCREEN_WIDTH);
-    categoryScreenSlide.setValue(SCREEN_WIDTH);
     helpScreenSlide.setValue(SCREEN_WIDTH);
 
     // Reset state
@@ -458,137 +444,38 @@ export default function App() {
   // Orders Navigation
   const handleNavigateToOrders = () => {
     setCurrentScreen('orders');
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(ordersScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const handleBackFromOrders = () => {
     setCurrentScreen('profile');
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(ordersScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   // Order Detail Navigation
   const handleNavigateToOrderDetail = (orderId: string) => {
     setSelectedOrderId(orderId);
     setCurrentScreen('orderDetail');
-
-    Animated.parallel([
-      Animated.timing(ordersScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(orderDetailScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const handleBackFromOrderDetail = () => {
     setCurrentScreen('orders');
-    Animated.parallel([
-      Animated.timing(ordersScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(orderDetailScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   // My Addresses Navigation
   const handleNavigateToMyAddresses = () => {
     setCurrentScreen('myAddresses');
-
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(myAddressesScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const handleBackFromMyAddresses = () => {
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(myAddressesScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('profile');
-    });
+    setCurrentScreen('profile');
   };
 
   // Explore Dishes (Favorites) Navigation
   const handleNavigateToExploreDishes = () => {
     setCurrentScreen('exploreDishes');
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(exploreDishesScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const handleBackFromExploreDishes = () => {
     setCurrentScreen('profile');
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(exploreDishesScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   // Privacy Policy Navigation
@@ -699,108 +586,30 @@ export default function App() {
   // Edit Profile Navigation
   const handleNavigateToEditProfile = () => {
     setCurrentScreen('editProfile');
-
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(editProfileScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const handleBackFromEditProfile = () => {
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(editProfileScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('profile');
-    });
+    setCurrentScreen('profile');
   };
 
   // Rate Order Navigation
   const handleNavigateToRateOrder = (orderId: string) => {
     setSelectedOrderId(orderId);
     setCurrentScreen('rateOrder');
-
-    Animated.parallel([
-      Animated.timing(ordersScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(rateOrderScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const handleBackFromRateOrder = () => {
-    Animated.parallel([
-      Animated.timing(ordersScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(rateOrderScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('orders');
-    });
+    setCurrentScreen('orders');
   };
 
   // Order Tracking Navigation
   const handleNavigateToOrderTracking = (orderId: string) => {
     setSelectedOrderId(orderId);
     setCurrentScreen('orderTracking');
-
-    Animated.parallel([
-      Animated.timing(ordersScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(orderTrackingScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const handleBackFromOrderTracking = () => {
-    Animated.parallel([
-      Animated.timing(ordersScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(orderTrackingScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('orders');
-    });
+    setCurrentScreen('orders');
   };
 
   // Search Navigation
@@ -890,6 +699,7 @@ export default function App() {
             pointerEvents={currentScreen === 'profile' || currentScreen === 'editProfile' ? 'auto' : 'none'}
           >
             <ProfileScreen
+              visible={currentScreen === 'profile'}
               onBack={handleBackToHome}
               onLogout={handleLogout}
               onEditProfile={handleNavigateToEditProfile}
@@ -946,39 +756,25 @@ export default function App() {
             />
           </Animated.View>
 
-          {/* Always render OrdersScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.ordersOverlay,
-              {
-                transform: [{ translateX: ordersScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'orders' || currentScreen === 'orderDetail' || currentScreen === 'rateOrder' || currentScreen === 'orderTracking' ? 'auto' : 'none'}
-          >
-            <OrdersScreen
-              visible={currentScreen === 'orders' || currentScreen === 'orderDetail' || currentScreen === 'rateOrder' || currentScreen === 'orderTracking'}
-              onBack={handleBackFromOrders}
-              onOrderDetails={handleNavigateToOrderDetail}
-              onReorder={(orderId) => {}}
-              onRateOrder={handleNavigateToRateOrder}
-              onTrackOrder={handleNavigateToOrderTracking}
-              onHelp={(orderId) => {}}
-              onViewMore={() => {}}
-            />
-          </Animated.View>
+          {/* Conditionally render OrdersScreen only when needed */}
+          {currentScreen === 'orders' && (
+            <View style={styles.ordersOverlay}>
+              <OrdersScreen
+                visible={true}
+                onBack={handleBackFromOrders}
+                onOrderDetails={handleNavigateToOrderDetail}
+                onReorder={(orderId) => {}}
+                onRateOrder={handleNavigateToRateOrder}
+                onTrackOrder={handleNavigateToOrderTracking}
+                onHelp={(orderId) => {}}
+                onViewMore={() => {}}
+              />
+            </View>
+          )}
 
-          {/* Always render OrderDetailScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.orderDetailOverlay,
-              {
-                transform: [{ translateX: orderDetailScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'orderDetail' ? 'auto' : 'none'}
-          >
-            {currentScreen === 'orderDetail' && (
+          {/* Conditionally render OrderDetailScreen only when needed */}
+          {currentScreen === 'orderDetail' && (
+            <View style={styles.orderDetailOverlay}>
               <OrderDetailScreen
                 key={selectedOrderId}
                 orderId={selectedOrderId}
@@ -990,42 +786,30 @@ export default function App() {
                 onReorder={() => {}}
                 onDownloadInvoice={() => {}}
               />
-            )}
-          </Animated.View>
+            </View>
+          )}
 
-          {/* Always render RateOrderScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.rateOrderOverlay,
-              {
-                transform: [{ translateX: rateOrderScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'rateOrder' ? 'auto' : 'none'}
-          >
-            <RateOrderScreen
-              onBack={handleBackFromRateOrder}
-              onSubmit={(data) => {
-                handleBackFromRateOrder();
-              }}
-            />
-          </Animated.View>
+          {/* Conditionally render RateOrderScreen only when needed */}
+          {currentScreen === 'rateOrder' && (
+            <View style={styles.rateOrderOverlay}>
+              <RateOrderScreen
+                onBack={handleBackFromRateOrder}
+                onSubmit={(data) => {
+                  handleBackFromRateOrder();
+                }}
+              />
+            </View>
+          )}
 
-          {/* Always render OrderTrackingScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.orderTrackingOverlay,
-              {
-                transform: [{ translateX: orderTrackingScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'orderTracking' ? 'auto' : 'none'}
-          >
-            <OrderTrackingScreen
-              onBack={handleBackFromOrderTracking}
-              onCallPartner={() => {}}
-            />
-          </Animated.View>
+          {/* Conditionally render OrderTrackingScreen only when needed */}
+          {currentScreen === 'orderTracking' && (
+            <View style={styles.orderTrackingOverlay}>
+              <OrderTrackingScreen
+                onBack={handleBackFromOrderTracking}
+                onCallPartner={() => {}}
+              />
+            </View>
+          )}
 
           {/* Always render SearchScreen, positioned off-screen initially */}
           <Animated.View
@@ -1071,52 +855,40 @@ export default function App() {
             />
           </Animated.View>
 
-          {/* Always render MyAddressesScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.myAddressesOverlay,
-              {
-                transform: [{ translateX: myAddressesScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'myAddresses' ? 'auto' : 'none'}
-          >
-            <MyAddressesScreen
-              visible={currentScreen === 'myAddresses'}
-              onBack={handleBackFromMyAddresses}
-              onAddNew={() => {}}
-              onEdit={(addressId) => {}}
-              onDelete={(addressId) => {}}
-            />
-          </Animated.View>
+          {/* Conditionally render MyAddressesScreen only when needed */}
+          {currentScreen === 'myAddresses' && (
+            <View style={styles.myAddressesOverlay}>
+              <MyAddressesScreen
+                visible={true}
+                onBack={handleBackFromMyAddresses}
+                onAddNew={() => {}}
+                onEdit={(addressId) => {}}
+                onDelete={(addressId) => {}}
+              />
+            </View>
+          )}
 
-          {/* Always render ExploreDishesScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.exploreDishesOverlay,
-              {
-                transform: [{ translateX: exploreDishesScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'exploreDishes' ? 'auto' : 'none'}
-          >
-            <ExploreDishesScreen
-              visible={currentScreen === 'exploreDishes'}
-              onBack={handleBackFromExploreDishes}
-              onSelectItem={(item) => {
-                // Navigate to category results screen to show restaurants with this dish
-                setSelectedCategory(item.name);
-                setCategoryCameFrom('favorites');
-                setCurrentScreen('categoryResults');
-              }}
-              onSelectRestaurant={(restaurantId, restaurantName) => {
-                setSelectedRestaurantId(Number(restaurantId));
-                setSelectedRestaurantName(restaurantName);
-                setRestaurantCameFrom('favorites');
-                setCurrentScreen('restaurant');
-              }}
-            />
-          </Animated.View>
+          {/* Conditionally render ExploreDishesScreen only when needed */}
+          {currentScreen === 'exploreDishes' && (
+            <View style={styles.exploreDishesOverlay}>
+              <ExploreDishesScreen
+                visible={true}
+                onBack={handleBackFromExploreDishes}
+                onSelectItem={(item) => {
+                  // Navigate to category results screen to show restaurants with this dish
+                  setSelectedCategory(item.name);
+                  setCategoryCameFrom('favorites');
+                  setCurrentScreen('categoryResults');
+                }}
+                onSelectRestaurant={(restaurantId, restaurantName) => {
+                  setSelectedRestaurantId(Number(restaurantId));
+                  setSelectedRestaurantName(restaurantName);
+                  setRestaurantCameFrom('favorites');
+                  setCurrentScreen('restaurant');
+                }}
+              />
+            </View>
+          )}
 
           {/* Always render Privacy Policy Screen, positioned off-screen initially */}
           <Animated.View
@@ -1165,23 +937,17 @@ export default function App() {
             />
           </Animated.View>
 
-          {/* Always render EditProfileScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.editProfileOverlay,
-              {
-                transform: [{ translateX: editProfileScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'editProfile' ? 'auto' : 'none'}
-          >
-            <EditProfileScreen
-              onBack={handleBackFromEditProfile}
-              onSave={(data) => {
-                handleBackFromEditProfile();
-              }}
-            />
-          </Animated.View>
+          {/* Conditionally render EditProfileScreen only when needed */}
+          {currentScreen === 'editProfile' && (
+            <View style={styles.editProfileOverlay}>
+              <EditProfileScreen
+                onBack={handleBackFromEditProfile}
+                onSave={(data) => {
+                  handleBackFromEditProfile();
+                }}
+              />
+            </View>
+          )}
 
           {/* Conditionally render CategoryResultsScreen only when needed */}
           {currentScreen === 'categoryResults' && (
