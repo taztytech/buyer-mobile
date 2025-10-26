@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useCart } from '@/context/CartContext';
 import { ordersService } from '@/services/orders.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface DeliveryAddress {
   id: number;
@@ -33,6 +34,7 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
   onOrderSuccess,
 }) => {
   const { cart, getTotalPrice, restaurantName, restaurantLogo, clearCart, restaurantId } = useCart();
+  const { showConfirmation } = useConfirmation();
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress | null>(null);
   const [notes, setNotes] = useState('');
@@ -56,17 +58,35 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
 
   const handlePlaceOrder = async () => {
     if (!deliveryAddress) {
-      Alert.alert('Error', 'Please select a delivery address');
+      showConfirmation({
+        title: 'Error',
+        message: 'Please select a delivery address',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
 
     if (!restaurantId) {
-      Alert.alert('Error', 'Restaurant information is missing');
+      showConfirmation({
+        title: 'Error',
+        message: 'Restaurant information is missing',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
 
     if (Object.keys(cart).length === 0) {
-      Alert.alert('Error', 'Your cart is empty');
+      showConfirmation({
+        title: 'Error',
+        message: 'Your cart is empty',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
 
@@ -131,28 +151,38 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
         const orderId = orderData.id || orderData.order_id;
 
         // Show success message
-        Alert.alert(
-          'Order Placed!',
-          orderNumber !== 'N/A'
+        showConfirmation({
+          title: 'Order Placed! 🎉',
+          message: orderNumber !== 'N/A'
             ? `Your order #${orderNumber} has been placed successfully.`
             : 'Your order has been placed successfully.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                if (onOrderSuccess && orderId) {
-                  onOrderSuccess(orderId);
-                }
-              },
-            },
-          ]
-        );
+          confirmText: 'View Order',
+          cancelText: 'Close',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {
+            if (onOrderSuccess && orderId) {
+              onOrderSuccess(orderId);
+            }
+          },
+        });
       } else {
-        Alert.alert('Error', orderResponse.error || 'Failed to place order');
+        showConfirmation({
+          title: 'Error',
+          message: orderResponse.error || 'Failed to place order',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to place order');
-    } finally {
+      showConfirmation({
+        title: 'Error',
+        message: error.message || 'Failed to place order',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+    } finally{
       setIsPlacingOrder(false);
     }
   };
