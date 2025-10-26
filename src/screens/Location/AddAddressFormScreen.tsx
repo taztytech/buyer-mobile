@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { addressService, AddAddressRequest } from '@/services/address.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface AddAddressFormScreenProps {
   visible: boolean;
@@ -56,6 +57,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   addressId,
   initialData,
 }) => {
+  const { showConfirmation } = useConfirmation();
   const [houseNo, setHouseNo] = useState('');
   const [building, setBuilding] = useState('');
   const [locality, setLocality] = useState('');
@@ -114,27 +116,63 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const handleContinue = async () => {
     // Validation
     if (!houseNo.trim()) {
-      Alert.alert('Validation Error', 'Please enter house/flat number');
+      showConfirmation({
+        title: 'Validation Error',
+        message: 'Please enter house/flat number',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
     if (!building.trim()) {
-      Alert.alert('Validation Error', 'Please enter building/street name');
+      showConfirmation({
+        title: 'Validation Error',
+        message: 'Please enter building/street name',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
     if (!locality.trim()) {
-      Alert.alert('Validation Error', 'Please enter locality');
+      showConfirmation({
+        title: 'Validation Error',
+        message: 'Please enter locality',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
     if (!city.trim()) {
-      Alert.alert('Validation Error', 'Please enter city');
+      showConfirmation({
+        title: 'Validation Error',
+        message: 'Please enter city',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
     if (!state.trim()) {
-      Alert.alert('Validation Error', 'Please enter state');
+      showConfirmation({
+        title: 'Validation Error',
+        message: 'Please enter state',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
     if (!pincode.trim()) {
-      Alert.alert('Validation Error', 'Please enter pincode');
+      showConfirmation({
+        title: 'Validation Error',
+        message: 'Please enter pincode',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
 
@@ -172,13 +210,31 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           onSave(response.data);
         }
 
-        // Show success alert
-        Alert.alert('Success', editMode ? 'Address updated successfully' : 'Address added successfully');
+        // Show success message
+        showConfirmation({
+          title: 'Success',
+          message: editMode ? 'Address updated successfully' : 'Address added successfully',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
       } else {
-        Alert.alert('Error', response.error || (editMode ? 'Failed to update address' : 'Failed to add address'));
+        showConfirmation({
+          title: 'Error',
+          message: response.error || (editMode ? 'Failed to update address' : 'Failed to add address'),
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      showConfirmation({
+        title: 'Error',
+        message: 'An unexpected error occurred. Please try again.',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
     } finally {
       setLoading(false);
     }

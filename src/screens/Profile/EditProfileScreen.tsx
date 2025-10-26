@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { authService } from '@/services/auth.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface EditProfileScreenProps {
   onBack?: () => void;
@@ -29,6 +30,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
   initialPhone = '',
   initialEmail = '',
 }) => {
+  const { showConfirmation } = useConfirmation();
   const [name, setName] = useState(initialName);
   const [phone, setPhone] = useState(initialPhone);
   const [email, setEmail] = useState(initialEmail);
@@ -81,7 +83,13 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
   const handleUpdate = async () => {
     // Validate required fields
     if (!name.trim()) {
-      Alert.alert('Validation Error', 'Name is required');
+      showConfirmation({
+        title: 'Validation Error',
+        message: 'Name is required',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
 
@@ -93,24 +101,37 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
       });
 
       if (response.success) {
-        Alert.alert('Success', 'Profile updated successfully', [
-          {
-            text: 'OK',
-            onPress: () => {
-              if (onSave) {
-                onSave({ name, phone, email });
-              }
-              if (onBack) {
-                onBack();
-              }
-            },
+        showConfirmation({
+          title: 'Success',
+          message: 'Profile updated successfully',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {
+            if (onSave) {
+              onSave({ name, phone, email });
+            }
+            if (onBack) {
+              onBack();
+            }
           },
-        ]);
+        });
       } else {
-        Alert.alert('Error', response.error || 'Failed to update profile');
+        showConfirmation({
+          title: 'Error',
+          message: response.error || 'Failed to update profile',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred');
+      showConfirmation({
+        title: 'Error',
+        message: 'An unexpected error occurred',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
     } finally {
       setIsSaving(false);
     }
