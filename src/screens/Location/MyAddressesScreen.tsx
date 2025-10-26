@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { addressService, AddressResponse } from '@/services/address.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface MyAddressesScreenProps {
   onBack?: () => void;
@@ -26,6 +27,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
   onEditAddress,
   visible = false,
 }) => {
+  const { showConfirmation } = useConfirmation();
   const [addresses, setAddresses] = useState<AddressResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -42,37 +44,57 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         setAddresses(response.data);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to load addresses');
+      showConfirmation({
+        title: 'Error',
+        message: 'Failed to load addresses',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDelete = async (addressId: number) => {
-    Alert.alert(
-      'Delete Address',
-      'Are you sure you want to delete this address?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await addressService.deleteAddress(addressId.toString());
-              if (response.success) {
-                await loadAddresses();
-                Alert.alert('Success', 'Address deleted successfully');
-              } else {
-                Alert.alert('Error', response.error || 'Failed to delete address');
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete address');
-            }
-          },
-        },
-      ]
-    );
+    showConfirmation({
+      title: 'Delete Address',
+      message: 'Are you sure you want to delete this address?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      confirmButtonColor: '#FF0000',
+      onConfirm: async () => {
+        try {
+          const response = await addressService.deleteAddress(addressId.toString());
+          if (response.success) {
+            await loadAddresses();
+            showConfirmation({
+              title: 'Success',
+              message: 'Address deleted successfully',
+              confirmText: 'OK',
+              cancelText: 'Close',
+              onConfirm: () => {},
+            });
+          } else {
+            showConfirmation({
+              title: 'Error',
+              message: response.error || 'Failed to delete address',
+              confirmText: 'OK',
+              cancelText: 'Close',
+              onConfirm: () => {},
+            });
+          }
+        } catch (error) {
+          showConfirmation({
+            title: 'Error',
+            message: 'Failed to delete address',
+            confirmText: 'OK',
+            cancelText: 'Close',
+            onConfirm: () => {},
+          });
+        }
+      },
+    });
   };
 
   const formatAddress = (addr: AddressResponse): string => {
