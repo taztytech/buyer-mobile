@@ -75,8 +75,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       const response = await ordersService.getOrders(20, 0);
 
       if (response.success && response.data) {
-        // API returns orders in response.data.data array
-        const ordersArray = response.data.data || response.data.orders || [];
+        // API returns orders in response.data.data array (double-wrapped response)
+        const ordersArray = response.data.data || [];
         setOrders(ordersArray);
       } else {
         setError(response.error || 'Failed to load orders');

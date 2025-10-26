@@ -188,18 +188,15 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
   };
 
   // Handle save from add address form
-  const handleSaveNewAddress = async (addressData: any) => {
-    // Close all modals FIRST (synchronously)
+  const handleSaveNewAddress = (addressData: any) => {
+    // Close modal immediately - don't wait for anything
     setShowAddAddressForm(false);
     setSelectedLocation(null);
     setShowEditModal(false);
     setEditingAddressId(null);
 
-    // Then refresh the address list from API
-    await fetchAddresses();
-
-    // Show success alert after modal is closed and data refreshed
-    Alert.alert('Success', 'Address added successfully');
+    // Refresh in background
+    fetchAddresses();
   };
 
   const renderAddressCard = (address: Address) => (
@@ -307,14 +304,14 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         </View>
       )}
 
-      {/* Edit Address Modal */}
-      {showEditModal && editingAddressId && (() => {
+      {/* Edit Address Modal - Always rendered */}
+      {(() => {
         const editAddress = addresses.find(a => a.id === editingAddressId);
         return (
           <AddAddressFormScreen
-            visible={showEditModal}
+            visible={showEditModal && editingAddressId !== null}
             editMode={true}
-            addressId={editingAddressId}
+            addressId={editingAddressId || ''}
             locationName="Edit Address"
             locationAddress={editAddress?.fullAddress || ''}
             latitude={editAddress?.latitude || 0}
@@ -343,25 +340,23 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         );
       })()}
 
-      {/* Add Address Form Modal */}
-      {showAddAddressForm && selectedLocation && (
-        <AddAddressFormScreen
-          visible={showAddAddressForm}
-          locationName={selectedLocation.name}
-          locationAddress={selectedLocation.address}
-          latitude={selectedLocation.latitude}
-          longitude={selectedLocation.longitude}
-          onBack={() => {
-            setShowAddAddressForm(false);
-            setShowLocationSelection(true);
-          }}
-          onClose={() => {
-            setShowAddAddressForm(false);
-            setSelectedLocation(null);
-          }}
-          onSave={handleSaveNewAddress}
-        />
-      )}
+      {/* Add Address Form Modal - Always rendered */}
+      <AddAddressFormScreen
+        visible={showAddAddressForm && selectedLocation !== null}
+        locationName={selectedLocation?.name || ''}
+        locationAddress={selectedLocation?.address || ''}
+        latitude={selectedLocation?.latitude || 0}
+        longitude={selectedLocation?.longitude || 0}
+        onBack={() => {
+          setShowAddAddressForm(false);
+          setShowLocationSelection(true);
+        }}
+        onClose={() => {
+          setShowAddAddressForm(false);
+          setSelectedLocation(null);
+        }}
+        onSave={handleSaveNewAddress}
+      />
     </View>
   );
 };

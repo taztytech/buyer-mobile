@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
@@ -189,6 +189,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
   const [hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
   const isInitialVegModeLoad = React.useRef(true);
+
+  // Dismiss keyboard when component mounts
+  React.useEffect(() => {
+    // Dismiss immediately
+    Keyboard.dismiss();
+
+    // Also dismiss whenever keyboard shows
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+      Keyboard.dismiss();
+    });
+
+    return () => {
+      keyboardDidShowListener.remove();
+    };
+  }, []);
 
   // Update local state when external selectedLocation changes
   React.useEffect(() => {
@@ -708,6 +723,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
 
       {/* Header with Background Image */}

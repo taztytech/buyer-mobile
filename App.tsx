@@ -105,7 +105,6 @@ export default function App() {
           timeoutPromise
         ]);
       } catch (error) {
-        console.error('Error checking auth:', error);
         // Continue to login screen even if auth check fails
       } finally {
         setIsCheckingAuth(false);
@@ -224,7 +223,7 @@ export default function App() {
         await storageService.saveUser(updatedUser);
       }
     } catch (error) {
-      console.error('Error saving profile:', error);
+      // Silent fail
     }
 
     setCurrentScreen('home');

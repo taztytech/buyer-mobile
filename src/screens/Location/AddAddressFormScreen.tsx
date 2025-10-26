@@ -171,7 +171,9 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         if (onSave) {
           onSave(response.data);
         }
-        // Don't show alert here - let parent handle it
+
+        // Show success alert
+        Alert.alert('Success', editMode ? 'Address updated successfully' : 'Address added successfully');
       } else {
         Alert.alert('Error', response.error || (editMode ? 'Failed to update address' : 'Failed to add address'));
       }
