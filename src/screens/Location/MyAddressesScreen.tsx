@@ -11,150 +11,61 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { AddAddressFormScreen } from './AddAddressFormScreen';
-import { LocationSelectionScreen } from './LocationSelectionScreen';
 import { addressService, AddressResponse } from '@/services/address.service';
-
-interface Address {
-  id: string;
-  type: 'home' | 'work' | 'other';
-  fullAddress: string;
-  isDefault: boolean;
-  // Individual address components
-  address1: string;
-  address2?: string;
-  address3?: string | null;
-  city: string;
-  state: string;
-  pincode: string;
-  latitude: number;
-  longitude: number;
-  alternate_phone_number?: number;
-}
 
 interface MyAddressesScreenProps {
   onBack?: () => void;
   onAddNew?: () => void;
-  onEdit?: (addressId: string) => void;
-  onDelete?: (addressId: string) => void;
-  visible?: boolean; // To track when screen becomes visible
+  visible?: boolean;
 }
 
 export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
   onBack,
   onAddNew,
-  onEdit,
-  onDelete,
   visible = false,
 }) => {
-  // State for managing addresses
-  const [addresses, setAddresses] = useState<Address[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
-  const [showLocationSelection, setShowLocationSelection] = useState(false);
-  const [showAddAddressForm, setShowAddAddressForm] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState<{
-    name: string;
-    address: string;
-    latitude: number;
-    longitude: number;
-  } | null>(null);
+  const [addresses, setAddresses] = useState<AddressResponse[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Fetch addresses when component mounts
   useEffect(() => {
-    fetchAddresses();
+    loadAddresses();
   }, []);
 
-  const fetchAddresses = async () => {
+  const loadAddresses = async () => {
     setIsLoading(true);
     try {
       const response = await addressService.getAddresses();
-
       if (response.success && response.data) {
-        // Transform API response to Address format
-        const addressList: Address[] = response.data.map((addr: AddressResponse) => ({
-          id: addr.id.toString(),
-          type: addr.type,
-          fullAddress: `${addr.address1}${addr.address2 ? ', ' + addr.address2 : ''}${addr.address3 ? ', ' + addr.address3 : ''}, ${addr.city}, ${addr.state} - ${addr.pincode}`,
-          isDefault: addr.is_default,
-          // Store individual components for editing
-          address1: addr.address1,
-          address2: addr.address2,
-          address3: addr.address3,
-          city: addr.city,
-          state: addr.state,
-          pincode: addr.pincode,
-          latitude: addr.latitude,
-          longitude: addr.longitude,
-          alternate_phone_number: addr.alternate_phone_number,
-        }));
-
-        setAddresses(addressList);
+        setAddresses(response.data);
       }
     } catch (error) {
+      Alert.alert('Error', 'Failed to load addresses');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const getIconForType = (type: 'home' | 'work' | 'other') => {
-    switch (type) {
-      case 'home':
-        return 'home';
-      case 'work':
-        return 'work';
-      case 'other':
-        return 'location-on';
-      default:
-        return 'location-on';
-    }
-  };
-
-  const formatAddressType = (type: 'home' | 'work' | 'other') => {
-    return type.charAt(0).toUpperCase() + type.slice(1);
-  };
-
-  // Handle edit address
-  const handleEdit = (addressId: string) => {
-    setEditingAddressId(addressId);
-    setShowEditModal(true);
-    if (onEdit) {
-      onEdit(addressId);
-    }
-  };
-
-  // Handle delete address
-  const handleDelete = async (addressId: string) => {
-    const address = addresses.find(addr => addr.id === addressId);
-
+  const handleDelete = async (addressId: number) => {
     Alert.alert(
       'Delete Address',
-      `Are you sure you want to delete ${formatAddressType(address?.type || 'other')} address?`,
+      'Are you sure you want to delete this address?',
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
-              const response = await addressService.deleteAddress(addressId);
-
+              const response = await addressService.deleteAddress(addressId.toString());
               if (response.success) {
-                // Refresh the address list after deletion
-                await fetchAddresses();
+                await loadAddresses();
                 Alert.alert('Success', 'Address deleted successfully');
-                if (onDelete) {
-                  onDelete(addressId);
-                }
               } else {
                 Alert.alert('Error', response.error || 'Failed to delete address');
               }
             } catch (error) {
-              Alert.alert('Error', 'An unexpected error occurred while deleting the address');
+              Alert.alert('Error', 'Failed to delete address');
             }
           },
         },
@@ -162,87 +73,31 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
     );
   };
 
-  // Handle Add New button click
-  const handleAddNew = () => {
-    setShowLocationSelection(true);
-    if (onAddNew) {
-      onAddNew();
+  const formatAddress = (addr: AddressResponse): string => {
+    const parts = [
+      addr.address1,
+      addr.address2,
+      addr.address3,
+      addr.city,
+      `${addr.state} - ${addr.pincode}`,
+    ].filter(Boolean);
+    return parts.join(', ');
+  };
+
+  const getIconForType = (type: string) => {
+    switch (type) {
+      case 'home': return 'home';
+      case 'work': return 'work';
+      default: return 'location-on';
     }
   };
 
-  // Handle location confirmation from LocationSelectionScreen
-  const handleLocationConfirm = (location: { name: string; address: string; latitude: number; longitude: number }) => {
-    setSelectedLocation(location);
-    setShowLocationSelection(false);
-    setShowAddAddressForm(true);
+  const formatType = (type: string): string => {
+    return type.charAt(0).toUpperCase() + type.slice(1);
   };
-
-  // Handle save from edit modal
-  const handleSaveAddress = async (addressData: any) => {
-    // Refresh the address list from API
-    await fetchAddresses();
-    setShowEditModal(false);
-    setEditingAddressId(null);
-  };
-
-  // Handle save from add address form
-  const handleSaveNewAddress = (addressData: any) => {
-    // Close modal immediately - don't wait for anything
-    setShowAddAddressForm(false);
-    setSelectedLocation(null);
-    setShowEditModal(false);
-    setEditingAddressId(null);
-
-    // Refresh in background
-    fetchAddresses();
-  };
-
-  const renderAddressCard = (address: Address) => (
-    <View key={address.id}>
-      <View style={styles.addressItem}>
-        {/* Delete button - Top Right */}
-        <TouchableOpacity
-          style={styles.deleteIconButton}
-          onPress={() => handleDelete(address.id)}
-          activeOpacity={0.7}
-        >
-          <MaterialIcons name="delete-outline" size={24} color="#FF0000" />
-        </TouchableOpacity>
-
-        {/* Address Content - Full Width */}
-        <TouchableOpacity
-          style={styles.addressContent}
-          onPress={() => handleEdit(address.id)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.addressIconContainer}>
-            <MaterialIcons
-              name={getIconForType(address.type)}
-              size={24}
-              color="#00B14F"
-            />
-          </View>
-          <View style={styles.addressInfo}>
-            <View style={styles.addressNameRow}>
-              <Text style={styles.addressName}>{formatAddressType(address.type)}</Text>
-              {address.isDefault && (
-                <View style={styles.defaultBadge}>
-                  <Text style={styles.defaultBadgeText}>Default</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.addressText}>{address.fullAddress}</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-      {addresses.indexOf(address) !== addresses.length - 1 && (
-        <View style={styles.divider} />
-      )}
-    </View>
-  );
 
   return (
-    <View style={styles.outerContainer}>
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
         <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
       </SafeAreaView>
@@ -252,133 +107,97 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Saved Address</Text>
+        <Text style={styles.headerTitle}>Saved Addresses</Text>
       </View>
 
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+      <SafeAreaView style={styles.content} edges={['bottom']}>
+        {isLoading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#00B14F" />
+            <Text style={styles.loadingText}>Loading addresses...</Text>
+          </View>
+        ) : addresses.length === 0 ? (
+          <View style={styles.centerContainer}>
+            <MaterialIcons name="location-off" size={64} color="#CCC" />
+            <Text style={styles.emptyTitle}>No saved addresses</Text>
+            <Text style={styles.emptySubtitle}>Add your first address to get started</Text>
+          </View>
+        ) : (
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {isLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#00B14F" />
-                <Text style={styles.loadingText}>Loading addresses...</Text>
-              </View>
-            ) : addresses.length > 0 ? (
-              <View style={styles.addressesList}>
-                {addresses.map((address) => renderAddressCard(address))}
-              </View>
-            ) : (
-              <View style={styles.emptyContainer}>
-                <MaterialIcons name="location-off" size={64} color="#CCC" />
-                <Text style={styles.emptyText}>No saved addresses yet</Text>
-                <Text style={styles.emptySubtext}>Add your first address to get started</Text>
-              </View>
-            )}
+            <View style={styles.addressList}>
+              {addresses.map((address, index) => (
+                <View key={address.id}>
+                  <View style={styles.addressCard}>
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => handleDelete(address.id)}
+                    >
+                      <MaterialIcons name="delete-outline" size={24} color="#FF0000" />
+                    </TouchableOpacity>
+
+                    <View style={styles.addressContent}>
+                      <View style={styles.iconContainer}>
+                        <MaterialIcons
+                          name={getIconForType(address.type)}
+                          size={24}
+                          color="#00B14F"
+                        />
+                      </View>
+
+                      <View style={styles.addressInfo}>
+                        <View style={styles.addressHeader}>
+                          <Text style={styles.addressType}>{formatType(address.type)}</Text>
+                          {address.is_default && (
+                            <View style={styles.defaultBadge}>
+                              <Text style={styles.defaultText}>Default</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.addressText}>{formatAddress(address)}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  {index < addresses.length - 1 && <View style={styles.divider} />}
+                </View>
+              ))}
+            </View>
           </ScrollView>
+        )}
 
-          {/* Add New Button - Fixed at bottom */}
-          <View style={styles.bottomButtonContainer}>
-            <TouchableOpacity
-              style={styles.addNewButton}
-              onPress={handleAddNew}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.addNewText}>Add New</Text>
-              <MaterialIcons name="add" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-
-      {/* Location Selection Screen for Add New - Full screen overlay */}
-      {showLocationSelection && (
-        <View style={styles.fullScreenOverlay}>
-          <LocationSelectionScreen
-            onBack={() => setShowLocationSelection(false)}
-            onLocationConfirm={handleLocationConfirm}
-          />
+        {/* Add New Button */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => {
+              console.log('🟢 Add New button pressed');
+              console.log('🟢 onAddNew function:', onAddNew);
+              if (onAddNew) {
+                onAddNew();
+              } else {
+                console.log('🔴 onAddNew is undefined!');
+              }
+            }}
+          >
+            <Text style={styles.addButtonText}>Add New</Text>
+            <MaterialIcons name="add" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
-      )}
-
-      {/* Edit Address Modal - Always rendered */}
-      {(() => {
-        const editAddress = addresses.find(a => a.id === editingAddressId);
-        return (
-          <AddAddressFormScreen
-            visible={showEditModal && editingAddressId !== null}
-            editMode={true}
-            addressId={editingAddressId || ''}
-            locationName="Edit Address"
-            locationAddress={editAddress?.fullAddress || ''}
-            latitude={editAddress?.latitude || 0}
-            longitude={editAddress?.longitude || 0}
-            initialData={{
-              houseNo: editAddress?.address1 || '',
-              building: editAddress?.address2 || '',
-              locality: editAddress?.address3 || '',
-              city: editAddress?.city || '',
-              state: editAddress?.state || '',
-              pincode: editAddress?.pincode?.toString() || '',
-              alternateMobile: editAddress?.alternate_phone_number?.toString() || '',
-              isDefault: editAddress?.isDefault || false,
-              tag: editAddress?.type || 'home',
-            }}
-            onBack={() => {
-              setShowEditModal(false);
-              setEditingAddressId(null);
-            }}
-            onClose={() => {
-              setShowEditModal(false);
-              setEditingAddressId(null);
-            }}
-            onSave={handleSaveAddress}
-          />
-        );
-      })()}
-
-      {/* Add Address Form Modal - Always rendered */}
-      <AddAddressFormScreen
-        visible={showAddAddressForm && selectedLocation !== null}
-        locationName={selectedLocation?.name || ''}
-        locationAddress={selectedLocation?.address || ''}
-        latitude={selectedLocation?.latitude || 0}
-        longitude={selectedLocation?.longitude || 0}
-        onBack={() => {
-          setShowAddAddressForm(false);
-          setShowLocationSelection(true);
-        }}
-        onClose={() => {
-          setShowAddAddressForm(false);
-          setSelectedLocation(null);
-        }}
-        onSave={handleSaveNewAddress}
-      />
+      </SafeAreaView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  outerContainer: {
+  container: {
     flex: 1,
     backgroundColor: '#00B14F',
-  },
-  fullScreenOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
-    backgroundColor: '#FFFFFF',
   },
   safeAreaTop: {
     backgroundColor: '#00B14F',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
   },
   header: {
     backgroundColor: '#00B14F',
@@ -406,6 +225,35 @@ const styles = StyleSheet.create({
     lineHeight: 27,
     opacity: 0.85,
   },
+  content: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    gap: 12,
+  },
+  loadingText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+  },
+  emptyTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#666',
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+  },
   scrollView: {
     flex: 1,
   },
@@ -413,17 +261,17 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 24,
   },
-  addressesList: {
+  addressList: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     overflow: 'hidden',
   },
-  addressItem: {
+  addressCard: {
     position: 'relative',
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
-  deleteIconButton: {
+  deleteButton: {
     position: 'absolute',
     top: 16,
     right: 16,
@@ -436,7 +284,7 @@ const styles = StyleSheet.create({
     gap: 16,
     paddingRight: 32,
   },
-  addressIconContainer: {
+  iconContainer: {
     width: 40,
     height: 40,
     justifyContent: 'center',
@@ -445,15 +293,15 @@ const styles = StyleSheet.create({
   addressInfo: {
     flex: 1,
   },
-  addressNameRow: {
+  addressHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginBottom: 4,
   },
-  addressName: {
-    fontFamily: 'Poppins',
+  addressType: {
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
-    fontWeight: '600',
     color: '#001E1F',
   },
   defaultBadge: {
@@ -461,35 +309,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  defaultBadgeText: {
-    fontFamily: 'Poppins',
+  defaultText: {
+    fontFamily: 'Poppins_500Medium',
     fontSize: 10,
-    fontWeight: '500',
     color: '#FFFFFF',
-    textAlign: 'center',
     lineHeight: 12,
   },
   addressText: {
     fontFamily: 'Poppins',
     fontSize: 13,
-    fontWeight: '400',
     color: '#666',
-    marginTop: 2,
+    lineHeight: 18,
   },
   divider: {
     height: 1,
     backgroundColor: '#F0F0F0',
     marginHorizontal: 16,
   },
-  bottomButtonContainer: {
+  buttonContainer: {
     paddingHorizontal: 20,
     paddingBottom: 20,
     backgroundColor: '#F5F5F5',
   },
-  addNewButton: {
+  addButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -499,39 +342,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#00B14F',
     borderRadius: 10,
   },
-  addNewText: {
-    fontFamily: 'Poppins',
-    fontWeight: '700',
+  addButtonText: {
+    fontFamily: 'Poppins_700Bold',
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    gap: 12,
-  },
-  loadingText: {
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    color: '#666',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    gap: 12,
-  },
-  emptyText: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 18,
-    color: '#666',
-  },
-  emptySubtext: {
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
   },
 });

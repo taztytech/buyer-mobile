@@ -46,6 +46,7 @@ export default function App() {
   const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites'>('home');
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
+  const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses'>('home');
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -296,20 +297,25 @@ export default function App() {
   };
 
   const handleBackFromAddressSelection = () => {
-    Animated.parallel([
-      Animated.timing(homeScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(addressScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('home');
-    });
+    if (addressSelectionCameFrom === 'myAddresses') {
+      setCurrentScreen('myAddresses');
+      setAddressSelectionCameFrom('home');
+    } else {
+      Animated.parallel([
+        Animated.timing(homeScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(addressScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('home');
+      });
+    }
   };
 
   // Location Selection Navigation
@@ -334,21 +340,27 @@ export default function App() {
   };
 
   const handleBackFromLocationSelection = () => {
-    Animated.parallel([
-      Animated.timing(addressScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(locationScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('addressSelection');
+    if (addressSelectionCameFrom === 'myAddresses') {
+      setCurrentScreen('myAddresses');
+      setAddressSelectionCameFrom('home');
       setSearchQuery('');
-    });
+    } else {
+      Animated.parallel([
+        Animated.timing(addressScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(locationScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('addressSelection');
+        setSearchQuery('');
+      });
+    }
   };
 
   const handleLocationConfirm = (location: any) => {
@@ -358,27 +370,41 @@ export default function App() {
       address: location.locationAddress || location.address,
     });
 
-    // Slide both address and location screens back to home
-    Animated.parallel([
-      Animated.timing(homeScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(addressScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
+    // Check if coming from MyAddresses
+    if (addressSelectionCameFrom === 'myAddresses') {
+      // Navigate back to MyAddresses after saving
       Animated.timing(locationScreenSlide, {
         toValue: SCREEN_WIDTH,
-        duration: 180,
+        duration: 300,
         useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('home');
-      setSearchQuery('');
-    });
+      }).start(() => {
+        setCurrentScreen('myAddresses');
+        setAddressSelectionCameFrom('home');
+        setSearchQuery('');
+      });
+    } else {
+      // Slide both address and location screens back to home
+      Animated.parallel([
+        Animated.timing(homeScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(addressScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(locationScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('home');
+        setSearchQuery('');
+      });
+    }
   };
 
   // Category Results Navigation
@@ -467,6 +493,21 @@ export default function App() {
 
   const handleBackFromMyAddresses = () => {
     setCurrentScreen('profile');
+  };
+
+  const handleNavigateToAddressSelectionFromMyAddresses = () => {
+    console.log('🔵 handleNavigateToAddressSelectionFromMyAddresses called');
+    setAddressSelectionCameFrom('myAddresses');
+    setCurrentScreen('locationSelection');
+
+    // Animate the location screen in
+    Animated.timing(locationScreenSlide, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    console.log('🔵 currentScreen set to locationSelection with animation');
   };
 
   // Explore Dishes (Favorites) Navigation
@@ -861,9 +902,7 @@ export default function App() {
               <MyAddressesScreen
                 visible={true}
                 onBack={handleBackFromMyAddresses}
-                onAddNew={() => {}}
-                onEdit={(addressId) => {}}
-                onDelete={(addressId) => {}}
+                onAddNew={handleNavigateToAddressSelectionFromMyAddresses}
               />
             </View>
           )}
