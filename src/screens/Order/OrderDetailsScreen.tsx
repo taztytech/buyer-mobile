@@ -20,6 +20,7 @@ import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScr
 import { ordersService } from '@/services/orders.service';
 import { addressService, AddressResponse } from '@/services/address.service';
 import { useCart } from '@/context/CartContext';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface CartItem {
   id: string;
@@ -58,6 +59,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   onUpdateCart,
 }) => {
   const { cart, clearCart } = useCart();
+  const { showConfirmation } = useConfirmation();
   const [orderExpanded, setOrderExpanded] = useState(true);
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
   const [tipExpanded, setTipExpanded] = useState(true);
@@ -120,10 +122,22 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           setSelectedAddressId(response.data[0].id.toString());
         }
       } else {
-        Alert.alert('Error', response.error || 'Failed to load addresses');
+        showConfirmation({
+          title: 'Error',
+          message: response.error || 'Failed to load addresses',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to load addresses');
+      showConfirmation({
+        title: 'Error',
+        message: error.message || 'Failed to load addresses',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
     } finally {
       setIsLoadingAddresses(false);
     }
@@ -174,12 +188,24 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
   const handlePlaceOrder = async () => {
     if (!restaurantId) {
-      Alert.alert('Error', 'Restaurant information is missing');
+      showConfirmation({
+        title: 'Error',
+        message: 'Restaurant information is missing',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
 
     if (Object.keys(cart).length === 0) {
-      Alert.alert('Error', 'Your cart is empty');
+      showConfirmation({
+        title: 'Error',
+        message: 'Your cart is empty',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
 
@@ -257,30 +283,40 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         const orderId = orderData.id || orderData.order_id;
 
         // Show success message
-        Alert.alert(
-          'Order Placed!',
-          orderNumber !== 'N/A'
+        showConfirmation({
+          title: 'Order Placed! 🎉',
+          message: orderNumber !== 'N/A'
             ? `Your order #${orderNumber} has been placed successfully.`
             : 'Your order has been placed successfully.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                if (onOrderSuccess && orderId) {
-                  onOrderSuccess(orderId);
-                } else if (onPlaceOrder) {
-                  onPlaceOrder();
-                }
-              },
-            },
-          ]
-        );
+          confirmText: 'View Order',
+          cancelText: 'Close',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {
+            if (onOrderSuccess && orderId) {
+              onOrderSuccess(orderId);
+            } else if (onPlaceOrder) {
+              onPlaceOrder();
+            }
+          },
+        });
       } else {
-        Alert.alert('Error', orderResponse.error || 'Failed to place order');
+        showConfirmation({
+          title: 'Error',
+          message: orderResponse.error || 'Failed to place order',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to place order');
-    } finally {
+      showConfirmation({
+        title: 'Error',
+        message: error.message || 'Failed to place order',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+    } finally{
       setIsPlacingOrder(false);
     }
   };
