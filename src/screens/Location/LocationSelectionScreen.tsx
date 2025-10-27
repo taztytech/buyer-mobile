@@ -79,6 +79,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const bottomPosition = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<any>(null);
   const isUpdatingFromCode = useRef(false);
+  const geocodingTimeout = useRef<NodeJS.Timeout | null>(null);
+  const isGeocodingRef = useRef(false);
+  const isDraggingRef = useRef(false);
+  const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const currentMapRegion = useRef<Region>(region);
 
   // Update region and location info when editing address changes
   useEffect(() => {
@@ -92,6 +97,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
       isUpdatingFromCode.current = true;
       setRegion(newRegion);
+      currentMapRegion.current = newRegion;
 
       // Animate map to the location if map is available
       if (mapRef.current && isMapAvailable) {
@@ -121,15 +127,24 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     }
   }, [editingAddress]);
 
+  // Get current location whenever screen loads for new addresses
+  useEffect(() => {
+    // Automatically get current location if not editing and no initial coordinates
+    if (!editingAddress && !initialLatitude && !initialLongitude) {
+      getCurrentLocation();
+    }
+  }, [editingAddress, initialLatitude, initialLongitude]);
+
+  // Handle initial search query
   useEffect(() => {
     // If initial search query is provided, trigger search on mount
     if (initialSearchQuery.trim()) {
       handleSearch();
     }
-    // Note: getCurrentLocation() is not called automatically
-    // It should only be called when user explicitly requests it (e.g., clicking "Use Current Location" button)
+  }, [initialSearchQuery]);
 
-    // Keyboard listeners with animation
+  // Keyboard listeners
+  useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       (event) => {
@@ -157,6 +172,13 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     return () => {
       keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
+      // Clear any pending timeouts on unmount
+      if (geocodingTimeout.current) {
+        clearTimeout(geocodingTimeout.current);
+      }
+      if (dragTimeoutRef.current) {
+        clearTimeout(dragTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -164,7 +186,12 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
-        const location = await Location.getCurrentPositionAsync({});
+        // Use balanced accuracy to get stable location without continuous updates
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Platform.OS === 'ios'
+            ? Location.Accuracy.Balanced
+            : Location.Accuracy.High,
+        });
         const newRegion = {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
@@ -172,12 +199,18 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           longitudeDelta: 0.01,
         };
 
+        isUpdatingFromCode.current = true;
         setRegion(newRegion);
+        currentMapRegion.current = newRegion;
 
         // Animate map to new location if map is available
         if (mapRef.current && isMapAvailable) {
           mapRef.current.animateToRegion(newRegion, 1000);
         }
+
+        setTimeout(() => {
+          isUpdatingFromCode.current = false;
+        }, 1100);
 
         // Get address from coordinates
         try {
@@ -202,40 +235,89 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     }
   };
 
+  const handleRegionChange = (newRegion: Region) => {
+    // Track the current map position in the ref (without triggering re-render)
+    currentMapRegion.current = newRegion;
+
+    // User is actively dragging the map
+    isDraggingRef.current = true;
+
+    // Clear the drag timeout if it exists
+    if (dragTimeoutRef.current) {
+      clearTimeout(dragTimeoutRef.current);
+    }
+
+    // Clear any pending geocoding timeout while dragging
+    if (geocodingTimeout.current) {
+      clearTimeout(geocodingTimeout.current);
+    }
+
+    // Set a timeout to mark dragging as complete
+    dragTimeoutRef.current = setTimeout(() => {
+      isDraggingRef.current = false;
+    }, 150);
+  };
+
   const handleRegionChangeComplete = async (newRegion: Region) => {
     // Skip if we're updating from code (editing address)
     if (isUpdatingFromCode.current) {
       return;
     }
 
-    setRegion(newRegion);
+    // DON'T update region state for user-initiated changes
+    // Only programmatic updates (getCurrentLocation, search, editing) should update region
+    // This prevents the map from jumping during user interaction
 
-    try {
-      // Only check if permission is already granted, don't request it
-      const { status } = await Location.getForegroundPermissionsAsync();
-
-      if (status === 'granted') {
-        try {
-          const addresses = await Location.reverseGeocodeAsync({
-            latitude: newRegion.latitude,
-            longitude: newRegion.longitude,
-          });
-
-          if (addresses.length > 0) {
-            const addr = addresses[0];
-            setLocationName(addr.name || addr.street || 'Location');
-            setLocationAddress(
-              `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
-            );
-          }
-        } catch (reverseGeoError) {
-          // Keep the current location name and address
-        }
-      } else {
-        // Permission not granted, keep default location name
-      }
-    } catch (error) {
+    // Clear any existing timeout
+    if (geocodingTimeout.current) {
+      clearTimeout(geocodingTimeout.current);
     }
+
+    // Schedule geocoding - wait for both drag completion AND debounce
+    geocodingTimeout.current = setTimeout(async () => {
+      // Skip if already geocoding
+      if (isGeocodingRef.current) {
+        return;
+      }
+
+      // Skip if still dragging (user might have started dragging again)
+      if (isDraggingRef.current) {
+        return;
+      }
+
+      try {
+        // Mark geocoding as in progress
+        isGeocodingRef.current = true;
+
+        // Only check if permission is already granted, don't request it
+        const { status } = await Location.getForegroundPermissionsAsync();
+
+        if (status === 'granted') {
+          try {
+            const addresses = await Location.reverseGeocodeAsync({
+              latitude: newRegion.latitude,
+              longitude: newRegion.longitude,
+            });
+
+            if (addresses.length > 0) {
+              const addr = addresses[0];
+              setLocationName(addr.name || addr.street || 'Location');
+              setLocationAddress(
+                `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
+              );
+            }
+          } catch (reverseGeoError) {
+            // Keep the current location name and address
+          }
+        } else {
+          // Permission not granted, keep default location name
+        }
+      } catch (error) {
+      } finally {
+        // Mark geocoding as complete
+        isGeocodingRef.current = false;
+      }
+    }, 650); // Wait 650ms (150ms drag detection + 500ms debounce)
   };
 
   const handleConfirm = () => {
@@ -247,8 +329,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       onLocationConfirm({
         name: locationName,
         address: locationAddress,
-        latitude: region.latitude,
-        longitude: region.longitude,
+        latitude: currentMapRegion.current.latitude,
+        longitude: currentMapRegion.current.longitude,
         ...addressData,
       });
     }
@@ -281,12 +363,18 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           longitudeDelta: 0.01,
         };
 
+        isUpdatingFromCode.current = true;
         setRegion(newRegion);
+        currentMapRegion.current = newRegion;
 
         // Animate map to new location if map is available
         if (mapRef.current && isMapAvailable) {
           mapRef.current.animateToRegion(newRegion, 1000);
         }
+
+        setTimeout(() => {
+          isUpdatingFromCode.current = false;
+        }, 1100);
 
         // Get address details
         try {
@@ -334,6 +422,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             provider={PROVIDER_GOOGLE}
             style={styles.map}
             region={region}
+            onRegionChange={handleRegionChange}
             onRegionChangeComplete={handleRegionChangeComplete}
             showsUserLocation={false}
             showsMyLocationButton={false}
@@ -393,7 +482,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
                 <View style={styles.locationInfo}>
                   <View style={styles.locationHeader}>
                     <MaterialIcons name="location-on" size={28} color="#00B14F" />
-                    <Text style={styles.locationName}>{locationName}</Text>
+                    <Text style={styles.locationName} numberOfLines={2} ellipsizeMode="tail">{locationName}</Text>
                   </View>
                   <Text style={styles.locationAddress}>{locationAddress}</Text>
                 </View>
@@ -420,8 +509,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           addressId={editingAddress?.id?.toString()}
           locationName={locationName}
           locationAddress={locationAddress}
-          latitude={region.latitude}
-          longitude={region.longitude}
+          latitude={currentMapRegion.current.latitude}
+          longitude={currentMapRegion.current.longitude}
           initialData={editingAddress ? {
             houseNo: editingAddress.address1 || '',
             building: editingAddress.address2 || '',
@@ -596,9 +685,11 @@ const styles = StyleSheet.create({
   locationName: {
     fontFamily: 'Poppins',
     fontWeight: '700',
-    fontSize: 26,
-    lineHeight: 39,
+    fontSize: 18,
+    lineHeight: 27,
     color: '#001E1F',
+    flex: 1,
+    flexShrink: 1,
   },
   locationAddress: {
     fontFamily: 'Poppins',
