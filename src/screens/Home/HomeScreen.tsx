@@ -199,6 +199,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     Keyboard.dismiss();
   }, []);
 
+  // Log API endpoint URL on mount
+  React.useEffect(() => {
+    const apiUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'Not configured';
+    console.log('=============================================');
+    console.log('Current API Endpoint:', apiUrl);
+    console.log('=============================================');
+  }, []);
+
   // Update local state when external selectedLocation changes
   React.useEffect(() => {
     if (externalSelectedLocation) {

@@ -53,6 +53,7 @@ export default function App() {
   const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites'>('home');
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
+  const [selectedOrderData, setSelectedOrderData] = React.useState<any>(null);
   const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses'>('home');
   const [editingAddress, setEditingAddress] = React.useState<any>(null);
 
@@ -701,13 +702,15 @@ export default function App() {
   };
 
   // Rate Order Navigation
-  const handleNavigateToRateOrder = (orderId: string) => {
+  const handleNavigateToRateOrder = (orderId: string, orderData?: any) => {
     setSelectedOrderId(orderId);
+    setSelectedOrderData(orderData);
     setCurrentScreen('rateOrder');
   };
 
   const handleBackFromRateOrder = () => {
     setCurrentScreen('orders');
+    setSelectedOrderData(null);
   };
 
   // Order Tracking Navigation
@@ -907,8 +910,10 @@ export default function App() {
           {currentScreen === 'rateOrder' && (
             <View style={styles.rateOrderOverlay}>
               <RateOrderScreen
+                orderId={parseInt(selectedOrderId)}
+                orderItems={selectedOrderData?.items || []}
                 onBack={handleBackFromRateOrder}
-                onSubmit={(data) => {
+                onSubmit={() => {
                   handleBackFromRateOrder();
                 }}
               />

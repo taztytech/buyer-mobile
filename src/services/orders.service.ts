@@ -94,6 +94,7 @@ export interface OrderListItem {
   payment_status: string;
   created_at: string;
   updated_at: string;
+  overall_rating?: number;
 }
 
 class OrdersService {
@@ -249,6 +250,36 @@ class OrdersService {
       return {
         success: false,
         error: error.message || 'Failed to cancel order',
+      };
+    }
+  }
+
+  /**
+   * Submit review for an order
+   */
+  async submitReview(reviewData: {
+    order_id: number;
+    overall_rating: number;
+    restaurant_rating: number;
+    restaurant_comment?: string;
+    delivery_partner_rating: number;
+    food_ratings: Array<{
+      item_id: number;
+      rating: number;
+      comment?: string;
+    }>;
+    photos?: Array<{
+      url: string;
+      type: string;
+    }>;
+  }): Promise<ApiResponse<any>> {
+    try {
+      const response = await apiService.post('/api/buyer/reviews/unified', reviewData);
+      return response;
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to submit review',
       };
     }
   }

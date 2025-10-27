@@ -38,7 +38,7 @@ interface OrdersScreenProps {
   onBack?: () => void;
   onOrderDetails?: (orderId: string) => void;
   onReorder?: (orderId: string) => void;
-  onRateOrder?: (orderId: string) => void;
+  onRateOrder?: (orderId: string, orderData?: any) => void;
   onTrackOrder?: (orderId: string) => void;
   onHelp?: (orderId: string) => void;
   onViewMore?: () => void;
@@ -205,7 +205,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   const handleRateOrder = (orderId: string) => {
     if (onRateOrder) {
-      onRateOrder(orderId);
+      // Find the order from the orders array
+      const order = orders.find(o => o.id.toString() === orderId);
+      onRateOrder(orderId, order);
     }
   };
 
@@ -332,14 +334,21 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             </>
           ) : (
             <>
-              <TouchableOpacity
-                style={styles.rateButton}
-                onPress={() => handleRateOrder(order.id.toString())}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="star-outline" size={18} color="#001E1F" />
-                <Text style={styles.rateButtonText}>Rate Order</Text>
-              </TouchableOpacity>
+              {order.overall_rating && order.overall_rating > 0 ? (
+                <View style={styles.ratingDisplay}>
+                  <MaterialIcons name="star" size={20} color="#F59E0B" />
+                  <Text style={styles.ratingText}>{order.overall_rating.toFixed(1)}</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.rateButton}
+                  onPress={() => handleRateOrder(order.id.toString())}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="star-outline" size={18} color="#001E1F" />
+                  <Text style={styles.rateButtonText}>Rate Order</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.reorderButton}
                 onPress={() => handleReorder(order.id.toString())}
@@ -682,6 +691,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#001E1F',
     lineHeight: 21,
+  },
+  ratingDisplay: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: '#FFFFFF',
+    gap: 6,
+  },
+  ratingText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    color: '#001E1F',
+    lineHeight: 24,
   },
   reorderButton: {
     flex: 1,

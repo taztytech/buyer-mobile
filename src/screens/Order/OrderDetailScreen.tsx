@@ -258,14 +258,21 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={styles.rateButton}
-                onPress={onRateOrder}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="star-outline" size={20} color="#001E1F" />
-                <Text style={styles.rateButtonText}>Rate Order</Text>
-              </TouchableOpacity>
+              {orderData.overall_rating && orderData.overall_rating > 0 ? (
+                <View style={styles.ratingDisplay}>
+                  <MaterialIcons name="star" size={20} color="#F59E0B" />
+                  <Text style={styles.ratingText}>{orderData.overall_rating.toFixed(1)}</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.rateButton}
+                  onPress={onRateOrder}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="star-outline" size={20} color="#001E1F" />
+                  <Text style={styles.rateButtonText}>Rate Order</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.reorderButton}
                 onPress={onReorder}
@@ -639,6 +646,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#001E1F',
     lineHeight: 21,
+  },
+  ratingDisplay: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: '#F3F4F6',
+    gap: 6,
+  },
+  ratingText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    color: '#001E1F',
+    lineHeight: 24,
   },
   reorderButton: {
     flex: 1,

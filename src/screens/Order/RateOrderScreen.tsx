@@ -10,24 +10,32 @@ import {
   Animated,
   Modal,
   Image,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import * as ImagePicker from 'expo-image-picker';
+import { ordersService } from '@/services/orders.service';
+
+interface OrderItem {
+  id: number;
+  name: string;
+  image?: string;
+  quantity: number;
+}
 
 interface RateOrderScreenProps {
+  orderId: number;
+  orderItems?: OrderItem[];
   onBack?: () => void;
-  onSubmit?: (data: {
-    overallRating: number;
-    deliveryPartnerRating: number;
-    foodRating: number;
-    foodComment: string;
-    restaurantRating: number;
-    restaurantComment: string;
-  }) => void;
+  onSubmit?: () => void;
 }
 
 export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
+  orderId,
+  orderItems = [],
   onBack,
   onSubmit,
 }) => {
@@ -39,11 +47,11 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
   const [restaurantComment, setRestaurantComment] = useState('');
   const [showFoodRatingModal, setShowFoodRatingModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [photos, setPhotos] = useState<Array<{ url: string; type: string }>>([]);
 
-  // Individual food item ratings
-  const [chickenBriyaniRating, setChickenBriyaniRating] = useState(0);
-  const [muttonBriyaniRating, setMuttonBriyaniRating] = useState(0);
-  const [chickenCurryRating, setChickenCurryRating] = useState(0);
+  // Dynamic food item ratings - Map of item_id to { rating, comment }
+  const [itemRatings, setItemRatings] = useState<Record<number, { rating: number; comment: string }>>({});
 
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -90,17 +98,110 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
     ]).start();
   };
 
+  const handlePickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant permission to access photos');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setPhotos(prev => [...prev, { url: result.assets[0].uri, type: 'photo' }]);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = () => {
     // Show the food rating modal instead of immediately submitting
     setShowFoodRatingModal(true);
   };
 
-  const handleFoodRatingModalClose = () => {
+  const handleFoodRatingModalClose = async () => {
     setShowFoodRatingModal(false);
-    // Show success modal after food rating modal closes
-    setTimeout(() => {
-      setShowSuccessModal(true);
-    }, 200);
+    setIsSubmitting(true);
+
+    console.log('Order ID:', orderId);
+    console.log('Order Items:', orderItems);
+
+    // Validate orderId
+    if (!orderId) {
+      Alert.alert('Error', 'Order ID is missing');
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      // Prepare food ratings array with comments only if they exist
+      const food_ratings = orderItems.map(item => {
+        const itemRating = itemRatings[item.id];
+        const foodItem: any = {
+          item_id: item.id,
+          rating: itemRating?.rating || 0,
+        };
+
+        // Only include comment if it exists and is not empty
+        if (itemRating?.comment && itemRating.comment.trim()) {
+          foodItem.comment = itemRating.comment.trim();
+        }
+
+        return foodItem;
+      });
+
+      // Prepare review data matching API structure
+      const reviewData: any = {
+        order_id: orderId,
+        overall_rating: overallRating,
+        restaurant_rating: restaurantRating,
+        delivery_partner_rating: deliveryPartnerRating,
+        food_ratings,
+      };
+
+      // Only include restaurant_comment if it exists and is not empty
+      if (restaurantComment && restaurantComment.trim()) {
+        reviewData.restaurant_comment = restaurantComment.trim();
+      }
+
+      // Only include photos if they exist
+      if (photos.length > 0) {
+        reviewData.photos = photos;
+      }
+
+      console.log('Submitting review data:', JSON.stringify(reviewData, null, 2));
+
+      // Submit review to API
+      const response = await ordersService.submitReview(reviewData);
+
+      console.log('API Response:', JSON.stringify(response, null, 2));
+
+      setIsSubmitting(false);
+
+      if (response.success) {
+        console.log('Review submitted successfully!');
+        // Show success modal after submission
+        setTimeout(() => {
+          setShowSuccessModal(true);
+        }, 200);
+      } else {
+        console.error('Review submission failed:', response.error);
+        Alert.alert('Error', response.error || 'Failed to submit review');
+      }
+    } catch (error: any) {
+      setIsSubmitting(false);
+      Alert.alert('Error', error.message || 'Failed to submit review');
+    }
   };
 
   const handleSuccessModalClose = () => {
@@ -108,18 +209,31 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
 
     // Call the onSubmit and onBack callbacks after success modal is closed
     if (onSubmit) {
-      onSubmit({
-        overallRating,
-        deliveryPartnerRating,
-        foodRating,
-        foodComment,
-        restaurantRating,
-        restaurantComment,
-      });
+      onSubmit();
     }
     if (onBack) {
       onBack();
     }
+  };
+
+  const handleItemRatingChange = (itemId: number, rating: number) => {
+    setItemRatings(prev => ({
+      ...prev,
+      [itemId]: {
+        rating,
+        comment: prev[itemId]?.comment || '',
+      },
+    }));
+  };
+
+  const handleItemCommentChange = (itemId: number, comment: string) => {
+    setItemRatings(prev => ({
+      ...prev,
+      [itemId]: {
+        rating: prev[itemId]?.rating || 0,
+        comment,
+      },
+    }));
   };
 
   const renderFace = (rating: number) => {
@@ -329,21 +443,44 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
           {/* Add Photo or Video */}
           <View style={styles.photoSection}>
             <Text style={styles.photoLabel}>Add Photo or Video</Text>
-            <TouchableOpacity style={styles.photoBox} activeOpacity={0.7}>
-              <MaterialIcons name="image" size={32} color="#00B14F" />
-            </TouchableOpacity>
+            <View style={styles.photosContainer}>
+              {photos.map((photo, index) => (
+                <View key={index} style={styles.photoItem}>
+                  <Image source={{ uri: photo.url }} style={styles.photoPreview} />
+                  <TouchableOpacity
+                    style={styles.removePhotoButton}
+                    onPress={() => handleRemovePhoto(index)}
+                  >
+                    <MaterialIcons name="close" size={16} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <TouchableOpacity style={styles.photoBox} activeOpacity={0.7} onPress={handlePickImage}>
+                <MaterialIcons name="image" size={32} color="#00B14F" />
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
 
         {/* Submit Button - Fixed at bottom */}
         <View style={styles.bottomButtonContainer}>
           <TouchableOpacity
-            style={styles.submitButton}
+            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
             onPress={handleSubmit}
             activeOpacity={0.8}
+            disabled={isSubmitting}
           >
-            <Text style={styles.submitButtonText}>Submit</Text>
-            <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
+            {isSubmitting ? (
+              <>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+                <Text style={styles.submitButtonText}>Submitting...</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.submitButtonText}>Submit</Text>
+                <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
+              </>
+            )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -365,31 +502,31 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
               <Text style={styles.foodModalSubtitle}>For Future better Experience</Text>
             </View>
 
-            {/* Chicken Briyani */}
-            <View style={styles.foodItemRow}>
-              <Text style={styles.foodItemName}>Chicken Briyani</Text>
-              {renderModalStars(chickenBriyaniRating, setChickenBriyaniRating)}
-            </View>
-
-            {/* Mutton Briyani */}
-            <View style={styles.foodItemRow}>
-              <Text style={styles.foodItemName}>Mutton Briyani</Text>
-              {renderModalStars(muttonBriyaniRating, setMuttonBriyaniRating)}
-            </View>
-
-            {/* Chicken Curry */}
-            <View style={styles.foodItemRow}>
-              <Text style={styles.foodItemName}>Chicken Curry</Text>
-              {renderModalStars(chickenCurryRating, setChickenCurryRating)}
-            </View>
+            {/* Dynamic Food Items */}
+            {orderItems.map((item) => (
+              <View key={item.id} style={styles.foodItemRow}>
+                <Text style={styles.foodItemName} numberOfLines={1}>
+                  {item.name} {item.quantity > 1 && `(x${item.quantity})`}
+                </Text>
+                {renderModalStars(
+                  itemRatings[item.id]?.rating || 0,
+                  (rating) => handleItemRatingChange(item.id, rating)
+                )}
+              </View>
+            ))}
 
             {/* Okay Button */}
             <TouchableOpacity
               style={styles.foodModalOkayButton}
               onPress={handleFoodRatingModalClose}
               activeOpacity={0.8}
+              disabled={isSubmitting}
             >
-              <Text style={styles.foodModalOkayText}>Okay</Text>
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.foodModalOkayText}>Okay</Text>
+              )}
             </TouchableOpacity>
           </View>
           </BlurView>
@@ -612,6 +749,32 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: '#000000',
   },
+  photosContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  photoItem: {
+    position: 'relative',
+    width: 85,
+    height: 85,
+  },
+  photoPreview: {
+    width: 85,
+    height: 85,
+    borderRadius: 8,
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   photoBox: {
     width: 85,
     height: 85,
@@ -644,6 +807,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
   },
   // Food Rating Modal Styles
   modalBackground: {
