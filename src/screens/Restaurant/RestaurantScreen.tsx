@@ -949,8 +949,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         stickyHeaderIndices={[1]} // Make the filter section (index 1) sticky
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        bounces={true}
-        overScrollMode="auto"
+        bounces={false}
+        overScrollMode="never"
         removeClippedSubviews={true}
         decelerationRate="normal"
       >
