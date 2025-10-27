@@ -42,6 +42,7 @@ interface OrderDetailsScreenProps {
   onEditCustomization?: (itemId: string, variantId: string, currentAddOnIds: string[]) => void;
   onPlaceOrder?: () => void;
   onOrderSuccess?: (orderId: number) => void;
+  onOrderCancel?: () => void;
   showCustomizationModal?: boolean;
   onUpdateCart?: (itemId: string, variantId: string | undefined, newQuantity: number) => void;
 }
@@ -55,6 +56,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   onEditCustomization,
   onPlaceOrder,
   onOrderSuccess,
+  onOrderCancel,
   showCustomizationModal = false,
   onUpdateCart,
 }) => {
@@ -291,11 +293,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           confirmText: 'View Order',
           cancelText: 'Close',
           confirmButtonColor: '#00B14F',
+          showRibbon: false,
           onConfirm: () => {
             if (onOrderSuccess && orderId) {
               onOrderSuccess(orderId);
             } else if (onPlaceOrder) {
               onPlaceOrder();
+            }
+          },
+          onCancel: () => {
+            if (onOrderCancel) {
+              onOrderCancel();
             }
           },
         });

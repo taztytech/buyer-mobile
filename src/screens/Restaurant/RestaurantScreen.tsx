@@ -37,6 +37,8 @@ interface RestaurantScreenProps {
   restaurantName?: string;
   onBack?: () => void;
   onNavigateToDetails?: () => void;
+  onNavigateToOrders?: (orderId?: number) => void;
+  onNavigateToHome?: () => void;
 }
 
 interface AddOn {
@@ -175,6 +177,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   restaurantName,
   onBack,
   onNavigateToDetails,
+  onNavigateToOrders,
+  onNavigateToHome,
 }) => {
   const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, checkRestaurantConflict } = useCart();
   const { vegMode, setVegMode } = useVegMode();
@@ -980,9 +984,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   <Text style={styles.restaurantName} numberOfLines={1}>
                     {restaurantData?.name || restaurantName || 'Restaurant'}
                   </Text>
-                  <TouchableOpacity onPress={onNavigateToDetails} activeOpacity={0.7}>
-                    <MaterialIcons name="info-outline" size={19} color="#00B14F" />
-                  </TouchableOpacity>
+                  {onNavigateToDetails && (
+                    <TouchableOpacity onPress={onNavigateToDetails} activeOpacity={0.7}>
+                      <MaterialIcons name="info-outline" size={19} color="#00B14F" />
+                    </TouchableOpacity>
+                  )}
                 </View>
                 {/* Only show rating and reviews if there's at least one review */}
                 {(restaurantData?.stats?.total_reviews > 0 || restaurantData?.total_reviews > 0) && (
@@ -1530,7 +1536,15 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           }}
           onOrderSuccess={(orderId) => {
             setShowOrderDetails(false);
-            setShowOrderSuccess(true);
+            if (onNavigateToOrders) {
+              onNavigateToOrders(orderId);
+            }
+          }}
+          onOrderCancel={() => {
+            setShowOrderDetails(false);
+            if (onNavigateToHome) {
+              onNavigateToHome();
+            }
           }}
           showCustomizationModal={showCustomizationModal}
           onUpdateCart={handleUpdateCartFromOrderDetails}

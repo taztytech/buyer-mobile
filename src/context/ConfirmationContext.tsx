@@ -12,6 +12,7 @@ interface ConfirmationConfig {
   cancelButtonColor?: string;
   confirmTextColor?: string;
   cancelTextColor?: string;
+  showRibbon?: boolean;
 }
 
 interface ConfirmationContextType {
@@ -77,6 +78,7 @@ export const ConfirmationProvider: React.FC<ConfirmationProviderProps> = ({ chil
         cancelButtonColor={config.cancelButtonColor}
         confirmTextColor={config.confirmTextColor}
         cancelTextColor={config.cancelTextColor}
+        showRibbon={config.showRibbon}
       />
     </ConfirmationContext.Provider>
   );

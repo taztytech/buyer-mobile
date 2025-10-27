@@ -110,43 +110,38 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+        >
+          {/* Green Background Section */}
+          <View style={styles.greenSection}>
+            {/* Welcome Title */}
+            <Text style={styles.welcomeTitle}>Welcome</Text>
 
-      <View style={styles.mainContainer}>
-        {/* Green Background Section */}
-        <View style={styles.greenSection}>
-          {/* Welcome Title */}
-          <Text style={styles.welcomeTitle}>Welcome</Text>
+            {/* Subtitle */}
+            <Text style={styles.welcomeSubtitle}>Enter your name to{'\n'}continue</Text>
 
-          {/* Subtitle */}
-          <Text style={styles.welcomeSubtitle}>Enter your name to{'\n'}continue</Text>
+            {/* Welcome Illustration */}
+            <Image
+              source={require('@/assets/welcome-screen.png')}
+              style={styles.illustrationImage}
+              resizeMode="contain"
+            />
+          </View>
 
-          {/* Welcome Illustration */}
-          <Image
-            source={require('@/assets/welcome-screen.png')}
-            style={styles.illustrationImage}
-            resizeMode="contain"
-          />
-        </View>
-
-        {/* White Bottom Sheet */}
-        <View style={styles.bottomSheet}>
-          <KeyboardAvoidingView
-            style={styles.keyboardAvoidingView}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={0}
-          >
-            <ScrollView
-              ref={scrollViewRef}
-              style={styles.scrollView}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              bounces={false}
-            >
-              <View style={styles.contentContainer}>
+          {/* White Bottom Sheet */}
+          <View style={styles.bottomSheet}>
             <View style={styles.formContainer}>
               {/* Title */}
               <Text style={styles.title}>Whats your name</Text>
@@ -184,7 +179,6 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
                   }}
                 />
               </View>
-            </View>
 
               {/* Continue Button */}
               <TouchableOpacity
@@ -199,37 +193,33 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
                   <Text style={styles.continueButtonText}>CONTINUE</Text>
                 )}
               </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </View>
-      </View>
-      </SafeAreaView>
-    </View>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#00B14F',
   },
-  safeArea: {
+  container: {
     flex: 1,
   },
-  mainContainer: {
+  scrollView: {
     flex: 1,
-    position: 'relative',
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   greenSection: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
     height: 258,
     backgroundColor: '#00B14F',
     paddingHorizontal: 20,
-    zIndex: 1,
+    position: 'relative',
   },
   welcomeTitle: {
     position: 'absolute',
@@ -263,37 +253,16 @@ const styles = StyleSheet.create({
     height: 204,
   },
   bottomSheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 258,
-    bottom: 0,
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 20,
-    zIndex: 2,
-    elevation: 2,
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
     paddingBottom: 40,
-  },
-  contentContainer: {
-    flex: 1,
-    justifyContent: 'space-between',
+    minHeight: 500,
   },
   formContainer: {
     width: '100%',
-    alignItems: 'center',
     gap: 24,
   },
   title: {

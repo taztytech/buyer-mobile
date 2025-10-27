@@ -12,6 +12,7 @@ import * as Location from 'expo-location';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ViewCartBar } from '@/components/ViewCartBar';
+import { CategoryModal } from '@/components/CategoryModal';
 import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
@@ -187,6 +188,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [tempVegSelection, setTempVegSelection] = React.useState<'pure' | 'all'>('pure');
   const [selectedLocation, setSelectedLocation] = React.useState(externalSelectedLocation || { name: DEFAULT_LOCATION.name, address: DEFAULT_LOCATION.address });
   const [isCategorySectionSticky, setIsCategorySectionSticky] = React.useState(false);
+  const [showCategoryModal, setShowCategoryModal] = React.useState(false);
   const flatListRef = React.useRef<FlatList>(null);
   const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
   const [hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
@@ -338,13 +340,40 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [isLoadingRestaurants, restaurantData, loadedRestaurantImages]);
 
-  // Show location permission modal only if no default address exists
+  // Check location permission and handle accordingly
   React.useEffect(() => {
-    // Only show if modal hasn't been shown yet this session AND user has no default address
-    if (!hasShownLocationModal && !hasDefaultAddress && !isLoadingLocation) {
-      setShowLocationPopup(true);
-      setHasShownLocationModal(true);
-    }
+    const checkLocationPermission = async () => {
+      // Skip if already checked this session or if user has a default address
+      if (hasShownLocationModal || hasDefaultAddress || isLoadingLocation) {
+        return;
+      }
+
+      try {
+        // Check if permission is already granted
+        const { status } = await Location.getForegroundPermissionsAsync();
+
+        if (status === 'granted') {
+          // Permission already granted, get location automatically
+          setHasShownLocationModal(true);
+          const location = await Location.getCurrentPositionAsync({});
+          const userLatitude = location.coords.latitude;
+          const userLongitude = location.coords.longitude;
+
+          // Fetch restaurants with user's location
+          await fetchHomeData(userLatitude, userLongitude);
+        } else {
+          // Permission not granted, show the modal
+          setShowLocationPopup(true);
+          setHasShownLocationModal(true);
+        }
+      } catch (error) {
+        // If error checking permission, show the modal
+        setShowLocationPopup(true);
+        setHasShownLocationModal(true);
+      }
+    };
+
+    checkLocationPermission();
   }, [hasShownLocationModal, hasDefaultAddress, isLoadingLocation]);
 
   // Reload home data when veg mode changes
@@ -670,7 +699,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         style={styles.categoryItem}
         testID={`category-${item.id}`}
         onPress={() => {
-          if (onNavigateToCategory) {
+          if (isViewAll) {
+            setShowCategoryModal(true);
+          } else if (onNavigateToCategory) {
             onNavigateToCategory(item.name);
           }
         }}
@@ -1191,6 +1222,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         }}
         restaurantLogo={restaurantLogo}
         deliveryLocation={selectedLocation.name}
+      />
+
+      {/* Category Modal */}
+      <CategoryModal
+        visible={showCategoryModal}
+        categories={categoryData}
+        onClose={() => setShowCategoryModal(false)}
+        onCategorySelect={(categoryName) => {
+          if (onNavigateToCategory) {
+            onNavigateToCategory(categoryName);
+          }
+        }}
       />
     </View>
   );

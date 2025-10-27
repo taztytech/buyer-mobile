@@ -248,8 +248,8 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                     provider={PROVIDER_GOOGLE}
                     style={styles.map}
                     initialRegion={{
-                      latitude: restaurantData.locations[0].lat,
-                      longitude: restaurantData.locations[0].lng,
+                      latitude: parseFloat(restaurantData.locations[0].lat),
+                      longitude: parseFloat(restaurantData.locations[0].lng),
                       latitudeDelta: 0.01,
                       longitudeDelta: 0.01,
                     }}
@@ -260,8 +260,8 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                   >
                     <Marker
                       coordinate={{
-                        latitude: restaurantData.locations[0].lat,
-                        longitude: restaurantData.locations[0].lng,
+                        latitude: parseFloat(restaurantData.locations[0].lat),
+                        longitude: parseFloat(restaurantData.locations[0].lng),
                       }}
                     />
                   </MapView>

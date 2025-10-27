@@ -1,11 +1,12 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Animated, StyleSheet, Dimensions } from 'react-native';
+import { View, Animated, StyleSheet, Dimensions, Easing } from 'react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface RibbonProps {
   delay: number;
   color: string;
+  startX: number;
   endX: number;
   rotation: number;
   height: number;
@@ -13,56 +14,37 @@ interface RibbonProps {
   peakHeight: number;
 }
 
-const Ribbon: React.FC<RibbonProps> = ({ delay, color, endX, rotation, height, width, peakHeight }) => {
-  // Start ribbons higher up (180px above center) to appear behind the PNG
-  const startY = -180;
+const Ribbon: React.FC<RibbonProps> = ({ delay, color, startX, endX, rotation, height, width, peakHeight }) => {
+  // Start ribbons from ABOVE the screen (negative Y position)
+  const startY = -200; // Start well above the screen top
   const translateY = useRef(new Animated.Value(startY)).current;
-  const translateX = useRef(new Animated.Value(0)).current;
+  const translateX = useRef(new Animated.Value(startX)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(1)).current; // Start fully visible
 
   useEffect(() => {
     Animated.sequence([
       Animated.delay(delay),
-      // Fade in
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-      // Shoot up
+      // Fall down from top to bottom
       Animated.parallel([
         Animated.timing(translateY, {
-          toValue: startY - peakHeight,
-          duration: 800,
+          toValue: SCREEN_HEIGHT + 200, // Go past the bottom
+          duration: 3000,
           useNativeDriver: true,
         }),
         Animated.timing(translateX, {
           toValue: endX,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(rotateAnim, {
-          toValue: rotation / 2,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ]),
-      // Fall down with gravity
-      Animated.parallel([
-        Animated.timing(translateY, {
-          toValue: SCREEN_HEIGHT,
-          duration: 1200,
+          duration: 3000,
           useNativeDriver: true,
         }),
         Animated.timing(rotateAnim, {
           toValue: rotation,
-          duration: 1200,
+          duration: 3000,
           useNativeDriver: true,
         }),
       ]),
     ]).start();
-  }, [delay, endX, rotation, peakHeight]);
+  }, [delay, startX, endX, rotation, peakHeight]);
 
   const rotate = rotateAnim.interpolate({
     inputRange: [0, 360],
@@ -78,6 +60,8 @@ const Ribbon: React.FC<RibbonProps> = ({ delay, color, endX, rotation, height, w
           opacity,
           height,
           width,
+          top: 0,
+          left: 0,
           transform: [
             { translateX },
             { translateY },
@@ -111,32 +95,33 @@ export const RibbonAnimation: React.FC<RibbonAnimationProps> = ({ active = true 
     '#FFD54F', // Amber
   ];
 
-  const centerX = SCREEN_WIDTH / 2;
-  const centerY = SCREEN_HEIGHT / 2;
+  const ribbons = Array.from({ length: 80 }, (_, i) => {
+    // Random starting X position across the full screen width
+    const startX = Math.random() * SCREEN_WIDTH;
 
-  const ribbons = Array.from({ length: 40 }, (_, i) => {
-    // Random spread in X direction (left and right from center)
-    const spread = (Math.random() - 0.5) * SCREEN_WIDTH * 0.8;
-    const endX = spread;
+    // Random ending X position with slight drift
+    const drift = (Math.random() - 0.5) * 150; // -75 to +75 pixels drift
+    const endX = startX + drift;
 
     // Random rotation
-    const rotation = Math.random() * 720 - 360;
+    const rotation = Math.random() * 1080 - 540; // More rotation variation
 
-    // Staggered delays
-    const delay = Math.random() * 300;
+    // Staggered delays - minimal delay for immediate start
+    const delay = Math.random() * 200;
 
     // Random color
     const color = ribbonColors[i % ribbonColors.length];
 
-    // Random sizes (much shorter and more varied)
-    const height = 12 + Math.random() * 25; // 12-37px height (shorter)
-    const width = 3 + Math.random() * 5; // 3-8px width
+    // Random sizes - varied ribbon dimensions
+    const height = 15 + Math.random() * 30; // 15-45px height
+    const width = 4 + Math.random() * 6; // 4-10px width
 
-    // Random peak heights (how high they shoot up)
+    // Random peak heights (not used in fall animation but kept for compatibility)
     const peakHeight = 180 + Math.random() * 220; // 180-400px
 
     return {
       key: i,
+      startX,
       endX,
       rotation,
       delay,
@@ -154,6 +139,7 @@ export const RibbonAnimation: React.FC<RibbonAnimationProps> = ({ active = true 
           key={ribbon.key}
           delay={ribbon.delay}
           color={ribbon.color}
+          startX={ribbon.startX}
           endX={ribbon.endX}
           rotation={ribbon.rotation}
           height={ribbon.height}
@@ -167,10 +153,14 @@ export const RibbonAnimation: React.FC<RibbonAnimationProps> = ({ active = true 
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: -200, // Extend above screen to allow ribbons to start from above
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: SCREEN_HEIGHT + 400, // Extra height to accommodate starting position
     zIndex: 999,
-    justifyContent: 'center',
-    alignItems: 'center',
+    overflow: 'visible',
   },
   ribbon: {
     position: 'absolute',

@@ -99,8 +99,10 @@ export default function App() {
               if (userData?.name && userData?.email) {
                 setCurrentScreen('home');
               } else {
-                // User is logged in but hasn't completed profile, show welcome screen
-                setCurrentScreen('welcome');
+                // User is logged in but hasn't completed profile
+                // Log them out and make them go through OTP verification again
+                await authService.logout();
+                setCurrentScreen('login');
               }
             }
           })(),
@@ -505,7 +507,12 @@ export default function App() {
 
   // Navigate to Restaurant Details
   const handleNavigateToRestaurantDetails = () => {
-    setCurrentScreen('restaurantDetails');
+    try {
+      console.log('Navigating to restaurant details, restaurantId:', selectedRestaurantId);
+      setCurrentScreen('restaurantDetails');
+    } catch (error) {
+      console.error('Error navigating to restaurant details:', error);
+    }
   };
 
   // Back from Restaurant Details
@@ -1092,6 +1099,42 @@ export default function App() {
                 restaurantName={selectedRestaurantName}
                 onBack={handleBackFromRestaurant}
                 onNavigateToDetails={handleNavigateToRestaurantDetails}
+                onNavigateToOrders={(orderId) => {
+                  // Close restaurant screen and navigate to orders
+                  Animated.timing(restaurantScreenSlide, {
+                    toValue: SCREEN_WIDTH,
+                    duration: 200,
+                    easing: Easing.out(Easing.ease),
+                    useNativeDriver: true,
+                  }).start(() => {
+                    if (orderId) {
+                      setSelectedOrderId(orderId.toString());
+                    }
+                    setCurrentScreen('orders');
+                  });
+                }}
+                onNavigateToHome={() => {
+                  // Close restaurant screen and go back to home
+                  if (restaurantCameFrom === 'home') {
+                    setCurrentScreen('home');
+                  } else if (restaurantCameFrom === 'category') {
+                    setCurrentScreen('home');
+                  } else if (restaurantCameFrom === 'search') {
+                    setCurrentScreen('home');
+                  } else if (restaurantCameFrom === 'favorites') {
+                    setCurrentScreen('home');
+                  } else {
+                    setCurrentScreen('home');
+                  }
+
+                  // Animate restaurant screen sliding out to the right
+                  Animated.timing(restaurantScreenSlide, {
+                    toValue: SCREEN_WIDTH,
+                    duration: 200,
+                    easing: Easing.out(Easing.ease),
+                    useNativeDriver: true,
+                  }).start();
+                }}
               />
             )}
           </Animated.View>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { RibbonAnimation } from './RibbonAnimation';
 
 export interface ConfirmationModalProps {
   visible: boolean;
@@ -14,6 +15,7 @@ export interface ConfirmationModalProps {
   cancelButtonColor?: string;
   confirmTextColor?: string;
   cancelTextColor?: string;
+  showRibbon?: boolean;
 }
 
 export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -28,6 +30,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   cancelButtonColor = '#FFFFFF',
   confirmTextColor = '#FFFFFF',
   cancelTextColor = '#000000',
+  showRibbon = false,
 }) => {
   return (
     <Modal
@@ -38,6 +41,9 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
       onRequestClose={onCancel}
     >
       <BlurView intensity={80} tint="dark" style={styles.overlay}>
+        {/* Ribbon Animation */}
+        {showRibbon && <RibbonAnimation active={true} />}
+
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             {/* Title */}
