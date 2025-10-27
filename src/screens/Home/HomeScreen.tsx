@@ -1420,7 +1420,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   adDescription: {
-    maxWidth: '75%',
+    maxWidth: '80%',
     fontFamily: 'Poppins',
     fontWeight: '500',
     fontSize: 14,
