@@ -308,25 +308,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [isLoadingBanners, carouselData, loadedBannerImages]);
 
-  // Check if all category images are loaded
+  // Hide shimmer as soon as API data is loaded
   React.useEffect(() => {
-    if (!isLoadingCategories && categoryData.length > 0) {
-      const allImagesLoaded = categoryData.every(item => loadedCategoryImages.has(item.id.toString()));
-
-      if (allImagesLoaded) {
-        setShowCategoryShimmer(false);
-      } else {
-        // Fallback: Hide shimmer after 3 seconds even if images haven't loaded
-        const timeout = setTimeout(() => {
-          setShowCategoryShimmer(false);
-        }, 3000);
-        return () => clearTimeout(timeout);
-      }
-    } else if (!isLoadingCategories && categoryData.length === 0) {
-      // No data received, hide shimmer immediately
+    if (!isLoadingCategories) {
+      // Hide shimmer immediately when API data loading is complete
       setShowCategoryShimmer(false);
     }
-  }, [isLoadingCategories, categoryData, loadedCategoryImages]);
+  }, [isLoadingCategories]);
 
   // Check if all restaurant images are loaded
   React.useEffect(() => {
@@ -999,15 +987,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         />
       </View>
 
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
+      {/* Filter Buttons - Hidden */}
+      {/* <View style={styles.filterContainer}>
         {showRestaurantShimmer ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filterScrollContent}
           >
-            {/* Render 5 shimmer filter buttons */}
             <Shimmer width={80} height={29} borderRadius={13} backgroundColor="#E8E8E8" />
             <Shimmer width={70} height={29} borderRadius={13} backgroundColor="#E8E8E8" />
             <Shimmer width={60} height={29} borderRadius={13} backgroundColor="#E8E8E8" />
@@ -1042,7 +1029,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </TouchableOpacity>
           </ScrollView>
         )}
-      </View>
+      </View> */}
 
       {/* Restaurant List */}
       <View style={[
@@ -1539,7 +1526,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 8,
+    paddingBottom: 20,
     gap: 15,
   },
   sectionTitleContainerCompact: {
@@ -1584,7 +1571,7 @@ const styles = StyleSheet.create({
   },
   categoryItem: {
     width: 74,
-    marginRight: 8,
+    marginRight: 4,
     alignItems: 'center',
     justifyContent: 'flex-start',
   },
@@ -1625,8 +1612,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 16,
+    paddingTop: 24,
+    paddingBottom: 8,
     gap: 15,
   },
   restaurantsTitleLine: {

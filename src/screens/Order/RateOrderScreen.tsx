@@ -12,12 +12,15 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { ordersService } from '@/services/orders.service';
+import { ConfirmationModal } from '@/components/ConfirmationModal';
 
 interface OrderItem {
   id: number;
@@ -124,13 +127,7 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
     setPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = () => {
-    // Show the food rating modal instead of immediately submitting
-    setShowFoodRatingModal(true);
-  };
-
-  const handleFoodRatingModalClose = async () => {
-    setShowFoodRatingModal(false);
+  const handleSubmit = async () => {
     setIsSubmitting(true);
 
     console.log('Order ID:', orderId);
@@ -191,9 +188,7 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
       if (response.success) {
         console.log('Review submitted successfully!');
         // Show success modal after submission
-        setTimeout(() => {
-          setShowSuccessModal(true);
-        }, 200);
+        setShowSuccessModal(true);
       } else {
         console.error('Review submission failed:', response.error);
         Alert.alert('Error', response.error || 'Failed to submit review');
@@ -202,6 +197,10 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
       setIsSubmitting(false);
       Alert.alert('Error', error.message || 'Failed to submit review');
     }
+  };
+
+  const handleFoodRatingModalClose = async () => {
+    setShowFoodRatingModal(false);
   };
 
   const handleSuccessModalClose = () => {
@@ -387,11 +386,17 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
       </View>
 
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingView}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
           {/* Overall Rating */}
           <View style={styles.overallRatingSection}>
             <Text style={styles.overallRatingTitle}>Overall Rating</Text>
@@ -483,6 +488,7 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
             )}
           </TouchableOpacity>
         </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
 
       {/* Food Rating Modal */}
@@ -534,43 +540,17 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
       </Modal>
 
       {/* Success Feedback Modal */}
-      <Modal
+      <ConfirmationModal
         visible={showSuccessModal}
-        transparent={true}
-        animationType="fade"
-        statusBarTranslucent={true}
-        onRequestClose={handleSuccessModalClose}
-      >
-        <View style={styles.successModalBackground}>
-          <BlurView intensity={100} tint="dark" style={styles.successModalOverlay}>
-            <View style={styles.successModalContent}>
-              {/* Review Submitted Image */}
-              <View style={styles.successIconContainer}>
-                <Image
-                  source={require('@/assets/review-submitted.png')}
-                  style={styles.reviewSubmittedImage}
-                  resizeMode="contain"
-                />
-              </View>
-
-              {/* Title */}
-              <Text style={styles.successTitle}>Feedback Successfull..!</Text>
-
-              {/* Subtitle */}
-              <Text style={styles.successSubtitle}>Thanks fro your valuable feedback</Text>
-
-              {/* Go to Home Button */}
-              <TouchableOpacity
-                style={styles.goToHomeButton}
-                onPress={handleSuccessModalClose}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.goToHomeText}>Go to Home</Text>
-              </TouchableOpacity>
-            </View>
-          </BlurView>
-        </View>
-      </Modal>
+        title="Review Submitted Successfully!"
+        message="Thank you for your valuable feedback. Your review helps us improve our service."
+        confirmText="OK"
+        cancelText=""
+        onConfirm={handleSuccessModalClose}
+        onCancel={handleSuccessModalClose}
+        confirmButtonColor="#00B14F"
+        showRibbon={false}
+      />
     </View>
   );
 };
@@ -586,6 +566,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   header: {
     backgroundColor: '#00B14F',
@@ -895,84 +878,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',
-  },
-  // Success Feedback Modal Styles
-  successModalBackground: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  successModalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  successModalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    width: '100%',
-    maxWidth: 350,
-    alignItems: 'center',
-    gap: 10,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -9,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 60,
-    elevation: 21,
-    overflow: 'visible',
-    marginTop: 100,
-  },
-  successIconContainer: {
-    width: 310,
-    height: 200,
-    marginTop: -133,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginBottom: 10,
-  },
-  reviewSubmittedImage: {
-    width: 310,
-    height: 310,
-  },
-  successTitle: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 22,
-    lineHeight: 33,
-    textAlign: 'center',
-    color: '#000000',
-    opacity: 0.85,
-  },
-  successSubtitle: {
-    fontFamily: 'Poppins',
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-    color: 'rgba(0, 0, 0, 0.5)',
-    opacity: 0.85,
-  },
-  goToHomeButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    gap: 4,
-    width: '100%',
-    maxWidth: 310,
-    height: 40,
-    backgroundColor: '#00B14F',
-    borderRadius: 6,
-  },
-  goToHomeText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#FFFFFF',
-    opacity: 0.85,
   },
 });

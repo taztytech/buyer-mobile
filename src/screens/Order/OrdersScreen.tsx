@@ -380,8 +380,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
       <SafeAreaView style={styles.container} edges={['bottom']}>
 
-      {/* Search and Filter */}
-      <View style={styles.searchContainer}>
+      {/* Search and Filter - Hidden */}
+      {/* <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
           <MaterialIcons name="search" size={24} color="rgba(0, 30, 31, 0.5)" />
           <TextInput
@@ -399,7 +399,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         >
           <MaterialIcons name="filter-list" size={24} color="#00B14F" />
         </TouchableOpacity>
-      </View>
+      </View> */}
 
       {/* Orders List */}
       <ScrollView
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 5,
+    paddingTop: 20,
     paddingBottom: 24,
     gap: 14,
   },

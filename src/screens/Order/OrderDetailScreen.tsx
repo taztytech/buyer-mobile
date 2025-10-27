@@ -22,6 +22,7 @@ interface OrderDetailScreenProps {
   onThankDriver?: () => void;
   onRateOrder?: () => void;
   onReorder?: () => void;
+  onTrackOrder?: () => void;
   onDownloadInvoice?: () => void;
 }
 
@@ -33,6 +34,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   onThankDriver,
   onRateOrder,
   onReorder,
+  onTrackOrder,
   onDownloadInvoice,
 }) => {
   const [orderData, setOrderData] = useState<any>(null);
@@ -273,14 +275,25 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <Text style={styles.rateButtonText}>Rate Order</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity
-                style={styles.reorderButton}
-                onPress={onReorder}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
-                <Text style={styles.reorderButtonText}>Reorder</Text>
-              </TouchableOpacity>
+              {orderData.status === 'delivered' ? (
+                <TouchableOpacity
+                  style={styles.reorderButton}
+                  onPress={onReorder}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
+                  <Text style={styles.reorderButtonText}>Reorder</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.reorderButton}
+                  onPress={onTrackOrder}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
+                  <Text style={styles.reorderButtonText}>Track Order</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 

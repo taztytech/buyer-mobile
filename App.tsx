@@ -901,6 +901,7 @@ export default function App() {
                 onThankDriver={() => {}}
                 onRateOrder={() => {}}
                 onReorder={() => {}}
+                onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId)}
                 onDownloadInvoice={() => {}}
               />
             </View>
