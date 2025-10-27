@@ -78,6 +78,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const [showAddressForm, setShowAddressForm] = useState(false);
   const bottomPosition = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<any>(null);
+  const isUpdatingFromCode = useRef(false);
 
   // Update region and location info when editing address changes
   useEffect(() => {
@@ -88,12 +89,21 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       };
+
+      isUpdatingFromCode.current = true;
       setRegion(newRegion);
 
       // Animate map to the location if map is available
       if (mapRef.current && isMapAvailable) {
         setTimeout(() => {
-          mapRef.current?.animateToRegion(newRegion, 1000);
+          mapRef.current?.animateToRegion(newRegion, 500);
+          setTimeout(() => {
+            isUpdatingFromCode.current = false;
+          }, 600);
+        }, 100);
+      } else {
+        setTimeout(() => {
+          isUpdatingFromCode.current = false;
         }, 100);
       }
 
@@ -193,6 +203,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   };
 
   const handleRegionChangeComplete = async (newRegion: Region) => {
+    // Skip if we're updating from code (editing address)
+    if (isUpdatingFromCode.current) {
+      return;
+    }
+
     setRegion(newRegion);
 
     try {

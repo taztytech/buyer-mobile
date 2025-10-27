@@ -167,7 +167,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             placeholderTextColor="#999999"
             value={searchQuery}
             onChangeText={setSearchQuery}
-            autoFocus={true}
+            autoFocus={false}
             cursorColor="#00B14F"
           />
           {searchQuery.length > 0 && (

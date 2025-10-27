@@ -919,10 +919,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <View key={item} style={styles.categoryItem}>
                 {/* Image Shimmer */}
                 <View style={styles.categoryImageContainer}>
-                  <Shimmer width={59} height={59} borderRadius={30} backgroundColor="#E8E8E8" />
+                  <Shimmer width={50} height={50} borderRadius={25} backgroundColor="#E8E8E8" />
                 </View>
                 {/* Text Shimmer */}
-                <Shimmer width={60} height={12} borderRadius={6} backgroundColor="#E8E8E8" />
+                <Shimmer width={50} height={10} borderRadius={5} backgroundColor="#E8E8E8" />
               </View>
             ))}
           </ScrollView>
