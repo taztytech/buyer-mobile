@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Animated, Dimensions, BackHandler } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing } from 'react-native';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
 import { WelcomeScreen } from '@/screens/Auth/WelcomeScreen';
@@ -444,6 +444,7 @@ export default function App() {
     Animated.timing(restaurantScreenSlide, {
       toValue: 0,
       duration: 250,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
   };
@@ -459,37 +460,39 @@ export default function App() {
     Animated.timing(restaurantScreenSlide, {
       toValue: 0,
       duration: 250,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
   };
 
   // Back from Restaurant (dynamic based on where we came from)
   const handleBackFromRestaurant = () => {
+    // Set screen immediately for smoother transition
+    if (restaurantCameFrom === 'home') {
+      setCurrentScreen('home');
+    } else if (restaurantCameFrom === 'category') {
+      setCurrentScreen('categoryResults');
+    } else if (restaurantCameFrom === 'search') {
+      setCurrentScreen('search');
+      // Re-open search screen with animation
+      Animated.timing(searchScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    } else if (restaurantCameFrom === 'favorites') {
+      setCurrentScreen('exploreDishes');
+    } else {
+      setCurrentScreen('categoryResults');
+    }
+
     // Animate restaurant screen sliding out to the right
     Animated.timing(restaurantScreenSlide, {
       toValue: SCREEN_WIDTH,
-      duration: 220,
+      duration: 200,
+      easing: Easing.out(Easing.ease),
       useNativeDriver: true,
-    }).start(() => {
-      // After animation completes, navigate back
-      if (restaurantCameFrom === 'home') {
-        setCurrentScreen('home');
-      } else if (restaurantCameFrom === 'category') {
-        setCurrentScreen('categoryResults');
-      } else if (restaurantCameFrom === 'search') {
-        setCurrentScreen('search');
-        // Re-open search screen with animation
-        Animated.timing(searchScreenSlide, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }).start();
-      } else if (restaurantCameFrom === 'favorites') {
-        setCurrentScreen('exploreDishes');
-      } else {
-        setCurrentScreen('categoryResults');
-      }
-    });
+    }).start();
   };
 
   // Orders Navigation
@@ -934,11 +937,13 @@ export default function App() {
                   Animated.timing(searchScreenSlide, {
                     toValue: SCREEN_WIDTH,
                     duration: 200,
+                    easing: Easing.out(Easing.ease),
                     useNativeDriver: true,
                   }),
                   Animated.timing(restaurantScreenSlide, {
                     toValue: 0,
                     duration: 250,
+                    easing: Easing.out(Easing.cubic),
                     useNativeDriver: true,
                   }),
                 ]).start();
