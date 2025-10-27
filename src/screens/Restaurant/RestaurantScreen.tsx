@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { apiService } from '@/services/api.service';
 import { Shimmer } from '@/components/Shimmer';
 import { CustomizationModal } from '@/components/CustomizationModal';
@@ -1247,28 +1248,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                       </TouchableOpacity>
                     )}
                   </View>
-
-                  {/* Like and Share Buttons */}
-                  <View style={styles.itemActions}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => handleToggleFavoriteItem(section.id, item.id)}
-                      disabled={togglingFavoriteItemId === item.id}
-                    >
-                      {togglingFavoriteItemId === item.id ? (
-                        <ActivityIndicator size="small" color="rgba(0, 0, 0, 0.5)" />
-                      ) : (
-                        <MaterialIcons
-                          name={item.isFavorite ? 'favorite' : 'favorite-border'}
-                          size={17}
-                          color={item.isFavorite ? '#FF0000' : 'rgba(0, 0, 0, 0.5)'}
-                        />
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionButton}>
-                      <MaterialIcons name="share" size={17} color="rgba(0, 0, 0, 0.5)" />
-                    </TouchableOpacity>
-                  </View>
                 </View>
 
                 <View style={styles.itemRight}>
@@ -1295,6 +1274,35 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                       fadeDuration={0}
                       progressiveRenderingEnabled={true}
                     />
+
+                    {/* Top Gradient Overlay */}
+                    <LinearGradient
+                      colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={styles.itemGradientOverlayTop}
+                    />
+
+                    {/* Heart Button Overlay */}
+                    <TouchableOpacity
+                      style={styles.itemHeartButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleToggleFavoriteItem(section.id, item.id);
+                      }}
+                      disabled={togglingFavoriteItemId === item.id}
+                      activeOpacity={0.7}
+                    >
+                      {togglingFavoriteItemId === item.id ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <MaterialIcons
+                          name={item.isFavorite ? 'favorite' : 'favorite-border'}
+                          size={24}
+                          color={item.isFavorite ? '#FF0000' : '#FFFFFF'}
+                        />
+                      )}
+                    </TouchableOpacity>
                   </TouchableOpacity>
 
                   {/* Add Button or Increment/Decrement Controls */}
@@ -1840,7 +1848,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     marginHorizontal: 0,
-    marginVertical: 5,
+    marginVertical: 0,
   },
   sectionTitle: {
     fontFamily: 'Poppins',
@@ -1974,21 +1982,6 @@ const styles = StyleSheet.create({
     color: '#00B14F',
     marginTop: 2,
   },
-  itemActions: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 3,
-    width: 53,
-    height: 25,
-  },
-  actionButton: {
-    width: 25,
-    height: 25,
-    borderRadius: 13,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   itemRight: {
     width: 155,
     alignItems: 'center',
@@ -2010,6 +2003,22 @@ const styles = StyleSheet.create({
     width: 155,
     height: 137,
     borderRadius: 16,
+  },
+  itemGradientOverlayTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  itemHeartButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 4,
+    zIndex: 10,
   },
   addButton: {
     flexDirection: 'row',
