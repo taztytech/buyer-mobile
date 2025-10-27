@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Animated,
   Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -2012,6 +2013,11 @@ const styles = StyleSheet.create({
     lineHeight: 27,
     color: '#00B14F',
     opacity: 0.85,
+    ...Platform.select({
+      ios: {
+        marginTop: -3,
+      },
+    }),
   },
   addButtonText: {
     fontFamily: 'Poppins',
@@ -2020,6 +2026,11 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     color: '#00B14F',
     opacity: 0.85,
+    ...Platform.select({
+      ios: {
+        marginTop: -3,
+      },
+    }),
   },
   quantityControl: {
     flexDirection: 'row',

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions, Keyboard, TouchableWithoutFeedback, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
@@ -1609,6 +1609,11 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     letterSpacing: 0,
     color: '#00B14F',
+    ...Platform.select({
+      ios: {
+        paddingTop: 4,
+      },
+    }),
   },
   filterButtonInactive: {
     flexDirection: 'row',
@@ -1629,6 +1634,11 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     letterSpacing: 0,
     color: '#000000',
+    ...Platform.select({
+      ios: {
+        paddingTop: 4,
+      },
+    }),
   },
   // Restaurant List
   restaurantListContainer: {
