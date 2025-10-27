@@ -720,15 +720,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           style={styles.container}
           stickyHeaderIndices={[3]}
           testID="home-screen"
-          bounces={false}
-          overScrollMode="never"
+          bounces={true}
+          overScrollMode="auto"
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           removeClippedSubviews={true}
-          decelerationRate="fast"
+          decelerationRate="normal"
         >
 
       {/* Header with Background Image */}
@@ -860,7 +860,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               showsHorizontalScrollIndicator={false}
               onViewableItemsChanged={onViewRef.current}
               viewabilityConfig={viewConfigRef.current}
-              decelerationRate="fast"
+              decelerationRate="normal"
               snapToAlignment="center"
               snapToInterval={SCREEN_WIDTH}
             />
