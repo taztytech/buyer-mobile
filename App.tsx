@@ -1051,23 +1051,24 @@ export default function App() {
             </View>
           )}
 
-          {/* Conditionally render RestaurantScreen only when needed */}
-          {currentScreen === 'restaurant' && (
-            <Animated.View
-              style={[
-                styles.restaurantOverlay,
-                {
-                  transform: [{ translateX: restaurantScreenSlide }],
-                },
-              ]}
-            >
+          {/* Always render RestaurantScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.restaurantOverlay,
+              {
+                transform: [{ translateX: restaurantScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'restaurant' ? 'auto' : 'none'}
+          >
+            {(currentScreen === 'restaurant' || restaurantScreenSlide._value !== SCREEN_WIDTH) && (
               <RestaurantScreen
                 restaurantId={selectedRestaurantId}
                 restaurantName={selectedRestaurantName}
                 onBack={handleBackFromRestaurant}
               />
-            </Animated.View>
-          )}
+            )}
+          </Animated.View>
         </View>
       )}
         </SafeAreaProvider>
@@ -1226,6 +1227,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    width: SCREEN_WIDTH,
     zIndex: 7,
     backgroundColor: '#FFFFFF',
   },
