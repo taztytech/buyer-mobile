@@ -1376,9 +1376,11 @@ const styles = StyleSheet.create({
   adContent: {
     flexDirection: 'column',
     alignItems: 'flex-start',
+    justifyContent: 'center',
     gap: 11,
     position: 'relative',
     zIndex: 2,
+    flex: 1,
   },
   blobContainer: {
     position: 'absolute',
@@ -1423,8 +1425,8 @@ const styles = StyleSheet.create({
     maxWidth: '80%',
     fontFamily: 'Poppins',
     fontWeight: '500',
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 12,
+    lineHeight: 18,
     color: '#FFFFFF',
     flexWrap: 'wrap',
   },
@@ -1538,26 +1540,10 @@ const styles = StyleSheet.create({
   categoryImage: {
     width: '100%',
     height: '100%',
-    shadowColor: '#000000',
-    shadowOffset: {
-      width: -6,
-      height: -2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
   },
   viewAllImage: {
     width: 45,
     height: 45,
-    shadowColor: '#000000',
-    shadowOffset: {
-      width: -6,
-      height: -2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
   },
   categoryName: {
     width: 74,

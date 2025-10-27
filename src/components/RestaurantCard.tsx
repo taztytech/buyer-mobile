@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   },
   // Restaurant Name
   restaurantName: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 18,
     lineHeight: 24,
     color: '#000000',

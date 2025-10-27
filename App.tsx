@@ -58,6 +58,7 @@ export default function App() {
   const addressScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const helpScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const restaurantScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
   const [fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
@@ -438,6 +439,13 @@ export default function App() {
     setSelectedRestaurantName(restaurantName);
     setRestaurantCameFrom('category');
     setCurrentScreen('restaurant');
+
+    // Animate restaurant screen sliding in from right
+    Animated.timing(restaurantScreenSlide, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
   };
 
   // Restaurant Navigation from Home
@@ -446,27 +454,42 @@ export default function App() {
     setSelectedRestaurantName(restaurantName);
     setRestaurantCameFrom('home');
     setCurrentScreen('restaurant');
+
+    // Animate restaurant screen sliding in from right
+    Animated.timing(restaurantScreenSlide, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
   };
 
   // Back from Restaurant (dynamic based on where we came from)
   const handleBackFromRestaurant = () => {
-    if (restaurantCameFrom === 'home') {
-      setCurrentScreen('home');
-    } else if (restaurantCameFrom === 'category') {
-      setCurrentScreen('categoryResults');
-    } else if (restaurantCameFrom === 'search') {
-      setCurrentScreen('search');
-      // Re-open search screen with animation
-      Animated.timing(searchScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    } else if (restaurantCameFrom === 'favorites') {
-      setCurrentScreen('exploreDishes');
-    } else {
-      setCurrentScreen('categoryResults');
-    }
+    // Animate restaurant screen sliding out to the right
+    Animated.timing(restaurantScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(() => {
+      // After animation completes, navigate back
+      if (restaurantCameFrom === 'home') {
+        setCurrentScreen('home');
+      } else if (restaurantCameFrom === 'category') {
+        setCurrentScreen('categoryResults');
+      } else if (restaurantCameFrom === 'search') {
+        setCurrentScreen('search');
+        // Re-open search screen with animation
+        Animated.timing(searchScreenSlide, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      } else if (restaurantCameFrom === 'favorites') {
+        setCurrentScreen('exploreDishes');
+      } else {
+        setCurrentScreen('categoryResults');
+      }
+    });
   };
 
   // Orders Navigation
@@ -906,12 +929,19 @@ export default function App() {
                 setRestaurantCameFrom('search');
                 setCurrentScreen('restaurant');
 
-                // Close search screen with animation
-                Animated.timing(searchScreenSlide, {
-                  toValue: SCREEN_WIDTH,
-                  duration: 200,
-                  useNativeDriver: true,
-                }).start();
+                // Close search screen and open restaurant screen with animation
+                Animated.parallel([
+                  Animated.timing(searchScreenSlide, {
+                    toValue: SCREEN_WIDTH,
+                    duration: 200,
+                    useNativeDriver: true,
+                  }),
+                  Animated.timing(restaurantScreenSlide, {
+                    toValue: 0,
+                    duration: 250,
+                    useNativeDriver: true,
+                  }),
+                ]).start();
               }}
             />
           </Animated.View>
@@ -1023,13 +1053,20 @@ export default function App() {
 
           {/* Conditionally render RestaurantScreen only when needed */}
           {currentScreen === 'restaurant' && (
-            <View style={styles.restaurantOverlay}>
+            <Animated.View
+              style={[
+                styles.restaurantOverlay,
+                {
+                  transform: [{ translateX: restaurantScreenSlide }],
+                },
+              ]}
+            >
               <RestaurantScreen
                 restaurantId={selectedRestaurantId}
                 restaurantName={selectedRestaurantName}
                 onBack={handleBackFromRestaurant}
               />
-            </View>
+            </Animated.View>
           )}
         </View>
       )}
