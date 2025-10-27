@@ -650,7 +650,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           ) : null}
 
           <View style={styles.adContent} testID={`banner-content-${item.id}`}>
-            <Text style={styles.adTitle} testID={`banner-title-${item.id}`}>{item.title}</Text>
+            <Text style={styles.adTitle} numberOfLines={1} ellipsizeMode="tail" testID={`banner-title-${item.id}`}>{item.title}</Text>
             <Text style={styles.adDescription} testID={`banner-description-${item.id}`}>{item.description}</Text>
             <TouchableOpacity style={styles.adButton} testID={`banner-button-${item.id}`}>
               <Text style={styles.adButtonText}>{item.buttonText}</Text>
@@ -1411,22 +1411,22 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '18deg' }],
   },
   adTitle: {
-    width: 294,
-    height: 29,
+    maxWidth: '90%',
     fontFamily: 'Poppins',
     fontWeight: '700',
-    fontSize: 19,
-    lineHeight: 28,
+    fontSize: 16,
+    lineHeight: 24,
     color: '#FFFFFF',
+    marginBottom: 4,
   },
   adDescription: {
-    width: 239,
-    height: 42,
+    maxWidth: '75%',
     fontFamily: 'Poppins',
     fontWeight: '500',
     fontSize: 14,
     lineHeight: 21,
     color: '#FFFFFF',
+    flexWrap: 'wrap',
   },
   adButton: {
     flexDirection: 'row',
