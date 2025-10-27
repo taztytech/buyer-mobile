@@ -16,6 +16,7 @@ import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScr
 import { MyAddressesScreen } from '@/screens/Location/MyAddressesScreen';
 import { CategoryResultsScreen } from '@/screens/Category/CategoryResultsScreen';
 import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
+import { RestaurantDetailsScreen } from '@/screens/Restaurant/RestaurantDetailsScreen';
 import { ExploreDishesScreen } from '@/screens/Favorites/ExploreDishesScreen';
 import { ContentPage } from '@/screens/Legal/ContentPage';
 import { HelpScreen } from '@/screens/Help/HelpScreen';
@@ -35,11 +36,16 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'exploreDishes' | 'privacyPolicy' | 'termsConditions' | 'help'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'privacyPolicy' | 'termsConditions' | 'help'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [selectedLocation, setSelectedLocation] = React.useState({ name: 'Madurai', address: 'Madurai, Tamil Nadu, India' });
+  const [selectedLocation, setSelectedLocation] = React.useState({
+    name: 'Madurai',
+    address: 'Madurai, Tamil Nadu, India',
+    latitude: 9.9352300,
+    longitude: 78.1304040
+  });
   const [selectedCategory, setSelectedCategory] = React.useState('Briyani');
   const [categoryData, setCategoryData] = React.useState<any[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
@@ -371,6 +377,8 @@ export default function App() {
     setSelectedLocation({
       name: location.name || location.locationName,
       address: location.locationAddress || location.address,
+      latitude: location.latitude || location.lat || 9.9352300,
+      longitude: location.longitude || location.lng || 78.1304040,
     });
 
     // Check if coming from MyAddresses
@@ -493,6 +501,16 @@ export default function App() {
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start();
+  };
+
+  // Navigate to Restaurant Details
+  const handleNavigateToRestaurantDetails = () => {
+    setCurrentScreen('restaurantDetails');
+  };
+
+  // Back from Restaurant Details
+  const handleBackFromRestaurantDetails = () => {
+    setCurrentScreen('restaurant');
   };
 
   // Orders Navigation
@@ -817,6 +835,8 @@ export default function App() {
                 setSelectedLocation({
                   name: formattedType,
                   address: `${address.address}, ${address.city}`,
+                  latitude: address.latitude || 9.9352300,
+                  longitude: address.longitude || 78.1304040,
                 });
                 handleBackFromAddressSelection();
               }}
@@ -1071,9 +1091,23 @@ export default function App() {
                 restaurantId={selectedRestaurantId}
                 restaurantName={selectedRestaurantName}
                 onBack={handleBackFromRestaurant}
+                onNavigateToDetails={handleNavigateToRestaurantDetails}
               />
             )}
           </Animated.View>
+
+          {/* Restaurant Details Screen */}
+          {currentScreen === 'restaurantDetails' && (
+            <View style={styles.restaurantDetailsOverlay}>
+              <RestaurantDetailsScreen
+                restaurantId={selectedRestaurantId}
+                restaurantName={selectedRestaurantName}
+                latitude={selectedLocation.latitude}
+                longitude={selectedLocation.longitude}
+                onBack={handleBackFromRestaurantDetails}
+              />
+            </View>
+          )}
         </View>
       )}
         </SafeAreaProvider>
@@ -1235,5 +1269,14 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     zIndex: 7,
     backgroundColor: '#FFFFFF',
+  },
+  restaurantDetailsOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 8,
+    backgroundColor: '#F5F5F5',
   },
 });

@@ -751,7 +751,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <View style={styles.cityRow}>
                   <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
                   <Shimmer width={120} height={18} borderRadius={8} />
-                  <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                  <View style={styles.arrowIconWrapper}>
+                    <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                  </View>
                 </View>
                 {/* Address - Shimmer */}
                 <Shimmer width={220} height={14} borderRadius={6} style={{ marginTop: 4 }} />
@@ -762,7 +764,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <View style={styles.cityRow}>
                   <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
                   <Text style={styles.cityName}>{selectedLocation.name}</Text>
-                  <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                  <View style={styles.arrowIconWrapper}>
+                    <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                  </View>
                 </View>
                 {/* Address */}
                 <Text
@@ -1244,6 +1248,13 @@ const styles = StyleSheet.create({
     width: 271,
     height: 24,
     marginLeft: -3,
+  },
+  arrowIconWrapper: {
+    ...Platform.select({
+      ios: {
+        paddingTop: 2,
+      },
+    }),
   },
   cityName: {
     height: 24,

@@ -36,6 +36,7 @@ interface RestaurantScreenProps {
   restaurantId: number;
   restaurantName?: string;
   onBack?: () => void;
+  onNavigateToDetails?: () => void;
 }
 
 interface AddOn {
@@ -173,6 +174,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   restaurantId,
   restaurantName,
   onBack,
+  onNavigateToDetails,
 }) => {
   const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, checkRestaurantConflict } = useCart();
   const { vegMode, setVegMode } = useVegMode();
@@ -978,7 +980,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   <Text style={styles.restaurantName} numberOfLines={1}>
                     {restaurantData?.name || restaurantName || 'Restaurant'}
                   </Text>
-                  <MaterialIcons name="info-outline" size={19} color="#00B14F" />
+                  <TouchableOpacity onPress={onNavigateToDetails} activeOpacity={0.7}>
+                    <MaterialIcons name="info-outline" size={19} color="#00B14F" />
+                  </TouchableOpacity>
                 </View>
                 {/* Only show rating and reviews if there's at least one review */}
                 {(restaurantData?.stats?.total_reviews > 0 || restaurantData?.total_reviews > 0) && (
@@ -1512,7 +1516,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         <OrderDetailsScreen
           restaurantId={restaurantId}
           restaurantName={restaurantData?.name || restaurantName}
-          deliveryAddress="Chennai | F1, Jeyalakshmi Appartments..."
+          deliveryAddress={
+            restaurantData?.locations?.[0]?.locality ||
+            restaurantData?.location?.locality ||
+            'Location not available'
+          }
           cartItems={getFlattenedCartItems()}
           onBack={() => setShowOrderDetails(false)}
           onEditCustomization={handleEditCustomization}

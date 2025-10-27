@@ -176,53 +176,54 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
     const isImageLoaded = loadedImages.has(imageId);
 
     return (
-      <TouchableOpacity
-        key={item.id}
-        style={styles.dishCard}
-        onPress={() => onSelectItem && onSelectItem(item)}
-        activeOpacity={0.7}
-      >
-        {/* Image with loading shimmer */}
-        {!isImageLoaded && (
-          <View style={styles.imageShimmer}>
-            <Shimmer width="100%" height={150} borderRadius={12} backgroundColor="#E8E8E8" />
-          </View>
-        )}
-        <Image
-          source={{ uri: imageUrl }}
-          style={[styles.dishImage, !isImageLoaded && styles.hiddenImage]}
-          resizeMode="cover"
-          onLoad={() => handleImageLoad(imageId)}
-        />
-
-        {/* Top Gradient Overlay */}
-        <LinearGradient
-          colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={styles.gradientOverlayTop}
-        />
-
-        {/* Heart Icon (Clickable to remove from favorites) */}
+      <View key={item.id} style={styles.cardShadowWrapper}>
         <TouchableOpacity
-          style={styles.heartIcon}
-          onPress={(e) => {
-            e.stopPropagation();
-            handleToggleFavoriteItem(item.id);
-          }}
-          disabled={togglingItemId === item.id}
+          style={styles.dishCard}
+          onPress={() => onSelectItem && onSelectItem(item)}
+          activeOpacity={0.7}
         >
-          {togglingItemId === item.id ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <MaterialIcons name="favorite" size={24} color="#FF0000" />
+          {/* Image with loading shimmer */}
+          {!isImageLoaded && (
+            <View style={styles.imageShimmer}>
+              <Shimmer width="100%" height={150} borderRadius={12} backgroundColor="#E8E8E8" />
+            </View>
           )}
-        </TouchableOpacity>
+          <Image
+            source={{ uri: imageUrl }}
+            style={[styles.dishImage, !isImageLoaded && styles.hiddenImage]}
+            resizeMode="cover"
+            onLoad={() => handleImageLoad(imageId)}
+          />
 
-        <View style={styles.dishLabelContainer}>
-          <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
-        </View>
-      </TouchableOpacity>
+          {/* Top Gradient Overlay */}
+          <LinearGradient
+            colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.gradientOverlayTop}
+          />
+
+          {/* Heart Icon (Clickable to remove from favorites) */}
+          <TouchableOpacity
+            style={styles.heartIcon}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleToggleFavoriteItem(item.id);
+            }}
+            disabled={togglingItemId === item.id}
+          >
+            {togglingItemId === item.id ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <MaterialIcons name="favorite" size={24} color="#FF0000" />
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.dishLabelContainer}>
+            <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -231,53 +232,54 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
     const isImageLoaded = loadedImages.has(imageId);
 
     return (
-      <TouchableOpacity
-        key={item.id}
-        style={styles.dishCard}
-        onPress={() => onSelectRestaurant && onSelectRestaurant(item.id, item.name)}
-        activeOpacity={0.7}
-      >
-        {/* Image with loading shimmer */}
-        {!isImageLoaded && (
-          <View style={styles.imageShimmer}>
-            <Shimmer width="100%" height={150} borderRadius={12} backgroundColor="#E8E8E8" />
-          </View>
-        )}
-        <Image
-          source={{ uri: item.logo_url }}
-          style={[styles.dishImage, !isImageLoaded && styles.hiddenImage]}
-          resizeMode="cover"
-          onLoad={() => handleImageLoad(imageId)}
-        />
-
-        {/* Top Gradient Overlay */}
-        <LinearGradient
-          colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={styles.gradientOverlayTop}
-        />
-
-        {/* Heart Icon (Clickable to remove from favorites) */}
+      <View key={item.id} style={styles.cardShadowWrapper}>
         <TouchableOpacity
-          style={styles.heartIcon}
-          onPress={(e) => {
-            e.stopPropagation();
-            handleToggleFavoriteRestaurant(item.id);
-          }}
-          disabled={togglingRestaurantId === item.id}
+          style={styles.dishCard}
+          onPress={() => onSelectRestaurant && onSelectRestaurant(item.id, item.name)}
+          activeOpacity={0.7}
         >
-          {togglingRestaurantId === item.id ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <MaterialIcons name="favorite" size={24} color="#FF0000" />
+          {/* Image with loading shimmer */}
+          {!isImageLoaded && (
+            <View style={styles.imageShimmer}>
+              <Shimmer width="100%" height={150} borderRadius={12} backgroundColor="#E8E8E8" />
+            </View>
           )}
-        </TouchableOpacity>
+          <Image
+            source={{ uri: item.logo_url }}
+            style={[styles.dishImage, !isImageLoaded && styles.hiddenImage]}
+            resizeMode="cover"
+            onLoad={() => handleImageLoad(imageId)}
+          />
 
-        <View style={styles.dishLabelContainer}>
-          <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
-        </View>
-      </TouchableOpacity>
+          {/* Top Gradient Overlay */}
+          <LinearGradient
+            colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.gradientOverlayTop}
+          />
+
+          {/* Heart Icon (Clickable to remove from favorites) */}
+          <TouchableOpacity
+            style={styles.heartIcon}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleToggleFavoriteRestaurant(item.id);
+            }}
+            disabled={togglingRestaurantId === item.id}
+          >
+            {togglingRestaurantId === item.id ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <MaterialIcons name="favorite" size={24} color="#FF0000" />
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.dishLabelContainer}>
+            <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -437,12 +439,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
   },
-  dishCard: {
+  cardShadowWrapper: {
     width: CARD_WIDTH,
     height: 150,
     borderRadius: 12,
-    overflow: 'hidden',
-    position: 'relative',
+    backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -451,6 +452,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 5,
+  },
+  dishCard: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#FFFFFF',
   },
   dishImage: {
     width: '100%',

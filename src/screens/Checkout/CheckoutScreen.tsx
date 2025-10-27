@@ -15,6 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useCart } from '@/context/CartContext';
 import { ordersService } from '@/services/orders.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { addressService, AddressResponse } from '@/services/address.service';
 
 interface DeliveryAddress {
   id: number;
@@ -38,23 +39,61 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress | null>(null);
   const [notes, setNotes] = useState('');
+  const [isLoadingAddress, setIsLoadingAddress] = useState(true);
 
   const subtotal = getTotalPrice();
   const deliveryFee = 30;
   const tax = Math.round(subtotal * 0.05); // 5% tax
   const total = subtotal + deliveryFee + tax;
 
-  // For now, using a mock address - integrate with your address service later
+  // Fetch user's delivery addresses
   useEffect(() => {
-    // TODO: Fetch user's default delivery address
-    setDeliveryAddress({
-      id: 1,
-      type: 'home',
-      address: '123 Main Street',
-      city: 'Madurai',
-      is_default: true,
-    });
+    fetchAddresses();
   }, []);
+
+  const fetchAddresses = async () => {
+    try {
+      setIsLoadingAddress(true);
+      const response = await addressService.getAddresses();
+
+      if (response.success && response.data && response.data.length > 0) {
+        // Find the default address or use the first one
+        const defaultAddress = response.data.find((addr: AddressResponse) => addr.is_default) || response.data[0];
+
+        // Convert API address format to DeliveryAddress format
+        setDeliveryAddress({
+          id: defaultAddress.id,
+          type: defaultAddress.type,
+          address: [defaultAddress.address1, defaultAddress.address2, defaultAddress.address3]
+            .filter(Boolean)
+            .join(', '),
+          city: defaultAddress.city,
+          is_default: defaultAddress.is_default,
+        });
+      } else {
+        // Fallback to mock data if no addresses found
+        setDeliveryAddress({
+          id: 1,
+          type: 'home',
+          address: '123 Main Street',
+          city: 'Madurai',
+          is_default: true,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching addresses:', error);
+      // Fallback to mock data on error
+      setDeliveryAddress({
+        id: 1,
+        type: 'home',
+        address: '123 Main Street',
+        city: 'Madurai',
+        is_default: true,
+      });
+    } finally {
+      setIsLoadingAddress(false);
+    }
+  };
 
   const handlePlaceOrder = async () => {
     if (!deliveryAddress) {
@@ -212,7 +251,12 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
           {/* Delivery Address */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Delivery Address</Text>
-            {deliveryAddress && (
+            {isLoadingAddress ? (
+              <View style={styles.addressCard}>
+                <ActivityIndicator size="small" color="#00B14F" />
+                <Text style={styles.loadingText}>Loading address...</Text>
+              </View>
+            ) : deliveryAddress ? (
               <View style={styles.addressCard}>
                 <View style={styles.addressHeader}>
                   <MaterialIcons name="location-on" size={20} color="#00B14F" />
@@ -221,6 +265,10 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
                 <Text style={styles.addressText}>
                   {deliveryAddress.address}, {deliveryAddress.city}
                 </Text>
+              </View>
+            ) : (
+              <View style={styles.addressCard}>
+                <Text style={styles.addressText}>No delivery address found</Text>
               </View>
             )}
           </View>
@@ -416,6 +464,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(0, 30, 31, 0.7)',
     lineHeight: 21,
+  },
+  loadingText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: '#666666',
+    marginTop: 8,
+    textAlign: 'center',
   },
   restaurantCard: {
     backgroundColor: '#FFFFFF',
