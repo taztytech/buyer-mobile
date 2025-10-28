@@ -7,23 +7,40 @@ import RazorpayCheckout from 'react-native-razorpay';
 import { apiService, ApiResponse } from './api.service';
 
 // Payment Interfaces
-export interface CreateRazorpayOrderRequest {
-  order_id: number; // Our internal order ID
-  amount: number; // Amount in rupees
+export interface InitiatePaymentRequest {
+  name: string;
+  email?: string;
+  phone: string;
 }
 
-export interface RazorpayOrderResponse {
+export interface PaymentDetails {
   razorpay_order_id: string;
   amount: number;
   currency: string;
-  key_id: string;
+  key: string;
+  name: string;
+  description: string;
+  prefill: {
+    name: string;
+    email?: string;
+    contact: string;
+  };
+}
+
+export interface InitiatePaymentResponse {
+  success: boolean;
+  message: string;
+  payment_details: PaymentDetails;
 }
 
 export interface VerifyPaymentRequest {
-  order_id: number; // Our internal order ID
-  razorpay_order_id: string;
   razorpay_payment_id: string;
+  razorpay_order_id: string;
   razorpay_signature: string;
+}
+
+export interface PaymentFailureRequest {
+  reason: string;
 }
 
 export interface RazorpayOptions {
@@ -65,19 +82,19 @@ class PaymentService {
   }
 
   /**
-   * Create Razorpay order on backend
+   * Initiate payment for an order
    */
-  async createRazorpayOrder(request: CreateRazorpayOrderRequest): Promise<ApiResponse<RazorpayOrderResponse>> {
+  async initiatePayment(orderId: number, request: InitiatePaymentRequest): Promise<ApiResponse<InitiatePaymentResponse>> {
     try {
-      const response = await apiService.post<RazorpayOrderResponse>(
-        '/api/buyer/payments/create-razorpay-order',
+      const response = await apiService.post<InitiatePaymentResponse>(
+        `/api/buyer/payment/initiate/${orderId}`,
         request
       );
       return response;
     } catch (error: any) {
       return {
         success: false,
-        error: error.message || 'Failed to create Razorpay order',
+        error: error.message || 'Failed to initiate payment',
       };
     }
   }
@@ -126,7 +143,7 @@ class PaymentService {
   async verifyPayment(request: VerifyPaymentRequest): Promise<ApiResponse<any>> {
     try {
       const response = await apiService.post<any>(
-        '/api/buyer/payments/verify-payment',
+        '/api/buyer/payment/verify',
         request
       );
       return response;
@@ -141,17 +158,17 @@ class PaymentService {
   /**
    * Handle payment failure
    */
-  async handlePaymentFailure(orderId: number, reason: string): Promise<ApiResponse<any>> {
+  async handlePaymentFailure(orderId: number, request: PaymentFailureRequest): Promise<ApiResponse<any>> {
     try {
       const response = await apiService.post<any>(
-        `/api/buyer/orders/${orderId}/payment-failed`,
-        { reason }
+        `/api/buyer/payment/failure/${orderId}`,
+        request
       );
       return response;
     } catch (error: any) {
       return {
         success: false,
-        error: error.message || 'Failed to update payment status',
+        error: error.message || 'Failed to record payment failure',
       };
     }
   }
@@ -162,44 +179,41 @@ class PaymentService {
    */
   async processPayment(
     orderId: number,
-    amount: number,
-    orderDetails: {
-      restaurantName: string;
-      restaurantLogo?: string;
-      userEmail?: string;
-      userPhone?: string;
-      userName?: string;
+    userDetails: {
+      name: string;
+      email?: string;
+      phone: string;
     }
   ): Promise<PaymentResult> {
     try {
-      // Step 1: Create Razorpay order on backend
-      const createOrderResponse = await this.createRazorpayOrder({
-        order_id: orderId,
-        amount: amount,
+      // Step 1: Initiate payment on backend
+      const initiateResponse = await this.initiatePayment(orderId, {
+        name: userDetails.name,
+        email: userDetails.email,
+        phone: userDetails.phone,
       });
 
-      if (!createOrderResponse.success || !createOrderResponse.data) {
+      if (!initiateResponse.success || !initiateResponse.data) {
         return {
           success: false,
-          error: createOrderResponse.error || 'Failed to create payment order',
+          error: initiateResponse.error || 'Failed to initiate payment',
         };
       }
 
-      const { razorpay_order_id, amount: orderAmount, currency, key_id } = createOrderResponse.data;
+      const paymentDetails = initiateResponse.data.payment_details;
 
       // Step 2: Open Razorpay checkout
       const checkoutOptions: RazorpayOptions = {
-        description: `Order #${orderId} from ${orderDetails.restaurantName}`,
-        image: orderDetails.restaurantLogo,
-        currency: currency,
-        key: key_id || this.razorpayKeyId,
-        amount: orderAmount,
-        name: 'Tazty',
-        order_id: razorpay_order_id,
+        description: paymentDetails.description,
+        currency: paymentDetails.currency,
+        key: paymentDetails.key,
+        amount: paymentDetails.amount,
+        name: paymentDetails.name,
+        order_id: paymentDetails.razorpay_order_id,
         prefill: {
-          email: orderDetails.userEmail,
-          contact: orderDetails.userPhone,
-          name: orderDetails.userName,
+          email: paymentDetails.prefill.email,
+          contact: paymentDetails.prefill.contact,
+          name: paymentDetails.prefill.name,
         },
         theme: {
           color: '#00B14F',
@@ -210,19 +224,24 @@ class PaymentService {
 
       if (!paymentResult.success) {
         // Payment failed or cancelled
-        await this.handlePaymentFailure(orderId, paymentResult.error || 'Payment cancelled');
+        await this.handlePaymentFailure(orderId, {
+          reason: paymentResult.error || 'Payment cancelled by user',
+        });
         return paymentResult;
       }
 
       // Step 3: Verify payment on backend
       const verifyResponse = await this.verifyPayment({
-        order_id: orderId,
-        razorpay_order_id: paymentResult.razorpay_order_id!,
         razorpay_payment_id: paymentResult.razorpay_payment_id!,
+        razorpay_order_id: paymentResult.razorpay_order_id!,
         razorpay_signature: paymentResult.razorpay_signature!,
       });
 
       if (!verifyResponse.success) {
+        // Verification failed
+        await this.handlePaymentFailure(orderId, {
+          reason: 'Payment verification failed',
+        });
         return {
           success: false,
           error: verifyResponse.error || 'Payment verification failed',

@@ -17,6 +17,7 @@ import { ordersService } from '@/services/orders.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { addressService, AddressResponse } from '@/services/address.service';
 import { paymentService } from '@/services/payment.service';
+import { authService } from '@/services/auth.service';
 
 interface DeliveryAddress {
   id: number;
@@ -193,12 +194,15 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
           // Process online payment via Razorpay
           setIsPlacingOrder(true);
 
+          // Get user details
+          const user = await authService.getCurrentUser();
+
           const paymentResult = await paymentService.processPayment(
             orderId,
-            total,
             {
-              restaurantName: restaurantName,
-              restaurantLogo: restaurantLogo,
+              name: user?.name || 'User',
+              email: user?.email,
+              phone: user?.phoneNumber || '',
             }
           );
 
