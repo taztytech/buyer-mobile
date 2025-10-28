@@ -191,11 +191,13 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
 
         // Step 3: Handle payment based on method
         if (selectedPaymentMethod === 'online') {
+          console.log('🟢 [Checkout] Online payment selected, starting payment flow');
           // Process online payment via Razorpay
           setIsPlacingOrder(true);
 
           // Get user details
           const user = await authService.getCurrentUser();
+          console.log('🟢 [Checkout] User details:', user);
 
           const paymentResult = await paymentService.processPayment(
             orderId,
@@ -205,6 +207,8 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
               phone: user?.phoneNumber || '',
             }
           );
+
+          console.log('🟢 [Checkout] Payment result:', paymentResult);
 
           if (paymentResult.success) {
             // Payment successful - clear cart and show success

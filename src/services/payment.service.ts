@@ -186,6 +186,9 @@ class PaymentService {
     }
   ): Promise<PaymentResult> {
     try {
+      console.log('🔵 [Payment] Starting payment process for order:', orderId);
+      console.log('🔵 [Payment] User details:', userDetails);
+
       // Step 1: Initiate payment on backend
       const initiateResponse = await this.initiatePayment(orderId, {
         name: userDetails.name,
@@ -193,7 +196,10 @@ class PaymentService {
         phone: userDetails.phone,
       });
 
+      console.log('🔵 [Payment] Initiate response:', JSON.stringify(initiateResponse, null, 2));
+
       if (!initiateResponse.success || !initiateResponse.data) {
+        console.log('🔴 [Payment] Failed to initiate payment:', initiateResponse.error);
         return {
           success: false,
           error: initiateResponse.error || 'Failed to initiate payment',
@@ -201,6 +207,7 @@ class PaymentService {
       }
 
       const paymentDetails = initiateResponse.data.payment_details;
+      console.log('🔵 [Payment] Payment details received:', JSON.stringify(paymentDetails, null, 2));
 
       // Step 2: Open Razorpay checkout
       const checkoutOptions: RazorpayOptions = {
@@ -220,10 +227,13 @@ class PaymentService {
         },
       };
 
+      console.log('🔵 [Payment] Opening Razorpay checkout with options:', JSON.stringify(checkoutOptions, null, 2));
       const paymentResult = await this.openCheckout(checkoutOptions);
+      console.log('🔵 [Payment] Razorpay checkout result:', JSON.stringify(paymentResult, null, 2));
 
       if (!paymentResult.success) {
         // Payment failed or cancelled
+        console.log('🔴 [Payment] Payment failed or cancelled:', paymentResult.error);
         await this.handlePaymentFailure(orderId, {
           reason: paymentResult.error || 'Payment cancelled by user',
         });
@@ -231,14 +241,18 @@ class PaymentService {
       }
 
       // Step 3: Verify payment on backend
+      console.log('🔵 [Payment] Verifying payment on backend');
       const verifyResponse = await this.verifyPayment({
         razorpay_payment_id: paymentResult.razorpay_payment_id!,
         razorpay_order_id: paymentResult.razorpay_order_id!,
         razorpay_signature: paymentResult.razorpay_signature!,
       });
 
+      console.log('🔵 [Payment] Verify response:', JSON.stringify(verifyResponse, null, 2));
+
       if (!verifyResponse.success) {
         // Verification failed
+        console.log('🔴 [Payment] Payment verification failed');
         await this.handlePaymentFailure(orderId, {
           reason: 'Payment verification failed',
         });
@@ -248,6 +262,7 @@ class PaymentService {
         };
       }
 
+      console.log('✅ [Payment] Payment completed successfully!');
       return {
         success: true,
         razorpay_payment_id: paymentResult.razorpay_payment_id,
@@ -255,6 +270,7 @@ class PaymentService {
         razorpay_signature: paymentResult.razorpay_signature,
       };
     } catch (error: any) {
+      console.log('🔴 [Payment] Error in payment process:', error);
       return {
         success: false,
         error: error.message || 'Payment processing failed',
