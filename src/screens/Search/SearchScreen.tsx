@@ -141,11 +141,13 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-
-      {/* Header with Back Button and Search Input */}
-      <View style={styles.header}>
+    <View style={styles.outerContainer}>
+      <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
+        <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
+      </SafeAreaView>
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        {/* Header with Back Button and Search Input */}
+        <View style={styles.header}>
         <TouchableOpacity
           onPress={onBack}
           style={styles.backButton}
@@ -224,11 +226,19 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           </Text>
         </View>
       )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    flex: 1,
+    backgroundColor: '#00B14F',
+  },
+  safeAreaTop: {
+    backgroundColor: '#00B14F',
+  },
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
