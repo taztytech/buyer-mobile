@@ -195,7 +195,10 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 size={24}
                 color={getStatusDisplay(orderData.status).color}
               />
-              <Text style={styles.statusTitle}>{getStatusDisplay(orderData.status).title}</Text>
+              <View style={styles.statusTextContainer}>
+                <Text style={styles.statusTitle}>{getStatusDisplay(orderData.status).title}</Text>
+                <Text style={styles.orderNumberText}>Order #{orderData.order_number}</Text>
+              </View>
             </View>
 
             {/* Driver Info - only show if tracking data available */}
@@ -265,7 +268,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <MaterialIcons name="star" size={20} color="#F59E0B" />
                   <Text style={styles.ratingText}>{orderData.overall_rating.toFixed(1)}</Text>
                 </View>
-              ) : (
+              ) : orderData.status === 'delivered' ? (
                 <TouchableOpacity
                   style={styles.rateButton}
                   onPress={onRateOrder}
@@ -274,7 +277,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <MaterialIcons name="star-outline" size={20} color="#001E1F" />
                   <Text style={styles.rateButtonText}>Rate Order</Text>
                 </TouchableOpacity>
-              )}
+              ) : null}
               {orderData.status === 'delivered' ? (
                 <TouchableOpacity
                   style={styles.reorderButton}
@@ -510,14 +513,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 8,
+    gap: 12,
+    paddingVertical: 12,
+  },
+  statusTextContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusTitle: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 20,
     color: '#001E1F',
     lineHeight: 30,
+    textAlign: 'center',
+  },
+  orderNumberText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    color: 'rgba(0, 30, 31, 0.7)',
+    lineHeight: 21,
+    textAlign: 'center',
+    marginTop: 2,
   },
   driverSection: {
     flexDirection: 'row',
