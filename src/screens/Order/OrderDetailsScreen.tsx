@@ -19,6 +19,8 @@ import { AddressSelectionModal } from '@/components/AddressSelectionModal';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { ordersService } from '@/services/orders.service';
 import { addressService, AddressResponse } from '@/services/address.service';
+import { paymentService } from '@/services/payment.service';
+import { authService } from '@/services/auth.service';
 import { useCart } from '@/context/CartContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 
@@ -276,37 +278,94 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       const orderResponse = await ordersService.createOrder(createOrderRequest);
 
       if (orderResponse.success && orderResponse.data) {
-        // Clear local cart
-        clearCart();
-
         // Get order data - API returns data nested under 'order' key
         const orderData = orderResponse.data.order || orderResponse.data;
         const orderNumber = orderData.order_number || orderData.orderNumber || 'N/A';
         const orderId = orderData.id || orderData.order_id;
 
-        // Show success message
-        showConfirmation({
-          title: 'Order Placed! 🎉',
-          message: orderNumber !== 'N/A'
-            ? `Your order #${orderNumber} has been placed successfully.`
-            : 'Your order has been placed successfully.',
-          confirmText: 'View Order',
-          cancelText: 'Close',
-          confirmButtonColor: '#00B14F',
-          showRibbon: false,
-          onConfirm: () => {
-            if (onOrderSuccess && orderId) {
-              onOrderSuccess(orderId);
-            } else if (onPlaceOrder) {
-              onPlaceOrder();
+        // Handle payment based on method
+        if (selectedPayment === 'online') {
+          console.log('🟢 [OrderDetails] Online payment selected, starting payment flow');
+
+          // Get user details for payment
+          const user = await authService.getCurrentUser();
+          console.log('🟢 [OrderDetails] User details:', user);
+
+          const paymentResult = await paymentService.processPayment(
+            orderId,
+            {
+              name: user?.name || 'User',
+              email: user?.email,
+              phone: user?.phoneNumber || '',
             }
-          },
-          onCancel: () => {
-            if (onOrderCancel) {
-              onOrderCancel();
-            }
-          },
-        });
+          );
+
+          console.log('🟢 [OrderDetails] Payment result:', paymentResult);
+
+          if (paymentResult.success) {
+            // Payment successful - clear cart and show success
+            clearCart();
+
+            showConfirmation({
+              title: 'Payment Successful! 🎉',
+              message: orderNumber !== 'N/A'
+                ? `Your order #${orderNumber} has been placed and paid successfully.`
+                : 'Your order has been placed and paid successfully.',
+              confirmText: 'View Order',
+              cancelText: 'Close',
+              confirmButtonColor: '#00B14F',
+              showRibbon: false,
+              onConfirm: () => {
+                if (onOrderSuccess && orderId) {
+                  onOrderSuccess(orderId);
+                } else if (onPlaceOrder) {
+                  onPlaceOrder();
+                }
+              },
+              onCancel: () => {
+                if (onOrderCancel) {
+                  onOrderCancel();
+                }
+              },
+            });
+          } else {
+            // Payment failed
+            showConfirmation({
+              title: 'Payment Failed',
+              message: paymentResult.error || 'Payment could not be processed. Your order has been created but not confirmed. Please try again.',
+              confirmText: 'OK',
+              cancelText: 'Close',
+              confirmButtonColor: '#DC2626',
+              onConfirm: () => {},
+            });
+          }
+        } else {
+          // COD payment - clear cart and show success immediately
+          clearCart();
+
+          showConfirmation({
+            title: 'Order Placed! 🎉',
+            message: orderNumber !== 'N/A'
+              ? `Your order #${orderNumber} has been placed successfully.`
+              : 'Your order has been placed successfully.',
+            confirmText: 'View Order',
+            cancelText: 'Close',
+            confirmButtonColor: '#00B14F',
+            showRibbon: false,
+            onConfirm: () => {
+              if (onOrderSuccess && orderId) {
+                onOrderSuccess(orderId);
+              } else if (onPlaceOrder) {
+                onPlaceOrder();
+              }
+            },
+            onCancel: () => {
+              if (onOrderCancel) {
+                onOrderCancel();
+              }
+            },
+          });
+        }
       } else {
         showConfirmation({
           title: 'Error',
