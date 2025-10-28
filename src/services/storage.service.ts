@@ -42,12 +42,19 @@ class StorageService {
 
       const expiryTime = Date.now() + tokenData.expiresIn * 1000;
 
+      console.log('💾 [Storage] Saving tokens to AsyncStorage...');
       await AsyncStorage.multiSet([
         [STORAGE_KEYS.ACCESS_TOKEN, tokenData.accessToken],
         [STORAGE_KEYS.REFRESH_TOKEN, tokenData.refreshToken],
         [STORAGE_KEYS.TOKEN_EXPIRY, expiryTime.toString()],
       ]);
+      console.log('✅ [Storage] Tokens saved successfully');
+
+      // Verify tokens were saved
+      const savedToken = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+      console.log('🔍 [Storage] Verification - Token exists:', !!savedToken);
     } catch (error) {
+      console.log('🔴 [Storage] Error saving tokens:', error);
       throw error;
     }
   }
@@ -57,8 +64,11 @@ class StorageService {
    */
   async getAccessToken(): Promise<string | null> {
     try {
-      return await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+      const token = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+      console.log('🔑 [Storage] Getting access token:', token ? 'Found' : 'Not found');
+      return token;
     } catch (error) {
+      console.log('🔴 [Storage] Error getting access token:', error);
       return null;
     }
   }
@@ -122,8 +132,15 @@ class StorageService {
       const isLoggedIn = await AsyncStorage.getItem(STORAGE_KEYS.IS_LOGGED_IN);
       const accessToken = await this.getAccessToken();
 
-      return isLoggedIn === 'true' && accessToken !== null;
+      const result = isLoggedIn === 'true' && accessToken !== null;
+      console.log('🔍 [Storage] isLoggedIn check:', {
+        isLoggedInFlag: isLoggedIn,
+        hasAccessToken: !!accessToken,
+        result: result
+      });
+      return result;
     } catch (error) {
+      console.log('🔴 [Storage] Error checking isLoggedIn:', error);
       return false;
     }
   }
