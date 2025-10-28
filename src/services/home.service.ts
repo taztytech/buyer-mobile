@@ -28,6 +28,13 @@ export interface CategoryItem {
   icon?: string;
 }
 
+export interface RestaurantTiming {
+  day: number;
+  open_time: string;
+  close_time: string;
+  is_open: boolean;
+}
+
 export interface Restaurant {
   id: string | number;
   name: string;
@@ -40,6 +47,8 @@ export interface Restaurant {
   image: string;
   isFavorite?: boolean;
   isVeg?: boolean;
+  timings?: RestaurantTiming[];
+  isOpen?: boolean;
 }
 
 export interface PaginationMetadata {
@@ -58,6 +67,45 @@ export interface HomeData {
 }
 
 class HomeService {
+  /**
+   * Check if restaurant is currently open based on timings
+   * @param timings - Array of restaurant timings
+   * @returns boolean indicating if restaurant is open
+   */
+  isRestaurantOpen(timings?: RestaurantTiming[]): boolean {
+    if (!timings || timings.length === 0) {
+      return true; // Default to open if no timing info
+    }
+
+    const now = new Date();
+    const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const currentTime = now.getHours() * 100 + now.getMinutes(); // Convert to HHMM format
+
+    // Find timing for current day
+    const todayTiming = timings.find(t => t.day === currentDay);
+
+    if (!todayTiming) {
+      return false; // No timing info for today means closed
+    }
+
+    if (!todayTiming.is_open) {
+      return false; // Explicitly marked as closed
+    }
+
+    // Convert time strings to numbers for comparison
+    const openTime = parseInt(todayTiming.open_time);
+    const closeTime = parseInt(todayTiming.close_time);
+
+    // Check if current time is within opening hours
+    if (closeTime > openTime) {
+      // Normal case: opens and closes on same day
+      return currentTime >= openTime && currentTime <= closeTime;
+    } else {
+      // Special case: closes after midnight (e.g., 2200 to 0200)
+      return currentTime >= openTime || currentTime <= closeTime;
+    }
+  }
+
   /**
    * Fetch home page data
    * @param latitude - User's latitude

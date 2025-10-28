@@ -797,6 +797,7 @@ export default function App() {
               onNavigateToSearch={handleNavigateToSearch}
               selectedLocation={selectedLocation}
               onCategoriesLoaded={setCategoryData}
+              isFocused={currentScreen === 'home'}
             />
           </Animated.View>
 

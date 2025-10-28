@@ -308,15 +308,20 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                 activeOpacity={0.7}
               >
                 <MaterialIcons name="access-time" size={24} color="#666666" />
-                <View style={styles.infoContent}>
-                  {restaurantData.is_open && getCurrentDayTiming() && (
-                    <Text style={styles.openNow}>Open now</Text>
-                  )}
-                  {getCurrentDayTiming() && (
-                    <Text style={styles.infoText}>
-                      {restaurantData.is_open ? ' • ' : ''}Closes {formatTime(getCurrentDayTiming()!.close_time)}
-                    </Text>
-                  )}
+                <View style={styles.infoContentColumn}>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoTitle}>Timings</Text>
+                  </View>
+                  <View style={styles.infoContent}>
+                    {restaurantData.is_open && getCurrentDayTiming() && (
+                      <Text style={styles.openNow}>Open now</Text>
+                    )}
+                    {getCurrentDayTiming() && (
+                      <Text style={styles.infoText}>
+                        {restaurantData.is_open ? ' • ' : ''}Closes {formatTime(getCurrentDayTiming()!.close_time)}
+                      </Text>
+                    )}
+                  </View>
                 </View>
                 <MaterialIcons
                   name={isTimingsExpanded ? "keyboard-arrow-up" : "keyboard-arrow-down"}

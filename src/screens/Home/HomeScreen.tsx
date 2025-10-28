@@ -28,6 +28,7 @@ interface HomeScreenProps {
   onNavigateToSearch?: () => void;
   selectedLocation?: { name: string; address: string };
   onCategoriesLoaded?: (categories: CategoryItem[]) => void;
+  isFocused?: boolean;
 }
 
 interface CarouselItem {
@@ -122,6 +123,7 @@ const fallbackRestaurantData: Restaurant[] = [
     image: require('@/assets/biriyani.png'),
     isFavorite: false,
     isVeg: true,
+    isOpen: true,
   },
   {
     id: 2,
@@ -135,6 +137,7 @@ const fallbackRestaurantData: Restaurant[] = [
     image: require('@/assets/burger.png'),
     isFavorite: false,
     isVeg: false,
+    isOpen: true,
   },
   {
     id: 3,
@@ -148,6 +151,7 @@ const fallbackRestaurantData: Restaurant[] = [
     image: require('@/assets/pizza.png'),
     isFavorite: false,
     isVeg: false,
+    isOpen: true,
   },
 ];
 
@@ -159,7 +163,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToRestaurant,
   onNavigateToSearch,
   selectedLocation: externalSelectedLocation,
-  onCategoriesLoaded
+  onCategoriesLoaded,
+  isFocused = true,
 }) => {
   const { restaurantId, restaurantName, restaurantLogo, getTotalItems } = useCart();
   const { vegMode, setVegMode, isVegModeEnabled } = useVegMode();
@@ -202,10 +207,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [hasMoreRestaurants, setHasMoreRestaurants] = React.useState(false);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
 
+  // Refresh trigger - increments to force data reload
+  const [refreshTrigger, setRefreshTrigger] = React.useState(0);
+
   // Dismiss keyboard when component mounts (only once)
   React.useEffect(() => {
     Keyboard.dismiss();
   }, []);
+
+  // Trigger data reload when screen becomes focused
+  React.useEffect(() => {
+    if (isFocused) {
+      // Increment refresh trigger to force data reload
+      setRefreshTrigger(prev => prev + 1);
+    }
+  }, [isFocused]);
 
   // Log API endpoint URL on mount
   React.useEffect(() => {
@@ -290,7 +306,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
     fetchDefaultAddress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshTrigger]);
 
 
   // Check if all banner images are loaded
@@ -594,19 +610,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           // Handle restaurants - use fallback if empty or undefined
           if (nearbyRestaurants && Array.isArray(nearbyRestaurants) && nearbyRestaurants.length > 0) {
             // Transform API data to match our Restaurant interface
-            const transformedRestaurants = nearbyRestaurants.map((restaurant: any) => ({
-              id: restaurant.id,
-              name: restaurant.name,
-              cuisine: restaurant.description || 'Restaurant',
-              rating: restaurant.rating || 0,
-              reviewCount: restaurant.review_count || restaurant.reviews_count || restaurant.total_reviews || 0,
-              deliveryTime: restaurant.delivery_time || '25-30 mins',
-              location: restaurant.location,
-              distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
-              image: restaurant.logo_url || restaurant.image,
-              isFavorite: restaurant.is_favorite || false,
-              isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
-            }));
+            const transformedRestaurants = nearbyRestaurants.map((restaurant: any) => {
+              const timings = restaurant.timings || [];
+              const isOpen = homeService.isRestaurantOpen(timings);
+
+              return {
+                id: restaurant.id,
+                name: restaurant.name,
+                cuisine: restaurant.description || 'Restaurant',
+                rating: restaurant.rating || 0,
+                reviewCount: restaurant.review_count || restaurant.reviews_count || restaurant.total_reviews || 0,
+                deliveryTime: restaurant.delivery_time || '25-30 mins',
+                location: restaurant.location,
+                distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
+                image: restaurant.logo_url || restaurant.image,
+                isFavorite: restaurant.is_favorite || false,
+                isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
+                timings: timings,
+                isOpen: isOpen,
+              };
+            });
 
             setRestaurantData(transformedRestaurants);
 
@@ -658,19 +681,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         if (nearbyRestaurants && Array.isArray(nearbyRestaurants) && nearbyRestaurants.length > 0) {
           // Transform new restaurants
-          const transformedRestaurants = nearbyRestaurants.map((restaurant: any) => ({
-            id: restaurant.id,
-            name: restaurant.name,
-            cuisine: restaurant.description || 'Restaurant',
-            rating: restaurant.rating || 0,
-            reviewCount: restaurant.review_count || restaurant.reviews_count || restaurant.total_reviews || 0,
-            deliveryTime: restaurant.delivery_time || '25-30 mins',
-            location: restaurant.location,
-            distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
-            image: restaurant.logo_url || restaurant.image,
-            isFavorite: restaurant.is_favorite || false,
-            isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
-          }));
+          const transformedRestaurants = nearbyRestaurants.map((restaurant: any) => {
+            const timings = restaurant.timings || [];
+            const isOpen = homeService.isRestaurantOpen(timings);
+
+            return {
+              id: restaurant.id,
+              name: restaurant.name,
+              cuisine: restaurant.description || 'Restaurant',
+              rating: restaurant.rating || 0,
+              reviewCount: restaurant.review_count || restaurant.reviews_count || restaurant.total_reviews || 0,
+              deliveryTime: restaurant.delivery_time || '25-30 mins',
+              location: restaurant.location,
+              distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
+              image: restaurant.logo_url || restaurant.image,
+              isFavorite: restaurant.is_favorite || false,
+              isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
+              timings: timings,
+              isOpen: isOpen,
+            };
+          });
 
           // Append new restaurants to existing list
           setRestaurantData(prevData => [...prevData, ...transformedRestaurants]);

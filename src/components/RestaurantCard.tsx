@@ -4,6 +4,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { favoritesService } from '@/services/favorites.service';
 
+export interface RestaurantTiming {
+  day: number;
+  open_time: string;
+  close_time: string;
+  is_open: boolean;
+}
+
 export interface Restaurant {
   id: string | number;
   name: string;
@@ -16,6 +23,8 @@ export interface Restaurant {
   image: any;
   isFavorite?: boolean;
   isVeg?: boolean;
+  timings?: RestaurantTiming[];
+  isOpen?: boolean;
 }
 
 interface RestaurantCardProps {
@@ -99,7 +108,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
       <View style={styles.imageContainer}>
         <Image
           source={getImageSource()}
-          style={styles.image}
+          style={[
+            styles.image,
+            restaurant.isOpen === false && styles.imageClosed
+          ]}
           resizeMode="cover"
           testID={`restaurant-image-${restaurant.id}`}
           onError={(error) => {}}
@@ -127,6 +139,13 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           end={{ x: 0, y: 1 }}
           style={styles.gradientOverlayBottom}
         />
+
+        {/* Closed Now Overlay */}
+        {restaurant.isOpen === false && (
+          <View style={styles.closedOverlay}>
+            <Text style={styles.closedText}>CLOSED NOW</Text>
+          </View>
+        )}
 
         {/* Heart Button Overlay */}
         <TouchableOpacity
@@ -225,6 +244,29 @@ const styles = StyleSheet.create({
     width: 130,
     height: 160,
     borderRadius: 16,
+  },
+  imageClosed: {
+    opacity: 0.5,
+  },
+  closedOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+  },
+  closedText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   gradientOverlayTop: {
     position: 'absolute',
