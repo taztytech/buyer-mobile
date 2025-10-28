@@ -1025,6 +1025,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* Ad Banner Carousel */}
       {isLocationServiceable && (
+      <>
       <View style={styles.carouselContainer}>
         {showBannerShimmer ? (
           <View style={styles.loadingContainer}>
@@ -1256,6 +1257,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </View>
         )}
       </View>
+      </>
       )}
 
       {/* Location Permission Modal */}
