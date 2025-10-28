@@ -16,6 +16,7 @@ import { useCart } from '@/context/CartContext';
 import { ordersService } from '@/services/orders.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { addressService, AddressResponse } from '@/services/address.service';
+import { paymentService } from '@/services/payment.service';
 
 interface DeliveryAddress {
   id: number;
@@ -40,6 +41,7 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
   const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress | null>(null);
   const [notes, setNotes] = useState('');
   const [isLoadingAddress, setIsLoadingAddress] = useState(true);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'cod' | 'online'>('cod');
 
   const subtotal = getTotalPrice();
   const deliveryFee = 30;
@@ -171,39 +173,86 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
         }
       }
 
-      // Step 2: Create order with COD payment
+      // Step 2: Create order
       const createOrderRequest = {
         delivery_address_id: deliveryAddress.id,
-        payment_method: 'cod' as const,
+        payment_method: selectedPaymentMethod,
         notes: notes || undefined,
       };
 
       const orderResponse = await ordersService.createOrder(createOrderRequest);
 
       if (orderResponse.success && orderResponse.data) {
-        // Clear local cart
-        clearCart();
-
         // Get order data - API returns data nested under 'order' key
         const orderData = orderResponse.data.order || orderResponse.data;
         const orderNumber = orderData.order_number || orderData.orderNumber || 'N/A';
         const orderId = orderData.id || orderData.order_id;
 
-        // Show success message
-        showConfirmation({
-          title: 'Order Placed! 🎉',
-          message: orderNumber !== 'N/A'
-            ? `Your order #${orderNumber} has been placed successfully.`
-            : 'Your order has been placed successfully.',
-          confirmText: 'View Order',
-          cancelText: 'Close',
-          confirmButtonColor: '#00B14F',
-          onConfirm: () => {
-            if (onOrderSuccess && orderId) {
-              onOrderSuccess(orderId);
+        // Step 3: Handle payment based on method
+        if (selectedPaymentMethod === 'online') {
+          // Process online payment via Razorpay
+          setIsPlacingOrder(true);
+
+          const paymentResult = await paymentService.processPayment(
+            orderId,
+            total,
+            {
+              restaurantName: restaurantName,
+              restaurantLogo: restaurantLogo,
             }
-          },
-        });
+          );
+
+          if (paymentResult.success) {
+            // Payment successful - clear cart and show success
+            clearCart();
+
+            showConfirmation({
+              title: 'Payment Successful! 🎉',
+              message: orderNumber !== 'N/A'
+                ? `Your order #${orderNumber} has been placed and paid successfully.`
+                : 'Your order has been placed and paid successfully.',
+              confirmText: 'View Order',
+              cancelText: 'Close',
+              confirmButtonColor: '#00B14F',
+              onConfirm: () => {
+                if (onOrderSuccess && orderId) {
+                  onOrderSuccess(orderId);
+                }
+              },
+            });
+          } else {
+            // Payment failed
+            showConfirmation({
+              title: 'Payment Failed',
+              message: paymentResult.error || 'Payment could not be processed. Your order has been created but not confirmed. Please try again.',
+              confirmText: 'Retry Payment',
+              cancelText: 'Cancel Order',
+              confirmButtonColor: '#DC2626',
+              onConfirm: () => {
+                // Retry payment
+                handlePlaceOrder();
+              },
+            });
+          }
+        } else {
+          // COD payment - clear cart and show success immediately
+          clearCart();
+
+          showConfirmation({
+            title: 'Order Placed! 🎉',
+            message: orderNumber !== 'N/A'
+              ? `Your order #${orderNumber} has been placed successfully.`
+              : 'Your order has been placed successfully.',
+            confirmText: 'View Order',
+            cancelText: 'Close',
+            confirmButtonColor: '#00B14F',
+            onConfirm: () => {
+              if (onOrderSuccess && orderId) {
+                onOrderSuccess(orderId);
+              }
+            },
+          });
+        }
       } else {
         showConfirmation({
           title: 'Error',
@@ -358,10 +407,58 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
           {/* Payment Method */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Payment Method</Text>
-            <View style={styles.paymentCard}>
-              <MaterialIcons name="payments" size={24} color="#00B14F" />
-              <Text style={styles.paymentMethod}>Cash on Delivery</Text>
-            </View>
+
+            {/* Cash on Delivery */}
+            <TouchableOpacity
+              style={[
+                styles.paymentCard,
+                selectedPaymentMethod === 'cod' && styles.paymentCardSelected
+              ]}
+              onPress={() => setSelectedPaymentMethod('cod')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.paymentLeft}>
+                <MaterialIcons name="payments" size={24} color="#00B14F" />
+                <View>
+                  <Text style={styles.paymentMethod}>Cash on Delivery</Text>
+                  <Text style={styles.paymentDescription}>Pay when you receive</Text>
+                </View>
+              </View>
+              <View style={[
+                styles.radioButton,
+                selectedPaymentMethod === 'cod' && styles.radioButtonSelected
+              ]}>
+                {selectedPaymentMethod === 'cod' && (
+                  <View style={styles.radioButtonInner} />
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {/* Online Payment */}
+            <TouchableOpacity
+              style={[
+                styles.paymentCard,
+                selectedPaymentMethod === 'online' && styles.paymentCardSelected
+              ]}
+              onPress={() => setSelectedPaymentMethod('online')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.paymentLeft}>
+                <MaterialIcons name="credit-card" size={24} color="#00B14F" />
+                <View>
+                  <Text style={styles.paymentMethod}>Pay Online</Text>
+                  <Text style={styles.paymentDescription}>UPI, Card, Wallet & More</Text>
+                </View>
+              </View>
+              <View style={[
+                styles.radioButton,
+                selectedPaymentMethod === 'online' && styles.radioButtonSelected
+              ]}>
+                {selectedPaymentMethod === 'online' && (
+                  <View style={styles.radioButtonInner} />
+                )}
+              </View>
+            </TouchableOpacity>
           </View>
         </ScrollView>
 
@@ -603,13 +700,50 @@ const styles = StyleSheet.create({
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  paymentCardSelected: {
+    borderColor: '#00B14F',
+    backgroundColor: 'rgba(0, 177, 79, 0.05)',
+  },
+  paymentLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
   paymentMethod: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
     color: '#001E1F',
     lineHeight: 21,
+  },
+  paymentDescription: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: 'rgba(0, 30, 31, 0.6)',
+    lineHeight: 18,
+  },
+  radioButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#D9D9D9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioButtonSelected: {
+    borderColor: '#00B14F',
+  },
+  radioButtonInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#00B14F',
   },
   footer: {
     backgroundColor: '#FFFFFF',
