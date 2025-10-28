@@ -26,7 +26,7 @@ interface HomeScreenProps {
   onNavigateToCategory?: (categoryName: string) => void;
   onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
   onNavigateToSearch?: () => void;
-  selectedLocation?: { name: string; address: string };
+  selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
   onCategoriesLoaded?: (categories: CategoryItem[]) => void;
   isFocused?: boolean;
 }
@@ -238,10 +238,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   React.useEffect(() => {
     if (externalSelectedLocation) {
       setSelectedLocation(externalSelectedLocation);
+      // User selected a different address, fetch restaurants for the new location
+      if (externalSelectedLocation.latitude && externalSelectedLocation.longitude) {
+        fetchHomeData(externalSelectedLocation.latitude, externalSelectedLocation.longitude);
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalSelectedLocation]);
 
-  // Fetch default address on component mount
+  // Fetch default address on component mount (ONLY ONCE)
   React.useEffect(() => {
     const fetchDefaultAddress = async () => {
       try {
@@ -262,11 +267,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             // Format address type (home -> Home, work -> Work, other -> Other)
             const formattedType = defaultAddress.type.charAt(0).toUpperCase() + defaultAddress.type.slice(1);
 
-            // Update selected location display
-            setSelectedLocation({
-              name: formattedType,
-              address: `${defaultAddress.address1}${defaultAddress.address2 ? ', ' + defaultAddress.address2 : ''}${defaultAddress.address3 ? ', ' + defaultAddress.address3 : ''}, ${defaultAddress.city}`,
-            });
+            // Update selected location display (only if no external location is set)
+            if (!externalSelectedLocation) {
+              setSelectedLocation({
+                name: formattedType,
+                address: `${defaultAddress.address1}${defaultAddress.address2 ? ', ' + defaultAddress.address2 : ''}${defaultAddress.address3 ? ', ' + defaultAddress.address3 : ''}, ${defaultAddress.city}`,
+              });
+            }
 
             // Fetch home data with default address coordinates
             await fetchHomeData(defaultAddress.latitude, defaultAddress.longitude);
@@ -308,6 +315,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     };
 
     fetchDefaultAddress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
+
+  // Reload home data when screen becomes focused (but don't reset address)
+  React.useEffect(() => {
+    if (isFocused && refreshTrigger > 0) {
+      // Reload data with current selected location coordinates
+      // Use coordinates from externalSelectedLocation if available, otherwise use default
+      const lat = externalSelectedLocation?.latitude || defaultAddressCoords?.latitude || DEFAULT_LOCATION.latitude;
+      const lng = externalSelectedLocation?.longitude || defaultAddressCoords?.longitude || DEFAULT_LOCATION.longitude;
+      fetchHomeData(lat, lng);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshTrigger]);
 
