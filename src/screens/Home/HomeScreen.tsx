@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions, Keyboard, TouchableWithoutFeedback, Platform } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions, Keyboard, TouchableWithoutFeedback, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
@@ -115,6 +115,7 @@ const fallbackRestaurantData: Restaurant[] = [
     name: 'A2B',
     cuisine: 'South Indian, Traditional, Meals.',
     rating: 4.5,
+    reviewCount: 120,
     deliveryTime: '10 - 15 mins',
     location: 'Keelkattalai',
     distance: '0.5Kms',
@@ -127,6 +128,7 @@ const fallbackRestaurantData: Restaurant[] = [
     name: 'Dinidigul Thalapakatti',
     cuisine: 'Burgers, Pizza, Chicken Wings Rolls & Wrap',
     rating: 4.5,
+    reviewCount: 85,
     deliveryTime: '10 - 15 mins',
     location: 'Pallavaram',
     distance: '1.2Kms',
@@ -139,6 +141,7 @@ const fallbackRestaurantData: Restaurant[] = [
     name: 'Pizza Hut',
     cuisine: 'Italian, Pizza, Fast Food',
     rating: 4.2,
+    reviewCount: 200,
     deliveryTime: '15 - 20 mins',
     location: 'Chrompet',
     distance: '2.5Kms',
@@ -193,6 +196,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
   const [hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
   const isInitialVegModeLoad = React.useRef(true);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [hasMoreRestaurants, setHasMoreRestaurants] = React.useState(false);
+  const [isLoadingMore, setIsLoadingMore] = React.useState(false);
 
   // Dismiss keyboard when component mounts (only once)
   React.useEffect(() => {
@@ -523,11 +531,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       setIsLoadingCategories(true);
       setIsLoadingRestaurants(true);
 
+      // Reset pagination state for fresh load
+      setCurrentPage(1);
+      setHasMoreRestaurants(false);
+
       // Use provided coordinates or default Madurai location
       const lat = latitude ?? DEFAULT_LOCATION.latitude;
       const lng = longitude ?? DEFAULT_LOCATION.longitude;
 
-      const response = await homeService.getHomeData(lat, lng, vegMode);
+      const response = await homeService.getHomeData(lat, lng, vegMode, 1);
 
         if (response.success && response.data) {
           // The API returns data nested as: { data: { data: { promotional_banner: {...} } } }
@@ -535,6 +547,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           const promotionalBanner = actualData.promotional_banner;
           const whatsOnYourMind = actualData.whats_on_your_mind;
           const nearbyRestaurants = actualData.nearby_restaurants;
+          const pagination = actualData.pagination;
 
           // Handle promotional banners
           if (promotionalBanner) {
@@ -586,6 +599,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               name: restaurant.name,
               cuisine: restaurant.description || 'Restaurant',
               rating: restaurant.rating || 0,
+              reviewCount: restaurant.review_count || restaurant.reviews_count || restaurant.total_reviews || 0,
               deliveryTime: restaurant.delivery_time || '25-30 mins',
               location: restaurant.location,
               distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
@@ -595,8 +609,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             }));
 
             setRestaurantData(transformedRestaurants);
+
+            // Handle pagination metadata
+            if (pagination) {
+              setHasMoreRestaurants(pagination.has_more || false);
+            }
           } else {
             setRestaurantData(fallbackRestaurantData);
+            setHasMoreRestaurants(false);
           }
         } else {
           setCarouselData(fallbackCarouselData);
@@ -615,6 +635,66 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setIsLoadingRestaurants(false);
       }
   }, [vegMode]);
+
+  // Load more restaurants function for pagination
+  const loadMoreRestaurants = React.useCallback(async () => {
+    // Don't load if already loading, no more data, or initial load is still in progress
+    if (isLoadingMore || !hasMoreRestaurants || isLoadingRestaurants) {
+      return;
+    }
+
+    try {
+      setIsLoadingMore(true);
+
+      const nextPage = currentPage + 1;
+      const coords = defaultAddressCoords || { latitude: DEFAULT_LOCATION.latitude, longitude: DEFAULT_LOCATION.longitude };
+
+      const response = await homeService.getHomeData(coords.latitude, coords.longitude, vegMode, nextPage);
+
+      if (response.success && response.data) {
+        const actualData = response.data.data || response.data;
+        const nearbyRestaurants = actualData.nearby_restaurants;
+        const pagination = actualData.pagination;
+
+        if (nearbyRestaurants && Array.isArray(nearbyRestaurants) && nearbyRestaurants.length > 0) {
+          // Transform new restaurants
+          const transformedRestaurants = nearbyRestaurants.map((restaurant: any) => ({
+            id: restaurant.id,
+            name: restaurant.name,
+            cuisine: restaurant.description || 'Restaurant',
+            rating: restaurant.rating || 0,
+            reviewCount: restaurant.review_count || restaurant.reviews_count || restaurant.total_reviews || 0,
+            deliveryTime: restaurant.delivery_time || '25-30 mins',
+            location: restaurant.location,
+            distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
+            image: restaurant.logo_url || restaurant.image,
+            isFavorite: restaurant.is_favorite || false,
+            isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
+          }));
+
+          // Append new restaurants to existing list
+          setRestaurantData(prevData => [...prevData, ...transformedRestaurants]);
+          setCurrentPage(nextPage);
+
+          // Update pagination state
+          if (pagination) {
+            setHasMoreRestaurants(pagination.has_more || false);
+          } else {
+            setHasMoreRestaurants(false);
+          }
+        } else {
+          setHasMoreRestaurants(false);
+        }
+      } else {
+        setHasMoreRestaurants(false);
+      }
+    } catch (error) {
+      console.error('Error loading more restaurants:', error);
+      setHasMoreRestaurants(false);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, hasMoreRestaurants, isLoadingRestaurants, currentPage, defaultAddressCoords, vegMode]);
 
   const handleLogout = async () => {
     showConfirmation({
@@ -730,14 +810,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     );
   }, [onNavigateToCategory]);
 
-  // Handle scroll to detect when category section becomes sticky
+  // Handle scroll to detect when category section becomes sticky and load more restaurants
   const handleScroll = React.useCallback((event: any) => {
     const scrollY = event.nativeEvent.contentOffset.y;
+    const layoutHeight = event.nativeEvent.layoutMeasurement.height;
+    const contentHeight = event.nativeEvent.contentSize.height;
+
     // Category section becomes sticky after header (212px) + carousel (~165px) + section title (~40px)
     // Total: approximately 400px
     const threshold = 400;
     setIsCategorySectionSticky(scrollY > threshold);
-  }, []);
+
+    // Check if user has scrolled near the bottom (within 500px)
+    const distanceFromBottom = contentHeight - (scrollY + layoutHeight);
+    if (distanceFromBottom < 500 && hasMoreRestaurants && !isLoadingMore && !isLoadingRestaurants) {
+      loadMoreRestaurants();
+    }
+  }, [hasMoreRestaurants, isLoadingMore, isLoadingRestaurants, loadMoreRestaurants]);
 
   return (
     <View style={styles.outerContainer}>
@@ -1095,6 +1184,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             initialNumToRender={3}
             updateCellsBatchingPeriod={50}
           />
+        )}
+
+        {/* Loading More Indicator */}
+        {isLoadingMore && (
+          <View style={styles.loadingMoreContainer}>
+            <ActivityIndicator size="large" color="#00B14F" />
+            <Text style={styles.loadingMoreText}>Loading more restaurants...</Text>
+          </View>
         )}
       </View>
 
@@ -1719,6 +1816,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 16,
     paddingHorizontal: 12,
+  },
+  loadingMoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 12,
+  },
+  loadingMoreText: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#00B14F',
   },
   message: {
     ...typography.bodyLarge,

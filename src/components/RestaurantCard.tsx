@@ -9,6 +9,7 @@ export interface Restaurant {
   name: string;
   cuisine: string;
   rating: number;
+  reviewCount?: number;
   deliveryTime: string;
   location: string | { lat?: number; lng?: number; city?: string; locality?: string };
   distance: string;
@@ -166,7 +167,9 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           <View style={styles.ratingContainer}>
             <MaterialIcons name="star" size={16} color="#00B14F" />
             <Text style={styles.ratingText}>
-              {restaurant.rating} ({restaurant.rating >= 1 ? `${restaurant.rating.toFixed(1)}K+` : '0'})
+              {restaurant.rating.toFixed(1)} ({restaurant.reviewCount && restaurant.reviewCount >= 1000
+                ? `${(restaurant.reviewCount / 1000).toFixed(1)}K+`
+                : restaurant.reviewCount || '0'})
             </Text>
           </View>
           <Text style={styles.deliveryDot}>•</Text>
