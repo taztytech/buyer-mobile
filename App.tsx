@@ -26,16 +26,21 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
 import { storageService } from '@/services/storage.service';
-import { CartProvider } from '@/context/CartContext';
+import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
-import { ConfirmationProvider } from '@/context/ConfirmationContext';
+import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
+import { ordersService } from '@/services/orders.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Keep splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync();
 
-export default function App() {
+// Inner component with cart and confirmation context access
+function AppContent() {
+  const { cart, addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart } = useCart();
+  const { showConfirmation } = useConfirmation();
+
   const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'privacyPolicy' | 'termsConditions' | 'help'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
@@ -50,7 +55,7 @@ export default function App() {
   const [categoryData, setCategoryData] = React.useState<any[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
-  const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites'>('home');
+  const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites' | 'orders'>('home');
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
   const [selectedOrderData, setSelectedOrderData] = React.useState<any>(null);
@@ -493,6 +498,8 @@ export default function App() {
       }).start();
     } else if (restaurantCameFrom === 'favorites') {
       setCurrentScreen('exploreDishes');
+    } else if (restaurantCameFrom === 'orders') {
+      setCurrentScreen('orders');
     } else {
       setCurrentScreen('categoryResults');
     }
@@ -527,7 +534,10 @@ export default function App() {
   };
 
   const handleBackFromOrders = () => {
-    setCurrentScreen('profile');
+    // Use requestAnimationFrame to ensure smooth transition and proper pointer events update
+    requestAnimationFrame(() => {
+      setCurrentScreen('profile');
+    });
   };
 
   // Order Detail Navigation
@@ -537,7 +547,10 @@ export default function App() {
   };
 
   const handleBackFromOrderDetail = () => {
-    setCurrentScreen('orders');
+    // Use requestAnimationFrame to ensure smooth transition
+    requestAnimationFrame(() => {
+      setCurrentScreen('orders');
+    });
   };
 
   // My Addresses Navigation
@@ -758,15 +771,128 @@ export default function App() {
     });
   };
 
+  // Reorder functionality
+  const handleReorder = async (orderId: string) => {
+    try {
+      // Fetch order details
+      const orderResponse = await ordersService.getOrderById(Number(orderId));
+
+      if (!orderResponse.success || !orderResponse.data) {
+        showConfirmation({
+          title: 'Error',
+          message: orderResponse.error || 'Failed to fetch order details',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
+        return;
+      }
+
+      const orderData = orderResponse.data;
+      const restaurantId = orderData.restaurant.id;
+      const restaurantName = orderData.restaurant.name;
+      const restaurantLogo = orderData.restaurant.logo_url;
+
+      // Check for restaurant conflict
+      const hasConflict = checkRestaurantConflict(restaurantId);
+
+      if (hasConflict) {
+        // Show confirmation to clear cart
+        showConfirmation({
+          title: 'Replace cart items?',
+          message: `Your cart contains items from a different restaurant. Do you want to clear your cart and add items from ${restaurantName}?`,
+          confirmText: 'Yes, Replace',
+          cancelText: 'Cancel',
+          confirmButtonColor: '#00B14F',
+          onConfirm: async () => {
+            // Clear cart and proceed
+            clearCart();
+            await addOrderItemsToCart(orderData, restaurantId, restaurantName, restaurantLogo);
+          },
+        });
+      } else {
+        // No conflict, directly add items
+        await addOrderItemsToCart(orderData, restaurantId, restaurantName, restaurantLogo);
+      }
+    } catch (error: any) {
+      showConfirmation({
+        title: 'Error',
+        message: error.message || 'Failed to reorder',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+    }
+  };
+
+  // Helper function to add order items to cart
+  const addOrderItemsToCart = async (orderData: any, restaurantId: number, restaurantName: string, restaurantLogo: string) => {
+    try {
+      // Set restaurant info
+      setRestaurantInfo(restaurantId, restaurantName, restaurantLogo);
+
+      // Add each item to cart
+      for (const item of orderData.items) {
+        // Calculate unit price from total_price and quantity
+        const unitPrice = item.total_price / item.quantity;
+
+        const cartItem = {
+          id: item.item_id.toString(),
+          name: item.item_name,
+          price: unitPrice,
+          quantity: item.quantity,
+          isVeg: item.is_veg || false,
+          image: item.image_url,
+          isCustomizable: false,
+        };
+
+        addToCart(cartItem);
+      }
+
+      // Show success message
+      showConfirmation({
+        title: 'Items Added!',
+        message: `${orderData.items.length} item${orderData.items.length > 1 ? 's' : ''} added to your cart from ${restaurantName}`,
+        confirmText: 'View Cart',
+        cancelText: 'Continue',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {
+          // Navigate to restaurant screen to view cart
+          setSelectedRestaurantId(restaurantId);
+          setSelectedRestaurantName(restaurantName);
+          // Remember that we came from orders/orderDetail screen
+          setRestaurantCameFrom(currentScreen === 'orders' || currentScreen === 'orderDetail' ? 'orders' : 'home');
+          setCurrentScreen('restaurant');
+
+          Animated.timing(restaurantScreenSlide, {
+            toValue: 0,
+            duration: 250,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }).start();
+        },
+        onCancel: () => {
+          // User clicked "Continue" - stay on current screen
+          // No action needed, just close the modal
+        },
+      });
+    } catch (error: any) {
+      showConfirmation({
+        title: 'Error',
+        message: error.message || 'Failed to add items to cart',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+    }
+  };
+
   if (!fontsLoaded || isCheckingAuth) {
     return null;
   }
 
   return (
-    <VegModeProvider>
-      <CartProvider>
-        <ConfirmationProvider>
-          <SafeAreaProvider>
+    <SafeAreaProvider>
         {currentScreen === 'login' ? (
         <LoginScreen onLoginSuccess={handleLoginSuccess} />
       ) : currentScreen === 'otp' ? (
@@ -881,7 +1007,7 @@ export default function App() {
                 visible={true}
                 onBack={handleBackFromOrders}
                 onOrderDetails={handleNavigateToOrderDetail}
-                onReorder={(orderId) => {}}
+                onReorder={handleReorder}
                 onRateOrder={handleNavigateToRateOrder}
                 onTrackOrder={handleNavigateToOrderTracking}
                 onHelp={(orderId) => {}}
@@ -901,7 +1027,7 @@ export default function App() {
                 onChatWithUs={() => {}}
                 onThankDriver={() => {}}
                 onRateOrder={() => {}}
-                onReorder={() => {}}
+                onReorder={() => handleReorder(selectedOrderId)}
                 onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId)}
                 onDownloadInvoice={() => {}}
               />
@@ -1160,7 +1286,17 @@ export default function App() {
           )}
         </View>
       )}
-        </SafeAreaProvider>
+    </SafeAreaProvider>
+  );
+}
+
+// Wrapper App component with providers
+export default function App() {
+  return (
+    <VegModeProvider>
+      <CartProvider>
+        <ConfirmationProvider>
+          <AppContent />
         </ConfirmationProvider>
       </CartProvider>
     </VegModeProvider>

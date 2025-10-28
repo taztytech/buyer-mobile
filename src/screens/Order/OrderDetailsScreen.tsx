@@ -447,8 +447,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         <View style={styles.header}>
         <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
           <View style={styles.headerContent}>
-            <TouchableOpacity onPress={onBack} style={styles.backButton}>
-              <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
+            <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.7}>
+              <MaterialIcons name="chevron-left" size={24} color="#000000" />
             </TouchableOpacity>
             <View style={styles.headerTextContainer}>
               <Text style={styles.restaurantName}>{restaurantName}</Text>
@@ -914,7 +914,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E4E4E4',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   headerTextContainer: {
     flex: 1,

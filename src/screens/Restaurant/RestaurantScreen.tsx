@@ -363,7 +363,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         onConfirm: () => {
           // Clear cart and add new item
           clearCart();
-          setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo);
+          setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
           addToCartContext({
             id: item.id,
             name: item.name,
@@ -379,7 +379,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
     // Set restaurant info if this is the first item
     if (Object.keys(cart).length === 0) {
-      setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo);
+      setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
     }
 
     addToCartContext({
@@ -438,7 +438,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         onConfirm: () => {
           // Clear cart and open customization modal
           clearCart();
-          setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo);
+          setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
           setSelectedCustomizableItem(item);
           setShowCustomizationModal(true);
         },
@@ -448,7 +448,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
     // Set restaurant info if this is the first item
     if (Object.keys(cart).length === 0) {
-      setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo);
+      setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
     }
 
     setSelectedCustomizableItem(item);

@@ -41,7 +41,12 @@ export const ViewCartBar: React.FC<ViewCartBarProps> = ({
             {/* Restaurant Logo */}
             <View style={styles.logoContainer}>
               {restaurantLogo ? (
-                <Image source={restaurantLogo} style={styles.restaurantLogo} resizeMode="cover" />
+                <Image
+                  source={typeof restaurantLogo === 'string' ? { uri: restaurantLogo } : restaurantLogo}
+                  style={styles.restaurantLogo}
+                  resizeMode="cover"
+                  defaultSource={require('@/assets/dummy-restaurent.png')}
+                />
               ) : (
                 <MaterialIcons name="restaurant" size={24} color="#00B14F" />
               )}
