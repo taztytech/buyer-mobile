@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { PaymentModal } from '@/components/PaymentModal';
 import { AddressSelectionModal } from '@/components/AddressSelectionModal';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { ordersService } from '@/services/orders.service';
@@ -77,8 +76,6 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [selfPickup, setSelfPickup] = useState(false);
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState('pay_on_delivery');
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState('1');
   const [showLocationSelection, setShowLocationSelection] = useState(false);
@@ -161,7 +158,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       return;
     }
 
-    if (showPaymentModal || showAddressModal || showCustomizationModal) {
+    if (showAddressModal || showCustomizationModal) {
       Animated.parallel([
         Animated.timing(scaleAnim, {
           toValue: 0.92,
@@ -188,7 +185,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         }),
       ]).start();
     }
-  }, [showPaymentModal, showAddressModal, showLocationSelection, showCustomizationModal]);
+  }, [showAddressModal, showLocationSelection, showCustomizationModal]);
 
   const handlePlaceOrder = async () => {
     if (!restaurantId) {
@@ -267,11 +264,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         }
       }
 
-      // Step 2: Create order with COD payment
-      const paymentMethod = selectedPayment === 'online' ? 'online' : 'cod';
+      // Step 2: Create order with online payment
       const createOrderRequest = {
         delivery_address_id: parseInt(selectedAddressId),
-        payment_method: paymentMethod as 'cod' | 'online',
+        payment_method: 'online' as const,
         notes: notes || undefined,
       };
 
@@ -283,71 +279,33 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         const orderNumber = orderData.order_number || orderData.orderNumber || 'N/A';
         const orderId = orderData.id || orderData.order_id;
 
-        // Handle payment based on method
-        if (selectedPayment === 'online') {
-          console.log('🟢 [OrderDetails] Online payment selected, starting payment flow');
+        // Process online payment via Razorpay
+        console.log('🟢 [OrderDetails] Online payment selected, starting payment flow');
 
-          // Get user details for payment
-          const user = await authService.getCurrentUser();
-          console.log('🟢 [OrderDetails] User details:', user);
+        // Get user details for payment
+        const user = await authService.getCurrentUser();
+        console.log('🟢 [OrderDetails] User details:', user);
 
-          const paymentResult = await paymentService.processPayment(
-            orderId,
-            {
-              name: user?.name || 'User',
-              email: user?.email,
-              phone: user?.phoneNumber || '',
-            }
-          );
-
-          console.log('🟢 [OrderDetails] Payment result:', paymentResult);
-
-          if (paymentResult.success) {
-            // Payment successful - clear cart and show success
-            clearCart();
-
-            showConfirmation({
-              title: 'Payment Successful! 🎉',
-              message: orderNumber !== 'N/A'
-                ? `Your order #${orderNumber} has been placed and paid successfully.`
-                : 'Your order has been placed and paid successfully.',
-              confirmText: 'View Order',
-              cancelText: 'Close',
-              confirmButtonColor: '#00B14F',
-              showRibbon: false,
-              onConfirm: () => {
-                if (onOrderSuccess && orderId) {
-                  onOrderSuccess(orderId);
-                } else if (onPlaceOrder) {
-                  onPlaceOrder();
-                }
-              },
-              onCancel: () => {
-                if (onOrderCancel) {
-                  onOrderCancel();
-                }
-              },
-            });
-          } else {
-            // Payment failed
-            showConfirmation({
-              title: 'Payment Failed',
-              message: paymentResult.error || 'Payment could not be processed. Your order has been created but not confirmed. Please try again.',
-              confirmText: 'OK',
-              cancelText: 'Close',
-              confirmButtonColor: '#DC2626',
-              onConfirm: () => {},
-            });
+        const paymentResult = await paymentService.processPayment(
+          orderId,
+          {
+            name: user?.name || 'User',
+            email: user?.email,
+            phone: user?.phoneNumber || '',
           }
-        } else {
-          // COD payment - clear cart and show success immediately
+        );
+
+        console.log('🟢 [OrderDetails] Payment result:', paymentResult);
+
+        if (paymentResult.success) {
+          // Payment successful - clear cart and show success
           clearCart();
 
           showConfirmation({
-            title: 'Order Placed! 🎉',
+            title: 'Payment Successful! 🎉',
             message: orderNumber !== 'N/A'
-              ? `Your order #${orderNumber} has been placed successfully.`
-              : 'Your order has been placed successfully.',
+              ? `Your order #${orderNumber} has been placed and paid successfully.`
+              : 'Your order has been placed and paid successfully.',
             confirmText: 'View Order',
             cancelText: 'Close',
             confirmButtonColor: '#00B14F',
@@ -364,6 +322,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 onOrderCancel();
               }
             },
+          });
+        } else {
+          // Payment failed
+          showConfirmation({
+            title: 'Payment Failed',
+            message: 'Payment could not be processed. Please try again or contact support if the issue persists.',
+            confirmText: 'OK',
+            cancelText: 'Close',
+            confirmButtonColor: '#DC2626',
+            onConfirm: () => {},
           });
         }
       } else {
@@ -872,23 +840,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       <View style={styles.footer}>
         <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
           <View style={styles.footerContent}>
-            <TouchableOpacity
-              style={styles.paymentSelector}
-              activeOpacity={0.7}
-              onPress={() => setShowPaymentModal(true)}
-            >
-              <View style={styles.paymentSelectorContent}>
-                <MaterialIcons
-                  name={selectedPayment === 'online' ? 'credit-card' : 'delivery-dining'}
-                  size={20}
-                  color="#00B14F"
-                />
-                <Text style={styles.paymentSelectorText}>
-                  {selectedPayment === 'online' ? 'Online Payment' : 'Pay on Delivery'}
-                </Text>
+            <View style={styles.paymentInfo}>
+              <MaterialIcons
+                name="credit-card"
+                size={20}
+                color="#00B14F"
+              />
+              <View style={styles.paymentInfoTextContainer}>
+                <Text style={styles.paymentInfoTitle}>Online Payment</Text>
+                <Text style={styles.paymentInfoSubtitle}>UPI, Cards & More</Text>
               </View>
-              <MaterialIcons name="expand-more" size={20} color="rgba(0, 0, 0, 0.5)" />
-            </TouchableOpacity>
+            </View>
 
             <TouchableOpacity
               style={[styles.placeOrderButton, isPlacingOrder && styles.placeOrderButtonDisabled]}
@@ -896,33 +858,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               onPress={handlePlaceOrder}
               disabled={isPlacingOrder}
             >
+              <Text style={styles.placeOrderButtonText}>Place Order</Text>
               {isPlacingOrder ? (
-                <>
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                  <Text style={styles.placeOrderButtonText}>Placing Order...</Text>
-                </>
+                <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <>
-                  <Text style={styles.placeOrderButtonText}>Place Order</Text>
-                  <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
-                </>
+                <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
               )}
             </TouchableOpacity>
           </View>
         </SafeAreaView>
       </View>
       </Animated.View>
-
-      {/* Payment Modal */}
-      <PaymentModal
-        visible={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        selectedPayment={selectedPayment}
-        onSelectPayment={(method) => {
-          setSelectedPayment(method);
-          setShowPaymentModal(false);
-        }}
-      />
 
       {/* Address Selection Modal */}
       <AddressSelectionModal
@@ -1459,26 +1405,31 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
-  paymentSelector: {
+  paymentInfo: {
     flex: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
     borderRadius: 8,
-    padding: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     marginRight: 12,
   },
-  paymentSelectorContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  paymentSelectorText: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 13,
-    lineHeight: 20,
-    color: '#000000',
+  paymentInfoTextContainer: {
     marginLeft: 8,
+    justifyContent: 'center',
+  },
+  paymentInfoTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#000000',
+  },
+  paymentInfoSubtitle: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 10,
+    lineHeight: 15,
+    color: 'rgba(0, 0, 0, 0.6)',
   },
   placeOrderButton: {
     flexDirection: 'row',
