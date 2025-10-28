@@ -68,6 +68,31 @@ export interface HomeData {
 
 class HomeService {
   /**
+   * Check if location is serviceable (within Madurai city bounds)
+   * @param latitude - Location latitude
+   * @param longitude - Location longitude
+   * @returns boolean indicating if location is serviceable
+   */
+  isLocationServiceable(latitude: number, longitude: number): boolean {
+    // Madurai city approximate bounds with some padding
+    const MADURAI_BOUNDS = {
+      north: 10.00,  // ~9.97°N + padding
+      south: 9.85,   // ~9.87°N - padding
+      east: 78.25,   // ~78.20°E + padding
+      west: 78.05,   // ~78.07°E - padding
+    };
+
+    // Check if coordinates are within bounds
+    const isWithinBounds =
+      latitude >= MADURAI_BOUNDS.south &&
+      latitude <= MADURAI_BOUNDS.north &&
+      longitude >= MADURAI_BOUNDS.west &&
+      longitude <= MADURAI_BOUNDS.east;
+
+    return isWithinBounds;
+  }
+
+  /**
    * Check if restaurant is currently open based on timings
    * @param timings - Array of restaurant timings
    * @returns boolean indicating if restaurant is open

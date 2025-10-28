@@ -210,6 +210,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Refresh trigger - increments to force data reload
   const [refreshTrigger, setRefreshTrigger] = React.useState(0);
 
+  // Location serviceability state
+  const [isLocationServiceable, setIsLocationServiceable] = React.useState(true);
+
   // Dismiss keyboard when component mounts (only once)
   React.useEffect(() => {
     Keyboard.dismiss();
@@ -554,6 +557,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       // Use provided coordinates or default Madurai location
       const lat = latitude ?? DEFAULT_LOCATION.latitude;
       const lng = longitude ?? DEFAULT_LOCATION.longitude;
+
+      // Check if location is serviceable
+      const serviceable = homeService.isLocationServiceable(lat, lng);
+      setIsLocationServiceable(serviceable);
+
+      // If location is not serviceable, stop loading and don't fetch data
+      if (!serviceable) {
+        setIsLoadingBanners(false);
+        setIsLoadingCategories(false);
+        setIsLoadingRestaurants(false);
+        return;
+      }
 
       const response = await homeService.getHomeData(lat, lng, vegMode, 1);
 
@@ -992,7 +1007,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
       </ImageBackground>
 
+      {/* Unserviceable Location Error Screen */}
+      {!isLocationServiceable && !isLoadingBanners && !isLoadingCategories && !isLoadingRestaurants && (
+        <View style={styles.unserviceableContainer}>
+          <View style={styles.unserviceableIconContainer}>
+            <MaterialIcons name="location-off" size={80} color="#CCCCCC" />
+          </View>
+          <Text style={styles.unserviceableTitle}>Sorry!</Text>
+          <Text style={styles.unserviceableMessage}>
+            We are not yet serviceable at your location
+          </Text>
+          <Text style={styles.unserviceableSubtext}>
+            Currently, we only serve in Madurai city. Stay tuned for expansion to your area!
+          </Text>
+        </View>
+      )}
+
       {/* Ad Banner Carousel */}
+      {isLocationServiceable && (
       <View style={styles.carouselContainer}>
         {showBannerShimmer ? (
           <View style={styles.loadingContainer}>
@@ -1224,6 +1256,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </View>
         )}
       </View>
+      )}
 
       {/* Location Permission Modal */}
       <Modal
@@ -2021,5 +2054,45 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#FFFFFF',
     opacity: 0.85,
+  },
+  // Unserviceable Location Error
+  unserviceableContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingVertical: 60,
+    backgroundColor: '#FFFFFF',
+  },
+  unserviceableIconContainer: {
+    marginBottom: 24,
+  },
+  unserviceableTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 24,
+    lineHeight: 32,
+    color: '#000000',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  unserviceableMessage: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#000000',
+    opacity: 0.7,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  unserviceableSubtext: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#9E9E9E',
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
 });
