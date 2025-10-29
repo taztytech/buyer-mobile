@@ -376,7 +376,15 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             },
           });
         } else {
-          // Payment failed
+          // Payment failed - cancel the order to prevent it from staying in database
+          console.log('🔴 [OrderDetails] Payment failed, cancelling order:', orderId);
+          try {
+            await ordersService.cancelOrder(orderId, 'Payment failed');
+            console.log('🟢 [OrderDetails] Order cancelled successfully');
+          } catch (cancelError) {
+            console.error('🔴 [OrderDetails] Failed to cancel order:', cancelError);
+          }
+
           showConfirmation({
             title: 'Payment Failed',
             message: 'Payment could not be processed. Please try again or contact support if the issue persists.',
