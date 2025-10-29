@@ -24,6 +24,7 @@ interface FoodItemDetailModalProps {
     isBestSeller: boolean;
     isCustomizable: boolean;
   } | null;
+  initialQuantity?: number;
   onClose: () => void;
   onAddToCart: (itemId: string, quantity: number) => void;
 }
@@ -31,6 +32,7 @@ interface FoodItemDetailModalProps {
 export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
   visible,
   item,
+  initialQuantity,
   onClose,
   onAddToCart,
 }) => {
@@ -45,10 +47,13 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
         tension: 65,
         friction: 11,
       }).start();
+
+      // Initialize quantity
+      setQuantity(initialQuantity || 1);
     } else {
       slideAnim.setValue(1000);
     }
-  }, [visible]);
+  }, [visible, initialQuantity]);
 
   if (!item) return null;
 
@@ -153,11 +158,19 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
             <View style={styles.bottomBar}>
               {/* Quantity Control */}
               <View style={styles.quantityControl}>
-                <TouchableOpacity onPress={handleDecrement} activeOpacity={0.7}>
+                <TouchableOpacity
+                  onPress={handleDecrement}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
                   <Text style={styles.quantityButton}>-</Text>
                 </TouchableOpacity>
                 <Text style={styles.quantityText}>{quantity}</Text>
-                <TouchableOpacity onPress={handleIncrement} activeOpacity={0.7}>
+                <TouchableOpacity
+                  onPress={handleIncrement}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
                   <Text style={styles.quantityButton}>+</Text>
                 </TouchableOpacity>
               </View>

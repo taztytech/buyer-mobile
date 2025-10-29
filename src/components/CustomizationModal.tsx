@@ -29,6 +29,7 @@ interface CustomizationModalProps {
     addOns?: AddOn[];
   } | null;
   preselectedAddOns?: string[];
+  initialQuantity?: number;
   onClose: () => void;
   onAddToCart: (itemId: string, quantity: number, selectedAddOns: string[]) => void;
 }
@@ -37,6 +38,7 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
   visible,
   item,
   preselectedAddOns,
+  initialQuantity,
   onClose,
   onAddToCart,
 }) => {
@@ -53,6 +55,9 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
         friction: 11,
       }).start();
 
+      // Initialize quantity
+      setQuantity(initialQuantity || 1);
+
       // Initialize selected add-ons if provided
       if (preselectedAddOns && preselectedAddOns.length > 0) {
         setSelectedAddOns(new Set(preselectedAddOns));
@@ -62,7 +67,7 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
     } else {
       slideAnim.setValue(1000);
     }
-  }, [visible, preselectedAddOns]);
+  }, [visible, preselectedAddOns, initialQuantity]);
 
   if (!item) return null;
 

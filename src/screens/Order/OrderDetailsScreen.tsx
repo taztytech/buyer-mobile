@@ -41,7 +41,7 @@ interface OrderDetailsScreenProps {
   deliveryAddress?: string;
   cartItems?: CartItem[];
   onBack?: () => void;
-  onEditCustomization?: (itemId: string, variantId: string, currentAddOnIds: string[]) => void;
+  onEditCustomization?: (itemId: string, variantId: string, currentAddOnIds: string[], currentQuantity?: number) => void;
   onPlaceOrder?: () => void;
   onOrderSuccess?: (orderId: number) => void;
   onOrderCancel?: () => void;
@@ -588,7 +588,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                             style={styles.customizationsRow}
                             onPress={() => {
                               if (onEditCustomization && item.variantId) {
-                                onEditCustomization(item.id, item.variantId, item.addOnIds || []);
+                                onEditCustomization(item.id, item.variantId, item.addOnIds || [], item.quantity);
                               }
                             }}
                             activeOpacity={0.7}

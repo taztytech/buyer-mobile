@@ -197,6 +197,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const [showCustomisationsReviewModal, setShowCustomisationsReviewModal] = useState(false);
   const [reviewingItemId, setReviewingItemId] = useState<string | null>(null);
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
+  const [editingVariantQuantity, setEditingVariantQuantity] = useState<number | undefined>(undefined);
   const [preselectedAddOns, setPreselectedAddOns] = useState<string[]>([]);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -546,13 +547,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   };
 
   // Handle editing customization from order details
-  const handleEditCustomization = (itemId: string, variantId: string, currentAddOnIds: string[]) => {
+  const handleEditCustomization = (itemId: string, variantId: string, currentAddOnIds: string[], currentQuantity?: number) => {
     const item = menuSections
       .flatMap(section => section.items)
       .find(i => i.id === itemId);
 
     if (item) {
       setEditingVariantId(variantId);
+      setEditingVariantQuantity(currentQuantity);
       setPreselectedAddOns(currentAddOnIds);
       setSelectedCustomizableItem(item);
       setShowCustomizationModal(true);
@@ -1466,11 +1468,13 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         visible={showCustomizationModal}
         item={selectedCustomizableItem}
         preselectedAddOns={preselectedAddOns}
+        initialQuantity={editingVariantQuantity}
         onClose={() => {
           // Just close the modal and reset editing state
           setShowCustomizationModal(false);
           setSelectedCustomizableItem(null);
           setEditingVariantId(null);
+          setEditingVariantQuantity(undefined);
           setPreselectedAddOns([]);
           // Order details remains open if it was already open
         }}
@@ -1500,6 +1504,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       <FoodItemDetailModal
         visible={showDetailModal}
         item={selectedDetailItem}
+        initialQuantity={selectedDetailItem ? (cart[selectedDetailItem.id]?.quantity || undefined) : undefined}
         onClose={() => {
           setShowDetailModal(false);
           setSelectedDetailItem(null);

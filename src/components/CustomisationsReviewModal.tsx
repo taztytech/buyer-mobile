@@ -127,18 +127,9 @@ export const CustomisationsReviewModal: React.FC<CustomisationsReviewModalProps>
 
                     {/* Description and Price */}
                     <View style={styles.variantInfo}>
-                      <View style={styles.descriptionRow}>
-                        <Text style={styles.variantDescription}>
-                          {getCustomizationDescription(variant)}
-                        </Text>
-                        <TouchableOpacity
-                          style={styles.editButton}
-                          onPress={() => onEdit(variant.id)}
-                        >
-                          <Text style={styles.editText}>Edit</Text>
-                          <MaterialIcons name="chevron-right" size={16} color="rgba(0, 0, 0, 0.6)" />
-                        </TouchableOpacity>
-                      </View>
+                      <Text style={styles.variantDescription}>
+                        {getCustomizationDescription(variant)}
+                      </Text>
                       <Text style={styles.variantPrice}>₹{variant.price}</Text>
                     </View>
                   </View>
@@ -273,28 +264,11 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 6,
   },
-  descriptionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
   variantDescription: {
-    flex: 1,
     fontFamily: 'Poppins',
     fontSize: 14,
     lineHeight: 21,
     color: 'rgba(0, 0, 0, 0.7)',
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: 8,
-  },
-  editText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 14,
-    lineHeight: 21,
-    color: 'rgba(0, 0, 0, 0.6)',
   },
   variantPrice: {
     fontFamily: 'Poppins_600SemiBold',
