@@ -30,10 +30,11 @@ import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
 import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
 import { ordersService } from '@/services/orders.service';
+// import { AnimatedSplash } from '@/components/AnimatedSplash';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Keep splash screen visible while fonts load
+// Prevent native splash from auto-hiding
 SplashScreen.preventAutoHideAsync();
 
 // Inner component with cart and confirmation context access
@@ -134,11 +135,7 @@ function AppContent() {
     checkAuth();
   }, []);
 
-  React.useEffect(() => {
-    if (fontsLoaded && !isCheckingAuth) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded, isCheckingAuth]);
+  // const [animationComplete, setAnimationComplete] = React.useState(false);
 
   // Handle Android back button
   React.useEffect(() => {
@@ -897,12 +894,32 @@ function AppContent() {
     }
   };
 
-  if (!fontsLoaded || isCheckingAuth) {
-    return null;
-  }
+  // Check if app is ready
+  const isAppReady = fontsLoaded && !isCheckingAuth;
+  // const showSplash = !animationComplete;
+
+  // console.log('🎯 [App] Splash check:', { fontsLoaded, isCheckingAuth, animationComplete, isAppReady, showSplash });
+
+  // Hide native splash screen when app is ready
+  React.useEffect(() => {
+    if (isAppReady) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [isAppReady]);
 
   return (
-    <SafeAreaProvider>
+    <>
+      {/* Render AnimatedSplash OUTSIDE SafeAreaProvider for true full-screen */}
+      {/* {showSplash && (
+        <AnimatedSplash
+          onAnimationEnd={() => {
+            console.log('🏁 [App] Animation ended, setting animationComplete to true');
+            setAnimationComplete(true);
+          }}
+        />
+      )} */}
+
+      <SafeAreaProvider>
         {currentScreen === 'login' ? (
         <LoginScreen onLoginSuccess={handleLoginSuccess} />
       ) : currentScreen === 'otp' ? (
@@ -1296,7 +1313,8 @@ function AppContent() {
           )}
         </View>
       )}
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+    </>
   );
 }
 

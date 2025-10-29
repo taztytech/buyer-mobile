@@ -4,23 +4,13 @@
     "slug": "Tazty",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./src/assets/app-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./src/assets/splash.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#00B14F"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.valarcom.tazty"
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./src/assets/app-icon.png",
-        "backgroundColor": "#00B14F"
-      },
       "package": "com.valarcom.tazty"
     },
     "web": {
