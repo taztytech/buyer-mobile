@@ -879,6 +879,16 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               return menuItem;
             });
 
+            // Debug: Log timing data for first few items
+            items.slice(0, 3).forEach(item => {
+              console.log(`[DEBUG] Item: ${item.name}`);
+              console.log(`[DEBUG] Has timings: ${!!item.timings}`);
+              if (item.timings) {
+                console.log(`[DEBUG] Timings:`, JSON.stringify(item.timings, null, 2));
+                console.log(`[DEBUG] Is available: ${isItemAvailable(item.timings)}`);
+              }
+            });
+
             // Sort items: available items first, unavailable items last
             const sortedItems = items.sort((a, b) => {
               const aAvailable = isItemAvailable(a.timings);
