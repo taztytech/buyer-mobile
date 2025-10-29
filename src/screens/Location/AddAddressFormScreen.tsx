@@ -473,7 +473,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    height: 39,
+    height: 30,
     paddingRight: 48,
   },
   locationInfo: {
@@ -481,10 +481,10 @@ const styles = StyleSheet.create({
   },
   locationName: {
     fontFamily: 'Poppins',
-    fontSize: 26,
+    fontSize: 20,
     fontWeight: '700',
     color: '#001E1F',
-    lineHeight: 39,
+    lineHeight: 30,
     flex: 1,
   },
   locationAddress: {
