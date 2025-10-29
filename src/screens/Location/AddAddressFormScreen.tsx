@@ -138,27 +138,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     if (!locality.trim()) {
       showConfirmation({
         title: 'Validation Error',
-        message: 'Please enter locality',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
-      return;
-    }
-    if (!city.trim()) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Please enter city',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
-      return;
-    }
-    if (!state.trim()) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Please enter state',
+        message: 'Please enter landmark',
         confirmText: 'OK',
         cancelText: 'Close',
         onConfirm: () => {},
@@ -184,8 +164,8 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         address1: houseNo,
         address2: building,
         address3: locality,
-        city: city,
-        state: state,
+        city: 'Madurai',
+        state: 'Tamil Nadu',
         pincode: pincode,
         latitude: latitude,
         longitude: longitude,
@@ -292,90 +272,60 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
 
           {/* Form Fields */}
           <View style={styles.formSection}>
-            {/* House/Flat No */}
+            {/* Set as default checkbox */}
+            <View style={styles.checkboxRow}>
+              <TouchableOpacity
+                style={styles.checkbox}
+                onPress={() => setIsDefault(!isDefault)}
+                activeOpacity={0.7}
+              >
+                {isDefault && (
+                  <MaterialIcons name="check" size={16} color="#00B14F" />
+                )}
+              </TouchableOpacity>
+              <Text style={styles.checkboxLabel}>Set as default</Text>
+            </View>
+
+            {/* House/Flat/Floor Number - Full width */}
             <View style={styles.fieldGroup}>
-              <View style={styles.fieldHeader}>
-                <Text style={styles.fieldLabel}>House / Flat No</Text>
-                <View style={styles.checkboxContainer}>
-                  <TouchableOpacity
-                    style={styles.checkbox}
-                    onPress={() => setIsDefault(!isDefault)}
-                    activeOpacity={0.7}
-                  >
-                    {isDefault && (
-                      <MaterialIcons name="check" size={16} color="#00B14F" />
-                    )}
-                  </TouchableOpacity>
-                  <Text style={styles.checkboxLabel}>Set as default</Text>
-                </View>
-              </View>
               <TextInput
                 style={styles.input}
                 value={houseNo}
                 onChangeText={setHouseNo}
-                placeholder="Flat No"
+                placeholder="House / flat / floor number"
                 placeholderTextColor="#999"
               />
             </View>
 
-            {/* Building/Street and Locality */}
-            <View style={styles.rowFields}>
-              <View style={[styles.fieldGroup, styles.halfField]}>
-                <Text style={styles.fieldLabel}>Building / Street</Text>
-                <TextInput
-                  style={styles.input}
-                  value={building}
-                  onChangeText={setBuilding}
-                  placeholder="Jeyalakshmi Appart..."
-                  placeholderTextColor="#999"
-                />
-              </View>
-
-              <View style={[styles.fieldGroup, styles.halfField]}>
-                <Text style={styles.fieldLabel}>Locality</Text>
-                <TextInput
-                  style={styles.input}
-                  value={locality}
-                  onChangeText={setLocality}
-                  placeholder="Nanganallur"
-                  placeholderTextColor="#999"
-                />
-              </View>
+            {/* House/Building/Street Name - Full width */}
+            <View style={styles.fieldGroup}>
+              <TextInput
+                style={styles.input}
+                value={building}
+                onChangeText={setBuilding}
+                placeholder="House / Building / Street Name"
+                placeholderTextColor="#999"
+              />
             </View>
 
-            {/* City and State */}
-            <View style={styles.rowFields}>
-              <View style={[styles.fieldGroup, styles.halfField]}>
-                <Text style={styles.fieldLabel}>City</Text>
-                <TextInput
-                  style={styles.input}
-                  value={city}
-                  onChangeText={setCity}
-                  placeholder="Chennai"
-                  placeholderTextColor="#999"
-                />
-              </View>
-
-              <View style={[styles.fieldGroup, styles.halfField]}>
-                <Text style={styles.fieldLabel}>State</Text>
-                <TextInput
-                  style={styles.input}
-                  value={state}
-                  onChangeText={setState}
-                  placeholder="Tamil Nadu"
-                  placeholderTextColor="#999"
-                />
-              </View>
+            {/* Landmark - Full width */}
+            <View style={styles.fieldGroup}>
+              <TextInput
+                style={styles.input}
+                value={locality}
+                onChangeText={setLocality}
+                placeholder="Landmark"
+                placeholderTextColor="#999"
+              />
             </View>
 
             {/* Pincode */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Pincode</Text>
               <TextInput
                 style={styles.input}
                 value={pincode}
                 onChangeText={setPincode}
-                placeholder="600061"
+                placeholder="Pincode"
                 placeholderTextColor="#999"
                 keyboardType="number-pad"
                 maxLength={6}
@@ -384,12 +334,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
 
             {/* Alternate Mobile Number */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Alternate Mobile number</Text>
               <TextInput
                 style={styles.input}
                 value={alternateMobile}
                 onChangeText={setAlternateMobile}
-                placeholder="+91 9876543210"
+                placeholder="Alternate Mobile number (Optional)"
                 placeholderTextColor="#999"
                 keyboardType="phone-pad"
               />
@@ -594,6 +543,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
   },
   checkbox: {
     width: 20,
