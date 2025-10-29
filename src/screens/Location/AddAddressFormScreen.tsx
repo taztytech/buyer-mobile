@@ -69,33 +69,48 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [selectedTag, setSelectedTag] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [loading, setLoading] = useState(false);
   const slideAnim = useRef(new Animated.Value(1000)).current;
+  const hasInitializedRef = useRef(false);
+  const previousVisibleRef = useRef(visible);
 
-  // Pre-fill form when in edit mode
+  // Pre-fill form when in edit mode - only run when modal first opens
   useEffect(() => {
-    if (visible && editMode && initialData) {
-      setHouseNo(initialData.houseNo || '');
-      setBuilding(initialData.building || '');
-      setLocality(initialData.locality || '');
-      setCity(initialData.city || '');
-      setState(initialData.state || '');
-      setPincode(initialData.pincode || '');
-      setAlternateMobile(initialData.alternateMobile || '');
-      setIsDefault(initialData.isDefault || false);
-      if (initialData.tag) {
-        const tagCapitalized = initialData.tag.charAt(0).toUpperCase() + initialData.tag.slice(1) as 'Home' | 'Work' | 'Other';
-        setSelectedTag(tagCapitalized);
+    // Check if modal is opening (visible changed from false to true)
+    const isOpening = visible && !previousVisibleRef.current;
+    previousVisibleRef.current = visible;
+
+    if (isOpening) {
+      // Reset initialization flag when modal opens
+      hasInitializedRef.current = false;
+    }
+
+    if (visible && !hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+
+      if (editMode && initialData) {
+        setHouseNo(initialData.houseNo || '');
+        setBuilding(initialData.building || '');
+        setLocality(initialData.locality || '');
+        setCity(initialData.city || '');
+        setState(initialData.state || '');
+        setPincode(initialData.pincode || '');
+        setAlternateMobile(initialData.alternateMobile || '');
+        setIsDefault(initialData.isDefault || false);
+        if (initialData.tag) {
+          const tagCapitalized = initialData.tag.charAt(0).toUpperCase() + initialData.tag.slice(1) as 'Home' | 'Work' | 'Other';
+          setSelectedTag(tagCapitalized);
+        }
+      } else if (!editMode) {
+        // Reset form for add mode
+        setHouseNo('');
+        setBuilding('');
+        setLocality('');
+        setCity('');
+        setState('');
+        setPincode('');
+        setAlternateMobile('');
+        setIsDefault(false);
+        setSelectedTag('Home');
       }
-    } else if (visible && !editMode) {
-      // Reset form for add mode
-      setHouseNo('');
-      setBuilding('');
-      setLocality('');
-      setCity('');
-      setState('');
-      setPincode('');
-      setAlternateMobile('');
-      setIsDefault(false);
-      setSelectedTag('Home');
     }
   }, [visible, editMode, initialData]);
 
@@ -149,6 +164,28 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
       showConfirmation({
         title: 'Validation Error',
         message: 'Please enter pincode',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+      return;
+    }
+    // Validate pincode format (must be exactly 6 digits)
+    if (!/^\d{6}$/.test(pincode.trim())) {
+      showConfirmation({
+        title: 'Validation Error',
+        message: 'Pincode must be exactly 6 digits',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+      return;
+    }
+    // Validate alternate mobile if provided (must be exactly 10 digits)
+    if (alternateMobile.trim() && !/^\d{10}$/.test(alternateMobile.trim())) {
+      showConfirmation({
+        title: 'Validation Error',
+        message: 'Alternate mobile number must be exactly 10 digits',
         confirmText: 'OK',
         cancelText: 'Close',
         onConfirm: () => {},
@@ -280,6 +317,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                 onChangeText={setHouseNo}
                 placeholder="House / flat / floor number"
                 placeholderTextColor="#999"
+                maxLength={50}
               />
             </View>
 
@@ -291,6 +329,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                 onChangeText={setBuilding}
                 placeholder="House / Building / Street Name"
                 placeholderTextColor="#999"
+                maxLength={100}
               />
             </View>
 
@@ -302,6 +341,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                 onChangeText={setLocality}
                 placeholder="Landmark"
                 placeholderTextColor="#999"
+                maxLength={100}
               />
             </View>
 
@@ -310,7 +350,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               <TextInput
                 style={styles.input}
                 value={pincode}
-                onChangeText={setPincode}
+                onChangeText={(text) => {
+                  // Only allow numeric input
+                  const numericText = text.replace(/[^0-9]/g, '');
+                  setPincode(numericText);
+                }}
                 placeholder="Pincode"
                 placeholderTextColor="#999"
                 keyboardType="number-pad"
@@ -323,10 +367,15 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               <TextInput
                 style={styles.input}
                 value={alternateMobile}
-                onChangeText={setAlternateMobile}
+                onChangeText={(text) => {
+                  // Only allow numeric input
+                  const numericText = text.replace(/[^0-9]/g, '');
+                  setAlternateMobile(numericText);
+                }}
                 placeholder="Alternate Mobile number (Optional)"
                 placeholderTextColor="#999"
                 keyboardType="phone-pad"
+                maxLength={10}
               />
             </View>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -119,6 +120,10 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
   const [topRatedRestaurants, setTopRatedRestaurants] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
   // Use provided categories or fallback
   const displayCategories = categories && categories.length > 0
     ? categories.filter(cat => cat.name !== 'View All').map(cat => cat.name)
@@ -186,6 +191,29 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
     fetchRestaurants();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory]);
+
+  // Trigger animation when loading completes
+  useEffect(() => {
+    if (!isLoading) {
+      // Reset animation values
+      fadeAnim.setValue(0);
+      slideAnim.setValue(30);
+
+      // Start animations
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [isLoading]);
 
   return (
     <View style={styles.outerContainer}>
@@ -288,7 +316,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         </View>
 
         {/* Filter Buttons */}
-        <View style={styles.filterSection}>
+        {/* <View style={styles.filterSection}>
           <TouchableOpacity style={styles.filterButtonActive}>
             <MaterialIcons name="filter-list" size={16} color="#00B14F" />
             <Text style={styles.filterTextActive}>Filters</Text>
@@ -309,7 +337,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           <TouchableOpacity style={styles.filterButton}>
             <Text style={styles.filterText}>10 Mins Delivery</Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {/* Top Rated Section - Show shimmer while loading, show data if available, hide if no data */}
         {isLoading || topRatedRestaurants.length > 0 ? (
@@ -345,42 +373,51 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
                   <ShimmerTopRatedCard />
                 </>
               ) : (
-                // Show actual data
-                topRatedRestaurants.map(item => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={styles.topRatedCard}
-                    onPress={() => {
-                      if (onNavigateToRestaurant) {
-                        onNavigateToRestaurant(parseInt(item.id), item.name);
-                      }
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.topRatedImageContainer}>
-                      <Image
-                        source={typeof item.image === 'string' ? { uri: item.image } : item.image}
-                        style={styles.topRatedImage}
-                        resizeMode="cover"
-                      />
-                      <View style={styles.topRatedRatingBadge}>
-                        <MaterialIcons name="star" size={10} color="#00B14F" />
-                        <Text style={styles.topRatedRatingText}>{item.rating}</Text>
+                // Show actual data with animation
+                <Animated.View
+                  style={{
+                    flexDirection: 'row',
+                    gap: 12,
+                    opacity: fadeAnim,
+                    transform: [{ translateY: slideAnim }],
+                  }}
+                >
+                  {topRatedRestaurants.map(item => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.topRatedCard}
+                      onPress={() => {
+                        if (onNavigateToRestaurant) {
+                          onNavigateToRestaurant(parseInt(item.id), item.name);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.topRatedImageContainer}>
+                        <Image
+                          source={typeof item.image === 'string' ? { uri: item.image } : item.image}
+                          style={styles.topRatedImage}
+                          resizeMode="cover"
+                        />
+                        <View style={styles.topRatedRatingBadge}>
+                          <MaterialIcons name="star" size={10} color="#00B14F" />
+                          <Text style={styles.topRatedRatingText}>{item.rating}</Text>
+                        </View>
                       </View>
-                    </View>
-                    <View style={styles.topRatedInfo}>
-                      <View style={styles.topRatedNameRow}>
-                        <Text style={styles.topRatedName} numberOfLines={1}>
-                          {item.name}
-                        </Text>
+                      <View style={styles.topRatedInfo}>
+                        <View style={styles.topRatedNameRow}>
+                          <Text style={styles.topRatedName} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                        </View>
+                        <View style={styles.topRatedDeliveryRow}>
+                          <MaterialIcons name="two-wheeler" size={15} color="#00B14F" />
+                          <Text style={styles.topRatedDeliveryText}>{item.deliveryTime}</Text>
+                        </View>
                       </View>
-                      <View style={styles.topRatedDeliveryRow}>
-                        <MaterialIcons name="two-wheeler" size={15} color="#00B14F" />
-                        <Text style={styles.topRatedDeliveryText}>{item.deliveryTime}</Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                ))
+                    </TouchableOpacity>
+                  ))}
+                </Animated.View>
               )}
             </ScrollView>
           </>
@@ -421,18 +458,25 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
               </Text>
             </View>
           ) : (
-            restaurants.map(restaurant => (
-              <View key={restaurant.id} style={styles.restaurantCardWrapper}>
-                <RestaurantCard
-                  restaurant={restaurant}
-                  onPress={() => {
-                    if (onNavigateToRestaurant) {
-                      onNavigateToRestaurant(restaurant.id, restaurant.name);
-                    }
-                  }}
-                />
-              </View>
-            ))
+            <Animated.View
+              style={{
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              }}
+            >
+              {restaurants.map(restaurant => (
+                <View key={restaurant.id} style={styles.restaurantCardWrapper}>
+                  <RestaurantCard
+                    restaurant={restaurant}
+                    onPress={() => {
+                      if (onNavigateToRestaurant) {
+                        onNavigateToRestaurant(restaurant.id, restaurant.name);
+                      }
+                    }}
+                  />
+                </View>
+              ))}
+            </Animated.View>
           )}
         </View>
       </ScrollView>
@@ -505,10 +549,12 @@ const styles = StyleSheet.create({
   },
   categoryScroll: {
     paddingHorizontal: 20,
-    gap: 30,
-    alignItems: 'center',
+    paddingRight: 20,
+    alignItems: 'flex-start',
   },
   categoryItemWrapper: {
+    width: 74,
+    marginRight: 4,
     alignItems: 'center',
     height: 75,
     justifyContent: 'center',

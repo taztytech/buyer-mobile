@@ -1026,7 +1026,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     <View style={styles.ratingBadge}>
                       <MaterialIcons name="star" size={14} color="#00B14F" />
                       <Text style={styles.ratingText}>
-                        {restaurantData?.stats?.average_rating || restaurantData?.rating || '0'}
+                        {(restaurantData?.stats?.average_rating || restaurantData?.rating || 0).toFixed(1)}
                       </Text>
                     </View>
                     <Text style={styles.reviewCountText}>
