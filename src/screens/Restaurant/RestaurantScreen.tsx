@@ -30,6 +30,7 @@ import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { favoritesService } from '@/services/favorites.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { ItemTiming as ImportedItemTiming, formatItemTiming, isItemAvailable } from '@/utils/timing.utils';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -70,6 +71,9 @@ interface CustomizationGroup {
   options: CustomizationOption[];
 }
 
+// Use imported ItemTiming type
+type ItemTiming = ImportedItemTiming;
+
 interface MenuItem {
   id: string;
   name: string;
@@ -83,6 +87,7 @@ interface MenuItem {
   isFavorite?: boolean;
   addOns?: AddOn[];
   customizations?: CustomizationGroup[];
+  timings?: ItemTiming[];
 }
 
 interface MenuSection {

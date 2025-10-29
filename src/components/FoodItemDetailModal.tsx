@@ -10,6 +10,7 @@ import {
   Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { ItemTiming, formatItemTiming, isItemAvailable } from '@/utils/timing.utils';
 
 interface FoodItemDetailModalProps {
   visible: boolean;
@@ -23,6 +24,7 @@ interface FoodItemDetailModalProps {
     isSpicy: boolean;
     isBestSeller: boolean;
     isCustomizable: boolean;
+    timings?: ItemTiming[];
   } | null;
   initialQuantity?: number;
   onClose: () => void;
@@ -153,6 +155,31 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
               <Text style={styles.itemName}>{item.name}</Text>
               <Text style={styles.itemDescription}>{item.description}</Text>
             </View>
+
+            {/* Timing Information */}
+            {item.timings && item.timings.length > 0 && (
+              <View style={styles.timingSection}>
+                <View style={styles.timingHeader}>
+                  <MaterialIcons name="access-time" size={16} color="#00B14F" />
+                  <Text style={styles.timingTitle}>Available</Text>
+                </View>
+                {item.timings.map((timing, index) => (
+                  <View key={index} style={styles.timingRow}>
+                    <Text style={[
+                      styles.timingText,
+                      timing.is_available_now && styles.timingTextAvailable
+                    ]}>
+                      {formatItemTiming(timing)}
+                    </Text>
+                    {timing.is_available_now && (
+                      <View style={styles.availableBadge}>
+                        <Text style={styles.availableText}>Now</Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
 
             {/* Bottom Action Bar */}
             <View style={styles.bottomBar}>
@@ -378,5 +405,54 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#FFFFFF',
     opacity: 0.85,
+  },
+  timingSection: {
+    backgroundColor: '#F5FFF5',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 10,
+    gap: 8,
+  },
+  timingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  timingTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#00B14F',
+  },
+  timingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  timingText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 11,
+    lineHeight: 16,
+    color: 'rgba(0, 0, 0, 0.6)',
+    flex: 1,
+  },
+  timingTextAvailable: {
+    color: '#00B14F',
+    fontWeight: '500',
+  },
+  availableBadge: {
+    backgroundColor: '#00B14F',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  availableText: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 9,
+    lineHeight: 13,
+    color: '#FFFFFF',
   },
 });
