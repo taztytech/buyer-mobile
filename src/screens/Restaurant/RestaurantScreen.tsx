@@ -1382,7 +1382,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   )}
                 </View>
               </View>
-              );
+              )
             })}
           </View>
           ))
