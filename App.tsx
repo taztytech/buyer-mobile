@@ -85,7 +85,6 @@ function AppContent() {
   React.useEffect(() => {
     const checkAuth = async () => {
       try {
-        console.log('🔵 [Auth] Starting auth check...');
         // Add timeout to prevent hanging
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Auth check timeout')), 5000)
@@ -94,39 +93,31 @@ function AppContent() {
         await Promise.race([
           (async () => {
             // Initialize API service with stored tokens
-            console.log('🔵 [Auth] Initializing API service...');
             await apiService.initialize();
 
             // Check if user is authenticated
-            console.log('🔵 [Auth] Checking if user is authenticated...');
             const isLoggedIn = await authService.isAuthenticated();
-            console.log('🔵 [Auth] Is logged in:', isLoggedIn);
 
             if (isLoggedIn) {
               // Check if user has completed their profile
               const userData = await authService.getCurrentUser();
-              console.log('🔵 [Auth] User data:', userData);
 
               // If user has both name and email, they've completed the welcome screen
               if (userData?.name && userData?.email) {
-                console.log('✅ [Auth] User authenticated, navigating to home');
                 setCurrentScreen('home');
               } else {
                 // User is logged in but hasn't completed profile
                 // Log them out and make them go through OTP verification again
-                console.log('⚠️ [Auth] User incomplete profile, logging out');
                 await authService.logout();
                 setCurrentScreen('login');
               }
-            } else {
-              console.log('❌ [Auth] User not logged in, showing login screen');
             }
           })(),
           timeoutPromise
         ]);
       } catch (error) {
         // Continue to login screen even if auth check fails
-        console.log('🔴 [Auth] Error during auth check:', error);
+        console.error('Error during auth check:', error);
       } finally {
         setIsCheckingAuth(false);
       }
@@ -523,7 +514,6 @@ function AppContent() {
   // Navigate to Restaurant Details
   const handleNavigateToRestaurantDetails = () => {
     try {
-      console.log('Navigating to restaurant details, restaurantId:', selectedRestaurantId);
       setCurrentScreen('restaurantDetails');
     } catch (error) {
       console.error('Error navigating to restaurant details:', error);
@@ -923,7 +913,6 @@ function AppContent() {
       {/* {showSplash && (
         <AnimatedSplash
           onAnimationEnd={() => {
-            console.log('🏁 [App] Animation ended, setting animationComplete to true');
             setAnimationComplete(true);
           }}
         />
