@@ -1315,6 +1315,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                             style={styles.quantityButton}
                             onPress={() => decrementItem(item.id)}
                             activeOpacity={0.7}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                           >
                             <Text style={styles.quantityButtonText}>-</Text>
                           </TouchableOpacity>
@@ -1323,6 +1324,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                             style={styles.quantityButton}
                             onPress={() => incrementItem(item.id)}
                             activeOpacity={0.7}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                           >
                             <Text style={styles.quantityButtonText}>+</Text>
                           </TouchableOpacity>

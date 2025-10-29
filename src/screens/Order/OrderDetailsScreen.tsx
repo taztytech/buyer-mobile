@@ -20,6 +20,7 @@ import { ordersService } from '@/services/orders.service';
 import { addressService, AddressResponse } from '@/services/address.service';
 import { paymentService } from '@/services/payment.service';
 import { authService } from '@/services/auth.service';
+import { homeService } from '@/services/home.service';
 import { useCart } from '@/context/CartContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 
@@ -119,8 +120,40 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         const defaultAddress = response.data.find(addr => addr.is_default);
         if (defaultAddress) {
           setSelectedAddressId(defaultAddress.id.toString());
+
+          // Check if the default address is within serviceable area (Madurai bounds)
+          const isServiceable = homeService.isLocationServiceable(
+            defaultAddress.latitude,
+            defaultAddress.longitude
+          );
+
+          if (!isServiceable) {
+            showConfirmation({
+              title: 'Error',
+              message: 'Service not available at the selected location',
+              confirmText: 'OK',
+              cancelText: 'Close',
+              onConfirm: () => {},
+            });
+          }
         } else if (response.data.length > 0) {
           setSelectedAddressId(response.data[0].id.toString());
+
+          // Check if the first address is within serviceable area (Madurai bounds)
+          const isServiceable = homeService.isLocationServiceable(
+            response.data[0].latitude,
+            response.data[0].longitude
+          );
+
+          if (!isServiceable) {
+            showConfirmation({
+              title: 'Error',
+              message: 'Service not available at the selected location',
+              confirmText: 'OK',
+              cancelText: 'Close',
+              onConfirm: () => {},
+            });
+          }
         }
       } else {
         showConfirmation({
@@ -197,6 +230,25 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         onConfirm: () => {},
       });
       return;
+    }
+
+    // Check if the selected address is within serviceable area (Madurai bounds)
+    if (selectedAddress) {
+      const isServiceable = homeService.isLocationServiceable(
+        selectedAddress.latitude,
+        selectedAddress.longitude
+      );
+
+      if (!isServiceable) {
+        showConfirmation({
+          title: 'Error',
+          message: 'Service not available at the selected location',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
+        return;
+      }
     }
 
     if (Object.keys(cart).length === 0) {
@@ -877,6 +929,28 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         addresses={addresses}
         selectedAddressId={selectedAddressId}
         onSelectAddress={(addressId) => {
+          // Find the address and check if it's within serviceable area (Madurai bounds)
+          const address = addresses.find(addr => addr.id.toString() === addressId);
+
+          if (address) {
+            const isServiceable = homeService.isLocationServiceable(
+              address.latitude,
+              address.longitude
+            );
+
+            if (!isServiceable) {
+              showConfirmation({
+                title: 'Error',
+                message: 'Service not available at the selected location',
+                confirmText: 'OK',
+                cancelText: 'Close',
+                onConfirm: () => {},
+              });
+              setShowAddressModal(false);
+              return;
+            }
+          }
+
           setSelectedAddressId(addressId);
           setShowAddressModal(false);
         }}

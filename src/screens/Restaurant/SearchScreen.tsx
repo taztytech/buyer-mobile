@@ -228,6 +228,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                               style={styles.quantityButton}
                               onPress={() => onDecrementItem && onDecrementItem(item.id)}
                               activeOpacity={0.7}
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                             >
                               <Text style={styles.quantityButtonText}>-</Text>
                             </TouchableOpacity>
@@ -236,6 +237,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                               style={styles.quantityButton}
                               onPress={() => onIncrementItem && onIncrementItem(item.id)}
                               activeOpacity={0.7}
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                             >
                               <Text style={styles.quantityButtonText}>+</Text>
                             </TouchableOpacity>

@@ -140,7 +140,11 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
                 {item.name}
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <MaterialIcons name="close" size={16} color="#000000" />
             </TouchableOpacity>
           </View>
@@ -170,6 +174,7 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
                   style={styles.addOnItem}
                   onPress={() => toggleAddOn(addOn.id)}
                   activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <View style={styles.addOnLeft}>
                     {/* Veg Icon */}
@@ -208,11 +213,19 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
           <View style={styles.bottomSection}>
             {/* Quantity Control */}
             <View style={styles.quantityControl}>
-              <TouchableOpacity onPress={handleDecrement} activeOpacity={0.7}>
+              <TouchableOpacity
+                onPress={handleDecrement}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <Text style={styles.quantityButton}>-</Text>
               </TouchableOpacity>
               <Text style={styles.quantityText}>{quantity}</Text>
-              <TouchableOpacity onPress={handleIncrement} activeOpacity={0.7}>
+              <TouchableOpacity
+                onPress={handleIncrement}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <Text style={styles.quantityButton}>+</Text>
               </TouchableOpacity>
             </View>
