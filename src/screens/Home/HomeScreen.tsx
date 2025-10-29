@@ -226,12 +226,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, []);
 
   // Trigger data reload when screen becomes focused
-  React.useEffect(() => {
-    if (isFocused) {
-      // Increment refresh trigger to force data reload
-      setRefreshTrigger(prev => prev + 1);
-    }
-  }, [isFocused]);
+  // DISABLED: Causes jerk/jump when returning from other screens
+  // Will implement a better refresh approach later
+  // React.useEffect(() => {
+  //   if (isFocused) {
+  //     // Increment refresh trigger to force data reload
+  //     setRefreshTrigger(prev => prev + 1);
+  //   }
+  // }, [isFocused]);
 
   // Log API endpoint URL on mount
   React.useEffect(() => {
@@ -341,20 +343,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, []); // Only run once on mount
 
   // Reload home data when screen becomes focused (but don't reset address)
-  React.useEffect(() => {
-    if (isFocused && refreshTrigger > 0) {
-      // Don't show shimmers - silently refresh data in background
-      // This prevents layout shift and scroll position jump
-      // Old content remains visible until new data loads
+  // DISABLED: Not needed since auto-refresh on focus is disabled
+  // React.useEffect(() => {
+  //   if (isFocused && refreshTrigger > 0) {
+  //     // Don't show shimmers - silently refresh data in background
+  //     // This prevents layout shift and scroll position jump
+  //     // Old content remains visible until new data loads
 
-      // Reload data with current selected location coordinates
-      const lat = externalSelectedLocation?.latitude || defaultAddressCoords?.latitude || DEFAULT_LOCATION.latitude;
-      const lng = externalSelectedLocation?.longitude || defaultAddressCoords?.longitude || DEFAULT_LOCATION.longitude;
+  //     // Reload data with current selected location coordinates
+  //     const lat = externalSelectedLocation?.latitude || defaultAddressCoords?.latitude || DEFAULT_LOCATION.latitude;
+  //     const lng = externalSelectedLocation?.longitude || defaultAddressCoords?.longitude || DEFAULT_LOCATION.longitude;
 
-      fetchHomeData(lat, lng);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshTrigger]);
+  //     fetchHomeData(lat, lng);
+  //   }
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [refreshTrigger]);
 
 
   // Check if all banner images are loaded
