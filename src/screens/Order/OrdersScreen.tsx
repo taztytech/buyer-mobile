@@ -334,12 +334,24 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             </>
           ) : (
             <>
-              {order.overall_rating && order.overall_rating > 0 ? (
+              {mappedStatus === 'cancelled' ? (
+                // For cancelled orders, show Help button
+                <TouchableOpacity
+                  style={styles.rateButton}
+                  onPress={() => handleHelp(order.id.toString())}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="help-outline" size={18} color="#001E1F" />
+                  <Text style={styles.rateButtonText}>Help</Text>
+                </TouchableOpacity>
+              ) : order.overall_rating && order.overall_rating > 0 ? (
+                // For delivered orders with rating, show rating display
                 <View style={styles.ratingDisplay}>
                   <MaterialIcons name="star" size={20} color="#F59E0B" />
                   <Text style={styles.ratingText}>{order.overall_rating.toFixed(1)}</Text>
                 </View>
               ) : (
+                // For delivered orders without rating, show Rate Order button
                 <TouchableOpacity
                   style={styles.rateButton}
                   onPress={() => handleRateOrder(order.id.toString())}

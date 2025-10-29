@@ -879,15 +879,17 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               return menuItem;
             });
 
-            // Debug: Log timing data for first few items
-            items.slice(0, 3).forEach(item => {
-              console.log(`[DEBUG] Item: ${item.name}`);
-              console.log(`[DEBUG] Has timings: ${!!item.timings}`);
-              if (item.timings) {
-                console.log(`[DEBUG] Timings:`, JSON.stringify(item.timings, null, 2));
-                console.log(`[DEBUG] Is available: ${isItemAvailable(item.timings)}`);
-              }
-            });
+            // Debug: Log timing data only for unavailable items
+            const unavailableItems = items.filter(item => !isItemAvailable(item.timings));
+            if (unavailableItems.length > 0) {
+              console.log(`[DEBUG] Found ${unavailableItems.length} unavailable items in category: ${category.name}`);
+              unavailableItems.forEach(item => {
+                console.log(`[DEBUG] Unavailable Item: ${item.name}`);
+                if (item.timings) {
+                  console.log(`[DEBUG] Timings:`, JSON.stringify(item.timings, null, 2));
+                }
+              });
+            }
 
             // Sort items: available items first, unavailable items last
             const sortedItems = items.sort((a, b) => {

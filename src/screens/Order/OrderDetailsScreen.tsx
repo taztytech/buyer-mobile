@@ -608,11 +608,19 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                         )}
                       </View>
                       <View style={styles.quantityControl}>
-                        <TouchableOpacity onPress={() => handleDecrement(item.id, item.variantId)} activeOpacity={0.7}>
+                        <TouchableOpacity
+                          onPress={() => handleDecrement(item.id, item.variantId)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
                           <Text style={styles.quantityButton}>-</Text>
                         </TouchableOpacity>
                         <Text style={styles.quantityText}>{item.quantity}</Text>
-                        <TouchableOpacity onPress={() => handleIncrement(item.id, item.variantId)} activeOpacity={0.7}>
+                        <TouchableOpacity
+                          onPress={() => handleIncrement(item.id, item.variantId)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
                           <Text style={styles.quantityButton}>+</Text>
                         </TouchableOpacity>
                       </View>
@@ -1098,8 +1106,8 @@ const styles = StyleSheet.create({
   },
   orderItemName: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 12,
+    lineHeight: 18,
     color: '#000000',
     flex: 1,
   },
@@ -1121,21 +1129,21 @@ const styles = StyleSheet.create({
   orderItemPrice: {
     fontFamily: 'Poppins',
     fontWeight: '400',
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 16,
     color: 'rgba(0, 0, 0, 0.6)',
   },
   quantityControl: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.15)',
     borderRadius: 8,
     marginRight: 8,
-    minWidth: 60,
+    minWidth: 75,
   },
   quantityButton: {
     fontFamily: 'Poppins_700Bold',
@@ -1163,8 +1171,8 @@ const styles = StyleSheet.create({
   },
   finalPrice: {
     fontFamily: 'Poppins_700Bold',
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 14,
+    lineHeight: 21,
     color: '#000000',
   },
   addMoreButton: {

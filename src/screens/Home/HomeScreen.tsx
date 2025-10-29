@@ -661,6 +661,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               const timings = restaurant.timings || [];
               const isOpen = homeService.isRestaurantOpen(timings);
 
+              // Debug: Log timing data for closed restaurants
+              if (!isOpen) {
+                const now = new Date();
+                const currentDay = now.getDay();
+                const currentTime = now.getHours() * 100 + now.getMinutes();
+                console.log(`[DEBUG] Restaurant "${restaurant.name}" is CLOSED`);
+                console.log(`[DEBUG] Current day: ${currentDay} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][currentDay]}), Current time: ${currentTime}`);
+                console.log(`[DEBUG] Timings:`, JSON.stringify(timings, null, 2));
+              }
+
               return {
                 id: restaurant.id,
                 name: restaurant.name,

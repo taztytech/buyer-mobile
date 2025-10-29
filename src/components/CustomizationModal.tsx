@@ -156,8 +156,8 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Timing Information */}
-          {item.timings && item.timings.length > 0 && (
+          {/* Timing Information - Only show for unavailable items */}
+          {item.timings && item.timings.length > 0 && !isItemAvailable(item.timings) && (
             <View style={styles.timingSection}>
               <View style={styles.timingHeader}>
                 <MaterialIcons name="access-time" size={14} color="#00B14F" />

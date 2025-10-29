@@ -156,8 +156,8 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
               <Text style={styles.itemDescription}>{item.description}</Text>
             </View>
 
-            {/* Timing Information */}
-            {item.timings && item.timings.length > 0 && (
+            {/* Timing Information - Only show for unavailable items */}
+            {item.timings && item.timings.length > 0 && !isItemAvailable(item.timings) && (
               <View style={styles.timingSection}>
                 <View style={styles.timingHeader}>
                   <MaterialIcons name="access-time" size={16} color="#00B14F" />
