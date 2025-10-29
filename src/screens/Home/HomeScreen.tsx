@@ -341,6 +341,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Reload home data when screen becomes focused (but don't reset address)
   React.useEffect(() => {
     if (isFocused && refreshTrigger > 0) {
+      // Show shimmers before reloading data to prevent jerk
+      setShowBannerShimmer(true);
+      setShowCategoryShimmer(true);
+      setShowRestaurantShimmer(true);
+
       // Reload data with current selected location coordinates
       // Use coordinates from externalSelectedLocation if available, otherwise use default
       const lat = externalSelectedLocation?.latitude || defaultAddressCoords?.latitude || DEFAULT_LOCATION.latitude;
