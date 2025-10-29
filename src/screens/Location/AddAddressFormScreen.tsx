@@ -171,7 +171,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         longitude: longitude,
         type: selectedTag.toLowerCase() as 'home' | 'work' | 'other',
         alternate_phone_number: alternateMobile ? parseInt(alternateMobile, 10) : undefined,
-        is_default: isDefault,
+        is_default: false,
       };
 
       let response;
@@ -400,20 +400,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   Other
                 </Text>
               </TouchableOpacity>
-            </View>
-
-            {/* Set as default checkbox */}
-            <View style={styles.checkboxRow}>
-              <TouchableOpacity
-                style={styles.checkbox}
-                onPress={() => setIsDefault(!isDefault)}
-                activeOpacity={0.7}
-              >
-                {isDefault && (
-                  <MaterialIcons name="check" size={16} color="#00B14F" />
-                )}
-              </TouchableOpacity>
-              <Text style={styles.checkboxLabel}>Set as default</Text>
             </View>
           </View>
         </ScrollView>
