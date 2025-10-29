@@ -198,7 +198,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Debug: Log whenever selectedLocation changes
   React.useEffect(() => {
-    console.log('🎯 [HomeScreen] selectedLocation updated to:', selectedLocation);
+    // selectedLocation tracking
   }, [selectedLocation]);
   const [isCategorySectionSticky, setIsCategorySectionSticky] = React.useState(false);
   const [showCategoryModal, setShowCategoryModal] = React.useState(false);
@@ -237,10 +237,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Log API endpoint URL on mount
   React.useEffect(() => {
-    const apiUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'Not configured';
-    console.log('=============================================');
-    console.log('Current API Endpoint:', apiUrl);
-    console.log('=============================================');
+    // API endpoint configuration check
   }, []);
 
   // Update local state when external selectedLocation changes
@@ -259,21 +256,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   React.useEffect(() => {
     const fetchDefaultAddress = async () => {
       try {
-        console.log('🏠 [HomeScreen] Fetching addresses...');
         const response = await addressService.getAddresses();
-        console.log('🏠 [HomeScreen] Address API response:', JSON.stringify(response, null, 2));
 
         if (response.success && response.data) {
-          console.log('🏠 [HomeScreen] Found addresses:', response.data.length);
-
           // Find the default address
           const defaultAddress = response.data.find(addr => addr.is_default);
-          console.log('🏠 [HomeScreen] Default address:', defaultAddress ? 'Found' : 'Not found');
-          console.log('🏠 [HomeScreen] All addresses is_default values:', response.data.map(addr => ({ id: addr.id, is_default: addr.is_default })));
 
           if (defaultAddress) {
             // User has a default address saved
-            console.log('🏠 [HomeScreen] Using default address:', defaultAddress.address1);
             setHasDefaultAddress(true);
             setDefaultAddressCoords({
               latitude: defaultAddress.latitude,
@@ -289,18 +279,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 name: formattedType,
                 address: `${defaultAddress.address1}${defaultAddress.address2 ? ', ' + defaultAddress.address2 : ''}${defaultAddress.address3 ? ', ' + defaultAddress.address3 : ''}, ${defaultAddress.city}`,
               };
-              console.log('🏠 [HomeScreen] Setting selectedLocation to:', newLocation);
               setSelectedLocation(newLocation);
-            } else {
-              console.log('🏠 [HomeScreen] External location exists, not updating selectedLocation');
             }
 
             // Fetch home data with default address coordinates
-            console.log('🏠 [HomeScreen] Fetching home data with coords:', defaultAddress.latitude, defaultAddress.longitude);
             await fetchHomeData(parseFloat(defaultAddress.latitude), parseFloat(defaultAddress.longitude));
           } else {
             // No default address, use fallback location
-            console.log('🏠 [HomeScreen] No default address found, using Madurai');
             setHasDefaultAddress(false);
             setSelectedLocation({
               name: DEFAULT_LOCATION.name,
@@ -312,7 +297,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           }
         } else {
           // API failed, use fallback location
-          console.log('🏠 [HomeScreen] API failed or no data, using Madurai. Success:', response.success, 'Data:', response.data);
           setHasDefaultAddress(false);
           setSelectedLocation({
             name: DEFAULT_LOCATION.name,
