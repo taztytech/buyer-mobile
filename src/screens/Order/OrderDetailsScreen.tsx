@@ -332,11 +332,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         const orderId = orderData.id || orderData.order_id;
 
         // Process online payment via Razorpay
-        console.log('🟢 [OrderDetails] Online payment selected, starting payment flow');
-
         // Get user details for payment
         const user = await authService.getCurrentUser();
-        console.log('🟢 [OrderDetails] User details:', user);
 
         const paymentResult = await paymentService.processPayment(
           orderId,
@@ -346,8 +343,6 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             phone: user?.phoneNumber || '',
           }
         );
-
-        console.log('🟢 [OrderDetails] Payment result:', paymentResult);
 
         if (paymentResult.success) {
           // Payment successful - clear cart and show success
@@ -377,12 +372,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           });
         } else {
           // Payment failed - cancel the order to prevent it from staying in database
-          console.log('🔴 [OrderDetails] Payment failed, cancelling order:', orderId);
           try {
             await ordersService.cancelOrder(orderId, 'Payment failed');
-            console.log('🟢 [OrderDetails] Order cancelled successfully');
           } catch (cancelError) {
-            console.error('🔴 [OrderDetails] Failed to cancel order:', cancelError);
+            // Failed to cancel order - error is logged silently
           }
 
           showConfirmation({
