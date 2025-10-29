@@ -203,6 +203,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isCategorySectionSticky, setIsCategorySectionSticky] = React.useState(false);
   const [showCategoryModal, setShowCategoryModal] = React.useState(false);
   const flatListRef = React.useRef<FlatList>(null);
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  const scrollPositionRef = React.useRef(0);
   const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
   const [hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
   const isInitialVegModeLoad = React.useRef(true);
@@ -341,16 +343,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Reload home data when screen becomes focused (but don't reset address)
   React.useEffect(() => {
     if (isFocused && refreshTrigger > 0) {
-      // Show shimmers before reloading data to prevent jerk
+      // Save current scroll position before refresh
+      const currentScrollPosition = scrollPositionRef.current;
+
+      // Show shimmers while loading new data
       setShowBannerShimmer(true);
       setShowCategoryShimmer(true);
       setShowRestaurantShimmer(true);
 
       // Reload data with current selected location coordinates
-      // Use coordinates from externalSelectedLocation if available, otherwise use default
       const lat = externalSelectedLocation?.latitude || defaultAddressCoords?.latitude || DEFAULT_LOCATION.latitude;
       const lng = externalSelectedLocation?.longitude || defaultAddressCoords?.longitude || DEFAULT_LOCATION.longitude;
-      fetchHomeData(lat, lng);
+
+      fetchHomeData(lat, lng).then(() => {
+        // Restore scroll position after data loads
+        setTimeout(() => {
+          if (scrollViewRef.current && currentScrollPosition > 0) {
+            scrollViewRef.current.scrollTo({ y: currentScrollPosition, animated: false });
+          }
+        }, 100);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshTrigger]);
@@ -905,6 +917,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const layoutHeight = event.nativeEvent.layoutMeasurement.height;
     const contentHeight = event.nativeEvent.contentSize.height;
 
+    // Save scroll position for restoration after refresh
+    scrollPositionRef.current = scrollY;
+
     // Category section becomes sticky after header (212px) + carousel (~165px) + section title (~40px)
     // Total: approximately 400px
     const threshold = 400;
@@ -922,6 +937,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView
+          ref={scrollViewRef}
           style={styles.container}
           stickyHeaderIndices={[3]}
           testID="home-screen"
