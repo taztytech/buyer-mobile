@@ -724,23 +724,32 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Load more restaurants function for pagination
   const loadMoreRestaurants = React.useCallback(async () => {
+    console.log('🔄 [LoadMore] Function called');
+    console.log('🔄 [LoadMore] States:', { isLoadingMore, hasMoreRestaurants, isLoadingRestaurants, currentPage });
+
     // Don't load if already loading, no more data, or initial load is still in progress
     if (isLoadingMore || !hasMoreRestaurants || isLoadingRestaurants) {
+      console.log('⏹️ [LoadMore] Skipped - Conditions not met');
       return;
     }
 
     try {
+      console.log('▶️ [LoadMore] Starting to load page', currentPage + 1);
       setIsLoadingMore(true);
 
       const nextPage = currentPage + 1;
       const coords = defaultAddressCoords || { latitude: DEFAULT_LOCATION.latitude, longitude: DEFAULT_LOCATION.longitude };
+      console.log('📍 [LoadMore] Loading with coords:', coords, 'vegMode:', vegMode);
 
       const response = await homeService.getHomeData(coords.latitude, coords.longitude, vegMode, nextPage);
+      console.log('📦 [LoadMore] API Response received:', { success: response.success, dataExists: !!response.data });
 
       if (response.success && response.data) {
         const actualData = response.data.data || response.data;
         const nearbyRestaurants = actualData.nearby_restaurants;
         const pagination = actualData.pagination;
+        console.log('🍽️ [LoadMore] Restaurants received:', nearbyRestaurants?.length || 0);
+        console.log('📄 [LoadMore] Pagination info:', pagination);
 
         if (nearbyRestaurants && Array.isArray(nearbyRestaurants) && nearbyRestaurants.length > 0) {
           // Transform new restaurants
@@ -766,26 +775,36 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           });
 
           // Append new restaurants to existing list
-          setRestaurantData(prevData => [...prevData, ...transformedRestaurants]);
+          setRestaurantData(prevData => {
+            const newTotal = prevData.length + transformedRestaurants.length;
+            console.log('✅ [LoadMore] Adding restaurants. Previous:', prevData.length, 'New:', transformedRestaurants.length, 'Total:', newTotal);
+            return [...prevData, ...transformedRestaurants];
+          });
           setCurrentPage(nextPage);
+          console.log('📖 [LoadMore] Updated to page', nextPage);
 
           // Update pagination state
           if (pagination) {
             setHasMoreRestaurants(pagination.has_more || false);
+            console.log('🔄 [LoadMore] Has more restaurants:', pagination.has_more);
           } else {
             setHasMoreRestaurants(false);
+            console.log('⛔ [LoadMore] No pagination info - setting hasMore to false');
           }
         } else {
+          console.log('⛔ [LoadMore] No restaurants in response');
           setHasMoreRestaurants(false);
         }
       } else {
+        console.log('❌ [LoadMore] API response failed or no data');
         setHasMoreRestaurants(false);
       }
     } catch (error) {
-      console.error('Error loading more restaurants:', error);
+      console.error('❌ [LoadMore] Error loading more restaurants:', error);
       setHasMoreRestaurants(false);
     } finally {
       setIsLoadingMore(false);
+      console.log('🏁 [LoadMore] Load more completed');
     }
   }, [isLoadingMore, hasMoreRestaurants, isLoadingRestaurants, currentPage, defaultAddressCoords, vegMode]);
 
@@ -920,6 +939,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     // Check if user has scrolled near the bottom (within 500px)
     const distanceFromBottom = contentHeight - (scrollY + layoutHeight);
     if (distanceFromBottom < 500 && hasMoreRestaurants && !isLoadingMore && !isLoadingRestaurants) {
+      console.log('⬇️ [Scroll] Near bottom! Distance:', distanceFromBottom, 'Triggering load more...');
       loadMoreRestaurants();
     }
   }, [hasMoreRestaurants, isLoadingMore, isLoadingRestaurants, loadMoreRestaurants]);
