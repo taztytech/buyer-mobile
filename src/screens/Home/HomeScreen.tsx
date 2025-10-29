@@ -195,6 +195,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showRestaurantShimmer, setShowRestaurantShimmer] = React.useState(true);
   const [tempVegSelection, setTempVegSelection] = React.useState<'pure' | 'all'>('pure');
   const [selectedLocation, setSelectedLocation] = React.useState(externalSelectedLocation || { name: DEFAULT_LOCATION.name, address: DEFAULT_LOCATION.address });
+
+  // Debug: Log whenever selectedLocation changes
+  React.useEffect(() => {
+    console.log('🎯 [HomeScreen] selectedLocation updated to:', selectedLocation);
+  }, [selectedLocation]);
   const [isCategorySectionSticky, setIsCategorySectionSticky] = React.useState(false);
   const [showCategoryModal, setShowCategoryModal] = React.useState(false);
   const flatListRef = React.useRef<FlatList>(null);
@@ -250,14 +255,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   React.useEffect(() => {
     const fetchDefaultAddress = async () => {
       try {
+        console.log('🏠 [HomeScreen] Fetching addresses...');
         const response = await addressService.getAddresses();
+        console.log('🏠 [HomeScreen] Address API response:', JSON.stringify(response, null, 2));
 
         if (response.success && response.data) {
+          console.log('🏠 [HomeScreen] Found addresses:', response.data.length);
+
           // Find the default address
           const defaultAddress = response.data.find(addr => addr.is_default);
+          console.log('🏠 [HomeScreen] Default address:', defaultAddress ? 'Found' : 'Not found');
+          console.log('🏠 [HomeScreen] All addresses is_default values:', response.data.map(addr => ({ id: addr.id, is_default: addr.is_default })));
 
           if (defaultAddress) {
             // User has a default address saved
+            console.log('🏠 [HomeScreen] Using default address:', defaultAddress.address1);
             setHasDefaultAddress(true);
             setDefaultAddressCoords({
               latitude: defaultAddress.latitude,
@@ -269,16 +281,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             // Update selected location display (only if no external location is set)
             if (!externalSelectedLocation) {
-              setSelectedLocation({
+              const newLocation = {
                 name: formattedType,
                 address: `${defaultAddress.address1}${defaultAddress.address2 ? ', ' + defaultAddress.address2 : ''}${defaultAddress.address3 ? ', ' + defaultAddress.address3 : ''}, ${defaultAddress.city}`,
-              });
+              };
+              console.log('🏠 [HomeScreen] Setting selectedLocation to:', newLocation);
+              setSelectedLocation(newLocation);
+            } else {
+              console.log('🏠 [HomeScreen] External location exists, not updating selectedLocation');
             }
 
             // Fetch home data with default address coordinates
-            await fetchHomeData(defaultAddress.latitude, defaultAddress.longitude);
+            console.log('🏠 [HomeScreen] Fetching home data with coords:', defaultAddress.latitude, defaultAddress.longitude);
+            await fetchHomeData(parseFloat(defaultAddress.latitude), parseFloat(defaultAddress.longitude));
           } else {
             // No default address, use fallback location
+            console.log('🏠 [HomeScreen] No default address found, using Madurai');
             setHasDefaultAddress(false);
             setSelectedLocation({
               name: DEFAULT_LOCATION.name,
@@ -290,6 +308,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           }
         } else {
           // API failed, use fallback location
+          console.log('🏠 [HomeScreen] API failed or no data, using Madurai. Success:', response.success, 'Data:', response.data);
           setHasDefaultAddress(false);
           setSelectedLocation({
             name: DEFAULT_LOCATION.name,
@@ -301,6 +320,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         }
       } catch (error) {
         // Error fetching addresses, use fallback location
+        console.error('🏠 [HomeScreen] Error fetching addresses:', error);
         setHasDefaultAddress(false);
         setSelectedLocation({
           name: DEFAULT_LOCATION.name,

@@ -46,12 +46,12 @@ function AppContent() {
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [selectedLocation, setSelectedLocation] = React.useState({
-    name: 'Madurai',
-    address: 'Madurai, Tamil Nadu, India',
-    latitude: 9.9352300,
-    longitude: 78.1304040
-  });
+  const [selectedLocation, setSelectedLocation] = React.useState<{
+    name: string;
+    address: string;
+    latitude?: number;
+    longitude?: number;
+  } | undefined>(undefined);
   const [selectedCategory, setSelectedCategory] = React.useState('Briyani');
   const [categoryData, setCategoryData] = React.useState<any[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
