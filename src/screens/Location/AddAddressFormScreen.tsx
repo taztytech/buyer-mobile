@@ -272,20 +272,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
 
           {/* Form Fields */}
           <View style={styles.formSection}>
-            {/* Set as default checkbox */}
-            <View style={styles.checkboxRow}>
-              <TouchableOpacity
-                style={styles.checkbox}
-                onPress={() => setIsDefault(!isDefault)}
-                activeOpacity={0.7}
-              >
-                {isDefault && (
-                  <MaterialIcons name="check" size={16} color="#00B14F" />
-                )}
-              </TouchableOpacity>
-              <Text style={styles.checkboxLabel}>Set as default</Text>
-            </View>
-
             {/* House/Flat/Floor Number - Full width */}
             <View style={styles.fieldGroup}>
               <TextInput
@@ -414,6 +400,20 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   Other
                 </Text>
               </TouchableOpacity>
+            </View>
+
+            {/* Set as default checkbox */}
+            <View style={styles.checkboxRow}>
+              <TouchableOpacity
+                style={styles.checkbox}
+                onPress={() => setIsDefault(!isDefault)}
+                activeOpacity={0.7}
+              >
+                {isDefault && (
+                  <MaterialIcons name="check" size={16} color="#00B14F" />
+                )}
+              </TouchableOpacity>
+              <Text style={styles.checkboxLabel}>Set as default</Text>
             </View>
           </View>
         </ScrollView>
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 16,
+    marginTop: 16,
   },
   checkbox: {
     width: 20,
