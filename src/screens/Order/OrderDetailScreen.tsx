@@ -344,6 +344,17 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             </View>
           </View>
 
+          {/* Notes Section - only show if notes exist */}
+          {orderData.notes && orderData.notes.trim() !== '' && (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Notes</Text>
+              <View style={styles.notesContainer}>
+                <MaterialIcons name="note" size={24} color="#00B14F" />
+                <Text style={styles.notesText}>{orderData.notes}</Text>
+              </View>
+            </View>
+          )}
+
           {/* Delivery Address Card */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Delivery Address</Text>
@@ -716,6 +727,18 @@ const styles = StyleSheet.create({
     color: '#001E1F',
     lineHeight: 27,
     marginBottom: 12,
+  },
+  notesContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  notesText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#001E1F',
+    lineHeight: 21,
+    flex: 1,
   },
   addressRow: {
     flexDirection: 'row',
