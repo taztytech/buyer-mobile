@@ -874,14 +874,24 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 isFavorite: item.is_favorite || false,
                 addOns: addOns.length > 0 ? addOns : undefined,
                 customizations: item.customizations,
+                timings: item.timings || undefined,
               };
               return menuItem;
+            });
+
+            // Sort items: available items first, unavailable items last
+            const sortedItems = items.sort((a, b) => {
+              const aAvailable = isItemAvailable(a.timings);
+              const bAvailable = isItemAvailable(b.timings);
+
+              if (aAvailable === bAvailable) return 0;
+              return aAvailable ? -1 : 1; // Available items come first
             });
 
             return {
               id: category.id.toString(),
               title: category.name,
-              items,
+              items: sortedItems,
               isExpanded: true, // Expand all sections by default
             };
           });
@@ -1200,7 +1210,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 />
               </TouchableOpacity>
 
-            {section.isExpanded && section.items.map((item) => (
+            {section.isExpanded && section.items.map((item) => {
+              const itemAvailable = isItemAvailable(item.timings);
+
+              return (
               <View key={item.id} style={styles.menuItem}>
                 <View style={styles.itemLeft}>
                   {/* Veg/Non-Veg Icon and Spicy Badge */}
@@ -1310,10 +1323,15 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                         />
                       )}
                     </TouchableOpacity>
+
+                    {/* Grey Overlay for Unavailable Items */}
+                    {!itemAvailable && (
+                      <View style={styles.unavailableOverlay} />
+                    )}
                   </TouchableOpacity>
 
                   {/* Add Button or Increment/Decrement Controls */}
-                  {loadedImages.has(item.id) && (
+                  {loadedImages.has(item.id) && itemAvailable && (
                     <>
                       {cart[item.id] ? (
                         // Show increment/decrement controls if item is in cart
@@ -1364,7 +1382,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   )}
                 </View>
               </View>
-            ))}
+              );
+            })}
           </View>
           ))
         )}
@@ -2031,6 +2050,16 @@ const styles = StyleSheet.create({
     right: 8,
     padding: 4,
     zIndex: 10,
+  },
+  unavailableOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(128, 128, 128, 0.7)',
+    borderRadius: 16,
+    zIndex: 5,
   },
   addButton: {
     flexDirection: 'row',
