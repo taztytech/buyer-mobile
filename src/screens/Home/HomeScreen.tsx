@@ -343,26 +343,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Reload home data when screen becomes focused (but don't reset address)
   React.useEffect(() => {
     if (isFocused && refreshTrigger > 0) {
-      // Save current scroll position before refresh
-      const currentScrollPosition = scrollPositionRef.current;
-
-      // Show shimmers while loading new data
-      setShowBannerShimmer(true);
-      setShowCategoryShimmer(true);
-      setShowRestaurantShimmer(true);
+      // Don't show shimmers - silently refresh data in background
+      // This prevents layout shift and scroll position jump
+      // Old content remains visible until new data loads
 
       // Reload data with current selected location coordinates
       const lat = externalSelectedLocation?.latitude || defaultAddressCoords?.latitude || DEFAULT_LOCATION.latitude;
       const lng = externalSelectedLocation?.longitude || defaultAddressCoords?.longitude || DEFAULT_LOCATION.longitude;
 
-      fetchHomeData(lat, lng).then(() => {
-        // Restore scroll position after data loads
-        setTimeout(() => {
-          if (scrollViewRef.current && currentScrollPosition > 0) {
-            scrollViewRef.current.scrollTo({ y: currentScrollPosition, animated: false });
-          }
-        }, 100);
-      });
+      fetchHomeData(lat, lng);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshTrigger]);
