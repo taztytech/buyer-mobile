@@ -898,14 +898,24 @@ function AppContent() {
   const isAppReady = fontsLoaded && !isCheckingAuth;
   // const showSplash = !animationComplete;
 
-  // console.log('🎯 [App] Splash check:', { fontsLoaded, isCheckingAuth, animationComplete, isAppReady, showSplash });
-
-  // Hide native splash screen when app is ready
+  // Hide native splash screen when app is fully ready
   React.useEffect(() => {
     if (isAppReady) {
-      SplashScreen.hideAsync().catch(() => {});
+      // Add small delay to ensure fonts are rendered
+      const timer = setTimeout(() => {
+        SplashScreen.hideAsync().catch(() => {});
+      }, 500);
+      return () => clearTimeout(timer);
     }
   }, [isAppReady]);
+
+  // Fallback: Always hide splash screen after 5 seconds to prevent getting stuck
+  React.useEffect(() => {
+    const fallbackTimer = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 5000);
+    return () => clearTimeout(fallbackTimer);
+  }, []);
 
   return (
     <>
