@@ -145,7 +145,11 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
       const query = selectedCategory.toLowerCase();
       const apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`;
 
-      const response = await apiService.get(apiEndpoint);
+      // Add minimum delay to show shimmer animation
+      const [response] = await Promise.all([
+        apiService.get(apiEndpoint),
+        new Promise(resolve => setTimeout(resolve, 1500)) // 1.5 second delay
+      ]);
 
       if (response.data?.success && response.data?.data?.restaurants) {
         // Transform API data to match RestaurantCard interface
@@ -325,25 +329,6 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoryScroll}
           >
-            {/* Dynamic Search Results Category - Show when search has results */}
-            {hasSearched && (
-              <View style={styles.categoryItemWrapper}>
-                <TouchableOpacity
-                  onPress={() => {
-                    // This category is already selected when showing search results
-                  }}
-                  style={styles.categoryItem}
-                >
-                  <View style={styles.searchCategoryImageContainer}>
-                    <MaterialIcons name="search" size={16} color="rgba(0, 177, 79, 0.5)" />
-                  </View>
-                  <Text style={[styles.categoryText, styles.selectedCategoryText]}>
-                    Search Results
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
             {displayCategories.map((category, index) => {
               // Map category names to their images
               const categoryImages: { [key: string]: any } = {
@@ -374,7 +359,10 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
               return (
                 <View key={`${category}-${index}`} style={styles.categoryItemWrapper}>
                   <TouchableOpacity
-                    onPress={() => setSelectedCategory(category)}
+                    onPress={() => {
+                      setSelectedCategory(category);
+                      handleClearSearch();
+                    }}
                     style={styles.categoryItem}
                   >
                     {imageSource && (
@@ -387,7 +375,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
                     <Text
                       style={[
                         styles.categoryText,
-                        selectedCategory === category && styles.selectedCategoryText,
+                        !hasSearched && selectedCategory === category && styles.selectedCategoryText,
                       ]}
                     >
                       {category}
@@ -428,8 +416,8 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           </TouchableOpacity>
         </View> */}
 
-        {/* Top Rated Section - Show shimmer while loading, show data if available, hide if no data, hide when showing search results */}
-        {!hasSearched && (isLoading || topRatedRestaurants.length > 0) ? (
+        {/* Top Rated Section - Only show when not loading, has data, and not showing search results */}
+        {!hasSearched && !isLoading && topRatedRestaurants.length > 0 ? (
           <>
             <View style={styles.sectionTitleContainer}>
               <LinearGradient
@@ -452,26 +440,15 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.topRatedScroll}
             >
-              {isLoading ? (
-                // Show 5 shimmer cards while loading
-                <>
-                  <ShimmerTopRatedCard />
-                  <ShimmerTopRatedCard />
-                  <ShimmerTopRatedCard />
-                  <ShimmerTopRatedCard />
-                  <ShimmerTopRatedCard />
-                </>
-              ) : (
-                // Show actual data with animation
-                <Animated.View
-                  style={{
-                    flexDirection: 'row',
-                    gap: 12,
-                    opacity: fadeAnim,
-                    transform: [{ translateY: slideAnim }],
-                  }}
-                >
-                  {topRatedRestaurants.map(item => (
+              <Animated.View
+                style={{
+                  flexDirection: 'row',
+                  gap: 12,
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                }}
+              >
+                {topRatedRestaurants.map(item => (
                     <TouchableOpacity
                       key={item.id}
                       style={styles.topRatedCard}
@@ -505,9 +482,8 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
                         </View>
                       </View>
                     </TouchableOpacity>
-                  ))}
-                </Animated.View>
-              )}
+                ))}
+              </Animated.View>
             </ScrollView>
           </>
         ) : null}
@@ -648,16 +624,6 @@ const styles = StyleSheet.create({
   },
   selectedCategoryText: {
     color: '#00B14F',
-  },
-  searchCategoryImageContainer: {
-    width: 38,
-    height: 38,
-    backgroundColor: 'rgba(0, 177, 79, 0.1)',
-    borderRadius: 19,
-    justifyContent: 'center',
-    alignItems: 'center',
-    alignSelf: 'center',
-    marginTop: 4,
   },
   // Line Container
   lineContainer: {

@@ -114,6 +114,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     padding: 0,
     margin: 0,
+    paddingTop: 1,
     textAlignVertical: 'center',
   },
   clearButton: {
