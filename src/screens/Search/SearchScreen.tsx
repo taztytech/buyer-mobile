@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   FlatList,
   Image,
@@ -13,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { searchService, SearchSuggestion } from '@/services/search.service';
+import { SearchBar } from '@/components/SearchBar';
 
 interface SearchResult {
   id: string;
@@ -147,42 +147,15 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       </SafeAreaView>
       <SafeAreaView style={styles.container} edges={['bottom']}>
         {/* Header with Back Button and Search Input */}
-        <View style={styles.header}>
-        <TouchableOpacity
-          onPress={onBack}
-          style={styles.backButton}
-          activeOpacity={0.7}
-        >
-          <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
-        </TouchableOpacity>
-
-        <View style={styles.searchInputContainer}>
-          <MaterialIcons
-            name="search"
-            size={24}
-            color="rgba(0, 0, 0, 0.4)"
-            style={styles.searchIcon}
-          />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search Restaurants & foods.."
-            placeholderTextColor="#999999"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoFocus={false}
-            cursorColor="#00B14F"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery('')}
-              style={styles.clearButton}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="close" size={20} color="rgba(0, 0, 0, 0.4)" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+        <SearchBar
+          onBack={onBack}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          showClearButton={true}
+          backButtonColor="#001E1F"
+          autoFocus={false}
+          cursorColor="#00B14F"
+        />
 
       {/* Loading State */}
       {isLoading && (
@@ -242,48 +215,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 12,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 50,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E4E4E4',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchInputContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: 56,
-  },
-  searchIcon: {
-    marginRight: 12,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 16,
-    color: '#000000',
-    paddingVertical: 0,
-  },
-  clearButton: {
-    padding: 4,
-    marginLeft: 8,
   },
   resultsContainer: {
     backgroundColor: '#FFFFFF',

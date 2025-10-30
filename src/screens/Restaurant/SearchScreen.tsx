@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   ScrollView,
   Image,
   StatusBar,
@@ -12,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Shimmer } from '@/components/Shimmer';
+import { SearchBar } from '@/components/SearchBar';
 
 interface MenuItem {
   id: string;
@@ -114,24 +114,14 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
 
       <SafeAreaView edges={['top']} style={styles.safeArea}>
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-            <MaterialIcons name="chevron-left" size={24} color="#000000" />
-          </TouchableOpacity>
-
-          {/* Search Input */}
-          <View style={styles.searchContainer}>
-            <MaterialIcons name="search" size={24} color="#000000" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search for dishes..."
-              placeholderTextColor="rgba(0, 0, 0, 0.4)"
-              value={searchQuery}
-              onChangeText={handleSearch}
-              autoFocus={false}
-            />
-          </View>
-        </View>
+        <SearchBar
+          onBack={onBack}
+          value={searchQuery}
+          onChangeText={handleSearch}
+          placeholder="Search for dishes..."
+          showClearButton={true}
+          autoFocus={false}
+        />
 
         {/* Search Results */}
         <ScrollView
@@ -294,43 +284,6 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    gap: 10,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 50,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E4E4E4',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#000000',
-    padding: 0,
   },
   resultsContainer: {
     flex: 1,

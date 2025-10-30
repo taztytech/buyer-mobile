@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { RibbonAnimation } from './RibbonAnimation';
 
@@ -32,20 +32,78 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   cancelTextColor = '#000000',
   showRibbon = false,
 }) => {
+  const slideAnim = useRef(new Animated.Value(500)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  // Animate modal slide in/out
+  useEffect(() => {
+    if (visible) {
+      slideAnim.setValue(500);
+      opacityAnim.setValue(0);
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        })
+      ]).start();
+    }
+  }, [visible]);
+
+  const handleAnimatedClose = (callback: () => void) => {
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 500,
+        duration: 75,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 75,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      callback();
+      slideAnim.setValue(500);
+      opacityAnim.setValue(0);
+    });
+  };
+
+  const handleConfirmPress = () => {
+    handleAnimatedClose(onConfirm);
+  };
+
+  const handleCancelPress = () => {
+    handleAnimatedClose(onCancel);
+  };
+
   return (
     <Modal
       visible={visible}
       transparent={true}
-      animationType="fade"
+      animationType="none"
       statusBarTranslucent={true}
-      onRequestClose={onCancel}
+      onRequestClose={handleCancelPress}
     >
       <BlurView intensity={80} tint="dark" style={styles.overlay}>
         {/* Ribbon Animation */}
         {showRibbon && <RibbonAnimation active={true} />}
 
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+          <Animated.View
+            style={[
+              styles.modalContent,
+              {
+                transform: [{ translateY: slideAnim }],
+                opacity: opacityAnim
+              }
+            ]}
+          >
             {/* Title */}
             <Text style={styles.title}>{title}</Text>
 
@@ -57,7 +115,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
               {/* Confirm Button */}
               <TouchableOpacity
                 style={[styles.confirmButton, { backgroundColor: confirmButtonColor }]}
-                onPress={onConfirm}
+                onPress={handleConfirmPress}
                 activeOpacity={0.8}
               >
                 <Text style={[styles.confirmButtonText, { color: confirmTextColor }]}>
@@ -69,7 +127,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
               {cancelText && cancelText.trim() !== '' && (
                 <TouchableOpacity
                   style={[styles.cancelButton, { backgroundColor: cancelButtonColor }]}
-                  onPress={onCancel}
+                  onPress={handleCancelPress}
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.cancelButtonText, { color: cancelTextColor }]}>
@@ -78,7 +136,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                 </TouchableOpacity>
               )}
             </View>
-          </View>
+          </Animated.View>
         </View>
       </BlurView>
     </Modal>

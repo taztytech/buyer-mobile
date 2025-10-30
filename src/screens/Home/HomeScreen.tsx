@@ -174,6 +174,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
   const [hasShownLocationModal, setHasShownLocationModal] = React.useState(false);
   const [showVegModePopup, setShowVegModePopup] = React.useState(false);
+  const [rememberVegChoice, setRememberVegChoice] = React.useState(false);
+  const vegModalSlideAnim = React.useRef(new Animated.Value(500)).current;
+  const vegModalOpacityAnim = React.useRef(new Animated.Value(1)).current;
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [carouselData, setCarouselData] = React.useState<CarouselItem[]>([]);
   const [categoryData, setCategoryData] = React.useState<CategoryItem[]>([]);
@@ -183,6 +186,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isLoadingRestaurants, setIsLoadingRestaurants] = React.useState(true);
   const [isLoadingLocation, setIsLoadingLocation] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [hasNetworkError, setHasNetworkError] = React.useState(false);
   const isRequestingPermission = React.useRef(false);
 
   // Track image loading states
@@ -511,9 +515,49 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   };
 
+  // Animate veg modal slide in/out
+  React.useEffect(() => {
+    if (showVegModePopup) {
+      vegModalSlideAnim.setValue(500);
+      vegModalOpacityAnim.setValue(0);
+      Animated.parallel([
+        Animated.timing(vegModalSlideAnim, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(vegModalOpacityAnim, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        })
+      ]).start();
+    }
+  }, [showVegModePopup]);
+
+  const handleCloseVegModal = () => {
+    Animated.parallel([
+      Animated.timing(vegModalSlideAnim, {
+        toValue: 500,
+        duration: 75,
+        useNativeDriver: true,
+      }),
+      Animated.timing(vegModalOpacityAnim, {
+        toValue: 0,
+        duration: 75,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      setShowVegModePopup(false);
+      // Reset for next opening
+      vegModalSlideAnim.setValue(500);
+      vegModalOpacityAnim.setValue(0);
+    });
+  };
+
   const handleApplyVegMode = () => {
     setVegMode(tempVegSelection);
-    setShowVegModePopup(false);
+    handleCloseVegModal();
   };
 
   // Mark local (bundled) images as loaded immediately
@@ -550,6 +594,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Fetch home data function - can be called multiple times
   const fetchHomeData = React.useCallback(async (latitude?: number, longitude?: number) => {
     try {
+      setHasNetworkError(false);
       setIsLoadingBanners(true);
       setIsLoadingCategories(true);
       setIsLoadingRestaurants(true);
@@ -626,7 +671,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             onCategoriesLoaded?.(fallbackCategoryData);
           }
 
-          // Handle restaurants - use fallback if empty or undefined
+          // Handle restaurants - show error if empty or undefined
           if (nearbyRestaurants && Array.isArray(nearbyRestaurants) && nearbyRestaurants.length > 0) {
             // Transform API data to match our Restaurant interface
             const transformedRestaurants = nearbyRestaurants.map((restaurant: any) => {
@@ -667,20 +712,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               setHasMoreRestaurants(pagination.has_more || false);
             }
           } else {
-            setRestaurantData(fallbackRestaurantData);
+            // No restaurants - show network error
+            setHasNetworkError(true);
+            setRestaurantData([]);
             setHasMoreRestaurants(false);
           }
         } else {
           setCarouselData(fallbackCarouselData);
           setCategoryData(fallbackCategoryData);
           onCategoriesLoaded?.(fallbackCategoryData);
-          setRestaurantData(fallbackRestaurantData);
+          setHasNetworkError(true);
+          setRestaurantData([]);
         }
       } catch (error) {
+        console.error('🚨 [HomeScreen] Error fetching home data:', error);
         setCarouselData(fallbackCarouselData);
         setCategoryData(fallbackCategoryData);
         onCategoriesLoaded?.(fallbackCategoryData);
-        setRestaurantData(fallbackRestaurantData);
+        setHasNetworkError(true);
+        setRestaurantData([]);
       } finally {
         setIsLoadingBanners(false);
         setIsLoadingCategories(false);
@@ -1021,17 +1071,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <>
               <TouchableOpacity
                 style={{ flex: 1 }}
-                onPress={onNavigateToSearch}
-                activeOpacity={0.7}
+                onPress={isLocationServiceable ? onNavigateToSearch : undefined}
+                activeOpacity={isLocationServiceable ? 0.7 : 1}
+                disabled={!isLocationServiceable}
               >
                 <LinearGradient
                   colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={styles.searchBar}
+                  style={[styles.searchBar, !isLocationServiceable && styles.searchBarDisabled]}
                 >
-                  <MaterialIcons name="search" size={24} color="#FFFFFF" />
-                  <Text style={styles.searchInput} numberOfLines={1}>
+                  <MaterialIcons name="search" size={24} color={isLocationServiceable ? "#FFFFFF" : "rgba(255, 255, 255, 0.3)"} />
+                  <Text style={[styles.searchInput, !isLocationServiceable && styles.searchInputDisabled]} numberOfLines={1}>
                     Search Restaurants & foods..
                   </Text>
                 </LinearGradient>
@@ -1039,13 +1090,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
               {/* VEG Mode Toggle */}
               <TouchableOpacity
-                style={styles.vegModeContainer}
-                onPress={handleVegModeToggle}
+                style={[styles.vegModeContainer, !isLocationServiceable && styles.vegModeContainerDisabled]}
+                onPress={isLocationServiceable ? handleVegModeToggle : undefined}
+                disabled={!isLocationServiceable}
                 testID="veg-mode-toggle"
               >
-                <Text style={styles.vegModeLabel}>VEG{'\n'}MODE</Text>
-                <View style={[styles.vegToggle, isVegModeEnabled && styles.vegToggleActive]}>
-                  <View style={[styles.vegToggleThumb, isVegModeEnabled && styles.vegToggleThumbActive]} />
+                <Text style={[styles.vegModeLabel, !isLocationServiceable && styles.vegModeLabelDisabled]}>VEG{'\n'}MODE</Text>
+                <View style={[
+                  styles.vegToggle,
+                  isVegModeEnabled && styles.vegToggleActive,
+                  !isLocationServiceable && styles.vegToggleDisabled
+                ]}>
+                  <View style={[
+                    styles.vegToggleThumb,
+                    isVegModeEnabled && styles.vegToggleThumbActive,
+                    !isLocationServiceable && styles.vegToggleThumbDisabled
+                  ]} />
                 </View>
               </TouchableOpacity>
             </>
@@ -1266,6 +1326,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </View>
             ))}
           </>
+        ) : hasNetworkError ? (
+          <View style={styles.networkErrorContainer}>
+            <MaterialIcons name="cloud-off" size={64} color="rgba(0, 0, 0, 0.2)" />
+            <Text style={styles.networkErrorTitle}>Network Error</Text>
+            <Text style={styles.networkErrorMessage}>
+              Unable to load restaurants. Please check your connection and try again.
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={handleRefresh}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <FlatList
             data={restaurantData}
@@ -1359,52 +1435,91 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <Modal
         visible={showVegModePopup}
         transparent={true}
-        animationType="fade"
+        animationType="none"
         statusBarTranslucent={true}
-        onRequestClose={() => setShowVegModePopup(false)}
+        onRequestClose={handleCloseVegModal}
       >
-        <TouchableOpacity
-          style={styles.vegModalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowVegModePopup(false)}
-        >
-          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.vegModalContent}>
-              {/* Pure Veg Option - Only veg restaurants */}
-              <TouchableOpacity
-                style={styles.vegOption}
-                onPress={() => setTempVegSelection('pure')}
-                testID="veg-option-pure"
-              >
-                <View style={styles.radioButton}>
-                  {tempVegSelection === 'pure' && <View style={styles.radioButtonSelected} />}
-                </View>
-                <Text style={styles.vegOptionText}>Pure Veg</Text>
-              </TouchableOpacity>
+        <View style={styles.vegModalOverlay}>
+          <Animated.View
+            style={[
+              styles.vegModalContent,
+              {
+                transform: [{ translateY: vegModalSlideAnim }],
+                opacity: vegModalOpacityAnim
+              }
+            ]}
+          >
+            {/* Close Button */}
+            <TouchableOpacity
+              style={styles.vegModalCloseButton}
+              onPress={handleCloseVegModal}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MaterialIcons name="close" size={24} color="#666666" />
+            </TouchableOpacity>
 
-              {/* All Option - All restaurants but only veg items */}
-              <TouchableOpacity
-                style={styles.vegOption}
-                onPress={() => setTempVegSelection('all')}
-                testID="veg-option-all"
-              >
-                <View style={styles.radioButton}>
-                  {tempVegSelection === 'all' && <View style={styles.radioButtonSelected} />}
-                </View>
-                <Text style={styles.vegOptionText}>All (Veg Items)</Text>
-              </TouchableOpacity>
-
-              {/* Apply Button */}
-              <TouchableOpacity
-                style={styles.vegApplyButton}
-                onPress={handleApplyVegMode}
-                testID="veg-apply-button"
-              >
-                <Text style={styles.vegApplyButtonText}>Apply</Text>
-              </TouchableOpacity>
+            {/* Title with Icon */}
+            <View style={styles.vegModalHeader}>
+              <View style={styles.vegModalTitleContainer}>
+                <Text style={styles.vegModalTitle}>I want to see veg{'\n'}choices from</Text>
+              </View>
+              <Text style={styles.vegModalIcon}>🥗</Text>
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+
+            {/* Divider */}
+            <View style={styles.vegModalDivider} />
+
+            {/* All restaurants Option */}
+            <TouchableOpacity
+              style={styles.vegOption}
+              onPress={() => setTempVegSelection('all')}
+              testID="veg-option-all"
+              activeOpacity={0.7}
+            >
+              <Text style={styles.vegOptionText}>All restaurants</Text>
+              <View style={styles.radioButton}>
+                {tempVegSelection === 'all' && <View style={styles.radioButtonSelected} />}
+              </View>
+            </TouchableOpacity>
+
+            {/* Pure Veg Option */}
+            <TouchableOpacity
+              style={styles.vegOption}
+              onPress={() => setTempVegSelection('pure')}
+              testID="veg-option-pure"
+              activeOpacity={0.7}
+            >
+              <Text style={styles.vegOptionText}>Pure veg restaurants only</Text>
+              <View style={styles.radioButton}>
+                {tempVegSelection === 'pure' && <View style={styles.radioButtonSelected} />}
+              </View>
+            </TouchableOpacity>
+
+            {/* Remember Choice Checkbox */}
+            <TouchableOpacity
+              style={styles.vegRememberOption}
+              onPress={() => setRememberVegChoice(!rememberVegChoice)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, rememberVegChoice && styles.checkboxChecked]}>
+                {rememberVegChoice && (
+                  <MaterialIcons name="check" size={14} color="#FFFFFF" />
+                )}
+              </View>
+              <Text style={styles.vegRememberText}>Remember my choice going forward</Text>
+            </TouchableOpacity>
+
+            {/* Show Restaurants Button */}
+            <TouchableOpacity
+              style={styles.vegApplyButton}
+              onPress={handleApplyVegMode}
+              testID="veg-apply-button"
+              activeOpacity={0.8}
+            >
+              <Text style={styles.vegApplyButtonText}>Show restaurants</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
       </Modal>
 
       </ScrollView>
@@ -1551,6 +1666,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 6,
   },
+  searchBarDisabled: {
+    opacity: 0.4,
+  },
   searchInput: {
     flex: 1,
     fontFamily: 'Poppins',
@@ -1560,12 +1678,18 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     textAlignVertical: 'center',
   },
+  searchInputDisabled: {
+    color: 'rgba(255, 255, 255, 0.3)',
+  },
   vegModeContainer: {
     width: 46,
     height: 60,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
+  },
+  vegModeContainerDisabled: {
+    opacity: 0.4,
   },
   vegModeLabel: {
     fontFamily: 'Poppins',
@@ -1576,6 +1700,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     opacity: 0.85,
   },
+  vegModeLabelDisabled: {
+    opacity: 0.3,
+  },
   vegToggle: {
     width: 46,
     height: 21,
@@ -1585,11 +1712,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'flex-start',
   },
+  vegToggleDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
   vegToggleThumb: {
     width: 17,
     height: 17,
     borderRadius: 8.5,
     backgroundColor: '#FFFFFF',
+  },
+  vegToggleThumbDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
   },
   vegToggleActive: {
     backgroundColor: '#00B14F',
@@ -2043,65 +2176,140 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 20,
   },
   vegModalContent: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 15,
-    gap: 12,
-    width: 192,
-    minHeight: 130,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 16,
+    width: '100%',
+    maxWidth: 400,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  vegModalCloseButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 10,
+    padding: 4,
+  },
+  vegModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingRight: 30,
+  },
+  vegModalTitleContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
+  vegModalTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 20,
+    lineHeight: 28,
+    color: '#000000',
+  },
+  vegModalIcon: {
+    fontSize: 36,
+    marginTop: -4,
+  },
+  vegModalDivider: {
+    height: 1,
+    backgroundColor: '#E5E5E5',
+    width: '100%',
+    marginBottom: 12,
   },
   vegOption: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 20,
     width: '100%',
-  },
-  radioButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#D9D9D9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioButtonSelected: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#00B14F',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
   },
   vegOptionText: {
     fontFamily: 'Poppins',
-    fontWeight: '500',
-    fontSize: 13,
-    lineHeight: 20,
-    color: '#000000',
-    opacity: 0.85,
+    fontWeight: '400',
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#3D3D3D',
+    flex: 1,
+  },
+  radioButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#00B14F',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  radioButtonSelected: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#00B14F',
+  },
+  vegRememberOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    paddingVertical: 12,
+    gap: 10,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#CCCCCC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  checkboxChecked: {
+    backgroundColor: '#00B14F',
+    borderColor: '#00B14F',
+  },
+  vegRememberText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#666666',
+    flex: 1,
   },
   vegApplyButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
     width: '100%',
     backgroundColor: '#00B14F',
-    borderRadius: 6,
+    borderRadius: 12,
+    marginTop: 4,
   },
   vegApplyButtonText: {
     fontFamily: 'Poppins',
-    fontWeight: '500',
-    fontSize: 12,
-    lineHeight: 18,
+    fontWeight: '600',
+    fontSize: 16,
+    lineHeight: 24,
     color: '#FFFFFF',
-    opacity: 0.85,
   },
   // Unserviceable Location Error
   unserviceableContainer: {
@@ -2142,5 +2350,48 @@ const styles = StyleSheet.create({
     color: '#9E9E9E',
     textAlign: 'center',
     paddingHorizontal: 20,
+  },
+  // Network Error
+  networkErrorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingVertical: 60,
+    minHeight: 300,
+  },
+  networkErrorTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    lineHeight: 27,
+    color: 'rgba(0, 0, 0, 0.8)',
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  networkErrorMessage: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 21,
+    color: 'rgba(0, 0, 0, 0.5)',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#00B14F',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 8,
+  },
+  retryButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#FFFFFF',
   },
 });

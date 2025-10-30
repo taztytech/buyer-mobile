@@ -6,7 +6,6 @@ import {
   StatusBar,
   TouchableOpacity,
   ScrollView,
-  TextInput,
   Image,
   Dimensions,
   ActivityIndicator,
@@ -19,6 +18,7 @@ import { apiService } from '@/services/api.service';
 import { API_CONFIG } from '@/config/api.config';
 import { Shimmer } from '@/components/Shimmer';
 import { RestaurantCard } from '@/components/RestaurantCard';
+import { SearchBar } from '@/components/SearchBar';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -227,26 +227,12 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           overScrollMode="never"
         >
           {/* Top Section - Back Button + Search Bar */}
-          <View style={styles.topSection}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={onBack}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="chevron-left" size={24} color="#000000" />
-          </TouchableOpacity>
-
-          <View style={styles.searchBar}>
-            <MaterialIcons name="search" size={24} color="#00B14F" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search.."
-              placeholderTextColor="rgba(0, 0, 0, 0.5)"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </View>
-        </View>
+          <SearchBar
+            onBack={onBack}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            showClearButton={true}
+          />
 
         {/* Categories Section with Images */}
         <View style={styles.categorySection}>
@@ -502,45 +488,6 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   // Top Section
-  topSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 10,
-    gap: 14,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 50,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E4E4E4',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 19,
-    height: 60,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 10,
-    gap: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#000000',
-  },
   // Category Section
   categorySection: {
     marginTop: 10,

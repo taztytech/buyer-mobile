@@ -416,9 +416,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addressName: {
-    fontFamily: 'Poppins',
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
-    fontWeight: '600',
     color: '#001E1F',
   },
   defaultBadge: {
