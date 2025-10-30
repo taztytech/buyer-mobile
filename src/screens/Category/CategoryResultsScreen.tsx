@@ -119,6 +119,10 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
   const [restaurants, setRestaurants] = useState<RestaurantItem[]>([]);
   const [topRatedRestaurants, setTopRatedRestaurants] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchResults, setSearchResults] = useState<RestaurantItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -185,12 +189,92 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
     }
   };
 
+  const searchRestaurants = async (query: string) => {
+    try {
+      setIsSearching(true);
+
+      // Default location - you can make this dynamic later
+      const lat = 9.93550394286794;
+      const lng = 78.13114931086115;
+      const radius = 5;
+
+      const apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`;
+
+      const response = await apiService.get(apiEndpoint);
+
+      if (response.data?.success && response.data?.data?.restaurants) {
+        // Transform API data to match RestaurantCard interface
+        const restaurantsData = response.data.data.restaurants.map((restaurant: any) => ({
+          id: restaurant.id,
+          name: restaurant.name,
+          cuisine: restaurant.description || 'Restaurant',
+          rating: restaurant.rating || 0,
+          deliveryTime: restaurant.delivery_time || '25-30 mins',
+          location: restaurant.location,
+          distance: restaurant.distance ? `${restaurant.distance.toFixed(1)}Kms` : '0Kms',
+          image: restaurant.logo_url || restaurant.image,
+          isFavorite: restaurant.is_favorite || false,
+          isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
+        }));
+
+        setSearchResults(restaurantsData);
+        setHasSearched(true);
+      } else {
+        setSearchResults([]);
+        setHasSearched(true);
+      }
+    } catch (error) {
+      setSearchResults([]);
+      setHasSearched(true);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setHasSearched(false);
+    setIsSearching(false);
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+  };
+
 
   // Fetch restaurants data from API
   useEffect(() => {
     fetchRestaurants();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory]);
+
+  // Handle search with debounce
+  useEffect(() => {
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // If search query is empty, clear results
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setHasSearched(false);
+      setIsSearching(false);
+      return;
+    }
+
+    // Set debounce timeout
+    searchTimeoutRef.current = setTimeout(() => {
+      searchRestaurants(searchQuery.trim());
+    }, 500); // 500ms debounce
+
+    // Cleanup
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery]);
 
   // Trigger animation when loading completes
   useEffect(() => {
@@ -241,6 +325,25 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoryScroll}
           >
+            {/* Dynamic Search Results Category - Show when search has results */}
+            {hasSearched && (
+              <View style={styles.categoryItemWrapper}>
+                <TouchableOpacity
+                  onPress={() => {
+                    // This category is already selected when showing search results
+                  }}
+                  style={styles.categoryItem}
+                >
+                  <View style={styles.searchCategoryImageContainer}>
+                    <MaterialIcons name="search" size={16} color="rgba(0, 177, 79, 0.5)" />
+                  </View>
+                  <Text style={[styles.categoryText, styles.selectedCategoryText]}>
+                    Search Results
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {displayCategories.map((category, index) => {
               // Map category names to their images
               const categoryImages: { [key: string]: any } = {
@@ -325,8 +428,8 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           </TouchableOpacity>
         </View> */}
 
-        {/* Top Rated Section - Show shimmer while loading, show data if available, hide if no data */}
-        {isLoading || topRatedRestaurants.length > 0 ? (
+        {/* Top Rated Section - Show shimmer while loading, show data if available, hide if no data, hide when showing search results */}
+        {!hasSearched && (isLoading || topRatedRestaurants.length > 0) ? (
           <>
             <View style={styles.sectionTitleContainer}>
               <LinearGradient
@@ -410,7 +513,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         ) : null}
 
         {/* Restaurants Near You Section - Only show title if loading or has data */}
-        {(isLoading || restaurants.length > 0) && (
+        {(hasSearched ? (isSearching || searchResults.length > 0) : (isLoading || restaurants.length > 0)) && (
           <View style={styles.sectionTitleContainer}>
             <LinearGradient
               colors={['rgba(0, 0, 0, 0)', '#000000']}
@@ -418,7 +521,9 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
               end={{ x: 1, y: 0 }}
               style={styles.sectionTitleLine}
             />
-            <Text style={styles.sectionTitle}>Restaurants Near You</Text>
+            <Text style={styles.sectionTitle}>
+              {hasSearched ? `Search Results (${searchResults.length})` : 'Restaurants Near You'}
+            </Text>
             <LinearGradient
               colors={['#000000', 'rgba(0, 0, 0, 0)']}
               start={{ x: 0, y: 0 }}
@@ -429,18 +534,21 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         )}
 
         <View style={styles.restaurantList}>
-          {isLoading ? (
+          {(hasSearched ? isSearching : isLoading) ? (
             <>
               <ShimmerRestaurantCard />
               <ShimmerRestaurantCard />
               <ShimmerRestaurantCard />
             </>
-          ) : restaurants.length === 0 ? (
+          ) : (hasSearched ? searchResults : restaurants).length === 0 ? (
             <View style={styles.noResultsContainer}>
               <MaterialIcons name="search-off" size={64} color="rgba(0, 0, 0, 0.3)" />
               <Text style={styles.noResultsTitle}>No restaurants found</Text>
               <Text style={styles.noResultsMessage}>
-                We couldn't find any restaurants for "{selectedCategory}". Try searching for something else.
+                {hasSearched
+                  ? `We couldn't find any restaurants for "${searchQuery}". Try searching for something else.`
+                  : `We couldn't find any restaurants for "${selectedCategory}". Try searching for something else.`
+                }
               </Text>
             </View>
           ) : (
@@ -450,7 +558,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
                 transform: [{ translateY: slideAnim }],
               }}
             >
-              {restaurants.map(restaurant => (
+              {(hasSearched ? searchResults : restaurants).map(restaurant => (
                 <View key={restaurant.id} style={styles.restaurantCardWrapper}>
                   <RestaurantCard
                     restaurant={restaurant}
@@ -540,6 +648,16 @@ const styles = StyleSheet.create({
   },
   selectedCategoryText: {
     color: '#00B14F',
+  },
+  searchCategoryImageContainer: {
+    width: 38,
+    height: 38,
+    backgroundColor: 'rgba(0, 177, 79, 0.1)',
+    borderRadius: 19,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginTop: 4,
   },
   // Line Container
   lineContainer: {
