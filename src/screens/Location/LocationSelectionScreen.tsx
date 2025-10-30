@@ -135,11 +135,12 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     }
   }, [editingAddress, initialLatitude, initialLongitude]);
 
-  // Handle initial search query
+  // Update searchText and trigger search when initialSearchQuery changes
   useEffect(() => {
-    // If initial search query is provided, trigger search on mount
     if (initialSearchQuery.trim()) {
-      handleSearch();
+      setSearchText(initialSearchQuery);
+      // Trigger search directly with the query
+      performSearch(initialSearchQuery);
     }
   }, [initialSearchQuery]);
 
@@ -340,8 +341,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     }
   };
 
-  const handleSearch = async () => {
-    if (!searchText.trim()) return;
+  const performSearch = async (query: string) => {
+    if (!query.trim()) return;
 
     try {
       // Only check if permission is already granted, don't request it
@@ -352,7 +353,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       }
 
       // Use geocoding to search for the location
-      const results = await Location.geocodeAsync(searchText);
+      const results = await Location.geocodeAsync(query);
 
       if (results.length > 0) {
         const result = results[0];
@@ -385,14 +386,14 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
           if (addresses.length > 0) {
             const addr = addresses[0];
-            setLocationName(addr.name || addr.street || searchText);
+            setLocationName(addr.name || addr.street || query);
             setLocationAddress(
               `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
             );
           }
         } catch (reverseGeoError) {
-          setLocationName(searchText);
-          setLocationAddress(searchText);
+          setLocationName(query);
+          setLocationAddress(query);
         }
 
         // Dismiss keyboard
@@ -401,6 +402,10 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     } catch (error) {
       Keyboard.dismiss();
     }
+  };
+
+  const handleSearch = async () => {
+    performSearch(searchText);
   };
 
   return (

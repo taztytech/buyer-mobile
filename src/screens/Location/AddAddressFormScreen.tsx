@@ -13,6 +13,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -123,10 +124,22 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         duration: 300,
         useNativeDriver: true,
       }).start();
-    } else {
-      slideAnim.setValue(1000);
     }
   }, [visible]);
+
+  const handleClose = () => {
+    // Animate slide down before closing
+    Animated.timing(slideAnim, {
+      toValue: 1000,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      // Call onClose after animation completes
+      if (onClose) {
+        onClose();
+      }
+    });
+  };
 
   const handleContinue = async () => {
     // Validation
@@ -263,12 +276,12 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
       transparent
       animationType="none"
       statusBarTranslucent={true}
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <TouchableOpacity
         style={styles.overlay}
         activeOpacity={1}
-        onPress={onClose}
+        onPress={handleClose}
       >
 
         <Animated.View
@@ -288,7 +301,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                 }
               ]}
             >
-
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardAvoidingView}
+            keyboardVerticalOffset={0}
+          >
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
@@ -471,6 +488,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
             )}
           </TouchableOpacity>
             </View>
+          </KeyboardAvoidingView>
             </Animated.View>
           </TouchableOpacity>
         </Animated.View>
@@ -504,11 +522,14 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     height: '100%',
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 16,
+    paddingBottom: 130,
   },
   header: {
     backgroundColor: '#FFFFFF',
