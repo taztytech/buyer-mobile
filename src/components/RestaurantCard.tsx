@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Animated } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { favoritesService } from '@/services/favorites.service';
+import { Shimmer } from '@/components/Shimmer';
 
 export interface RestaurantTiming {
   day: number;
@@ -42,6 +43,8 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
 }) => {
   const [isFavorite, setIsFavorite] = useState(restaurant.isFavorite || false);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const imageOpacity = useState(new Animated.Value(0))[0];
 
   // Update internal state when prop changes
   useEffect(() => {
@@ -99,23 +102,53 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
 
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={[
+        styles.card,
+        restaurant.isOpen === false && styles.cardClosed
+      ]}
       onPress={onPress}
       activeOpacity={0.7}
       testID={`restaurant-card-${restaurant.id}`}
     >
       {/* Left Side - Image with Heart Button */}
       <View style={styles.imageContainer}>
-        <Image
+        {/* Shimmer shown while image loads */}
+        {!imageLoaded && (
+          <View style={styles.imageShimmerContainer}>
+            <Shimmer width={130} height={160} borderRadius={16} backgroundColor="#E8E8E8" />
+          </View>
+        )}
+
+        {/* Actual image with fade-in animation */}
+        <Animated.Image
           source={getImageSource()}
           style={[
             styles.image,
-            restaurant.isOpen === false && styles.imageClosed
+            restaurant.isOpen === false && styles.imageClosed,
+            { opacity: imageOpacity }
           ]}
           resizeMode="cover"
           testID={`restaurant-image-${restaurant.id}`}
-          onError={(error) => {}}
+          onError={(error) => {
+            // Mark as loaded even on error
+            setImageLoaded(true);
+            Animated.timing(imageOpacity, {
+              toValue: 1,
+              duration: 300,
+              useNativeDriver: true,
+            }).start();
+            if (onImageLoad) {
+              onImageLoad();
+            }
+          }}
           onLoad={() => {
+            // Fade in the image
+            setImageLoaded(true);
+            Animated.timing(imageOpacity, {
+              toValue: 1,
+              duration: 300,
+              useNativeDriver: true,
+            }).start();
             if (onImageLoad) {
               onImageLoad();
             }
@@ -167,7 +200,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
       </View>
 
       {/* Right Side - Details (Vertically Centered) */}
-      <View style={styles.detailsContainer}>
+      <View style={[
+        styles.detailsContainer,
+        restaurant.isOpen === false && styles.detailsContainerClosed
+      ]}>
         {/* Pure Veg Badge */}
         {restaurant.isVeg && (
           <View style={styles.pureVegBadge}>
@@ -232,6 +268,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 8,
   },
+  cardClosed: {
+    opacity: 0.6,
+  },
   // Left Side - Image
   imageContainer: {
     width: 130,
@@ -239,6 +278,14 @@ const styles = StyleSheet.create({
     position: 'relative',
     backgroundColor: '#F5F5F5',
     borderRadius: 16,
+  },
+  imageShimmerContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 130,
+    height: 160,
+    zIndex: 1,
   },
   image: {
     width: 130,
@@ -300,6 +347,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 12,
     gap: 4,
+  },
+  detailsContainerClosed: {
+    opacity: 0.5,
   },
   // Pure Veg Badge
   pureVegBadge: {

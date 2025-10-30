@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions, Keyboard, TouchableWithoutFeedback, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions, Keyboard, TouchableWithoutFeedback, Platform, ActivityIndicator, Animated, RefreshControl } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
@@ -182,6 +182,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isLoadingCategories, setIsLoadingCategories] = React.useState(true);
   const [isLoadingRestaurants, setIsLoadingRestaurants] = React.useState(true);
   const [isLoadingLocation, setIsLoadingLocation] = React.useState(false);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
   const isRequestingPermission = React.useRef(false);
 
   // Track image loading states
@@ -344,28 +345,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // }, [refreshTrigger]);
 
 
-  // Check if all banner images are loaded
+  // Hide banner shimmer immediately when API data loads
   React.useEffect(() => {
-    if (!isLoadingBanners && carouselData.length > 0) {
-      // Check if all banner images with URLs are loaded (or if there are no images with URLs)
-      const bannersWithImages = carouselData.filter(item => item.imageUrl);
-      const allImagesLoaded = bannersWithImages.length === 0 ||
-                              bannersWithImages.every(item => loadedBannerImages.has(item.id));
-
-      if (allImagesLoaded) {
-        setShowBannerShimmer(false);
-      } else {
-        // Fallback: Hide shimmer after 3 seconds even if images haven't loaded
-        const timeout = setTimeout(() => {
-          setShowBannerShimmer(false);
-        }, 3000);
-        return () => clearTimeout(timeout);
-      }
-    } else if (!isLoadingBanners && carouselData.length === 0) {
-      // No data received, hide shimmer immediately
+    if (!isLoadingBanners) {
       setShowBannerShimmer(false);
     }
-  }, [isLoadingBanners, carouselData, loadedBannerImages]);
+  }, [isLoadingBanners]);
 
   // Hide shimmer as soon as API data is loaded
   React.useEffect(() => {
@@ -375,25 +360,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [isLoadingCategories]);
 
-  // Check if all restaurant images are loaded
+  // Hide restaurant shimmer immediately when API data loads
   React.useEffect(() => {
-    if (!isLoadingRestaurants && restaurantData.length > 0) {
-      const allImagesLoaded = restaurantData.every(item => loadedRestaurantImages.has(item.id.toString()));
-
-      if (allImagesLoaded) {
-        setShowRestaurantShimmer(false);
-      } else {
-        // Fallback: Hide shimmer after 3 seconds even if images haven't loaded
-        const timeout = setTimeout(() => {
-          setShowRestaurantShimmer(false);
-        }, 3000);
-        return () => clearTimeout(timeout);
-      }
-    } else if (!isLoadingRestaurants && restaurantData.length === 0) {
-      // No data received, hide shimmer immediately
+    if (!isLoadingRestaurants) {
       setShowRestaurantShimmer(false);
     }
-  }, [isLoadingRestaurants, restaurantData, loadedRestaurantImages]);
+  }, [isLoadingRestaurants]);
 
   // Check location permission and handle accordingly
   React.useEffect(() => {
@@ -834,7 +806,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   onLoad={() => {
                     setLoadedBannerImages(prev => new Set(prev).add(item.id));
                   }}
-                  fadeDuration={0}
+                  onError={() => {
+                    // Mark as loaded even on error
+                    setLoadedBannerImages(prev => new Set(prev).add(item.id));
+                  }}
+                  fadeDuration={300}
                   progressiveRenderingEnabled={true}
                 />
               </View>
@@ -883,10 +859,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
             }}
             onError={(error) => {
-              // Mark as loaded anyway to not block shimmer
+              // Mark as loaded anyway
               setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
             }}
-            fadeDuration={0}
+            fadeDuration={300}
             progressiveRenderingEnabled={true}
           />
         </View>
@@ -896,6 +872,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </TouchableOpacity>
     );
   }, [onNavigateToCategory]);
+
+  // Handle pull-to-refresh
+  const handleRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+
+    // Get current coordinates for refresh
+    const lat = externalSelectedLocation?.latitude || defaultAddressCoords?.latitude || DEFAULT_LOCATION.latitude;
+    const lng = externalSelectedLocation?.longitude || defaultAddressCoords?.longitude || DEFAULT_LOCATION.longitude;
+
+    // Reload home data
+    await fetchHomeData(lat, lng);
+
+    setIsRefreshing(false);
+  }, [externalSelectedLocation, defaultAddressCoords, fetchHomeData]);
 
   // Handle scroll to detect when category section becomes sticky and load more restaurants
   const handleScroll = React.useCallback((event: any) => {
@@ -928,6 +918,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           stickyHeaderIndices={[3]}
           testID="home-screen"
           bounces={false}
+          alwaysBounceVertical={true}
           overScrollMode="never"
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
@@ -936,6 +927,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           keyboardDismissMode="on-drag"
           removeClippedSubviews={true}
           decelerationRate="normal"
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              colors={['#00B14F']}
+              tintColor="#00B14F"
+              progressBackgroundColor="#FFFFFF"
+            />
+          }
         >
 
       {/* Header with Background Image */}
