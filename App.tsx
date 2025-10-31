@@ -1257,53 +1257,52 @@ function AppContent() {
             ]}
             pointerEvents={currentScreen === 'restaurant' ? 'auto' : 'none'}
           >
-            {(currentScreen === 'restaurant' || restaurantScreenSlide._value !== SCREEN_WIDTH) && (
-              <RestaurantScreen
-                restaurantId={selectedRestaurantId}
-                restaurantName={selectedRestaurantName}
-                onBack={handleBackFromRestaurant}
-                onNavigateToDetails={handleNavigateToRestaurantDetails}
-                onNavigateToOrders={(orderId) => {
-                  // Close restaurant screen and navigate to orders
-                  Animated.timing(restaurantScreenSlide, {
-                    toValue: SCREEN_WIDTH,
-                    duration: 200,
-                    easing: Easing.out(Easing.ease),
-                    useNativeDriver: true,
-                  }).start(() => {
-                    if (orderId) {
-                      setSelectedOrderId(orderId.toString());
-                    }
-                    setCurrentScreen('orders');
-                  });
-                }}
-                onNavigateToHome={() => {
-                  // Close restaurant screen and go back to appropriate screen
-                  if (restaurantCameFrom === 'orders') {
-                    // If came from orders (reorder flow), go back to orders screen
-                    setCurrentScreen('orders');
-                  } else if (restaurantCameFrom === 'home') {
-                    setCurrentScreen('home');
-                  } else if (restaurantCameFrom === 'category') {
-                    setCurrentScreen('home');
-                  } else if (restaurantCameFrom === 'search') {
-                    setCurrentScreen('home');
-                  } else if (restaurantCameFrom === 'favorites') {
-                    setCurrentScreen('home');
-                  } else {
-                    setCurrentScreen('home');
+            <RestaurantScreen
+              visible={currentScreen === 'restaurant'}
+              restaurantId={selectedRestaurantId}
+              restaurantName={selectedRestaurantName}
+              onBack={handleBackFromRestaurant}
+              onNavigateToDetails={handleNavigateToRestaurantDetails}
+              onNavigateToOrders={(orderId) => {
+                // Close restaurant screen and navigate to orders
+                Animated.timing(restaurantScreenSlide, {
+                  toValue: SCREEN_WIDTH,
+                  duration: 200,
+                  easing: Easing.out(Easing.ease),
+                  useNativeDriver: true,
+                }).start(() => {
+                  if (orderId) {
+                    setSelectedOrderId(orderId.toString());
                   }
+                  setCurrentScreen('orders');
+                });
+              }}
+              onNavigateToHome={() => {
+                // Close restaurant screen and go back to appropriate screen
+                if (restaurantCameFrom === 'orders') {
+                  // If came from orders (reorder flow), go back to orders screen
+                  setCurrentScreen('orders');
+                } else if (restaurantCameFrom === 'home') {
+                  setCurrentScreen('home');
+                } else if (restaurantCameFrom === 'category') {
+                  setCurrentScreen('home');
+                } else if (restaurantCameFrom === 'search') {
+                  setCurrentScreen('home');
+                } else if (restaurantCameFrom === 'favorites') {
+                  setCurrentScreen('home');
+                } else {
+                  setCurrentScreen('home');
+                }
 
-                  // Animate restaurant screen sliding out to the right
-                  Animated.timing(restaurantScreenSlide, {
-                    toValue: SCREEN_WIDTH,
-                    duration: 200,
-                    easing: Easing.out(Easing.ease),
-                    useNativeDriver: true,
-                  }).start();
-                }}
-              />
-            )}
+                // Animate restaurant screen sliding out to the right
+                Animated.timing(restaurantScreenSlide, {
+                  toValue: SCREEN_WIDTH,
+                  duration: 200,
+                  easing: Easing.out(Easing.ease),
+                  useNativeDriver: true,
+                }).start();
+              }}
+            />
           </Animated.View>
 
           {/* Restaurant Details Screen */}
@@ -1312,8 +1311,8 @@ function AppContent() {
               <RestaurantDetailsScreen
                 restaurantId={selectedRestaurantId}
                 restaurantName={selectedRestaurantName}
-                latitude={selectedLocation.latitude}
-                longitude={selectedLocation.longitude}
+                latitude={selectedLocation?.latitude || 9.9252}
+                longitude={selectedLocation?.longitude || 78.1198}
                 onBack={handleBackFromRestaurantDetails}
               />
             </View>

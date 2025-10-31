@@ -35,6 +35,7 @@ import { ItemTiming as ImportedItemTiming, formatItemTiming, isItemAvailable } f
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface RestaurantScreenProps {
+  visible: boolean;
   restaurantId: number;
   restaurantName?: string;
   onBack?: () => void;
@@ -179,6 +180,7 @@ interface CartItem {
 }
 
 export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
+  visible,
   restaurantId,
   restaurantName,
   onBack,
@@ -744,10 +746,15 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Fetch restaurant details from API
   useEffect(() => {
-    if (restaurantId) {
+    if (visible && restaurantId) {
       fetchRestaurantDetails();
+    } else if (!visible) {
+      // Clear data when screen is not visible to prevent showing old cache
+      setRestaurantData(null);
+      setMenuSections([]);
+      setIsLoading(true);
     }
-  }, [restaurantId]);
+  }, [visible, restaurantId]);
 
   // Initialize active category when menu sections load
   useEffect(() => {
@@ -980,16 +987,13 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         decelerationRate="normal"
       >
         {/* Header Image with Overlay */}
-        <ImageBackground
-          source={
-            restaurantData?.logo_url
-              ? { uri: restaurantData.logo_url }
-              : require('@/assets/biriyani.png')
-          }
-          style={styles.headerImage}
-          resizeMode="cover"
-        >
-          <View style={styles.headerOverlay}>
+        {restaurantData?.logo_url ? (
+          <ImageBackground
+            source={{ uri: restaurantData.logo_url }}
+            style={styles.headerImage}
+            resizeMode="cover"
+          >
+            <View style={styles.headerOverlay}>
             {/* Back Button */}
             <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
               <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
@@ -1040,8 +1044,50 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 <Text style={styles.deliveryText}>{restaurantData?.delivery_time || '25-30 mins'}</Text>
               </View>
             </View>
+            </View>
+          </ImageBackground>
+        ) : (
+          <View style={styles.headerImage}>
+            {/* Shimmer for the banner image */}
+            <Shimmer
+              width={SCREEN_WIDTH}
+              height={252}
+              borderRadius={0}
+              backgroundColor="#E8E8E8"
+              style={{ position: 'absolute', top: 0, left: 0 }}
+            />
+            <View style={styles.headerOverlay}>
+            {/* Back Button */}
+            <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
+              <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+            </TouchableOpacity>
+
+            {/* Restaurant Info Card with Shimmer */}
+            <View style={styles.restaurantCard}>
+              <View style={styles.restaurantTopRow}>
+                <View style={styles.restaurantNameRow}>
+                  <Shimmer width={180} height={20} borderRadius={4} backgroundColor="#E8E8E8" />
+                </View>
+                <View style={styles.ratingContainer}>
+                  <Shimmer width={80} height={16} borderRadius={4} backgroundColor="#E8E8E8" />
+                </View>
+              </View>
+
+              {/* Dotted Divider */}
+              <View style={styles.dividerContainer}>
+                {Array.from({ length: 30 }).map((_, index) => (
+                  <View key={index} style={styles.dash} />
+                ))}
+              </View>
+
+              <View style={styles.restaurantBottomRow}>
+                <Shimmer width={120} height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+                <Shimmer width={80} height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+              </View>
+            </View>
+            </View>
           </View>
-        </ImageBackground>
+        )}
 
         {/* Filter Buttons with Search - STICKY */}
         <SafeAreaView edges={['top']} style={styles.filterSafeArea}>
