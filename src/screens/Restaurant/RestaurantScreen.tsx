@@ -874,9 +874,13 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       const lat = 9.9352300;
       const lng = 78.1304040;
 
-      const response = await apiService.get(
-        `/api/buyer/restaurants/${restaurantId}?lat=${lat}&lng=${lng}&include_items=true`
-      );
+      // Add minimum delay to show shimmer animation
+      const [response] = await Promise.all([
+        apiService.get(
+          `/api/buyer/restaurants/${restaurantId}?lat=${lat}&lng=${lng}&include_items=true`
+        ),
+        new Promise(resolve => setTimeout(resolve, 1500)) // 1.5 second delay
+      ]);
 
       // Handle nested data structure: response.data.data.data
       const nestedData = response.data?.data?.data || response.data?.data;
@@ -1737,9 +1741,6 @@ const styles = StyleSheet.create({
   animatedContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    overflow: 'hidden',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
   },
   headerImage: {
     width: SCREEN_WIDTH,

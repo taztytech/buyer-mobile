@@ -902,17 +902,17 @@ function AppContent() {
   return (
     <>
       <SafeAreaProvider>
-        {currentScreen === 'login' ? (
+        {!isCheckingAuth && currentScreen === 'login' ? (
         <LoginScreen onLoginSuccess={handleLoginSuccess} />
-      ) : currentScreen === 'otp' ? (
+      ) : !isCheckingAuth && currentScreen === 'otp' ? (
         <OTPVerificationScreen
           phoneNumber={phoneNumber}
           onBack={handleBackToLogin}
           onSuccess={handleOtpSuccess}
         />
-      ) : currentScreen === 'welcome' ? (
+      ) : !isCheckingAuth && currentScreen === 'welcome' ? (
         <WelcomeScreen onContinue={handleWelcomeComplete} />
-      ) : (
+      ) : !isCheckingAuth ? (
         <View style={styles.container}>
           {/* Keep HomeScreen mounted to preserve state */}
           <Animated.View
@@ -1306,7 +1306,7 @@ function AppContent() {
             </View>
           )}
         </View>
-      )}
+      ) : null}
       </SafeAreaProvider>
     </>
   );

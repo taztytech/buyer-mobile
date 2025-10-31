@@ -129,8 +129,12 @@ class AuthService {
           });
         }
 
-        // 3. Set tokens in API service (in-memory)
-        apiService.setTokens(response.data.access_token, response.data.refresh_token);
+        // 3. Set tokens in API service (in-memory and persist to storage again as backup)
+        await apiService.setTokens(
+          response.data.access_token,
+          response.data.refresh_token,
+          response.data.expires_in || 3600
+        );
       }
 
       return response;

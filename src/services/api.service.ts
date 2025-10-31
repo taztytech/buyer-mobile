@@ -41,10 +41,25 @@ class ApiService {
   /**
    * Set authentication tokens (in memory and storage)
    */
-  setTokens(accessToken: string, refreshToken?: string) {
+  async setTokens(accessToken: string, refreshToken?: string, expiresIn: number = 3600): Promise<void> {
     this.accessToken = accessToken;
     if (refreshToken) {
       this.refreshToken = refreshToken;
+    }
+
+    // Also persist to storage to ensure tokens survive app restart
+    // Only save if we have both access and refresh tokens
+    const tokenToSave = refreshToken || this.refreshToken;
+    if (tokenToSave) {
+      try {
+        await storageService.saveTokens({
+          accessToken,
+          refreshToken: tokenToSave,
+          expiresIn,
+        });
+      } catch (error) {
+        // Silent fail - tokens are still in memory
+      }
     }
   }
 

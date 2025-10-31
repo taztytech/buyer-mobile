@@ -374,6 +374,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Check location permission and handle accordingly
   React.useEffect(() => {
     const checkLocationPermission = async () => {
+      // Skip if screen is not focused (HomeScreen is always mounted but not always visible)
+      if (!isFocused) {
+        return;
+      }
+
       // Skip if already checked this session or if user has a default address
       if (hasShownLocationModal || hasDefaultAddress || isLoadingLocation) {
         return;
@@ -384,7 +389,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         const { status } = await Location.getForegroundPermissionsAsync();
 
         if (status === 'granted') {
-          // Permission already granted, get location automatically
+          // Permission already granted, get location silently without showing modal
           setHasShownLocationModal(true);
           const location = await Location.getCurrentPositionAsync({});
           const userLatitude = location.coords.latitude;
@@ -393,7 +398,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           // Fetch restaurants with user's location
           await fetchHomeData(userLatitude, userLongitude);
         } else {
-          // Permission not granted, show the modal
+          // Permission not granted, show custom modal first
           setShowLocationPopup(true);
           setHasShownLocationModal(true);
         }
@@ -405,7 +410,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     };
 
     checkLocationPermission();
-  }, [hasShownLocationModal, hasDefaultAddress, isLoadingLocation]);
+  }, [isFocused, hasShownLocationModal, hasDefaultAddress, isLoadingLocation]);
 
   // Reload home data when veg mode changes
   React.useEffect(() => {
