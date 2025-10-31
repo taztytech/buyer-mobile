@@ -30,12 +30,12 @@ import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
 import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
 import { ordersService } from '@/services/orders.service';
-// import { AnimatedSplash } from '@/components/AnimatedSplash';
+import CustomSplashScreen from '@/components/CustomSplashScreen';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Prevent native splash from auto-hiding
-SplashScreen.preventAutoHideAsync();
+// Let native splash auto-hide immediately - don't prevent it
+// SplashScreen.preventAutoHideAsync();
 
 // Inner component with cart and confirmation context access
 function AppContent() {
@@ -893,36 +893,14 @@ function AppContent() {
   const isAppReady = fontsLoaded && !isCheckingAuth;
   // const showSplash = !animationComplete;
 
-  // Hide native splash screen when app is fully ready
+  // Hide native splash screen INSTANTLY
   React.useEffect(() => {
-    if (isAppReady) {
-      // Add small delay to ensure fonts are rendered
-      const timer = setTimeout(() => {
-        SplashScreen.hideAsync().catch(() => {});
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isAppReady]);
-
-  // Fallback: Always hide splash screen after 3 seconds to prevent getting stuck
-  React.useEffect(() => {
-    const fallbackTimer = setTimeout(() => {
-      SplashScreen.hideAsync().catch(() => {});
-    }, 3000);
-    return () => clearTimeout(fallbackTimer);
+    // Hide immediately on mount
+    SplashScreen.hideAsync().catch(() => {});
   }, []);
 
   return (
     <>
-      {/* Render AnimatedSplash OUTSIDE SafeAreaProvider for true full-screen */}
-      {/* {showSplash && (
-        <AnimatedSplash
-          onAnimationEnd={() => {
-            setAnimationComplete(true);
-          }}
-        />
-      )} */}
-
       <SafeAreaProvider>
         {currentScreen === 'login' ? (
         <LoginScreen onLoginSuccess={handleLoginSuccess} />
@@ -1336,14 +1314,25 @@ function AppContent() {
 
 // Wrapper App component with providers
 export default function App() {
+  const [showCustomSplash, setShowCustomSplash] = React.useState(true);
+
   return (
-    <VegModeProvider>
-      <CartProvider>
-        <ConfirmationProvider>
-          <AppContent />
-        </ConfirmationProvider>
-      </CartProvider>
-    </VegModeProvider>
+    <>
+      {showCustomSplash && (
+        <CustomSplashScreen
+          onFinish={() => {
+            setShowCustomSplash(false);
+          }}
+        />
+      )}
+      <VegModeProvider>
+        <CartProvider>
+          <ConfirmationProvider>
+            <AppContent />
+          </ConfirmationProvider>
+        </CartProvider>
+      </VegModeProvider>
+    </>
   );
 }
 

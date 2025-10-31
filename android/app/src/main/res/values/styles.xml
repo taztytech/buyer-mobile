@@ -6,8 +6,10 @@
     <item name="android:statusBarColor">#1a9656</item>
   </style>
   <style name="Theme.App.SplashScreen" parent="Theme.SplashScreen">
-    <item name="windowSplashScreenBackground">@drawable/splash_screen</item>
-    <item name="windowSplashScreenAnimatedIcon">@drawable/splash_screen</item>
+    <item name="windowSplashScreenBackground">#1a9656</item>
+    <item name="windowSplashScreenAnimatedIcon">@drawable/transparent</item>
+    <item name="windowSplashScreenAnimationDuration">1</item>
+    <item name="android:windowBackground">#1a9656</item>
     <item name="postSplashScreenTheme">@style/AppTheme</item>
   </style>
 </resources>
