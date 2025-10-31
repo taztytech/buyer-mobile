@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   TextInputProps,
+  Keyboard,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -38,12 +39,19 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     }
   };
 
+  const handleBack = () => {
+    Keyboard.dismiss();
+    if (onBack) {
+      onBack();
+    }
+  };
+
   return (
     <View style={styles.container}>
       {showBackButton && (
         <TouchableOpacity
           style={styles.backButton}
-          onPress={onBack}
+          onPress={handleBack}
           activeOpacity={0.7}
         >
           <MaterialIcons name="chevron-left" size={24} color={backButtonColor} />

@@ -1089,58 +1089,60 @@ function AppContent() {
             </View>
           )}
 
-          {/* Always render SearchScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.searchOverlay,
-              {
-                transform: [{ translateX: searchScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'search' ? 'auto' : 'none'}
-          >
-            <SearchScreen
-              onBack={handleBackFromSearch}
-              onSelectResult={(result) => {
-                handleBackFromSearch();
-              }}
-              onSelectItem={(itemId, itemName) => {
-                // Navigate to category results screen to show restaurants with this dish
-                setSelectedCategory(itemName);
-                setCategoryCameFrom('search');
-                setCurrentScreen('categoryResults');
+          {/* Conditionally render SearchScreen only when needed */}
+          {currentScreen === 'search' && (
+            <Animated.View
+              style={[
+                styles.searchOverlay,
+                {
+                  transform: [{ translateX: searchScreenSlide }],
+                },
+              ]}
+              pointerEvents="auto"
+            >
+              <SearchScreen
+                onBack={handleBackFromSearch}
+                onSelectResult={(result) => {
+                  handleBackFromSearch();
+                }}
+                onSelectItem={(itemId, itemName) => {
+                  // Navigate to category results screen to show restaurants with this dish
+                  setSelectedCategory(itemName);
+                  setCategoryCameFrom('search');
+                  setCurrentScreen('categoryResults');
 
-                // Close search screen with animation
-                Animated.timing(searchScreenSlide, {
-                  toValue: SCREEN_WIDTH,
-                  duration: 200,
-                  useNativeDriver: true,
-                }).start();
-              }}
-              onSelectRestaurant={(restaurantId, restaurantName) => {
-                setSelectedRestaurantId(restaurantId);
-                setSelectedRestaurantName(restaurantName);
-                setRestaurantCameFrom('search');
-                setCurrentScreen('restaurant');
-
-                // Close search screen and open restaurant screen with animation
-                Animated.parallel([
+                  // Close search screen with animation
                   Animated.timing(searchScreenSlide, {
                     toValue: SCREEN_WIDTH,
                     duration: 200,
-                    easing: Easing.out(Easing.ease),
                     useNativeDriver: true,
-                  }),
-                  Animated.timing(restaurantScreenSlide, {
-                    toValue: 0,
-                    duration: 250,
-                    easing: Easing.out(Easing.cubic),
-                    useNativeDriver: true,
-                  }),
-                ]).start();
-              }}
-            />
-          </Animated.View>
+                  }).start();
+                }}
+                onSelectRestaurant={(restaurantId, restaurantName) => {
+                  setSelectedRestaurantId(restaurantId);
+                  setSelectedRestaurantName(restaurantName);
+                  setRestaurantCameFrom('search');
+                  setCurrentScreen('restaurant');
+
+                  // Close search screen and open restaurant screen with animation
+                  Animated.parallel([
+                    Animated.timing(searchScreenSlide, {
+                      toValue: SCREEN_WIDTH,
+                      duration: 200,
+                      easing: Easing.out(Easing.ease),
+                      useNativeDriver: true,
+                    }),
+                    Animated.timing(restaurantScreenSlide, {
+                      toValue: 0,
+                      duration: 250,
+                      easing: Easing.out(Easing.cubic),
+                      useNativeDriver: true,
+                    }),
+                  ]).start();
+                }}
+              />
+            </Animated.View>
+          )}
 
           {/* Conditionally render MyAddressesScreen only when needed */}
           {currentScreen === 'myAddresses' && (

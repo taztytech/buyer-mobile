@@ -19,7 +19,6 @@ interface FilterModalProps {
 export interface FilterState {
   sortBy: 'lowToHigh' | 'highToLow' | null;
   dietary: 'veg' | 'nonVeg' | 'eggterian' | null;
-  topPicks: 'bestSellers' | 'highlyOrdered' | null;
 }
 
 export const FilterModal: React.FC<FilterModalProps> = ({
@@ -30,7 +29,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({
 }) => {
   const [sortBy, setSortBy] = useState<'lowToHigh' | 'highToLow' | null>(initialFilters?.sortBy || null);
   const [dietary, setDietary] = useState<'veg' | 'nonVeg' | 'eggterian' | null>(initialFilters?.dietary || null);
-  const [topPicks, setTopPicks] = useState<'bestSellers' | 'highlyOrdered' | null>(initialFilters?.topPicks || null);
   const slideAnim = useRef(new Animated.Value(1000)).current;
 
   useEffect(() => {
@@ -49,14 +47,12 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   const handleClear = () => {
     setSortBy(null);
     setDietary(null);
-    setTopPicks(null);
   };
 
   const handleApply = () => {
     onApply({
       sortBy,
       dietary,
-      topPicks,
     });
     onClose();
   };
@@ -159,33 +155,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                     activeOpacity={0.7}
                   >
                     <Text style={styles.optionText}>Eggterian</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Top Picks Section */}
-              <View style={styles.filterSection}>
-                <Text style={styles.sectionTitle}>Top Picks</Text>
-                <View style={styles.optionsRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.optionButton,
-                      topPicks === 'bestSellers' && styles.optionButtonActive,
-                    ]}
-                    onPress={() => setTopPicks(topPicks === 'bestSellers' ? null : 'bestSellers')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.optionText}>Best Sellers</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.optionButton,
-                      topPicks === 'highlyOrdered' && styles.optionButtonActive,
-                    ]}
-                    onPress={() => setTopPicks(topPicks === 'highlyOrdered' ? null : 'highlyOrdered')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.optionText}>Highly Ordered</Text>
                   </TouchableOpacity>
                 </View>
               </View>

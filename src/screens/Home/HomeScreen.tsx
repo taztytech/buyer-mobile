@@ -556,8 +556,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const handleApplyVegMode = () => {
-    setVegMode(tempVegSelection);
+    setVegMode(tempVegSelection, rememberVegChoice);
     handleCloseVegModal();
+    // Reset remember choice for next time
+    setRememberVegChoice(false);
   };
 
   // Mark local (bundled) images as loaded immediately

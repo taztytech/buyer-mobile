@@ -120,7 +120,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           onChangeText={handleSearch}
           placeholder="Search for dishes..."
           showClearButton={true}
-          autoFocus={false}
+          autoFocus={true}
         />
 
         {/* Search Results */}

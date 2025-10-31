@@ -13,6 +13,7 @@ import {
   Animated,
   Alert,
   Platform,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -211,7 +212,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const [filters, setFilters] = useState<FilterState>({
     sortBy: null,
     dietary: null,
-    topPicks: null,
   });
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
@@ -693,9 +693,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   // Get filtered menu sections based on active dietary filter and global veg mode
   const getFilteredMenuSections = (): MenuSection[] => {
     return menuSections
-      .map(section => ({
-        ...section,
-        items: section.items.filter(item => {
+      .map(section => {
+        // Filter items
+        let filteredItems = section.items.filter(item => {
           // First apply global veg mode filter
           if (vegMode === 'all') {
             // When veg mode is 'all', show only veg items
@@ -715,9 +715,40 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             }
           }
 
+          // Apply filter modal dietary filter
+          if (filters.dietary) {
+            if (filters.dietary === 'veg') {
+              return item.isVeg === true;
+            } else if (filters.dietary === 'nonVeg') {
+              return item.isVeg === false;
+            }
+            // eggterian filter - would need an isEgg property on items
+            // For now, treating as non-veg
+            else if (filters.dietary === 'eggterian') {
+              return item.isVeg === false;
+            }
+          }
+
           return true;
-        })
-      }))
+        });
+
+        // Apply sorting if filter is active
+        if (filters.sortBy) {
+          filteredItems = [...filteredItems].sort((a, b) => {
+            if (filters.sortBy === 'lowToHigh') {
+              return a.price - b.price;
+            } else if (filters.sortBy === 'highToLow') {
+              return b.price - a.price;
+            }
+            return 0;
+          });
+        }
+
+        return {
+          ...section,
+          items: filteredItems,
+        };
+      })
       .filter(section => section.items.length > 0); // Remove empty sections
   };
 
@@ -748,6 +779,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   useEffect(() => {
     if (visible && restaurantId) {
       fetchRestaurantDetails();
+      // Reset cart view to ensure menu is shown when entering restaurant
+      setShowOrderDetails(false);
     } else if (!visible) {
       // Clear data when screen is not visible to prevent showing old cache
       setRestaurantData(null);
@@ -779,6 +812,28 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       }).start();
     }
   }, [showOrderDetails]);
+
+  // Handle Android back button
+  useEffect(() => {
+    const backAction = () => {
+      // If cart/order details is open, close it instead of going back
+      if (showOrderDetails) {
+        setShowOrderDetails(false);
+        return true; // Prevent default back behavior
+      }
+      // If search is open, close it
+      if (showSearch) {
+        setShowSearch(false);
+        return true;
+      }
+      // Otherwise, let the parent handle back (go to previous screen)
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+
+    return () => backHandler.remove();
+  }, [showOrderDetails, showSearch]);
 
   // Animate background when modal opens/closes
   useEffect(() => {
@@ -1002,16 +1057,22 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             {/* Restaurant Info Card */}
             <View style={styles.restaurantCard}>
               <View style={styles.restaurantTopRow}>
-                <View style={styles.restaurantNameRow}>
-                  <Text style={styles.restaurantName} numberOfLines={1}>
+                <TouchableOpacity
+                  style={styles.restaurantNameRow}
+                  onPress={onNavigateToDetails}
+                  activeOpacity={1}
+                  disabled={!onNavigateToDetails}
+                >
+                  <Text style={styles.restaurantName} numberOfLines={2}>
                     {restaurantData?.name || restaurantName || 'Restaurant'}
+                    {onNavigateToDetails && (
+                      <Text style={styles.infoIconText}>
+                        {' '}
+                        <MaterialIcons name="info-outline" size={18} color="#00B14F" />
+                      </Text>
+                    )}
                   </Text>
-                  {onNavigateToDetails && (
-                    <TouchableOpacity onPress={onNavigateToDetails} activeOpacity={0.7}>
-                      <MaterialIcons name="info-outline" size={19} color="#00B14F" />
-                    </TouchableOpacity>
-                  )}
-                </View>
+                </TouchableOpacity>
                 {/* Only show rating and reviews if there's at least one review */}
                 {(restaurantData?.stats?.total_reviews > 0 || restaurantData?.total_reviews > 0) && (
                   <View style={styles.ratingContainer}>
@@ -1094,14 +1155,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           <View style={styles.filterSectionContainer}>
             <View style={styles.filterSection}>
             <View style={styles.filterButtonsGroup}>
-              <TouchableOpacity
+              {/* <TouchableOpacity
                 style={styles.filterButton}
                 onPress={() => setShowFilterModal(true)}
                 activeOpacity={0.7}
               >
                 <MaterialIcons name="filter-list" size={14} color="#000000" />
                 <Text style={styles.filterText}>Filters</Text>
-              </TouchableOpacity>
+              </TouchableOpacity> */}
 
               <TouchableOpacity
                 style={[
@@ -1583,16 +1644,15 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       />
 
       {/* Filter Modal */}
-      <FilterModal
+      {/* <FilterModal
         visible={showFilterModal}
         onClose={() => setShowFilterModal(false)}
         onApply={(newFilters) => {
           setFilters(newFilters);
           setShowFilterModal(false);
-          // TODO: Apply filters to menu items
         }}
         initialFilters={filters}
-      />
+      /> */}
 
       {/* Order Details Screen */}
       <Animated.View
@@ -1720,19 +1780,20 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   restaurantNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    position: 'relative',
     flex: 1,
+    marginRight: 8,
   },
   restaurantName: {
     fontFamily: 'Poppins',
     fontWeight: '600',
     fontSize: 18,
     lineHeight: 27,
-    textAlign: 'center',
     color: '#000000',
     opacity: 0.85,
+  },
+  infoIconText: {
+    lineHeight: 27,
   },
   ratingContainer: {
     alignItems: 'center',

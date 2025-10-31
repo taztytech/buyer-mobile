@@ -5,7 +5,7 @@ export type VegModeType = 'off' | 'pure' | 'all';
 
 interface VegModeContextType {
   vegMode: VegModeType;
-  setVegMode: (mode: VegModeType) => Promise<void>;
+  setVegMode: (mode: VegModeType, remember?: boolean) => Promise<void>;
   isVegModeEnabled: boolean;
 }
 
@@ -33,10 +33,13 @@ export const VegModeProvider: React.FC<{ children: React.ReactNode }> = ({ child
     loadVegMode();
   }, []);
 
-  const setVegMode = async (mode: VegModeType) => {
+  const setVegMode = async (mode: VegModeType, remember: boolean = true) => {
     try {
       setVegModeState(mode);
-      await storageService.saveVegMode(mode);
+      // Only save to storage if remember is true
+      if (remember) {
+        await storageService.saveVegMode(mode);
+      }
     } catch (error) {
       // Silent fail
     }

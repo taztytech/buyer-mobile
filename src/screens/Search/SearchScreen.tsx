@@ -153,7 +153,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           onChangeText={setSearchQuery}
           showClearButton={true}
           backButtonColor="#001E1F"
-          autoFocus={false}
+          autoFocus={true}
           cursorColor="#00B14F"
         />
 
