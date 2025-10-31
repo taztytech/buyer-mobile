@@ -247,20 +247,34 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
               ))}
             </View>
 
-            {/* Resend Code Row */}
+            {/* Bottom Action Row - Back, Timer, and Resend Code */}
             <View style={styles.resendRow}>
               <TouchableOpacity
-                onPress={handleResendCode}
-                disabled={timer > 0 || isResending}
+                onPress={onBack}
+                disabled={timer > 0}
               >
                 <Text style={[
                   styles.resendText,
-                  timer === 0 && !isResending && styles.resendTextActive
+                  timer === 0 && styles.resendTextActive
                 ]}>
-                  {isResending ? 'Sending...' : 'Resend Code'}
+                  &lt; Back
                 </Text>
               </TouchableOpacity>
-              <Text style={styles.timerText}>0.{timer.toString().padStart(2, '0')} s</Text>
+
+              <View style={styles.resendRightGroup}>
+                <TouchableOpacity
+                  onPress={handleResendCode}
+                  disabled={timer > 0 || isResending}
+                >
+                  <Text style={[
+                    styles.resendText,
+                    timer === 0 && !isResending && styles.resendTextActive
+                  ]}>
+                    {isResending ? 'Sending...' : 'Resend Code'}
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.timerText}>0.{timer.toString().padStart(2, '0')} s</Text>
+              </View>
             </View>
 
             {/* VERIFY & PROCEED Button */}
@@ -412,6 +426,20 @@ const styles = StyleSheet.create({
     height: 21,
     marginBottom: 0,
   },
+  resendRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timerText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.primary,
+    width: 60,
+    textAlign: 'right',
+  },
   resendText: {
     fontFamily: 'Poppins',
     fontWeight: '400',
@@ -420,14 +448,6 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 30, 31, 0.5)',
   },
   resendTextActive: {
-    color: colors.primary,
-    textDecorationLine: 'underline',
-  },
-  timerText: {
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 14,
-    lineHeight: 21,
     color: colors.primary,
   },
   verifyButton: {

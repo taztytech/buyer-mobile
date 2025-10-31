@@ -130,9 +130,6 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
   const handleSubmit = async () => {
     setIsSubmitting(true);
 
-    console.log('Order ID:', orderId);
-    console.log('Order Items:', orderItems);
-
     // Validate orderId
     if (!orderId) {
       Alert.alert('Error', 'Order ID is missing');
@@ -176,21 +173,15 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
         reviewData.photos = photos;
       }
 
-      console.log('Submitting review data:', JSON.stringify(reviewData, null, 2));
-
       // Submit review to API
       const response = await ordersService.submitReview(reviewData);
-
-      console.log('API Response:', JSON.stringify(response, null, 2));
 
       setIsSubmitting(false);
 
       if (response.success) {
-        console.log('Review submitted successfully!');
         // Show success modal after submission
         setShowSuccessModal(true);
       } else {
-        console.error('Review submission failed:', response.error);
         Alert.alert('Error', response.error || 'Failed to submit review');
       }
     } catch (error: any) {

@@ -49,25 +49,19 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
     try {
       setIsLoading(true);
       setError(null);
-      console.log('Fetching restaurant details for ID:', restaurantId);
-      console.log('Using coordinates:', { lat: latitude, lng: longitude });
 
       const response = await restaurantService.getRestaurantDetails(restaurantId, {
         lat: latitude,
         lng: longitude,
         include_items: true,
       });
-      console.log('Restaurant details response:', JSON.stringify(response, null, 2));
 
       if (response.success && response.data) {
-        console.log('Setting restaurant data:', response.data);
         setRestaurantData(response.data);
       } else {
-        console.log('Failed to fetch restaurant details:', response.message);
         setError(response.message || 'Failed to load restaurant details');
       }
     } catch (err: any) {
-      console.log('Error fetching restaurant details:', err);
       setError(err.message || 'An error occurred');
     } finally {
       setIsLoading(false);
@@ -79,8 +73,6 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
     const phoneNumber = (restaurantData as any)?.phone || (restaurantData as any)?.contact_number;
     if (phoneNumber) {
       Linking.openURL(`tel:${phoneNumber}`);
-    } else {
-      console.log('Phone number not available');
     }
   };
 
@@ -125,22 +117,12 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
         message += `https://maps.google.com/?q=${location.lat},${location.lng}`;
       }
 
-      const result = await Share.share({
+      await Share.share({
         message: message,
         title: `${restaurantData.name} - Tazty`,
       });
-
-      if (result.action === Share.sharedAction) {
-        if (result.activityType) {
-          console.log('Shared with activity type:', result.activityType);
-        } else {
-          console.log('Shared successfully');
-        }
-      } else if (result.action === Share.dismissedAction) {
-        console.log('Share dismissed');
-      }
     } catch (error: any) {
-      console.error('Error sharing:', error.message);
+      // Error sharing
     }
   };
 

@@ -479,16 +479,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const deliveryFee = selfPickup ? 0 : 29;
   const platformFee = 10;
 
-  // Calculate tip amount based on selection
-  const tipAmount = (() => {
-    if (selectedTip === null) return 0;
-    if (selectedTip === -1) {
-      // "Other" is selected, use custom amount
-      const customAmount = parseInt(customTipAmount) || 0;
-      return customAmount;
-    }
-    return selectedTip;
-  })();
+  // Calculate tip amount based on selection (DISABLED - always 0)
+  const tipAmount = 0; // Tip feature is disabled
+  // const tipAmount = (() => {
+  //   if (selectedTip === null) return 0;
+  //   if (selectedTip === -1) {
+  //     // "Other" is selected, use custom amount
+  //     const customAmount = parseInt(customTipAmount) || 0;
+  //     return customAmount;
+  //   }
+  //   return selectedTip;
+  // })();
 
   const totalAmount = itemTotal + gstAndCharges + deliveryFee + platformFee + tipAmount;
 
@@ -701,8 +702,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             )}
           </View>
 
-          {/* Tip Section */}
-          <View style={styles.section}>
+          {/* Tip Section - HIDDEN/DISABLED */}
+          {/* <View style={styles.section}>
             <TouchableOpacity
               style={styles.sectionHeader}
               onPress={() => setTipExpanded(!tipExpanded)}
@@ -761,7 +762,6 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   </TouchableOpacity>
                 </View>
 
-                {/* Custom Tip Input */}
                 {selectedTip === -1 && (
                   <View style={styles.customTipContainer}>
                     <Text style={styles.customTipLabel}>Enter custom tip amount</Text>
@@ -784,10 +784,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 </Text>
               </View>
             )}
-          </View>
+          </View> */}
 
-          {/* Apply Promo Code Section */}
-          <View style={styles.section}>
+          {/* Apply Promo Code Section - HIDDEN/DISABLED */}
+          {/* <View style={styles.section}>
             <TouchableOpacity
               style={styles.sectionHeader}
               onPress={() => setPromoExpanded(!promoExpanded)}
@@ -817,7 +817,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 </View>
               </View>
             )}
-          </View>
+          </View> */}
 
           {/* Bill Details Section */}
           <View style={styles.section}>

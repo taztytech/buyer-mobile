@@ -187,6 +187,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isLoadingLocation, setIsLoadingLocation] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [hasNetworkError, setHasNetworkError] = React.useState(false);
+  const [noRestaurantsFound, setNoRestaurantsFound] = React.useState(false);
   const isRequestingPermission = React.useRef(false);
 
   // Track image loading states
@@ -313,7 +314,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         }
       } catch (error) {
         // Error fetching addresses, use fallback location
-        console.error('🏠 [HomeScreen] Error fetching addresses:', error);
         setHasDefaultAddress(false);
         setSelectedLocation({
           name: DEFAULT_LOCATION.name,
@@ -595,6 +595,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const fetchHomeData = React.useCallback(async (latitude?: number, longitude?: number) => {
     try {
       setHasNetworkError(false);
+      setNoRestaurantsFound(false);
       setIsLoadingBanners(true);
       setIsLoadingCategories(true);
       setIsLoadingRestaurants(true);
@@ -678,16 +679,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               const timings = restaurant.timings || [];
               const isOpen = homeService.isRestaurantOpen(timings);
 
-              // Debug: Log timing data for closed restaurants
-              if (!isOpen) {
-                const now = new Date();
-                const currentDay = now.getDay();
-                const currentTime = now.getHours() * 100 + now.getMinutes();
-                console.log(`[DEBUG] Restaurant "${restaurant.name}" is CLOSED`);
-                console.log(`[DEBUG] Current day: ${currentDay} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][currentDay]}), Current time: ${currentTime}`);
-                console.log(`[DEBUG] Timings:`, JSON.stringify(timings, null, 2));
-              }
-
               return {
                 id: restaurant.id,
                 name: restaurant.name,
@@ -712,12 +703,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               setHasMoreRestaurants(pagination.has_more || false);
             }
           } else {
-            // No restaurants - show network error
-            setHasNetworkError(true);
+            // No restaurants found in the area
+            setNoRestaurantsFound(true);
             setRestaurantData([]);
             setHasMoreRestaurants(false);
           }
         } else {
+          // API call failed - show network error
           setCarouselData(fallbackCarouselData);
           setCategoryData(fallbackCategoryData);
           onCategoriesLoaded?.(fallbackCategoryData);
@@ -725,7 +717,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           setRestaurantData([]);
         }
       } catch (error) {
-        console.error('🚨 [HomeScreen] Error fetching home data:', error);
         setCarouselData(fallbackCarouselData);
         setCategoryData(fallbackCategoryData);
         onCategoriesLoaded?.(fallbackCategoryData);
@@ -798,7 +789,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setHasMoreRestaurants(false);
       }
     } catch (error) {
-      console.error('Error loading more restaurants:', error);
       setHasMoreRestaurants(false);
     } finally {
       setIsLoadingMore(false);
@@ -1326,6 +1316,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </View>
             ))}
           </>
+        ) : noRestaurantsFound ? (
+          <View style={styles.noRestaurantsContainer}>
+            <MaterialIcons name="store" size={64} color="rgba(0, 0, 0, 0.2)" />
+            <Text style={styles.noRestaurantsTitle}>No Restaurants Nearby</Text>
+            <Text style={styles.noRestaurantsMessage}>
+              We couldn't find any restaurants within 5km of your location. Try changing your delivery address or check back later.
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={handleRefresh}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         ) : hasNetworkError ? (
           <View style={styles.networkErrorContainer}>
             <MaterialIcons name="cloud-off" size={64} color="rgba(0, 0, 0, 0.2)" />
@@ -2350,6 +2356,33 @@ const styles = StyleSheet.create({
     color: '#9E9E9E',
     textAlign: 'center',
     paddingHorizontal: 20,
+  },
+  // No Restaurants Found
+  noRestaurantsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingVertical: 60,
+    minHeight: 300,
+  },
+  noRestaurantsTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    lineHeight: 27,
+    color: 'rgba(0, 0, 0, 0.8)',
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  noRestaurantsMessage: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 21,
+    color: 'rgba(0, 0, 0, 0.5)',
+    textAlign: 'center',
+    marginBottom: 24,
   },
   // Network Error
   networkErrorContainer: {

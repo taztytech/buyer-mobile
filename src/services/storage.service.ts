@@ -48,7 +48,6 @@ class StorageService {
         [STORAGE_KEYS.TOKEN_EXPIRY, expiryTime.toString()],
       ]);
     } catch (error) {
-      console.error('Error saving tokens:', error);
       throw error;
     }
   }
@@ -61,7 +60,6 @@ class StorageService {
       const token = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
       return token;
     } catch (error) {
-      console.error('Error getting access token:', error);
       return null;
     }
   }
@@ -128,7 +126,6 @@ class StorageService {
       const result = isLoggedIn === 'true' && accessToken !== null;
       return result;
     } catch (error) {
-      console.error('Error checking isLoggedIn:', error);
       return false;
     }
   }

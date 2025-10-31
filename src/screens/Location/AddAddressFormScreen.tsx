@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    maxHeight: '60%',
+    maxHeight: '75%',
   },
   bottomSheet: {
     backgroundColor: '#FFFFFF',
@@ -526,10 +526,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollView: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
   },
   scrollContent: {
-    paddingBottom: 130,
+    paddingBottom: 20,
   },
   header: {
     backgroundColor: '#FFFFFF',

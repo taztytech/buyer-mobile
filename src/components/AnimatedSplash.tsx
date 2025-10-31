@@ -12,8 +12,6 @@ export const AnimatedSplash: React.FC<AnimatedSplashProps> = ({ onAnimationEnd }
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    console.log('🎬 [AnimatedSplash] Component mounted, hiding native splash...');
-
     // Hide native splash immediately when our AnimatedSplash is mounted
     SplashScreen.hideAsync().catch(() => {});
 
@@ -31,7 +29,6 @@ export const AnimatedSplash: React.FC<AnimatedSplashProps> = ({ onAnimationEnd }
         useNativeDriver: true,
       }),
     ]).start(() => {
-      console.log('✅ [AnimatedSplash] Animation completed');
       if (onAnimationEnd) {
         onAnimationEnd();
       }

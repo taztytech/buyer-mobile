@@ -45,7 +45,11 @@ module.exports = {
       favicon: "./src/assets/favicon.png"
     },
     extra: {
-      EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
-    }
+      EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+      eas: {
+        projectId: "7d65a380-eee0-49b0-9f39-a5cd6eaede5a"
+      }
+    },
+    owner: "hitasoft"
   }
 };

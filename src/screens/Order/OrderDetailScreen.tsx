@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ordersService } from '@/services/orders.service';
+import { authService } from '@/services/auth.service';
 import { Shimmer } from '@/components/Shimmer';
 
 interface OrderDetailScreenProps {
@@ -40,6 +41,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [orderData, setOrderData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userPhoneNumber, setUserPhoneNumber] = useState<string>('');
 
   // Fetch order details function
   const fetchOrderDetails = useCallback(async () => {
@@ -78,6 +80,22 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       fetchOrderDetails();
     }
   }, [visible, orderId, fetchOrderDetails]);
+
+  // Fetch user's phone number on mount
+  useEffect(() => {
+    const fetchUserPhone = async () => {
+      try {
+        const user = await authService.getCurrentUser();
+        if (user?.phoneNumber) {
+          setUserPhoneNumber(user.phoneNumber);
+        }
+      } catch (error) {
+        // Error fetching user phone
+      }
+    };
+
+    fetchUserPhone();
+  }, []);
 
   // Mock data fallback (for reference)
   const mockOrderData = {
@@ -377,7 +395,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             <View style={styles.addressRow}>
               <MaterialIcons name="phone" size={24} color="#00B14F" />
               <Text style={styles.addressText}>
-                {orderData.delivery_address?.alternate_phone_number || 'N/A'}
+                {orderData.delivery_address?.alternate_phone_number || userPhoneNumber || 'N/A'}
               </Text>
             </View>
           </View>

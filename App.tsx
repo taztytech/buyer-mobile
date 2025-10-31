@@ -87,7 +87,7 @@ function AppContent() {
       try {
         // Add timeout to prevent hanging
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Auth check timeout')), 5000)
+          setTimeout(() => reject(new Error('Auth check timeout')), 3000)
         );
 
         await Promise.race([
@@ -117,7 +117,6 @@ function AppContent() {
         ]);
       } catch (error) {
         // Continue to login screen even if auth check fails
-        console.error('Error during auth check:', error);
       } finally {
         setIsCheckingAuth(false);
       }
@@ -238,6 +237,9 @@ function AppContent() {
   };
 
   const handleLogout = async () => {
+    // Clear authentication tokens and user data
+    await authService.logout();
+
     // Reset all animated values to their initial state
     homeScreenSlide.setValue(0);
     profileScreenSlide.setValue(SCREEN_WIDTH);
@@ -247,6 +249,9 @@ function AppContent() {
     addressScreenSlide.setValue(SCREEN_WIDTH);
     locationScreenSlide.setValue(SCREEN_WIDTH);
     helpScreenSlide.setValue(SCREEN_WIDTH);
+
+    // Clear cart
+    clearCart();
 
     // Reset state
     setCurrentScreen('login');
@@ -516,7 +521,7 @@ function AppContent() {
     try {
       setCurrentScreen('restaurantDetails');
     } catch (error) {
-      console.error('Error navigating to restaurant details:', error);
+      // Error navigating to restaurant details
     }
   };
 
@@ -899,11 +904,11 @@ function AppContent() {
     }
   }, [isAppReady]);
 
-  // Fallback: Always hide splash screen after 5 seconds to prevent getting stuck
+  // Fallback: Always hide splash screen after 3 seconds to prevent getting stuck
   React.useEffect(() => {
     const fallbackTimer = setTimeout(() => {
       SplashScreen.hideAsync().catch(() => {});
-    }, 5000);
+    }, 3000);
     return () => clearTimeout(fallbackTimer);
   }, []);
 
@@ -1273,8 +1278,11 @@ function AppContent() {
                   });
                 }}
                 onNavigateToHome={() => {
-                  // Close restaurant screen and go back to home
-                  if (restaurantCameFrom === 'home') {
+                  // Close restaurant screen and go back to appropriate screen
+                  if (restaurantCameFrom === 'orders') {
+                    // If came from orders (reorder flow), go back to orders screen
+                    setCurrentScreen('orders');
+                  } else if (restaurantCameFrom === 'home') {
                     setCurrentScreen('home');
                   } else if (restaurantCameFrom === 'category') {
                     setCurrentScreen('home');

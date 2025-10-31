@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "owner": "hitasoft",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.valarcom.tazty"
@@ -20,6 +21,11 @@
       "enabled": false,
       "checkAutomatically": "NEVER",
       "fallbackToCacheTimeout": 0
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7d65a380-eee0-49b0-9f39-a5cd6eaede5a"
+      }
     }
   }
 }
