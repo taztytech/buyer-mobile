@@ -1158,7 +1158,7 @@ function AppContent() {
 
           {/* Conditionally render ExploreDishesScreen only when needed */}
           {currentScreen === 'exploreDishes' && (
-            <View style={styles.exploreDishesOverlay}>
+            <View style={styles.exploreDishesOverlay} pointerEvents="auto">
               <ExploreDishesScreen
                 visible={true}
                 onBack={handleBackFromExploreDishes}
@@ -1173,6 +1173,14 @@ function AppContent() {
                   setSelectedRestaurantName(restaurantName);
                   setRestaurantCameFrom('favorites');
                   setCurrentScreen('restaurant');
+
+                  // Animate restaurant screen sliding in from right
+                  Animated.timing(restaurantScreenSlide, {
+                    toValue: 0,
+                    duration: 250,
+                    easing: Easing.out(Easing.cubic),
+                    useNativeDriver: true,
+                  }).start();
                 }}
               />
             </View>
