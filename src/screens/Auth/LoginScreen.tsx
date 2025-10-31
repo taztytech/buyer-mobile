@@ -9,13 +9,13 @@ import {
   Image,
   Dimensions,
   Linking,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import { authService } from '@/services/auth.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -24,6 +24,7 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
+  const { showConfirmation } = useConfirmation();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -50,12 +51,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
   const handleLogin = async () => {
     if (!phoneNumber) {
-      Alert.alert('Error', 'Please enter your phone number');
+      showConfirmation({
+        title: 'Error',
+        message: 'Please enter your phone number',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
 
     if (!validatePhoneNumber(phoneNumber)) {
-      Alert.alert('Error', 'Please enter a valid 10-digit Indian phone number');
+      showConfirmation({
+        title: 'Error',
+        message: 'Please enter a valid 10-digit Indian phone number',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
 
@@ -72,10 +85,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         }
       } else {
         // Show error message
-        Alert.alert('Error', response.error || 'Failed to send OTP. Please try again.');
+        showConfirmation({
+          title: 'Error',
+          message: response.error || 'Failed to send OTP. Please try again.',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
       }
     } catch (error: any) {
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      showConfirmation({
+        title: 'Error',
+        message: 'An unexpected error occurred. Please try again.',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
     } finally {
       setIsLoading(false);
     }
@@ -263,7 +288,7 @@ const styles = StyleSheet.create({
   formContainer: {
     width: '100%',
     alignItems: 'center',
-    gap: 24,
+    gap: 16,
   },
   inputLabel: {
     width: '100%',
@@ -273,14 +298,14 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     textTransform: 'uppercase',
     color: '#001E1F',
-    marginBottom: 9,
+    marginBottom: 4,
   },
   phoneInputRow: {
     flexDirection: 'row',
     width: '100%',
     height: 60,
     gap: 9,
-    marginBottom: 24,
+    marginBottom: 8,
   },
   countryCodeBox: {
     flexDirection: 'row',

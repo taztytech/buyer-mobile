@@ -9,12 +9,12 @@ import {
   Image,
   Dimensions,
   Linking,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import { authService } from '@/services/auth.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -29,6 +29,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   onBack,
   onSuccess
 }) => {
+  const { showConfirmation } = useConfirmation();
   const [otp, setOtp] = useState(['', '', '', '']);
   const [timer, setTimer] = useState(61);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -128,7 +129,13 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   const handleVerify = async () => {
     const otpCode = otp.join('');
     if (otpCode.length !== 4) {
-      Alert.alert('Error', 'Please enter the complete 4-digit OTP');
+      showConfirmation({
+        title: 'Error',
+        message: 'Please enter the complete 4-digit OTP',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
 
@@ -147,13 +154,25 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
         }
       } else {
         // Show error message
-        Alert.alert('Incorrect OTP', 'Invalid code. Please enter the correct 4 digit code.');
+        showConfirmation({
+          title: 'Incorrect OTP',
+          message: 'Invalid code. Please enter the correct 4 digit code.',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
         // Clear OTP inputs on error
         setOtp(['', '', '', '']);
         inputRefs[0].current?.focus();
       }
     } catch (error: any) {
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      showConfirmation({
+        title: 'Error',
+        message: 'An unexpected error occurred. Please try again.',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
     } finally {
       setIsVerifying(false);
     }
@@ -174,7 +193,13 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
         setOtp(['', '', '', '']);
         inputRefs[0].current?.focus();
 
-        Alert.alert('Success', 'OTP has been resent to your phone number.');
+        showConfirmation({
+          title: 'Success',
+          message: 'OTP has been resent to your phone number.',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
       } else {
         // Show error message with better context
         const errorMessage = response.error || 'Failed to resend OTP';
@@ -182,10 +207,22 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
           ? 'Please wait a bit longer before requesting a new OTP. Try again in a minute.'
           : errorMessage;
 
-        Alert.alert('Error', detailedMessage);
+        showConfirmation({
+          title: 'Error',
+          message: detailedMessage,
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
       }
     } catch (error: any) {
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      showConfirmation({
+        title: 'Error',
+        message: 'An unexpected error occurred. Please try again.',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
     } finally {
       setIsResending(false);
     }
@@ -382,7 +419,7 @@ const styles = StyleSheet.create({
   formContainer: {
     width: '100%',
     alignItems: 'center',
-    gap: 24,
+    gap: 12,
   },
   inputLabel: {
     width: '100%',
@@ -392,14 +429,14 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     textTransform: 'uppercase',
     color: '#001E1F',
-    marginBottom: 9,
+    marginBottom: 4,
   },
   otpInputRow: {
     flexDirection: 'row',
     width: '100%',
     height: 60,
     gap: 9,
-    marginBottom: 24,
+    marginBottom: 8,
   },
   otpBox: {
     flex: 1,

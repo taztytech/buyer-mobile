@@ -11,13 +11,13 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '@/theme';
 import { authService } from '@/services/auth.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -26,6 +26,7 @@ interface WelcomeScreenProps {
 }
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
+  const { showConfirmation } = useConfirmation();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -56,19 +57,37 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
   const handleContinue = async () => {
     // Validation
     if (!fullName.trim()) {
-      Alert.alert('Required', 'Please enter your full name');
+      showConfirmation({
+        title: 'Required',
+        message: 'Please enter your full name',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
 
     if (!email.trim()) {
-      Alert.alert('Required', 'Please enter your email address');
+      showConfirmation({
+        title: 'Required',
+        message: 'Please enter your email address',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
 
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      showConfirmation({
+        title: 'Invalid Email',
+        message: 'Please enter a valid email address',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
       return;
     }
 
@@ -80,7 +99,13 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
       const phoneNumber = currentUser?.phoneNumber;
 
       if (!phoneNumber) {
-        Alert.alert('Error', 'Phone number not found. Please login again.');
+        showConfirmation({
+          title: 'Error',
+          message: 'Phone number not found. Please login again.',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
         setIsLoading(false);
         return;
       }
@@ -100,10 +125,22 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
         }
       } else {
         // Show error message
-        Alert.alert('Error', response.error || 'Failed to create profile. Please try again.');
+        showConfirmation({
+          title: 'Error',
+          message: response.error || 'Failed to create profile. Please try again.',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
       }
     } catch (error: any) {
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      showConfirmation({
+        title: 'Error',
+        message: 'An unexpected error occurred. Please try again.',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
     } finally {
       setIsLoading(false);
     }
