@@ -1100,23 +1100,31 @@ function AppContent() {
                   setSelectedRestaurantId(restaurantId);
                   setSelectedRestaurantName(restaurantName);
                   setRestaurantCameFrom('search');
+
+                  // Ensure restaurant screen starts off-screen before animating
+                  restaurantScreenSlide.setValue(SCREEN_WIDTH);
+
+                  // Set screen to restaurant
                   setCurrentScreen('restaurant');
 
-                  // Close search screen and open restaurant screen with animation
-                  Animated.parallel([
-                    Animated.timing(searchScreenSlide, {
-                      toValue: SCREEN_WIDTH,
-                      duration: 200,
-                      easing: Easing.out(Easing.ease),
-                      useNativeDriver: true,
-                    }),
-                    Animated.timing(restaurantScreenSlide, {
-                      toValue: 0,
-                      duration: 250,
-                      easing: Easing.out(Easing.cubic),
-                      useNativeDriver: true,
-                    }),
-                  ]).start();
+                  // Small delay to ensure screen is mounted before animation
+                  requestAnimationFrame(() => {
+                    // Close search screen and open restaurant screen with animation
+                    Animated.parallel([
+                      Animated.timing(searchScreenSlide, {
+                        toValue: SCREEN_WIDTH,
+                        duration: 200,
+                        easing: Easing.out(Easing.ease),
+                        useNativeDriver: true,
+                      }),
+                      Animated.timing(restaurantScreenSlide, {
+                        toValue: 0,
+                        duration: 300,
+                        easing: Easing.out(Easing.ease),
+                        useNativeDriver: true,
+                      }),
+                    ]).start();
+                  });
                 }}
               />
             </Animated.View>
