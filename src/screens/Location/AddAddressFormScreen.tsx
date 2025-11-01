@@ -69,9 +69,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [isDefault, setIsDefault] = useState(false);
   const [selectedTag, setSelectedTag] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [loading, setLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const slideAnim = useRef(new Animated.Value(1000)).current;
   const hasInitializedRef = useRef(false);
   const previousVisibleRef = useRef(visible);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Pre-fill form when in edit mode - only run when modal first opens
   useEffect(() => {
@@ -126,6 +128,27 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
       }).start();
     }
   }, [visible]);
+
+  // Listen to keyboard events
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      () => {
+        setKeyboardVisible(true);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setKeyboardVisible(false);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
 
   const handleClose = () => {
     // Animate slide down before closing
@@ -302,13 +325,17 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               ]}
             >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.keyboardAvoidingView}
             keyboardVerticalOffset={0}
           >
           <ScrollView
+            ref={scrollViewRef}
             style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[
+              styles.scrollContent,
+              keyboardVisible && styles.scrollContentWithKeyboard
+            ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
@@ -376,6 +403,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                 placeholderTextColor="#999"
                 keyboardType="number-pad"
                 maxLength={6}
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollTo({ y: 200, animated: true });
+                  }, 100);
+                }}
               />
             </View>
 
@@ -393,6 +425,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                 placeholderTextColor="#999"
                 keyboardType="phone-pad"
                 maxLength={10}
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                  }, 100);
+                }}
               />
             </View>
 
@@ -531,6 +568,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 20,
+  },
+  scrollContentWithKeyboard: {
+    paddingBottom: 0,
   },
   header: {
     backgroundColor: '#FFFFFF',

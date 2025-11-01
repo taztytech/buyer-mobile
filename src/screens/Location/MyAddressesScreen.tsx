@@ -141,10 +141,10 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
             <Text style={styles.loadingText}>Loading addresses...</Text>
           </View>
         ) : addresses.length === 0 ? (
-          <View style={styles.centerContainer}>
-            <MaterialIcons name="location-off" size={64} color="#CCC" />
-            <Text style={styles.emptyTitle}>No saved addresses</Text>
-            <Text style={styles.emptySubtitle}>Add your first address to get started</Text>
+          <View style={styles.emptyState}>
+            <MaterialIcons name="location-off" size={64} color="rgba(0, 0, 0, 0.2)" />
+            <Text style={styles.emptyTitle}>No Saved Addresses</Text>
+            <Text style={styles.emptyText}>Add your first address to get started</Text>
           </View>
         ) : (
           <ScrollView
@@ -273,16 +273,25 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 8,
   },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: 80,
+    paddingHorizontal: 40,
+  },
   emptyTitle: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 18,
-    color: '#666',
+    color: '#001E1F',
     marginTop: 16,
+    textAlign: 'center',
   },
-  emptySubtitle: {
-    fontFamily: 'Poppins',
+  emptyText: {
+    fontFamily: 'Poppins_400Regular',
     fontSize: 14,
-    color: '#999',
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginTop: 8,
     textAlign: 'center',
   },
   scrollView: {

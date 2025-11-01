@@ -151,12 +151,16 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <ScrollView
           ref={scrollViewRef}
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            keyboardVisible && styles.scrollContentWithKeyboard
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           bounces={false}
@@ -194,6 +198,12 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
                   value={fullName}
                   onChangeText={setFullName}
                   autoCapitalize="words"
+                  onFocus={() => {
+                    // Scroll to make name input visible when focused
+                    setTimeout(() => {
+                      scrollViewRef.current?.scrollTo({ y: 100, animated: true });
+                    }, 100);
+                  }}
                 />
               </View>
 
@@ -252,6 +262,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
+  scrollContentWithKeyboard: {
+    paddingBottom: 0,
+  },
   greenSection: {
     height: 258,
     backgroundColor: '#00B14F',
@@ -290,17 +303,17 @@ const styles = StyleSheet.create({
     height: 204,
   },
   bottomSheet: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 40,
-    minHeight: 500,
   },
   formContainer: {
     width: '100%',
-    gap: 24,
+    gap: 16,
   },
   title: {
     width: '100%',

@@ -1093,11 +1093,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           ) : (
             <TouchableOpacity
               style={styles.profileButton}
-              onPress={onNavigateToProfile}
+              onPress={(isLocationServiceable && !hasNetworkError) ? onNavigateToProfile : undefined}
+              activeOpacity={(isLocationServiceable && !hasNetworkError) ? 0.7 : 1}
+              disabled={!isLocationServiceable || hasNetworkError}
               testID="profile-button"
             >
-              <View style={styles.profileAvatar}>
-                <MaterialIcons name="person" size={22} color="#00B14F" />
+              <View style={[
+                styles.profileAvatar,
+                (!isLocationServiceable || hasNetworkError) && styles.profileAvatarDisabled
+              ]}>
+                <MaterialIcons name="person" size={22} color={(isLocationServiceable && !hasNetworkError) ? "#00B14F" : "rgba(0, 177, 79, 0.3)"} />
               </View>
             </TouchableOpacity>
           )}
@@ -1119,18 +1124,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <>
               <TouchableOpacity
                 style={{ flex: 1 }}
-                onPress={isLocationServiceable ? onNavigateToSearch : undefined}
-                activeOpacity={isLocationServiceable ? 0.7 : 1}
-                disabled={!isLocationServiceable}
+                onPress={(isLocationServiceable && !hasNetworkError) ? onNavigateToSearch : undefined}
+                activeOpacity={(isLocationServiceable && !hasNetworkError) ? 0.7 : 1}
+                disabled={!isLocationServiceable || hasNetworkError}
               >
                 <LinearGradient
                   colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={[styles.searchBar, !isLocationServiceable && styles.searchBarDisabled]}
+                  style={[styles.searchBar, (!isLocationServiceable || hasNetworkError) && styles.searchBarDisabled]}
                 >
-                  <MaterialIcons name="search" size={24} color={isLocationServiceable ? "#FFFFFF" : "rgba(255, 255, 255, 0.3)"} />
-                  <Text style={[styles.searchInput, !isLocationServiceable && styles.searchInputDisabled]} numberOfLines={1}>
+                  <MaterialIcons name="search" size={24} color={(isLocationServiceable && !hasNetworkError) ? "#FFFFFF" : "rgba(255, 255, 255, 0.3)"} />
+                  <Text style={[styles.searchInput, (!isLocationServiceable || hasNetworkError) && styles.searchInputDisabled]} numberOfLines={1}>
                     Search Restaurants & foods..
                   </Text>
                 </LinearGradient>
@@ -1138,21 +1143,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
               {/* VEG Mode Toggle */}
               <TouchableOpacity
-                style={[styles.vegModeContainer, !isLocationServiceable && styles.vegModeContainerDisabled]}
-                onPress={isLocationServiceable ? handleVegModeToggle : undefined}
-                disabled={!isLocationServiceable}
+                style={[styles.vegModeContainer, (!isLocationServiceable || hasNetworkError) && styles.vegModeContainerDisabled]}
+                onPress={(isLocationServiceable && !hasNetworkError) ? handleVegModeToggle : undefined}
+                disabled={!isLocationServiceable || hasNetworkError}
                 testID="veg-mode-toggle"
               >
-                <Text style={[styles.vegModeLabel, !isLocationServiceable && styles.vegModeLabelDisabled]}>VEG{'\n'}MODE</Text>
+                <Text style={[styles.vegModeLabel, (!isLocationServiceable || hasNetworkError) && styles.vegModeLabelDisabled]}>VEG{'\n'}MODE</Text>
                 <View style={[
                   styles.vegToggle,
                   isVegModeEnabled && styles.vegToggleActive,
-                  !isLocationServiceable && styles.vegToggleDisabled
+                  (!isLocationServiceable || hasNetworkError) && styles.vegToggleDisabled
                 ]}>
                   <View style={[
                     styles.vegToggleThumb,
                     isVegModeEnabled && styles.vegToggleThumbActive,
-                    !isLocationServiceable && styles.vegToggleThumbDisabled
+                    (!isLocationServiceable || hasNetworkError) && styles.vegToggleThumbDisabled
                   ]} />
                 </View>
               </TouchableOpacity>
@@ -1709,6 +1714,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F7F7',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  profileAvatarDisabled: {
+    opacity: 0.4,
   },
   // Search section
   searchSection: {
