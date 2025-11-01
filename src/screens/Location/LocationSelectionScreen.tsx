@@ -57,8 +57,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   initialLongitude,
 }) => {
   const [region, setRegion] = useState<Region>({
-    latitude: initialLatitude ? parseFloat(String(initialLatitude)) : 12.9716, // Use provided lat/lng or default to Chennai
-    longitude: initialLongitude ? parseFloat(String(initialLongitude)) : 80.2425,
+    latitude: initialLatitude ? parseFloat(String(initialLatitude)) : 9.9252, // Use provided lat/lng or default to Madurai
+    longitude: initialLongitude ? parseFloat(String(initialLongitude)) : 78.1198,
     latitudeDelta: 0.01,
     longitudeDelta: 0.01,
   });
@@ -185,6 +185,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
   const getCurrentLocation = async () => {
     try {
+      console.log('📍 Getting current location...');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         // Use balanced accuracy to get stable location without continuous updates
@@ -193,6 +194,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             ? Location.Accuracy.Balanced
             : Location.Accuracy.High,
         });
+        console.log('📍 Current location:', location.coords.latitude, location.coords.longitude);
+
         const newRegion = {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
@@ -203,6 +206,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         isUpdatingFromCode.current = true;
         setRegion(newRegion);
         currentMapRegion.current = newRegion;
+        console.log('✅ Updated currentMapRegion to current location');
 
         // Animate map to new location if map is available
         if (mapRef.current && isMapAvailable) {
@@ -211,7 +215,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
         setTimeout(() => {
           isUpdatingFromCode.current = false;
-        }, 1100);
+          console.log('🔓 isUpdatingFromCode = false (getCurrentLocation complete)');
+        }, 1500); // Increased from 1100ms to ensure animation completes
 
         // Get address from coordinates
         try {
@@ -237,6 +242,12 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   };
 
   const handleRegionChange = (newRegion: Region) => {
+    // Skip if we're updating from code (search, getCurrentLocation, editing)
+    // This prevents overwriting the programmatically set coordinates
+    if (isUpdatingFromCode.current) {
+      return;
+    }
+
     // Track the current map position in the ref (without triggering re-render)
     currentMapRegion.current = newRegion;
 
@@ -264,6 +275,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     if (isUpdatingFromCode.current) {
       return;
     }
+
+    console.log('🗺️ MAP DRAG - Region changed to:', newRegion.latitude, newRegion.longitude);
 
     // DON'T update region state for user-initiated changes
     // Only programmatic updates (getCurrentLocation, search, editing) should update region
@@ -322,6 +335,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   };
 
   const handleConfirm = () => {
+    console.log('📍 LOCATION CONFIRM - Latitude:', currentMapRegion.current.latitude);
+    console.log('📍 LOCATION CONFIRM - Longitude:', currentMapRegion.current.longitude);
     setShowAddressForm(true);
   };
 
@@ -344,19 +359,25 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const performSearch = async (query: string) => {
     if (!query.trim()) return;
 
+    console.log('🔍 SEARCH - Query:', query);
+
     try {
       // Only check if permission is already granted, don't request it
       const { status } = await Location.getForegroundPermissionsAsync();
 
       if (status !== 'granted') {
+        console.log('⚠️ SEARCH - Location permission not granted');
         return;
       }
 
       // Use geocoding to search for the location
       const results = await Location.geocodeAsync(query);
+      console.log('🔍 SEARCH - Found results:', results.length);
 
       if (results.length > 0) {
         const result = results[0];
+        console.log('🔍 SEARCH - Result coordinates:', result.latitude, result.longitude);
+
         const newRegion = {
           latitude: result.latitude,
           longitude: result.longitude,
@@ -367,6 +388,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         isUpdatingFromCode.current = true;
         setRegion(newRegion);
         currentMapRegion.current = newRegion;
+        console.log('✅ SEARCH - Updated currentMapRegion to:', currentMapRegion.current);
 
         // Animate map to new location if map is available
         if (mapRef.current && isMapAvailable) {
@@ -375,7 +397,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
         setTimeout(() => {
           isUpdatingFromCode.current = false;
-        }, 1100);
+          console.log('🔓 isUpdatingFromCode = false (search complete)');
+        }, 1500); // Increased from 1100ms to ensure animation completes
 
         // Get address details
         try {

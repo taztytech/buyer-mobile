@@ -232,6 +232,10 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     setLoading(true);
 
     try {
+      // Log received coordinates
+      console.log('📥 ADDRESS FORM - Received Latitude:', latitude);
+      console.log('📥 ADDRESS FORM - Received Longitude:', longitude);
+
       // Prepare address data for API
       const addressData: AddAddressRequest = {
         address1: houseNo,
@@ -246,6 +250,13 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         alternate_phone_number: alternateMobile ? parseInt(alternateMobile, 10) : undefined,
         is_default: false,
       };
+
+      console.log('📤 ADDRESS FORM - Sending to API:', {
+        latitude: addressData.latitude,
+        longitude: addressData.longitude,
+        address1: addressData.address1,
+        city: addressData.city,
+      });
 
       let response;
 
