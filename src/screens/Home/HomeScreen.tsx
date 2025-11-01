@@ -372,45 +372,46 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [isLoadingRestaurants]);
 
   // Check location permission and handle accordingly
-  React.useEffect(() => {
-    const checkLocationPermission = async () => {
-      // Skip if screen is not focused (HomeScreen is always mounted but not always visible)
-      if (!isFocused) {
-        return;
-      }
+  // COMMENTED OUT: Custom location permission modal disabled
+  // React.useEffect(() => {
+  //   const checkLocationPermission = async () => {
+  //     // Skip if screen is not focused (HomeScreen is always mounted but not always visible)
+  //     if (!isFocused) {
+  //       return;
+  //     }
 
-      // Skip if already checked this session or if user has a default address
-      if (hasShownLocationModal || hasDefaultAddress || isLoadingLocation) {
-        return;
-      }
+  //     // Skip if already checked this session or if user has a default address
+  //     if (hasShownLocationModal || hasDefaultAddress || isLoadingLocation) {
+  //       return;
+  //     }
 
-      try {
-        // Check if permission is already granted
-        const { status } = await Location.getForegroundPermissionsAsync();
+  //     try {
+  //       // Check if permission is already granted
+  //       const { status } = await Location.getForegroundPermissionsAsync();
 
-        if (status === 'granted') {
-          // Permission already granted, get location silently without showing modal
-          setHasShownLocationModal(true);
-          const location = await Location.getCurrentPositionAsync({});
-          const userLatitude = location.coords.latitude;
-          const userLongitude = location.coords.longitude;
+  //       if (status === 'granted') {
+  //         // Permission already granted, get location silently without showing modal
+  //         setHasShownLocationModal(true);
+  //         const location = await Location.getCurrentPositionAsync({});
+  //         const userLatitude = location.coords.latitude;
+  //         const userLongitude = location.coords.longitude;
 
-          // Fetch restaurants with user's location
-          await fetchHomeData(userLatitude, userLongitude);
-        } else {
-          // Permission not granted, show custom modal first
-          setShowLocationPopup(true);
-          setHasShownLocationModal(true);
-        }
-      } catch (error) {
-        // If error checking permission, show the modal
-        setShowLocationPopup(true);
-        setHasShownLocationModal(true);
-      }
-    };
+  //         // Fetch restaurants with user's location
+  //         await fetchHomeData(userLatitude, userLongitude);
+  //       } else {
+  //         // Permission not granted, show custom modal first
+  //         setShowLocationPopup(true);
+  //         setHasShownLocationModal(true);
+  //       }
+  //     } catch (error) {
+  //       // If error checking permission, show the modal
+  //       setShowLocationPopup(true);
+  //       setHasShownLocationModal(true);
+  //     }
+  //   };
 
-    checkLocationPermission();
-  }, [isFocused, hasShownLocationModal, hasDefaultAddress, isLoadingLocation]);
+  //   checkLocationPermission();
+  // }, [isFocused, hasShownLocationModal, hasDefaultAddress, isLoadingLocation]);
 
   // Reload home data when veg mode changes
   React.useEffect(() => {
@@ -637,6 +638,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           const nearbyRestaurants = actualData.nearby_restaurants;
           const pagination = actualData.pagination;
 
+          // Log restaurant names and food_type
+          if (nearbyRestaurants && Array.isArray(nearbyRestaurants)) {
+            console.log('=== HOME API RESTAURANTS ===');
+            console.log(`Total restaurants: ${nearbyRestaurants.length}`);
+            nearbyRestaurants.forEach((restaurant: any, index: number) => {
+              console.log(`${index + 1}. ${restaurant.name} - food_type: ${restaurant.food_type || 'N/A'}`);
+            });
+            console.log('============================');
+          }
+
           // Handle promotional banners
           if (promotionalBanner) {
             // Handle if it's a single object or array
@@ -681,15 +692,42 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           // Handle restaurants - show error if empty or undefined
           if (nearbyRestaurants && Array.isArray(nearbyRestaurants) && nearbyRestaurants.length > 0) {
-            // Transform API data to match our Restaurant interface
-            const transformedRestaurants = nearbyRestaurants.map((restaurant: any) => {
+            // Filter restaurants based on vegMode and food_type
+            let filteredRestaurants = nearbyRestaurants;
+
+            if (vegMode === 'pure') {
+              // Show only Veg restaurants (food_type === 'Veg')
+              filteredRestaurants = nearbyRestaurants.filter((restaurant: any) => {
+                const foodType = restaurant.food_type;
+                return foodType && foodType.toLowerCase() === 'veg';
+              });
+              console.log(`VEG MODE: pure - Filtered ${filteredRestaurants.length} veg restaurants out of ${nearbyRestaurants.length}`);
+            } else if (vegMode === 'all') {
+              // Show all restaurants regardless of food_type
+              filteredRestaurants = nearbyRestaurants;
+              console.log(`VEG MODE: all - Showing all ${nearbyRestaurants.length} restaurants`);
+            }
+            // If vegMode is 'off', show all restaurants (no filtering)
+
+            // Transform filtered restaurants to match our Restaurant interface
+            const transformedRestaurants = filteredRestaurants.map((restaurant: any) => {
               const timings = restaurant.timings || [];
               const isOpen = homeService.isRestaurantOpen(timings);
+
+              // Format cuisine_tags: if array, join with " • ", otherwise use as string
+              let cuisineText = 'Restaurant';
+              if (restaurant.cuisine_tags) {
+                if (Array.isArray(restaurant.cuisine_tags)) {
+                  cuisineText = restaurant.cuisine_tags.join(' • ');
+                } else if (typeof restaurant.cuisine_tags === 'string') {
+                  cuisineText = restaurant.cuisine_tags;
+                }
+              }
 
               return {
                 id: restaurant.id,
                 name: restaurant.name,
-                cuisine: restaurant.description || 'Restaurant',
+                cuisine: cuisineText,
                 rating: restaurant.rating || 0,
                 reviewCount: restaurant.review_count || restaurant.reviews_count || restaurant.total_reviews || 0,
                 deliveryTime: restaurant.delivery_time || '25-30 mins',
@@ -757,15 +795,41 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         const pagination = actualData.pagination;
 
         if (nearbyRestaurants && Array.isArray(nearbyRestaurants) && nearbyRestaurants.length > 0) {
-          // Transform new restaurants
-          const transformedRestaurants = nearbyRestaurants.map((restaurant: any) => {
+          // Filter restaurants based on vegMode and food_type (same as initial load)
+          let filteredRestaurants = nearbyRestaurants;
+
+          if (vegMode === 'pure') {
+            // Show only Veg restaurants (food_type === 'Veg')
+            filteredRestaurants = nearbyRestaurants.filter((restaurant: any) => {
+              const foodType = restaurant.food_type;
+              return foodType && foodType.toLowerCase() === 'veg';
+            });
+            console.log(`LOAD MORE - VEG MODE: pure - Filtered ${filteredRestaurants.length} veg restaurants out of ${nearbyRestaurants.length}`);
+          } else if (vegMode === 'all') {
+            // Show all restaurants regardless of food_type
+            filteredRestaurants = nearbyRestaurants;
+            console.log(`LOAD MORE - VEG MODE: all - Showing all ${nearbyRestaurants.length} restaurants`);
+          }
+
+          // Transform filtered new restaurants
+          const transformedRestaurants = filteredRestaurants.map((restaurant: any) => {
             const timings = restaurant.timings || [];
             const isOpen = homeService.isRestaurantOpen(timings);
+
+            // Format cuisine_tags: if array, join with " • ", otherwise use as string
+            let cuisineText = 'Restaurant';
+            if (restaurant.cuisine_tags) {
+              if (Array.isArray(restaurant.cuisine_tags)) {
+                cuisineText = restaurant.cuisine_tags.join(' • ');
+              } else if (typeof restaurant.cuisine_tags === 'string') {
+                cuisineText = restaurant.cuisine_tags;
+              }
+            }
 
             return {
               id: restaurant.id,
               name: restaurant.name,
-              cuisine: restaurant.description || 'Restaurant',
+              cuisine: cuisineText,
               rating: restaurant.rating || 0,
               reviewCount: restaurant.review_count || restaurant.reviews_count || restaurant.total_reviews || 0,
               deliveryTime: restaurant.delivery_time || '25-30 mins',
@@ -1396,7 +1460,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       )}
 
       {/* Location Permission Modal */}
-      <Modal
+      {/* COMMENTED OUT: Custom location permission modal disabled */}
+      {/* <Modal
         visible={showLocationPopup}
         transparent={true}
         animationType="fade"
@@ -1405,7 +1470,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       >
         <BlurView intensity={80} tint="dark" style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            {/* Location Illustration */}
             <View style={styles.illustrationContainer}>
               <Image
                 source={require('@/assets/location-illustration.png')}
@@ -1414,15 +1478,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               />
             </View>
 
-            {/* Title */}
             <Text style={styles.modalTitle}>Location Access</Text>
 
-            {/* Description */}
             <Text style={styles.modalDescription}>
               Give the access to fetch accurate location that will ease to delivery
             </Text>
 
-            {/* Buttons */}
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.allowButton}
@@ -1442,7 +1503,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </View>
           </View>
         </BlurView>
-      </Modal>
+      </Modal> */}
 
       {/* VEG Mode Selection Modal */}
       <Modal

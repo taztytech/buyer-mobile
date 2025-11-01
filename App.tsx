@@ -87,7 +87,7 @@ function AppContent() {
       try {
         // Add timeout to prevent hanging
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Auth check timeout')), 3000)
+          setTimeout(() => reject(new Error('Auth check timeout')), 5000)
         );
 
         await Promise.race([

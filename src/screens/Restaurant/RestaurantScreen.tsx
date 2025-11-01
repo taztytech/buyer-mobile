@@ -782,10 +782,13 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       // Reset cart view to ensure menu is shown when entering restaurant
       setShowOrderDetails(false);
     } else if (!visible) {
+      // Reset scroll to top BEFORE clearing data to prevent layout offset
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
       // Clear data when screen is not visible to prevent showing old cache
       setRestaurantData(null);
       setMenuSections([]);
-      setIsLoading(true);
+      // DON'T set isLoading(true) here - it causes layout offset when navigating from search
+      // Let isLoading be managed by fetchRestaurantDetails naturally
     }
   }, [visible, restaurantId]);
 
@@ -793,6 +796,13 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   useEffect(() => {
     if (menuSections.length > 0 && !activeCategoryId) {
       setActiveCategoryId(menuSections[0].id);
+    }
+    // Reset scroll position after data loads and shimmer completes
+    // This ensures proper positioning after the 1.5s shimmer delay
+    if (menuSections.length > 0) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      }, 100);
     }
   }, [menuSections]);
 
@@ -1735,7 +1745,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: '#000000',
   },
   animatedContainer: {

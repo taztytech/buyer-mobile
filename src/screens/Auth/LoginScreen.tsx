@@ -179,11 +179,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             </TouchableOpacity>
 
             {/* Social Section */}
-            <View style={styles.socialSection}>
-              {/* Or Text */}
+            {/* COMMENTED OUT: Google login button hidden */}
+            {/* <View style={styles.socialSection}>
               <Text style={styles.orText}>Or</Text>
 
-              {/* Google Sign In Button */}
               <TouchableOpacity
                 style={styles.googleButton}
                 onPress={handleGoogleLogin}
@@ -196,7 +195,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 />
                 <Text style={styles.googleButtonText}>Continue with Google</Text>
               </TouchableOpacity>
-            </View>
+            </View> */}
           </View>
 
           {/* Terms & Privacy */}
