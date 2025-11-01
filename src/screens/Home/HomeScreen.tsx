@@ -732,30 +732,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             setRestaurantData(transformedRestaurants);
 
-            // Log restaurant timing details
-            console.log('\n=== RESTAURANT TIMINGS ===');
-            console.log(`Total restaurants loaded: ${transformedRestaurants.length}`);
-            const now = new Date();
-            const jsDay = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-            const currentTime = now.getHours() * 100 + now.getMinutes();
-            console.log(`Current: Day=${jsDay} (JS getDay), Time=${currentTime}`);
-            transformedRestaurants.forEach((restaurant: any, index: number) => {
-              console.log(`\n${index + 1}. ${restaurant.name}`);
-              console.log(`   Status: ${restaurant.isOpen ? 'OPEN' : 'CLOSED'}`);
-              if (restaurant.timings && restaurant.timings.length > 0) {
-                restaurant.timings.forEach((timing: any, timingIndex: number) => {
-                  const day = timing.day || timing.day_of_week || 'N/A';
-                  const openTime = timing.open_time || timing.opening_time || 'N/A';
-                  const closeTime = timing.close_time || timing.closing_time || 'N/A';
-                  const isOpen = timing.is_open !== undefined ? timing.is_open : 'N/A';
-                  console.log(`   Day ${day}: ${openTime} - ${closeTime} (is_open: ${isOpen})`);
-                });
-              } else {
-                console.log('   No timing information available');
-              }
-            });
-            console.log('==========================\n');
-
             // Handle pagination metadata
             if (pagination) {
               setHasMoreRestaurants(pagination.has_more || false);
@@ -857,25 +833,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           // Append new restaurants to existing list
           setRestaurantData(prevData => [...prevData, ...transformedRestaurants]);
           setCurrentPage(nextPage);
-
-          // Log timing details for newly loaded restaurants
-          console.log('\n=== LOAD MORE - RESTAURANT TIMINGS ===');
-          console.log(`New restaurants loaded: ${transformedRestaurants.length} (Page ${nextPage})`);
-          transformedRestaurants.forEach((restaurant: any, index: number) => {
-            console.log(`\n${index + 1}. ${restaurant.name}`);
-            console.log(`   Status: ${restaurant.isOpen ? 'OPEN' : 'CLOSED'}`);
-            if (restaurant.timings && restaurant.timings.length > 0) {
-              restaurant.timings.forEach((timing: any) => {
-                const day = timing.day || timing.day_of_week || 'N/A';
-                const openTime = timing.open_time || timing.opening_time || 'N/A';
-                const closeTime = timing.close_time || timing.closing_time || 'N/A';
-                console.log(`   ${day}: ${openTime} - ${closeTime}`);
-              });
-            } else {
-              console.log('   No timing information available');
-            }
-          });
-          console.log('======================================\n');
 
           // Update pagination state
           if (pagination) {
