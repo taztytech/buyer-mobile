@@ -103,17 +103,22 @@ class HomeService {
     }
 
     const now = new Date();
-    const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const jsDay = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
     const currentTime = now.getHours() * 100 + now.getMinutes(); // Convert to HHMM format
 
+    // Convert JavaScript day (0-6) to API day format (1-7)
+    // API format: 1 = Monday, 2 = Tuesday, ..., 7 = Sunday
+    // JS format: 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    const apiDay = jsDay === 0 ? 7 : jsDay;
+
     // Find timing for current day
-    const todayTiming = timings.find(t => t.day === currentDay);
+    const todayTiming = timings.find(t => t.day === apiDay);
 
     if (!todayTiming) {
       return false; // No timing info for today means closed
     }
 
-    if (!todayTiming.is_open) {
+    if (todayTiming.is_open === false) {
       return false; // Explicitly marked as closed
     }
 

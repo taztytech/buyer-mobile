@@ -638,15 +638,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           const nearbyRestaurants = actualData.nearby_restaurants;
           const pagination = actualData.pagination;
 
-          // Log restaurant names and food_type
-          if (nearbyRestaurants && Array.isArray(nearbyRestaurants)) {
-            console.log('=== HOME API RESTAURANTS ===');
-            console.log(`Total restaurants: ${nearbyRestaurants.length}`);
-            nearbyRestaurants.forEach((restaurant: any, index: number) => {
-              console.log(`${index + 1}. ${restaurant.name} - food_type: ${restaurant.food_type || 'N/A'}`);
-            });
-            console.log('============================');
-          }
 
           // Handle promotional banners
           if (promotionalBanner) {
@@ -701,11 +692,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 const foodType = restaurant.food_type;
                 return foodType && foodType.toLowerCase() === 'veg';
               });
-              console.log(`VEG MODE: pure - Filtered ${filteredRestaurants.length} veg restaurants out of ${nearbyRestaurants.length}`);
             } else if (vegMode === 'all') {
               // Show all restaurants regardless of food_type
               filteredRestaurants = nearbyRestaurants;
-              console.log(`VEG MODE: all - Showing all ${nearbyRestaurants.length} restaurants`);
             }
             // If vegMode is 'off', show all restaurants (no filtering)
 
@@ -742,6 +731,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             });
 
             setRestaurantData(transformedRestaurants);
+
+            // Log restaurant timing details
+            console.log('\n=== RESTAURANT TIMINGS ===');
+            console.log(`Total restaurants loaded: ${transformedRestaurants.length}`);
+            const now = new Date();
+            const jsDay = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+            const currentTime = now.getHours() * 100 + now.getMinutes();
+            console.log(`Current: Day=${jsDay} (JS getDay), Time=${currentTime}`);
+            transformedRestaurants.forEach((restaurant: any, index: number) => {
+              console.log(`\n${index + 1}. ${restaurant.name}`);
+              console.log(`   Status: ${restaurant.isOpen ? 'OPEN' : 'CLOSED'}`);
+              if (restaurant.timings && restaurant.timings.length > 0) {
+                restaurant.timings.forEach((timing: any, timingIndex: number) => {
+                  const day = timing.day || timing.day_of_week || 'N/A';
+                  const openTime = timing.open_time || timing.opening_time || 'N/A';
+                  const closeTime = timing.close_time || timing.closing_time || 'N/A';
+                  const isOpen = timing.is_open !== undefined ? timing.is_open : 'N/A';
+                  console.log(`   Day ${day}: ${openTime} - ${closeTime} (is_open: ${isOpen})`);
+                });
+              } else {
+                console.log('   No timing information available');
+              }
+            });
+            console.log('==========================\n');
 
             // Handle pagination metadata
             if (pagination) {
@@ -804,11 +817,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               const foodType = restaurant.food_type;
               return foodType && foodType.toLowerCase() === 'veg';
             });
-            console.log(`LOAD MORE - VEG MODE: pure - Filtered ${filteredRestaurants.length} veg restaurants out of ${nearbyRestaurants.length}`);
           } else if (vegMode === 'all') {
             // Show all restaurants regardless of food_type
             filteredRestaurants = nearbyRestaurants;
-            console.log(`LOAD MORE - VEG MODE: all - Showing all ${nearbyRestaurants.length} restaurants`);
           }
 
           // Transform filtered new restaurants
@@ -846,6 +857,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           // Append new restaurants to existing list
           setRestaurantData(prevData => [...prevData, ...transformedRestaurants]);
           setCurrentPage(nextPage);
+
+          // Log timing details for newly loaded restaurants
+          console.log('\n=== LOAD MORE - RESTAURANT TIMINGS ===');
+          console.log(`New restaurants loaded: ${transformedRestaurants.length} (Page ${nextPage})`);
+          transformedRestaurants.forEach((restaurant: any, index: number) => {
+            console.log(`\n${index + 1}. ${restaurant.name}`);
+            console.log(`   Status: ${restaurant.isOpen ? 'OPEN' : 'CLOSED'}`);
+            if (restaurant.timings && restaurant.timings.length > 0) {
+              restaurant.timings.forEach((timing: any) => {
+                const day = timing.day || timing.day_of_week || 'N/A';
+                const openTime = timing.open_time || timing.opening_time || 'N/A';
+                const closeTime = timing.close_time || timing.closing_time || 'N/A';
+                console.log(`   ${day}: ${openTime} - ${closeTime}`);
+              });
+            } else {
+              console.log('   No timing information available');
+            }
+          });
+          console.log('======================================\n');
 
           // Update pagination state
           if (pagination) {
