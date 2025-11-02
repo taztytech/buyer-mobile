@@ -64,14 +64,14 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   });
 
   const [locationName, setLocationName] = useState(
-    editingAddress?.city || 'Kannan Nagar'
+    editingAddress?.city || 'Madurai'
   );
   const [locationAddress, setLocationAddress] = useState(
     editingAddress ?
       [editingAddress.address1, editingAddress.address2, editingAddress.address3, editingAddress.city, editingAddress.state, editingAddress.pincode]
         .filter(Boolean)
         .join(', ')
-      : 'Vigneshwar Nagar, Nanganallur, Tamilnadu, India'
+      : 'Madurai, Tamil Nadu, India'
   );
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [searchText, setSearchText] = useState(initialSearchQuery);
@@ -127,11 +127,21 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     }
   }, [editingAddress]);
 
-  // Get current location whenever screen loads for new addresses
+  // Don't automatically get location on mount
+  // User can click the "Use My Location" button if they want their current location
+  // This prevents the map from showing California while fetching location
   useEffect(() => {
-    // Automatically get current location if not editing and no initial coordinates
-    if (!editingAddress && !initialLatitude && !initialLongitude) {
-      getCurrentLocation();
+    // Force map to Madurai on mount if not editing
+    if (!editingAddress && !initialLatitude && !initialLongitude && mapRef.current && isMapAvailable) {
+      const maduraiRegion = {
+        latitude: 9.9252,
+        longitude: 78.1198,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      setTimeout(() => {
+        mapRef.current?.animateToRegion(maduraiRegion, 100);
+      }, 300);
     }
   }, [editingAddress, initialLatitude, initialLongitude]);
 
@@ -148,10 +158,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (event) => {
+      () => {
         setIsKeyboardVisible(true);
+        // Position search bar just 8px above keyboard
         Animated.timing(bottomPosition, {
-          toValue: event.endCoordinates.height,
+          toValue: 8,
           duration: Platform.OS === 'ios' ? 250 : 200,
           useNativeDriver: false,
         }).start();
@@ -212,7 +223,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
         setTimeout(() => {
           isUpdatingFromCode.current = false;
-        }, 1500); // Increased from 1100ms to ensure animation completes
+        }, 1500);
 
         // Get address from coordinates
         try {
@@ -232,8 +243,55 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           setLocationName('Current Location');
           setLocationAddress('Current Location');
         }
+      } else {
+        // Permission denied - ensure we use Madurai default
+        const maduraiRegion = {
+          latitude: 9.9252,
+          longitude: 78.1198,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        };
+
+        isUpdatingFromCode.current = true;
+        setRegion(maduraiRegion);
+        currentMapRegion.current = maduraiRegion;
+
+        // Animate map to Madurai if map is available
+        if (mapRef.current && isMapAvailable) {
+          mapRef.current.animateToRegion(maduraiRegion, 1000);
+        }
+
+        setTimeout(() => {
+          isUpdatingFromCode.current = false;
+        }, 1500);
+
+        // Set Madurai as location
+        setLocationName('Madurai');
+        setLocationAddress('Madurai, Tamil Nadu, India');
       }
     } catch (error) {
+      // Error getting location - fallback to Madurai
+      const maduraiRegion = {
+        latitude: 9.9252,
+        longitude: 78.1198,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+
+      isUpdatingFromCode.current = true;
+      setRegion(maduraiRegion);
+      currentMapRegion.current = maduraiRegion;
+
+      if (mapRef.current && isMapAvailable) {
+        mapRef.current.animateToRegion(maduraiRegion, 1000);
+      }
+
+      setTimeout(() => {
+        isUpdatingFromCode.current = false;
+      }, 1500);
+
+      setLocationName('Madurai');
+      setLocationAddress('Madurai, Tamil Nadu, India');
     }
   };
 
@@ -333,6 +391,38 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     setShowAddressForm(true);
   };
 
+  const handleBackPress = () => {
+    // Dismiss keyboard before navigating back
+    Keyboard.dismiss();
+    if (onBack) {
+      onBack();
+    }
+  };
+
+  // Callback when map is ready - ensure it's at the correct position
+  const handleMapReady = () => {
+    if (mapRef.current && isMapAvailable) {
+      // If no editing and no initial coords, ensure we're at Madurai
+      if (!editingAddress && !initialLatitude && !initialLongitude) {
+        const maduraiRegion = {
+          latitude: 9.9252,
+          longitude: 78.1198,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        };
+        currentMapRegion.current = maduraiRegion;
+        setTimeout(() => {
+          mapRef.current?.animateToRegion(maduraiRegion, 300);
+        }, 100);
+      } else {
+        // Otherwise use the current region
+        setTimeout(() => {
+          mapRef.current?.animateToRegion(currentMapRegion.current, 300);
+        }, 100);
+      }
+    }
+  };
+
   const handleAddressSave = (addressData: any) => {
     if (onLocationConfirm) {
       onLocationConfirm({
@@ -424,7 +514,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
       {/* Back Button in Safe Area */}
       <SafeAreaView style={styles.headerSafeArea} edges={['top']}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
+        <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
           <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
         </TouchableOpacity>
       </SafeAreaView>
@@ -436,9 +526,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             ref={mapRef}
             provider={PROVIDER_GOOGLE}
             style={styles.map}
+            initialRegion={region}
             region={region}
             onRegionChange={handleRegionChange}
             onRegionChangeComplete={handleRegionChangeComplete}
+            onMapReady={handleMapReady}
             showsUserLocation={false}
             showsMyLocationButton={false}
           />
@@ -471,7 +563,13 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         </View>
 
         {/* Bottom Section */}
-        <Animated.View style={[styles.bottomSection, { bottom: bottomPosition }]}>
+        <Animated.View style={[
+          styles.bottomSection,
+          {
+            bottom: bottomPosition,
+            paddingBottom: isKeyboardVisible ? 12 : 40,
+          }
+        ]}>
           {/* Search Bar */}
           <View style={styles.searchContainer}>
             <MaterialIcons name="search" size={24} color="#001E1F" />

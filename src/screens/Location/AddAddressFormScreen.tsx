@@ -249,12 +249,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         is_default: false,
       };
 
-        latitude: addressData.latitude,
-        longitude: addressData.longitude,
-        address1: addressData.address1,
-        city: addressData.city,
-      });
-
       let response;
 
       if (editMode && addressId) {

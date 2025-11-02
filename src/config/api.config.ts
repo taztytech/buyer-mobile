@@ -38,6 +38,8 @@ export const API_CONFIG = {
       FAVORITES_RESTAURANTS: '/api/buyer/favorites/restaurants',
       FAVORITES_ITEMS: '/api/buyer/favorites/items',
       FAVORITES_ALL: '/api/buyer/favorites/all',
+      PUSH_TOKENS: '/api/buyer/push-tokens',
+      DELETE_PUSH_TOKEN: (token: string) => `/api/buyer/push-tokens/${token}`,
     },
     // Add more endpoint groups as needed
   },

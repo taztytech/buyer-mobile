@@ -9,10 +9,22 @@
     "owner": "hitasoft",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.valarcom.tazty"
+      "bundleIdentifier": "com.valarcom.tazty",
+      "infoPlist": {
+        "NSUserNotificationsUsageDescription": "This app uses notifications to keep you updated on your orders and special offers."
+      }
     },
     "android": {
-      "package": "com.valarcom.tazty"
+      "package": "com.valarcom.tazty",
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED"
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./src/assets/favicon.png"

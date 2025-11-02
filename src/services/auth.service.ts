@@ -6,6 +6,7 @@
 import { apiService, ApiResponse } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 import { storageService, UserData } from './storage.service';
+import { pushNotificationService } from './pushNotification.service';
 
 // Types
 export interface SendOtpRequest {
@@ -135,6 +136,11 @@ class AuthService {
           response.data.refresh_token,
           response.data.expires_in || 3600
         );
+
+        // 4. Register for push notifications (don't block login if this fails)
+        pushNotificationService.registerForPushNotifications().catch(() => {
+          // Silent fail - push notifications are optional
+        });
       }
 
       return response;
@@ -152,6 +158,11 @@ class AuthService {
    */
   async logout(): Promise<ApiResponse> {
     try {
+      // Unregister push notifications (don't block logout if this fails)
+      pushNotificationService.unregisterPushToken().catch(() => {
+        // Silent fail - continue with logout even if this fails
+      });
+
       // Attempt to call logout API
       const response = await apiService.post(API_CONFIG.ENDPOINTS.AUTHENTICATION.LOGOUT);
 
