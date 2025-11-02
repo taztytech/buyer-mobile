@@ -37,17 +37,22 @@ class StorageService {
     try {
       // Validate tokens are not undefined or null
       if (!tokenData.accessToken || !tokenData.refreshToken) {
+        console.error('[StorageService] Cannot save tokens: missing access or refresh token');
         throw new Error('Access token and refresh token are required');
       }
 
       const expiryTime = Date.now() + tokenData.expiresIn * 1000;
+      const expiryDate = new Date(expiryTime);
 
       await AsyncStorage.multiSet([
         [STORAGE_KEYS.ACCESS_TOKEN, tokenData.accessToken],
         [STORAGE_KEYS.REFRESH_TOKEN, tokenData.refreshToken],
         [STORAGE_KEYS.TOKEN_EXPIRY, expiryTime.toString()],
       ]);
+
+      console.log(`[StorageService] Tokens saved successfully (expires: ${expiryDate.toLocaleString()})`);
     } catch (error) {
+      console.error('[StorageService] Failed to save tokens:', error);
       throw error;
     }
   }
@@ -124,8 +129,10 @@ class StorageService {
       const accessToken = await this.getAccessToken();
 
       const result = isLoggedIn === 'true' && accessToken !== null;
+      console.log(`[StorageService] isLoggedIn check: ${result} (flag=${isLoggedIn}, hasToken=${accessToken !== null})`);
       return result;
     } catch (error) {
+      console.error('[StorageService] isLoggedIn check failed:', error);
       return false;
     }
   }
@@ -157,6 +164,7 @@ class StorageService {
    */
   async clearAll(): Promise<void> {
     try {
+      console.warn('[StorageService] Clearing all auth data (logout)');
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.ACCESS_TOKEN,
         STORAGE_KEYS.REFRESH_TOKEN,
@@ -164,8 +172,10 @@ class StorageService {
         STORAGE_KEYS.USER_DATA,
         STORAGE_KEYS.IS_LOGGED_IN,
       ]);
+      console.log('[StorageService] Auth data cleared successfully');
       // Note: VEG_MODE is not cleared on logout - it persists
     } catch (error) {
+      console.error('[StorageService] Failed to clear auth data:', error);
       throw error;
     }
   }

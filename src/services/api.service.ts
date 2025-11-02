@@ -25,6 +25,7 @@ class ApiService {
   private refreshToken: string | null = null;
   private isRefreshing: boolean = false;
   private refreshPromise: Promise<boolean> | null = null;
+  private isInitialized: boolean = false;
 
   /**
    * Initialize API service - load tokens from storage
@@ -33,8 +34,20 @@ class ApiService {
     try {
       this.accessToken = await storageService.getAccessToken();
       this.refreshToken = await storageService.getRefreshToken();
+      this.isInitialized = true;
     } catch (error) {
-      // Silent fail
+      // Silent fail but mark as initialized
+      this.isInitialized = true;
+    }
+  }
+
+  /**
+   * Ensure tokens are loaded from storage (lazy loading fallback)
+   */
+  private async ensureTokensLoaded(): Promise<void> {
+    // If not initialized or tokens are null, try loading from storage
+    if (!this.isInitialized || (!this.accessToken && !this.refreshToken)) {
+      await this.initialize();
     }
   }
 
@@ -73,9 +86,16 @@ class ApiService {
   }
 
   /**
-   * Get current access token
+   * Get current access token (with fallback to storage)
    */
-  getAccessToken(): string | null {
+  async getAccessToken(): Promise<string | null> {
+    // If we have it in memory, return it
+    if (this.accessToken) {
+      return this.accessToken;
+    }
+
+    // Otherwise, try loading from storage
+    await this.ensureTokensLoaded();
     return this.accessToken;
   }
 
@@ -105,9 +125,14 @@ class ApiService {
    */
   private async _performRefresh(): Promise<boolean> {
     try {
+      // Ensure tokens are loaded from storage
+      await this.ensureTokensLoaded();
+
       const refreshToken = this.refreshToken || await storageService.getRefreshToken();
 
       if (!refreshToken) {
+        // No refresh token available - only then clear tokens
+        console.warn('[ApiService] No refresh token available, clearing session');
         await this.clearTokens();
         return false;
       }
@@ -129,7 +154,8 @@ class ApiService {
         const newRefreshToken = data.data?.refresh_token || data.data?.refreshToken;
 
         if (!newAccessToken) {
-          await this.clearTokens();
+          console.warn('[ApiService] Token refresh succeeded but no access token in response');
+          // Keep existing tokens - don't clear them
           return false;
         }
 
@@ -143,19 +169,37 @@ class ApiService {
           expiresIn: data.data?.expires_in || data.data?.expiresIn || 3600,
         });
 
+        console.log('[ApiService] Token refresh successful');
         return true;
       } else {
-        await this.clearTokens();
+        // Check if this is a definitive "invalid token" error
+        const errorMessage = data.message || data.error || '';
+        const isInvalidToken = response.status === 401 ||
+                              errorMessage.toLowerCase().includes('invalid') ||
+                              errorMessage.toLowerCase().includes('expired') ||
+                              errorMessage.toLowerCase().includes('unauthorized');
+
+        if (isInvalidToken) {
+          console.warn('[ApiService] Refresh token invalid, clearing session:', errorMessage);
+          await this.clearTokens();
+        } else {
+          // Network/server error - keep tokens and try again later
+          console.warn('[ApiService] Token refresh failed (non-auth error), keeping session:', errorMessage);
+        }
+
         return false;
       }
-    } catch (error) {
-      await this.clearTokens();
+    } catch (error: any) {
+      // Network error or other exception - DON'T clear tokens
+      // The user might just have temporary connectivity issues
+      console.warn('[ApiService] Token refresh error (network/exception), keeping session:', error.message);
       return false;
     }
   }
 
   /**
    * Build headers for API request
+   * Note: Assumes ensureTokensLoaded() was already called by the request method
    */
   private buildHeaders(customHeaders?: Record<string, string>): HeadersInit {
     const headers: Record<string, string> = {
@@ -163,6 +207,7 @@ class ApiService {
       ...customHeaders,
     };
 
+    // Use in-memory token (should be loaded by ensureTokensLoaded already)
     if (this.accessToken) {
       headers['Authorization'] = `Bearer ${this.accessToken}`;
     }
@@ -202,9 +247,13 @@ class ApiService {
     method: string,
     endpoint: string,
     data?: any,
-    customHeaders?: Record<string, string>
+    customHeaders?: Record<string, string>,
+    retryCount: number = 0
   ): Promise<ApiResponse<T>> {
     try {
+      // Ensure tokens are loaded from storage before making request
+      await this.ensureTokensLoaded();
+
       const url = buildApiUrl(endpoint);
       const headers = this.buildHeaders(customHeaders);
 
@@ -229,17 +278,40 @@ class ApiService {
 
       // Handle 401 Unauthorized - attempt token refresh
       if (response.status === 401) {
-        const refreshed = await this.refreshAccessToken();
+        // Only attempt refresh once per request to avoid infinite loops
+        if (retryCount < 1) {
+          console.log('[ApiService] Got 401, attempting token refresh...');
+          const refreshed = await this.refreshAccessToken();
 
-        if (refreshed) {
-          // Retry the original request with new token
-          return this.request<T>(method, endpoint, data, customHeaders);
+          if (refreshed) {
+            // Retry the original request with new token
+            console.log('[ApiService] Token refreshed, retrying request...');
+            return this.request<T>(method, endpoint, data, customHeaders, retryCount + 1);
+          } else {
+            // Refresh failed - check if session was cleared
+            const stillHasTokens = await storageService.getAccessToken() !== null;
+            if (stillHasTokens) {
+              // Tokens still exist, refresh just failed temporarily
+              return {
+                success: false,
+                error: 'Unable to refresh session. Please try again.',
+                message: 'Unable to refresh session. Please try again.',
+              };
+            } else {
+              // Session was cleared, user needs to login
+              return {
+                success: false,
+                error: 'Session expired. Please login again.',
+                message: 'Session expired. Please login again.',
+              };
+            }
+          }
         } else {
-          // Refresh failed, return unauthorized error
+          // Already retried, don't try again
           return {
             success: false,
-            error: 'Session expired. Please login again.',
-            message: 'Session expired. Please login again.',
+            error: 'Authentication failed. Please login again.',
+            message: 'Authentication failed. Please login again.',
           };
         }
       }
