@@ -132,7 +132,6 @@ class ApiService {
 
       if (!refreshToken) {
         // No refresh token available - only then clear tokens
-        console.warn('[ApiService] No refresh token available, clearing session');
         await this.clearTokens();
         return false;
       }
@@ -154,7 +153,6 @@ class ApiService {
         const newRefreshToken = data.data?.refresh_token || data.data?.refreshToken;
 
         if (!newAccessToken) {
-          console.warn('[ApiService] Token refresh succeeded but no access token in response');
           // Keep existing tokens - don't clear them
           return false;
         }
@@ -169,7 +167,6 @@ class ApiService {
           expiresIn: data.data?.expires_in || data.data?.expiresIn || 3600,
         });
 
-        console.log('[ApiService] Token refresh successful');
         return true;
       } else {
         // Check if this is a definitive "invalid token" error
@@ -180,11 +177,9 @@ class ApiService {
                               errorMessage.toLowerCase().includes('unauthorized');
 
         if (isInvalidToken) {
-          console.warn('[ApiService] Refresh token invalid, clearing session:', errorMessage);
           await this.clearTokens();
         } else {
           // Network/server error - keep tokens and try again later
-          console.warn('[ApiService] Token refresh failed (non-auth error), keeping session:', errorMessage);
         }
 
         return false;
@@ -192,7 +187,6 @@ class ApiService {
     } catch (error: any) {
       // Network error or other exception - DON'T clear tokens
       // The user might just have temporary connectivity issues
-      console.warn('[ApiService] Token refresh error (network/exception), keeping session:', error.message);
       return false;
     }
   }
@@ -280,12 +274,10 @@ class ApiService {
       if (response.status === 401) {
         // Only attempt refresh once per request to avoid infinite loops
         if (retryCount < 1) {
-          console.log('[ApiService] Got 401, attempting token refresh...');
           const refreshed = await this.refreshAccessToken();
 
           if (refreshed) {
             // Retry the original request with new token
-            console.log('[ApiService] Token refreshed, retrying request...');
             return this.request<T>(method, endpoint, data, customHeaders, retryCount + 1);
           } else {
             // Refresh failed - check if session was cleared
