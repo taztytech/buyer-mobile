@@ -233,8 +233,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
 
     try {
       // Log received coordinates
-      console.log('📥 ADDRESS FORM - Received Latitude:', latitude);
-      console.log('📥 ADDRESS FORM - Received Longitude:', longitude);
 
       // Prepare address data for API
       const addressData: AddAddressRequest = {
@@ -251,7 +249,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         is_default: false,
       };
 
-      console.log('📤 ADDRESS FORM - Sending to API:', {
         latitude: addressData.latitude,
         longitude: addressData.longitude,
         address1: addressData.address1,

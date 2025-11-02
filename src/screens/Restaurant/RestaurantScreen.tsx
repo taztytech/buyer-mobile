@@ -966,39 +966,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           });
 
           setMenuSections(sections);
-
-          // Log item timing details
-          console.log('\n=== RESTAURANT ITEM TIMINGS ===');
-          console.log(`Restaurant: ${restaurant.name || restaurantName}`);
-          const now = new Date();
-          const jsDay = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-          const currentTime = now.getHours() * 100 + now.getMinutes();
-          console.log(`Current: Day=${jsDay} (JS getDay), Time=${currentTime}`);
-
-          sections.forEach((section, sectionIndex) => {
-            console.log(`\nCategory ${sectionIndex + 1}: ${section.title}`);
-            console.log(`Total items: ${section.items.length}`);
-
-            section.items.forEach((item, itemIndex) => {
-              const available = isItemAvailable(item.timings);
-              console.log(`\n  ${itemIndex + 1}. ${item.name}`);
-              console.log(`     Available: ${available ? 'YES' : 'NO'}`);
-
-              if (item.timings && item.timings.length > 0) {
-                item.timings.forEach((timing: any, timingIdx: number) => {
-                  const dayFrom = timing.day_from || 'N/A';
-                  const dayTo = timing.day_to || 'N/A';
-                  const timeFrom = timing.time_from || 'N/A';
-                  const timeTo = timing.time_to || 'N/A';
-                  const isAvailableNow = timing.is_available_now !== undefined ? timing.is_available_now : 'N/A';
-                  console.log(`     Timing ${timingIdx + 1} - Days ${dayFrom}-${dayTo}: ${timeFrom} - ${timeTo} (is_available_now: ${isAvailableNow})`);
-                });
-              } else {
-                console.log('     No timing restrictions (available all day)');
-              }
-            });
-          });
-          console.log('==================================\n');
         }
       }
     } catch (error) {
