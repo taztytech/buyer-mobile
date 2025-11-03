@@ -365,8 +365,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         );
 
         if (paymentResult.success) {
-          // Payment successful - clear cart and show success
+          // Payment successful - clear cart and reset form
           clearCart();
+          setNotes(''); // Reset notes for next order
+          setSelectedTip(null); // Reset tip selection
+          setCustomTipAmount(''); // Reset custom tip amount
 
           showConfirmation({
             title: 'Payment Successful! 🎉',
@@ -550,6 +553,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               { scale: scaleAnim },
               { translateY: translateYAnim },
             ],
+            borderTopLeftRadius: (showAddressModal || showCustomizationModal) ? 20 : 0,
+            borderTopRightRadius: (showAddressModal || showCustomizationModal) ? 20 : 0,
           },
         ]}
       >
@@ -1010,8 +1015,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
     overflow: 'hidden',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
   },
   header: {
     backgroundColor: '#00B14F',

@@ -88,38 +88,22 @@ function AppContent() {
   React.useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Add timeout to prevent hanging
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Auth check timeout')), 5000)
-        );
+        // Initialize API service with stored tokens
+        await apiService.initialize();
 
-        await Promise.race([
-          (async () => {
-            // Initialize API service with stored tokens
-            await apiService.initialize();
+        // Check if user is authenticated
+        const isLoggedIn = await authService.isAuthenticated();
 
-            // Check if user is authenticated
-            const isLoggedIn = await authService.isAuthenticated();
-
-            if (isLoggedIn) {
-              // Check if user has completed their profile
-              const userData = await authService.getCurrentUser();
-
-              // If user has both name and email, they've completed the welcome screen
-              if (userData?.name && userData?.email) {
-                setCurrentScreen('home');
-              } else {
-                // User is logged in but hasn't completed profile
-                // Log them out and make them go through OTP verification again
-                await authService.logout();
-                setCurrentScreen('login');
-              }
-            }
-          })(),
-          timeoutPromise
-        ]);
+        if (isLoggedIn) {
+          // User has valid session, navigate to home
+          setCurrentScreen('home');
+        } else {
+          // No valid session, go to login
+          setCurrentScreen('login');
+        }
       } catch (error) {
-        // Continue to login screen even if auth check fails
+        // If auth check fails, go to login screen
+        setCurrentScreen('login');
       } finally {
         setIsCheckingAuth(false);
       }

@@ -288,6 +288,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
             <View style={styles.resendRow}>
               <TouchableOpacity
                 onPress={onBack}
+                disabled={timer > 0}
               >
                 <Text style={[
                   styles.resendText,

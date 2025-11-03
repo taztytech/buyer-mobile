@@ -14,8 +14,24 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { restaurantService, RestaurantDetails } from '@/services/restaurant.service';
+import { isExpoGo } from '@/utils/platform.util';
+
+// Conditionally import MapView only for standalone builds
+let MapView: any;
+let Marker: any;
+let PROVIDER_GOOGLE: any;
+
+if (!isExpoGo()) {
+  try {
+    const maps = require('react-native-maps');
+    MapView = maps.default;
+    Marker = maps.Marker;
+    PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
+  } catch (e) {
+    console.warn('react-native-maps not available');
+  }
+}
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -220,33 +236,77 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                   {restaurantData.min_order_value && `Min ₹${parseFloat(restaurantData.min_order_value).toFixed(0)}`}
                 </Text>
               )}
+
+              {/* Cuisine Tags */}
+              {(() => {
+                const cuisineTags = (restaurantData as any)?.cuisine_tags;
+                let cuisineArray: string[] = [];
+                if (Array.isArray(cuisineTags)) {
+                  cuisineArray = cuisineTags;
+                } else if (typeof cuisineTags === 'string' && cuisineTags.trim()) {
+                  cuisineArray = cuisineTags.split(',').map(tag => tag.trim()).filter(tag => tag);
+                }
+
+                return cuisineArray.length > 0 && (
+                  <View style={styles.cuisineTagsContainer}>
+                    {cuisineArray.slice(0, 3).map((cuisine: any, index: number) => {
+                      const displayText = typeof cuisine === 'string' ? cuisine : cuisine?.name || cuisine?.tag || '';
+                      return (
+                        <View key={index} style={styles.cuisineTag}>
+                          <Text style={styles.cuisineTagText}>{displayText}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                );
+              })()}
             </View>
 
             {/* Map View */}
             {restaurantData?.locations && restaurantData.locations.length > 0 && (
               <View style={styles.mapWrapper}>
                 <View style={styles.mapContainer}>
-                  <MapView
-                    provider={PROVIDER_GOOGLE}
-                    style={styles.map}
-                    initialRegion={{
-                      latitude: parseFloat(restaurantData.locations[0].lat),
-                      longitude: parseFloat(restaurantData.locations[0].lng),
-                      latitudeDelta: 0.01,
-                      longitudeDelta: 0.01,
-                    }}
-                    scrollEnabled={false}
-                    zoomEnabled={false}
-                    pitchEnabled={false}
-                    rotateEnabled={false}
-                  >
-                    <Marker
-                      coordinate={{
+                  {MapView && !isExpoGo() ? (
+                    <MapView
+                      provider={PROVIDER_GOOGLE}
+                      style={styles.map}
+                      initialRegion={{
                         latitude: parseFloat(restaurantData.locations[0].lat),
                         longitude: parseFloat(restaurantData.locations[0].lng),
+                        latitudeDelta: 0.01,
+                        longitudeDelta: 0.01,
                       }}
-                    />
-                  </MapView>
+                      scrollEnabled={false}
+                      zoomEnabled={false}
+                      pitchEnabled={false}
+                      rotateEnabled={false}
+                    >
+                      <Marker
+                        coordinate={{
+                          latitude: parseFloat(restaurantData.locations[0].lat),
+                          longitude: parseFloat(restaurantData.locations[0].lng),
+                        }}
+                      />
+                    </MapView>
+                  ) : (
+                    // Fallback view for Expo Go
+                    <View style={styles.mapFallback}>
+                      <MaterialIcons name="location-on" size={48} color="#00B14F" />
+                      <Text style={styles.mapFallbackText}>
+                        Location: {restaurantData.locations[0].locality}, {restaurantData.locations[0].city}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.openMapsButton}
+                        onPress={handleDirections}
+                      >
+                        <MaterialIcons name="directions" size={20} color="#FFFFFF" />
+                        <Text style={styles.openMapsButtonText}>Open in Maps</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.expoGoNote}>
+                        📱 Map preview is not available in Expo Go. Use a development build to see the map.
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
             )}
@@ -535,6 +595,46 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  mapFallback: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    padding: 20,
+  },
+  mapFallbackText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#333333',
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  openMapsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: '#00B14F',
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  openMapsButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  expoGoNote: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#666666',
+    textAlign: 'center',
+    paddingHorizontal: 16,
+  },
   addressSection: {
     paddingHorizontal: 20,
     paddingVertical: 16,
@@ -754,5 +854,27 @@ const styles = StyleSheet.create({
   termsLink: {
     color: '#FF0000',
     textDecorationLine: 'underline',
+  },
+  cuisineTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 12,
+  },
+  cuisineTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(0, 177, 79, 0.1)',
+    borderRadius: 11,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 177, 79, 0.3)',
+  },
+  cuisineTagText: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#00B14F',
+    opacity: 0.85,
   },
 });

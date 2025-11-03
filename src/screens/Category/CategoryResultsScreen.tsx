@@ -122,6 +122,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
   const [searchResults, setSearchResults] = useState<RestaurantItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [scrollOffset, setScrollOffset] = useState(0);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Animation values
@@ -328,6 +329,10 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoryScroll}
+            onScroll={(event) => {
+              setScrollOffset(event.nativeEvent.contentOffset.x);
+            }}
+            scrollEventThrottle={16}
           >
             {displayCategories.map((category, index) => {
               // Map category names to their images
@@ -390,6 +395,24 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         {/* Line separator */}
         <View style={styles.lineContainer}>
           <View style={styles.fullLine} />
+          {/* Selected category indicator line */}
+          {!hasSearched && (() => {
+            const selectedIndex = displayCategories.indexOf(selectedCategory);
+            if (selectedIndex === -1) return null;
+
+            // Calculate position based on category index and scroll offset
+            const categoryWidth = 74 + 4; // categoryItemWrapper width + marginRight
+            const leftOffset = 20 + (selectedIndex * categoryWidth) + (74 - 67) / 2 - scrollOffset; // paddingLeft + offset + centering - scroll
+
+            return (
+              <View
+                style={[
+                  styles.selectedLine,
+                  { left: leftOffset }
+                ]}
+              />
+            );
+          })()}
         </View>
 
         {/* Filter Buttons */}
@@ -629,21 +652,22 @@ const styles = StyleSheet.create({
   lineContainer: {
     marginTop: 10,
     position: 'relative',
-    height: 2,
+    height: 5,
   },
   fullLine: {
     position: 'absolute',
     width: '100%',
     height: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    top: 0,
+    top: 2,
   },
   selectedLine: {
     position: 'absolute',
     width: 67,
-    height: 2,
+    height: 5,
     backgroundColor: '#00B14F',
     top: 0,
+    borderRadius: 2.5,
   },
   // Filter Section
   filterSection: {

@@ -138,7 +138,7 @@ class AuthService {
         );
 
         // 4. Register for push notifications (don't block login if this fails)
-        pushNotificationService.registerForPushNotifications().catch(() => {
+        pushNotificationService.registerForPushNotifications().catch((error) => {
           // Silent fail - push notifications are optional
         });
       }

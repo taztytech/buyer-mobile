@@ -296,7 +296,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <Text style={styles.rateButtonText}>Rate Order</Text>
                 </TouchableOpacity>
               ) : null}
-              {orderData.status === 'delivered' ? (
+              {orderData.status === 'delivered' || orderData.status === 'cancelled' ? (
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={onReorder}

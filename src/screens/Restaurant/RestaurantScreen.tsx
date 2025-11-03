@@ -1004,6 +1004,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               { scale: scaleAnim },
               { translateY: translateYAnim },
             ],
+            borderTopLeftRadius: (showCustomizationModal || showCustomisationsReviewModal || showFilterModal || showDetailModal) ? 20 : 0,
+            borderTopRightRadius: (showCustomizationModal || showCustomisationsReviewModal || showFilterModal || showDetailModal) ? 20 : 0,
           },
         ]}
       >
@@ -1679,6 +1681,7 @@ const styles = StyleSheet.create({
   animatedContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
   },
   headerImage: {
     width: SCREEN_WIDTH,

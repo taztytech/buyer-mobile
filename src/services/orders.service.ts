@@ -205,14 +205,17 @@ class OrdersService {
    */
   async getOrders(
     limit: number = 10,
-    offset: number = 0,
+    page: number = 1,
     status?: string
   ): Promise<ApiResponse<{ orders: OrderListItem[]; total: number }>> {
     try {
-      const params: any = { limit, offset };
+      const params: any = { limit, page };
       if (status) params.status = status;
 
+
       const response = await apiService.get<any>('/api/buyer/orders', params);
+
+
       return response;
     } catch (error: any) {
       return {

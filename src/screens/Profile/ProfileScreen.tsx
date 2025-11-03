@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Switch,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -147,7 +148,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   return (
     <View style={styles.rootContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="#00B14F"
+        translucent={false}
+      />
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.container}>
         <ScrollView
@@ -256,11 +261,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#00B14F',
   },
   safeArea: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#00B14F',
   },
   container: {
     flex: 1,
@@ -355,7 +360,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    height: 21,
+    minHeight: 21,
+    paddingVertical: 2,
   },
   menuItemLeft: {
     flexDirection: 'row',

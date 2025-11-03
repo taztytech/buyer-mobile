@@ -59,20 +59,28 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   useEffect(() => {
     // Fetch fresh data whenever screen becomes visible
     if (visible) {
-      fetchOrders();
+      setCurrentPage(1);
+      fetchOrders(1, true);
     }
   }, [visible]);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (page: number = 1, reset: boolean = false) => {
     try {
-      setIsLoading(true);
+      if (reset) {
+        setIsLoading(true);
+      } else {
+        setIsLoadingMore(true);
+      }
       setError(null);
 
-      const response = await ordersService.getOrders(20, 0);
+      const response = await ordersService.getOrders(10, page);
 
       if (response.success && response.data) {
         // Try different response structures the API might return
@@ -81,7 +89,27 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           response.data.orders || // Direct orders array
           (Array.isArray(response.data) ? response.data : []); // Data is already array
 
-        setOrders(ordersArray);
+        // Get total from various possible locations in response
+        const total =
+          response.data.total ||
+          response.data.meta?.total || // Added meta.total
+          response.data.data?.total ||
+          response.data.pagination?.total ||
+          response.data.metadata?.total ||
+          ordersArray.length; // Fallback to array length
+
+        if (reset) {
+          setOrders(ordersArray);
+        } else {
+          // Append new orders to existing ones, filtering out duplicates
+          setOrders(prev => {
+            const existingIds = new Set(prev.map(o => o.id));
+            const newOrders = ordersArray.filter((order: any) => !existingIds.has(order.id));
+            return [...prev, ...newOrders];
+          });
+        }
+        setTotalOrders(total);
+        setCurrentPage(page);
       } else {
         setError(response.error || 'Failed to load orders');
       }
@@ -89,7 +117,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       setError(err.message || 'Failed to load orders');
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
+  };
+
+  const handleViewMore = () => {
+    const nextPage = currentPage + 1;
+    fetchOrders(nextPage, false);
   };
 
   // Format date to match the design
@@ -264,7 +298,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
     return (
       <TouchableOpacity
-        key={order.id}
         style={styles.orderCard}
         activeOpacity={0.7}
         onPress={() => handleOrderPress(order.id.toString())}
@@ -301,8 +334,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         <View style={styles.itemsContainer}>
           {/* Show first 2 items */}
           <View style={styles.multipleItems}>
-            {order.items.slice(0, 2).map((item: any) => (
-              <View key={item.id} style={styles.itemRow}>
+            {order.items.slice(0, 2).map((item: any, index: number) => (
+              <View key={`${order.id}-item-${item.id}-${index}`} style={styles.itemRow}>
                 <Text style={styles.itemName}>{item.quantity}x {item.item_name}</Text>
               </View>
             ))}
@@ -459,16 +492,27 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           </View>
         ) : (
           <>
-            {orders.map((order) => renderOrderCard(order))}
+            {orders.map((order, index) => (
+              <React.Fragment key={`order-${order.id}-${index}`}>
+                {renderOrderCard(order)}
+              </React.Fragment>
+            ))}
 
-            {/* View More Button */}
-            <TouchableOpacity
-              style={styles.viewMoreButton}
-              onPress={onViewMore}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.viewMoreText}>View more orders</Text>
-            </TouchableOpacity>
+            {/* View More Button - Show only if there are more orders to load */}
+            {orders.length < totalOrders && (
+              <TouchableOpacity
+                style={styles.viewMoreButton}
+                onPress={handleViewMore}
+                activeOpacity={0.7}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? (
+                  <ActivityIndicator size="small" color="#00B14F" />
+                ) : (
+                  <Text style={styles.viewMoreText}>View more orders</Text>
+                )}
+              </TouchableOpacity>
+            )}
 
             {/* App Version */}
             <Text style={styles.appVersion}>App Version 1.2</Text>

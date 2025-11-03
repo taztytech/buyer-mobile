@@ -9,16 +9,16 @@ const CustomSplashScreen: React.FC<CustomSplashScreenProps> = ({ onFinish }) => 
   const [fadeAnim] = useState(new Animated.Value(1));
 
   useEffect(() => {
-    // Show splash for 1 second then fade out quickly
+    // Show splash for 2 seconds then fade out smoothly
     const timer = setTimeout(() => {
       Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 300,
+        duration: 800,
         useNativeDriver: true,
       }).start(() => {
         onFinish();
       });
-    }, 1000);
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, []);

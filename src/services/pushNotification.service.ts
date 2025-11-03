@@ -31,33 +31,31 @@ class PushNotificationService {
    */
   async registerForPushNotifications(): Promise<boolean> {
     try {
+
       // Check if running in Expo Go
       const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
       if (isExpoGo) {
-        if (__DEV__) {
-          console.warn(
-            '⚠️  PUSH NOTIFICATIONS DISABLED IN EXPO GO\n' +
-            '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-            'Push notifications are not supported in Expo Go (SDK 53+).\n' +
-            'To test push notifications:\n' +
-            '1. Create a development build: npx eas build --profile development\n' +
-            '2. Install the development build on your device\n' +
-            '3. Test push notifications in the dev build\n' +
-            '\nLearn more: https://docs.expo.dev/develop/development-builds/introduction/\n' +
-            '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
-          );
-        }
+        console.warn(
+          '⚠️  PUSH NOTIFICATIONS DISABLED IN EXPO GO\n' +
+          '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+          'Push notifications are not supported in Expo Go (SDK 53+).\n' +
+          'To test push notifications:\n' +
+          '1. Create a development build: npx eas build --profile development\n' +
+          '2. Install the development build on your device\n' +
+          '3. Test push notifications in the dev build\n' +
+          '\nLearn more: https://docs.expo.dev/develop/development-builds/introduction/\n' +
+          '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+        );
         return false;
       }
 
       // Only works on physical devices
       if (!Device.isDevice) {
-        if (__DEV__) {
-          console.warn('Push notifications only work on physical devices, not simulators/emulators');
-        }
+        console.warn('⚠️  Push notifications only work on physical devices, not simulators/emulators');
         return false;
       }
+
 
       // Request permissions
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -69,11 +67,10 @@ class PushNotificationService {
       }
 
       if (finalStatus !== 'granted') {
-        if (__DEV__) {
-          console.warn('Push notification permissions not granted by user');
-        }
+        console.warn('⚠️  Push notification permissions not granted by user');
         return false;
       }
+
 
       // Get push token
       const tokenData = await Notifications.getExpoPushTokenAsync({
@@ -84,10 +81,6 @@ class PushNotificationService {
 
       // Save token locally
       await AsyncStorage.setItem(PUSH_TOKEN_KEY, this.pushToken);
-
-      if (__DEV__) {
-        console.log('✅ Push token registered:', this.pushToken);
-      }
 
       // Configure notification channel for Android
       if (Platform.OS === 'android') {
@@ -100,15 +93,19 @@ class PushNotificationService {
       }
 
       // Send token to backend
-      await this.sendTokenToBackend(this.pushToken);
+      const backendSuccess = await this.sendTokenToBackend(this.pushToken);
+
+      if (backendSuccess) {
+      } else {
+        console.warn('⚠️  Push notification registration completed locally but backend registration failed');
+      }
 
       return true;
     } catch (error) {
-      if (__DEV__) {
-        console.error('❌ Push notification registration failed:', error);
-        if (error instanceof Error) {
-          console.error('Error details:', error.message);
-        }
+      console.error('❌ Push notification registration failed:', error);
+      if (error instanceof Error) {
+        console.error('   Error details:', error.message);
+        console.error('   Error stack:', error.stack);
       }
       return false;
     }
@@ -122,24 +119,22 @@ class PushNotificationService {
       const response = await apiService.post(
         API_CONFIG.ENDPOINTS.BUYER.PUSH_TOKENS,
         {
-          token: token,
-          device_type: Platform.OS, // 'ios' or 'android'
-          device_name: Device.deviceName || 'Unknown Device',
+          device_token: token,
+          platform: Platform.OS, // 'ios' or 'android'
         }
       );
 
-      if (__DEV__) {
-        if (response.success) {
-          console.log('✅ Push token sent to backend successfully');
-        } else {
-          console.warn('⚠️  Backend returned success=false for push token registration');
-        }
+      if (response.success) {
+      } else {
+        console.warn('⚠️  Backend returned success=false for push token registration');
+        console.warn('   Error:', response.error);
       }
 
       return response.success;
     } catch (error) {
-      if (__DEV__) {
-        console.error('❌ Failed to send push token to backend:', error);
+      console.error('❌ Failed to send push token to backend:', error);
+      if (error instanceof Error) {
+        console.error('   Error message:', error.message);
       }
       return false;
     }
@@ -154,14 +149,7 @@ class PushNotificationService {
       const token = this.pushToken || await AsyncStorage.getItem(PUSH_TOKEN_KEY);
 
       if (!token) {
-        if (__DEV__) {
-          console.log('No push token to unregister');
-        }
         return true; // Nothing to unregister
-      }
-
-      if (__DEV__) {
-        console.log('Unregistering push token from backend...');
       }
 
       // Delete from backend
@@ -173,20 +161,13 @@ class PushNotificationService {
       this.pushToken = null;
       await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
 
-      if (__DEV__) {
-        if (response.success) {
-          console.log('✅ Push token unregistered successfully');
-        } else {
-          console.warn('⚠️  Backend returned success=false for push token unregistration');
-        }
+      if (!response.success) {
+        console.warn('⚠️  Backend returned success=false for push token unregistration');
       }
 
       return response.success;
     } catch (error) {
-      if (__DEV__) {
-        console.error('❌ Failed to unregister push token from backend:', error);
-        console.log('Clearing local token storage anyway...');
-      }
+      console.error('❌ Failed to unregister push token from backend:', error);
 
       // Still clear local storage even if API fails
       this.pushToken = null;
