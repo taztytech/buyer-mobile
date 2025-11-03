@@ -43,6 +43,7 @@ interface RestaurantScreenProps {
   onNavigateToDetails?: () => void;
   onNavigateToOrders?: (orderId?: number) => void;
   onNavigateToHome?: () => void;
+  showCart?: boolean; // Auto-open cart/checkout when screen loads
 }
 
 interface AddOn {
@@ -188,6 +189,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   onNavigateToDetails,
   onNavigateToOrders,
   onNavigateToHome,
+  showCart = false,
 }) => {
   const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, checkRestaurantConflict } = useCart();
   const { vegMode, setVegMode } = useVegMode();
@@ -215,7 +217,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   });
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
-  const [showOrderDetails, setShowOrderDetails] = useState(false);
+  const [showOrderDetails, setShowOrderDetails] = useState(showCart);
   const [activeDietaryFilter, setActiveDietaryFilter] = useState<'veg' | 'non-veg' | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showOrderSuccess, setShowOrderSuccess] = useState(false);
@@ -837,6 +839,13 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
     return () => backHandler.remove();
   }, [showOrderDetails, showSearch]);
+
+  // Auto-open cart/checkout when screen loads if showCart is true
+  useEffect(() => {
+    if (visible && showCart && totalCartItems > 0) {
+      setShowOrderDetails(true);
+    }
+  }, [visible, showCart]);
 
   // Animate background when modal opens/closes
   useEffect(() => {

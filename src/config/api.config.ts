@@ -40,6 +40,12 @@ export const API_CONFIG = {
       FAVORITES_ALL: '/api/buyer/favorites/all',
       PUSH_TOKENS: '/api/buyer/push-tokens',
       DELETE_PUSH_TOKEN: (token: string) => `/api/buyer/push-tokens/${token}`,
+      // Cart endpoints
+      CART_ADD: '/api/buyer/cart/add',
+      CART_GET: '/api/buyer/cart',
+      CART_UPDATE: '/api/buyer/cart/update',
+      CART_REMOVE: '/api/buyer/cart/remove',
+      CART_CLEAR: '/api/buyer/cart/clear',
     },
     // Add more endpoint groups as needed
   },

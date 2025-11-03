@@ -312,6 +312,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         <Animated.View
           style={[
             styles.bottomSheetWrapper,
+            keyboardVisible && styles.bottomSheetWrapperWithKeyboard,
           ]}
         >
           <TouchableOpacity
@@ -327,7 +328,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               ]}
             >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.keyboardAvoidingView}
             keyboardVerticalOffset={0}
           >
@@ -364,6 +365,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                 placeholder="House / flat / floor number"
                 placeholderTextColor="#999"
                 maxLength={50}
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+                  }, 100);
+                }}
               />
             </View>
 
@@ -376,6 +382,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                 placeholder="House / Building / Street Name"
                 placeholderTextColor="#999"
                 maxLength={100}
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollTo({ y: 50, animated: true });
+                  }, 100);
+                }}
               />
             </View>
 
@@ -388,6 +399,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                 placeholder="Landmark"
                 placeholderTextColor="#999"
                 maxLength={100}
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollTo({ y: 100, animated: true });
+                  }, 100);
+                }}
               />
             </View>
 
@@ -548,6 +564,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     maxHeight: '75%',
+  },
+  bottomSheetWrapperWithKeyboard: {
+    maxHeight: '90%',
   },
   bottomSheet: {
     backgroundColor: '#FFFFFF',

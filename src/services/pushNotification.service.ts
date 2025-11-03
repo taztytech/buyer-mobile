@@ -5,6 +5,7 @@
 
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { apiService } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
@@ -30,8 +31,31 @@ class PushNotificationService {
    */
   async registerForPushNotifications(): Promise<boolean> {
     try {
+      // Check if running in Expo Go
+      const isExpoGo = Constants.executionEnvironment === 'storeClient';
+
+      if (isExpoGo) {
+        if (__DEV__) {
+          console.warn(
+            '⚠️  PUSH NOTIFICATIONS DISABLED IN EXPO GO\n' +
+            '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+            'Push notifications are not supported in Expo Go (SDK 53+).\n' +
+            'To test push notifications:\n' +
+            '1. Create a development build: npx eas build --profile development\n' +
+            '2. Install the development build on your device\n' +
+            '3. Test push notifications in the dev build\n' +
+            '\nLearn more: https://docs.expo.dev/develop/development-builds/introduction/\n' +
+            '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+          );
+        }
+        return false;
+      }
+
       // Only works on physical devices
       if (!Device.isDevice) {
+        if (__DEV__) {
+          console.warn('Push notifications only work on physical devices, not simulators/emulators');
+        }
         return false;
       }
 
@@ -45,6 +69,9 @@ class PushNotificationService {
       }
 
       if (finalStatus !== 'granted') {
+        if (__DEV__) {
+          console.warn('Push notification permissions not granted by user');
+        }
         return false;
       }
 
@@ -57,6 +84,10 @@ class PushNotificationService {
 
       // Save token locally
       await AsyncStorage.setItem(PUSH_TOKEN_KEY, this.pushToken);
+
+      if (__DEV__) {
+        console.log('✅ Push token registered:', this.pushToken);
+      }
 
       // Configure notification channel for Android
       if (Platform.OS === 'android') {
@@ -73,6 +104,12 @@ class PushNotificationService {
 
       return true;
     } catch (error) {
+      if (__DEV__) {
+        console.error('❌ Push notification registration failed:', error);
+        if (error instanceof Error) {
+          console.error('Error details:', error.message);
+        }
+      }
       return false;
     }
   }
@@ -91,8 +128,19 @@ class PushNotificationService {
         }
       );
 
+      if (__DEV__) {
+        if (response.success) {
+          console.log('✅ Push token sent to backend successfully');
+        } else {
+          console.warn('⚠️  Backend returned success=false for push token registration');
+        }
+      }
+
       return response.success;
     } catch (error) {
+      if (__DEV__) {
+        console.error('❌ Failed to send push token to backend:', error);
+      }
       return false;
     }
   }
@@ -106,7 +154,14 @@ class PushNotificationService {
       const token = this.pushToken || await AsyncStorage.getItem(PUSH_TOKEN_KEY);
 
       if (!token) {
+        if (__DEV__) {
+          console.log('No push token to unregister');
+        }
         return true; // Nothing to unregister
+      }
+
+      if (__DEV__) {
+        console.log('Unregistering push token from backend...');
       }
 
       // Delete from backend
@@ -118,8 +173,21 @@ class PushNotificationService {
       this.pushToken = null;
       await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
 
+      if (__DEV__) {
+        if (response.success) {
+          console.log('✅ Push token unregistered successfully');
+        } else {
+          console.warn('⚠️  Backend returned success=false for push token unregistration');
+        }
+      }
+
       return response.success;
     } catch (error) {
+      if (__DEV__) {
+        console.error('❌ Failed to unregister push token from backend:', error);
+        console.log('Clearing local token storage anyway...');
+      }
+
       // Still clear local storage even if API fails
       this.pushToken = null;
       await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
@@ -143,7 +211,7 @@ class PushNotificationService {
    */
   addNotificationReceivedListener(
     callback: (notification: Notifications.Notification) => void
-  ): Notifications.Subscription {
+  ): Notifications.EventSubscription {
     return Notifications.addNotificationReceivedListener(callback);
   }
 
@@ -152,7 +220,7 @@ class PushNotificationService {
    */
   addNotificationResponseListener(
     callback: (response: Notifications.NotificationResponse) => void
-  ): Notifications.Subscription {
+  ): Notifications.EventSubscription {
     return Notifications.addNotificationResponseReceivedListener(callback);
   }
 

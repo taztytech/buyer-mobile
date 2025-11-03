@@ -24,7 +24,7 @@ interface HomeScreenProps {
   onNavigateToProfile?: () => void;
   onNavigateToAddressSelection?: () => void;
   onNavigateToCategory?: (categoryName: string) => void;
-  onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
+  onNavigateToRestaurant?: (restaurantId: number, restaurantName: string, showCart?: boolean) => void;
   onNavigateToSearch?: () => void;
   selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
   onCategoriesLoaded?: (categories: CategoryItem[]) => void;
@@ -1594,14 +1594,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* View Cart Bar - shows when cart has items */}
       <ViewCartBar
         onPress={() => {
-          // Navigate to restaurant page
+          // Navigate to restaurant page with cart open (Checkout)
           if (restaurantId && onNavigateToRestaurant) {
-            onNavigateToRestaurant(restaurantId, restaurantName);
+            onNavigateToRestaurant(restaurantId, restaurantName, true);
           }
         }}
         onViewMenu={() => {
+          // Navigate to restaurant page with menu view (View full menu)
           if (restaurantId && onNavigateToRestaurant) {
-            onNavigateToRestaurant(restaurantId, restaurantName);
+            onNavigateToRestaurant(restaurantId, restaurantName, false);
           }
         }}
         restaurantLogo={restaurantLogo}

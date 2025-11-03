@@ -256,7 +256,7 @@ class ApiService {
         headers,
       };
 
-      if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE')) {
         config.body = JSON.stringify(data);
       }
 
@@ -391,9 +391,10 @@ class ApiService {
    */
   async delete<T>(
     endpoint: string,
+    data?: any,
     customHeaders?: Record<string, string>
   ): Promise<ApiResponse<T>> {
-    return this.request<T>('DELETE', endpoint, null, customHeaders);
+    return this.request<T>('DELETE', endpoint, data, customHeaders);
   }
 }
 

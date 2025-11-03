@@ -58,6 +58,7 @@ function AppContent() {
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
   const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites' | 'orders'>('home');
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
+  const [shouldShowCart, setShouldShowCart] = React.useState<boolean>(false);
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
   const [selectedOrderData, setSelectedOrderData] = React.useState<any>(null);
   const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses'>('home');
@@ -469,10 +470,11 @@ function AppContent() {
   };
 
   // Restaurant Navigation from Home
-  const handleNavigateToRestaurantFromHome = (restaurantId: number, restaurantName: string) => {
+  const handleNavigateToRestaurantFromHome = (restaurantId: number, restaurantName: string, showCart: boolean = false) => {
     setSelectedRestaurantId(restaurantId);
     setSelectedRestaurantName(restaurantName);
     setRestaurantCameFrom('home');
+    setShouldShowCart(showCart);
     setCurrentScreen('restaurant');
 
     // Animate restaurant screen sliding in from right
@@ -486,6 +488,9 @@ function AppContent() {
 
   // Back from Restaurant (dynamic based on where we came from)
   const handleBackFromRestaurant = () => {
+    // Reset showCart flag when leaving restaurant
+    setShouldShowCart(false);
+
     // Set screen immediately for smoother transition
     if (restaurantCameFrom === 'home') {
       setCurrentScreen('home');
@@ -1257,6 +1262,7 @@ function AppContent() {
               visible={currentScreen === 'restaurant'}
               restaurantId={selectedRestaurantId}
               restaurantName={selectedRestaurantName}
+              showCart={shouldShowCart}
               onBack={handleBackFromRestaurant}
               onNavigateToDetails={handleNavigateToRestaurantDetails}
               onNavigateToOrders={(orderId) => {
