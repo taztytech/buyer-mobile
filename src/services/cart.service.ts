@@ -97,10 +97,6 @@ class CartService {
    */
   async addToCart(data: AddToCartRequest): Promise<AddToCartResponse> {
     try {
-      if (__DEV__) {
-        console.log('Adding item to cart:', data);
-      }
-
       const response = await apiService.post<AddToCartResponse>(
         API_CONFIG.ENDPOINTS.BUYER.CART_ADD,
         data
@@ -114,15 +110,6 @@ class CartService {
         responseData = responseData.data;
       }
 
-      if (__DEV__) {
-        if (response.success) {
-          console.log('✅ Item added to cart. Cart item ID:', responseData.cart_item_id);
-          console.log('Cart summary:', responseData.cart_summary);
-        } else {
-          console.warn('⚠️  Backend returned success=false for add to cart');
-        }
-      }
-
       // Return the unwrapped data with success flag
       return {
         success: response.success,
@@ -131,9 +118,6 @@ class CartService {
         cart_summary: responseData.cart_summary,
       };
     } catch (error) {
-      if (__DEV__) {
-        console.error('❌ Failed to add item to cart:', error);
-      }
       throw error;
     }
   }
@@ -143,17 +127,9 @@ class CartService {
    */
   async getCart(): Promise<CartResponse | null> {
     try {
-      if (__DEV__) {
-        console.log('Fetching cart from backend...');
-      }
-
       const response = await apiService.get<GetCartResponse>(
         API_CONFIG.ENDPOINTS.BUYER.CART_GET
       );
-
-      if (__DEV__) {
-        console.log('Raw cart response:', JSON.stringify(response, null, 2));
-      }
 
       // Handle double-nested response structure
       // Backend returns: { success: true, data: { success: true, data: { actual cart } } }
@@ -164,27 +140,8 @@ class CartService {
         cartData = (cartData as any).data;
       }
 
-      if (__DEV__) {
-        if (response.success) {
-          console.log('✅ Cart fetched successfully');
-          if (cartData) {
-            console.log(`Total items: ${cartData.total_items || 0}`);
-            console.log(`Restaurant: ${cartData.restaurant_name || 'N/A'}`);
-            console.log(`Items array exists: ${!!cartData.items}`);
-            console.log(`Items count: ${cartData.items?.length || 0}`);
-          } else {
-            console.warn('⚠️  cartData is null or undefined');
-          }
-        } else {
-          console.warn('⚠️  Backend returned success=false for get cart');
-        }
-      }
-
       return response.success && cartData ? cartData : null;
     } catch (error) {
-      if (__DEV__) {
-        console.error('❌ Failed to fetch cart:', error);
-      }
       // Return null if cart doesn't exist or error occurs
       return null;
     }
@@ -204,10 +161,6 @@ class CartService {
     }
   ): Promise<{ success: boolean; cart_summary?: CartSummary }> {
     try {
-      if (__DEV__) {
-        console.log(`Updating cart item ${cartItemId}:`, updates);
-      }
-
       const response = await apiService.put(
         API_CONFIG.ENDPOINTS.BUYER.CART_UPDATE,
         {
@@ -222,25 +175,11 @@ class CartService {
         responseData = responseData.data;
       }
 
-      if (__DEV__) {
-        if (response.success) {
-          console.log('✅ Cart item updated successfully');
-          if (responseData.cart_summary) {
-            console.log('Updated cart summary:', responseData.cart_summary);
-          }
-        } else {
-          console.warn('⚠️  Backend returned success=false for update cart item');
-        }
-      }
-
       return {
         success: response.success,
         cart_summary: responseData.cart_summary,
       };
     } catch (error) {
-      if (__DEV__) {
-        console.error('❌ Failed to update cart item:', error);
-      }
       throw error;
     }
   }
@@ -250,10 +189,6 @@ class CartService {
    */
   async removeCartItem(cartItemId: number): Promise<{ success: boolean; cart_summary?: CartSummary }> {
     try {
-      if (__DEV__) {
-        console.log(`Removing cart item ${cartItemId}`);
-      }
-
       const response = await apiService.delete(
         API_CONFIG.ENDPOINTS.BUYER.CART_REMOVE,
         {
@@ -267,25 +202,11 @@ class CartService {
         responseData = responseData.data;
       }
 
-      if (__DEV__) {
-        if (response.success) {
-          console.log('✅ Cart item removed successfully');
-          if (responseData.cart_summary) {
-            console.log('Updated cart summary:', responseData.cart_summary);
-          }
-        } else {
-          console.warn('⚠️  Backend returned success=false for remove cart item');
-        }
-      }
-
       return {
         success: response.success,
         cart_summary: responseData.cart_summary,
       };
     } catch (error) {
-      if (__DEV__) {
-        console.error('❌ Failed to remove cart item:', error);
-      }
       throw error;
     }
   }
@@ -295,10 +216,6 @@ class CartService {
    */
   async clearCart(): Promise<{ success: boolean; message?: string }> {
     try {
-      if (__DEV__) {
-        console.log('Clearing cart...');
-      }
-
       const response = await apiService.delete(
         API_CONFIG.ENDPOINTS.BUYER.CART_CLEAR
       );
@@ -309,22 +226,11 @@ class CartService {
         responseData = responseData.data;
       }
 
-      if (__DEV__) {
-        if (response.success) {
-          console.log('✅ Cart cleared successfully');
-        } else {
-          console.warn('⚠️  Backend returned success=false for clear cart');
-        }
-      }
-
       return {
         success: response.success,
         message: responseData.message || response.message,
       };
     } catch (error) {
-      if (__DEV__) {
-        console.error('❌ Failed to clear cart:', error);
-      }
       throw error;
     }
   }

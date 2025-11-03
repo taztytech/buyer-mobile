@@ -62,15 +62,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Only load cart if user is authenticated
         if (!token) {
-          if (__DEV__) {
-            console.log('User not authenticated, skipping cart load');
-          }
           setIsCartLoaded(true);
           return;
-        }
-
-        if (__DEV__) {
-          console.log('Loading cart from backend...');
         }
 
         const backendCart = await cartService.getCart();
@@ -80,11 +73,6 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setRestaurantId(backendCart.restaurant_id);
           setRestaurantName(backendCart.restaurant_name);
           setRestaurantLogo(backendCart.restaurant_logo);
-
-          if (__DEV__) {
-            console.log('Restaurant:', backendCart.restaurant_name);
-            console.log('Total items in backend cart:', backendCart.items.length);
-          }
 
           // Convert backend cart items to local cart format
           const localCart: { [key: string]: CartItem } = {};
@@ -124,19 +112,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           });
 
           setCart(localCart);
-
-          if (__DEV__) {
-            console.log('✅ Cart loaded from backend:', Object.keys(localCart).length, 'items');
-          }
-        } else {
-          if (__DEV__) {
-            console.log('No cart found in backend');
-          }
         }
       } catch (error) {
-        if (__DEV__) {
-          console.error('❌ Failed to load cart from backend:', error);
-        }
         // Continue with empty cart if loading fails
       } finally {
         setIsCartLoaded(true);
