@@ -28,7 +28,7 @@ export interface CartItem {
 
 interface CartContextType {
   cart: { [key: string]: CartItem };
-  addToCart: (item: CartItem) => Promise<void>;
+  addToCart: (item: CartItem, overrideRestaurantId?: number) => Promise<void>;
   removeFromCart: (itemId: string) => Promise<void>;
   updateQuantity: (itemId: string, quantity: number) => Promise<void>;
   clearCart: () => Promise<void>;
@@ -149,7 +149,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   /**
    * Add item to cart (local + backend sync)
    */
-  const addToCart = async (item: CartItem) => {
+  const addToCart = async (item: CartItem, overrideRestaurantId?: number) => {
     // Update local cart immediately for responsive UI
     setCart(prev => ({
       ...prev,
@@ -160,11 +160,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const token = await storageService.getAccessToken();
 
+      // Use overrideRestaurantId if provided, otherwise use context restaurantId
+      const effectiveRestaurantId = overrideRestaurantId || restaurantId;
+
       // Only sync with backend if user is authenticated
-      if (!token || !restaurantId) {
-        if (__DEV__) {
-          console.log('Skipping backend sync: User not authenticated or no restaurant selected');
-        }
+      if (!token || !effectiveRestaurantId) {
         return;
       }
 
@@ -172,7 +172,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // Prepare backend request
       const backendRequest: AddToCartRequest = {
-        restaurant_id: restaurantId,
+        restaurant_id: effectiveRestaurantId,
         item_id: item.itemId || parseInt(item.id, 10), // Use itemId if available, fallback to id
         quantity: item.quantity || 1,
         special_instructions: item.specialInstructions,
@@ -201,16 +201,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             cartItemId: response.cart_item_id,
           },
         }));
-
-        if (__DEV__) {
-          console.log('✅ Cart synced with backend. Cart item ID:', response.cart_item_id);
-        }
       }
     } catch (error) {
-      if (__DEV__) {
-        console.error('❌ Failed to sync cart with backend:', error);
-        console.log('Item remains in local cart only');
-      }
       // Item remains in local cart even if backend sync fails
     } finally {
       setSyncWithBackend(false);
@@ -234,25 +226,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const token = await storageService.getAccessToken();
       if (!token || !item?.cartItemId) {
-        if (__DEV__) {
-          console.log('Skipping backend sync for remove: User not authenticated or no cart_item_id');
-        }
         return;
       }
 
       setSyncWithBackend(true);
 
       const response = await cartService.removeCartItem(item.cartItemId);
-
-      if (response.success) {
-        if (__DEV__) {
-          console.log('✅ Item removed from backend cart');
-        }
-      }
     } catch (error) {
-      if (__DEV__) {
-        console.error('❌ Failed to remove item from backend cart:', error);
-      }
       // Item already removed from local cart
     } finally {
       setSyncWithBackend(false);
@@ -282,11 +262,47 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Sync with backend
     try {
       const token = await storageService.getAccessToken();
-      if (!token || !item?.cartItemId || !restaurantId) {
-        if (__DEV__) {
-          console.log('Skipping backend sync for update: User not authenticated or no cart_item_id');
-        }
+
+      if (!token || !restaurantId) {
         return;
+      }
+
+      // If item doesn't have cartItemId, add it to backend first
+      if (!item?.cartItemId) {
+
+        // Prepare backend request
+        const backendRequest: AddToCartRequest = {
+          restaurant_id: restaurantId,
+          item_id: item.itemId || parseInt(item.id, 10),
+          quantity: quantity,
+          special_instructions: item.specialInstructions,
+        };
+
+        // Add customizations if item has variants
+        if (item.isCustomizable && item.variants && item.variants.length > 0) {
+          backendRequest.customizations = item.variants.map((variant) => ({
+            customization_group_id: parseInt(variant.variantId || '0', 10),
+            selected_options: (variant.addOns || []).map(addOnId => ({
+              id: parseInt(addOnId, 10),
+            })),
+          })).filter(c => c.customization_group_id > 0);
+        }
+
+        const addResponse = await cartService.addToCart(backendRequest);
+
+        if (addResponse.success && addResponse.cart_item_id) {
+          // Update local cart with backend cart_item_id
+          setCart(prev => ({
+            ...prev,
+            [item.id]: {
+              ...prev[item.id],
+              cartItemId: addResponse.cart_item_id,
+            },
+          }));
+          return; // Quantity already set during add
+        } else {
+          return;
+        }
       }
 
       setSyncWithBackend(true);
@@ -295,16 +311,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         restaurant_id: restaurantId,
         quantity,
       });
-
-      if (response.success) {
-        if (__DEV__) {
-          console.log('✅ Item quantity updated in backend cart');
-        }
-      }
     } catch (error) {
-      if (__DEV__) {
-        console.error('❌ Failed to update item quantity in backend cart:', error);
-      }
       // Quantity already updated in local cart
     } finally {
       setSyncWithBackend(false);
@@ -326,25 +333,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const token = await storageService.getAccessToken();
       if (!token) {
-        if (__DEV__) {
-          console.log('Skipping backend sync for clear: User not authenticated');
-        }
         return;
       }
 
       setSyncWithBackend(true);
 
       const response = await cartService.clearCart();
-
-      if (response.success) {
-        if (__DEV__) {
-          console.log('✅ Cart cleared in backend');
-        }
-      }
     } catch (error) {
-      if (__DEV__) {
-        console.error('❌ Failed to clear backend cart:', error);
-      }
       // Cart already cleared locally
     } finally {
       setSyncWithBackend(false);

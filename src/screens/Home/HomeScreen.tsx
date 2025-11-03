@@ -24,7 +24,8 @@ interface HomeScreenProps {
   onNavigateToProfile?: () => void;
   onNavigateToAddressSelection?: () => void;
   onNavigateToCategory?: (categoryName: string) => void;
-  onNavigateToRestaurant?: (restaurantId: number, restaurantName: string, showCart?: boolean) => void;
+  onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
+  onNavigateToCheckout?: (restaurantId: number, restaurantName: string, from?: 'home' | 'restaurant') => void;
   onNavigateToSearch?: () => void;
   selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
   onCategoriesLoaded?: (categories: CategoryItem[]) => void;
@@ -161,6 +162,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToAddressSelection,
   onNavigateToCategory,
   onNavigateToRestaurant,
+  onNavigateToCheckout,
   onNavigateToSearch,
   selectedLocation: externalSelectedLocation,
   onCategoriesLoaded,
@@ -1594,15 +1596,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* View Cart Bar - shows when cart has items */}
       <ViewCartBar
         onPress={() => {
-          // Navigate to restaurant page with cart open (Checkout)
-          if (restaurantId && onNavigateToRestaurant) {
-            onNavigateToRestaurant(restaurantId, restaurantName, true);
+          // Navigate directly to checkout page
+          if (restaurantId && onNavigateToCheckout) {
+            onNavigateToCheckout(restaurantId, restaurantName, 'home');
           }
         }}
         onViewMenu={() => {
-          // Navigate to restaurant page with menu view (View full menu)
+          // Navigate to restaurant menu
           if (restaurantId && onNavigateToRestaurant) {
-            onNavigateToRestaurant(restaurantId, restaurantName, false);
+            onNavigateToRestaurant(restaurantId, restaurantName);
           }
         }}
         restaurantLogo={restaurantLogo}

@@ -24,7 +24,6 @@ import { CustomizationModal } from '@/components/CustomizationModal';
 import { CustomisationsReviewModal } from '@/components/CustomisationsReviewModal';
 import { FoodItemDetailModal } from '@/components/FoodItemDetailModal';
 import { FilterModal, FilterState } from '@/components/FilterModal';
-import { OrderDetailsScreen } from '@/screens/Order/OrderDetailsScreen';
 import { OrderSuccessScreen } from '@/screens/Order/OrderSuccessScreen';
 import { SearchScreen } from './SearchScreen';
 import { useCart } from '@/context/CartContext';
@@ -43,7 +42,7 @@ interface RestaurantScreenProps {
   onNavigateToDetails?: () => void;
   onNavigateToOrders?: (orderId?: number) => void;
   onNavigateToHome?: () => void;
-  showCart?: boolean; // Auto-open cart/checkout when screen loads
+  onNavigateToCheckout?: (restaurantId: number, restaurantName: string, from?: 'home' | 'restaurant') => void;
 }
 
 interface AddOn {
@@ -189,7 +188,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   onNavigateToDetails,
   onNavigateToOrders,
   onNavigateToHome,
-  showCart = false,
+  onNavigateToCheckout,
 }) => {
   const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, checkRestaurantConflict } = useCart();
   const { vegMode, setVegMode } = useVegMode();
@@ -217,7 +216,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   });
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
-  const [showOrderDetails, setShowOrderDetails] = useState(showCart);
   const [activeDietaryFilter, setActiveDietaryFilter] = useState<'veg' | 'non-veg' | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showOrderSuccess, setShowOrderSuccess] = useState(false);
@@ -230,7 +228,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
-  const orderDetailsSlide = useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
   // Calculate total cart items
   const totalCartItems = Object.values(cart).reduce((sum, item) => {
@@ -381,17 +378,16 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             quantity: 1,
             isVeg: item.isVeg,
             isCustomizable: false,
-          });
+          }, restaurantId);
         },
       });
       return;
     }
 
-    // Set restaurant info if this is the first item
-    if (Object.keys(cart).length === 0) {
-      setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
-    }
+    // Always ensure restaurant info is set before adding items
+    setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
 
+    // Pass restaurantId directly to avoid race condition
     addToCartContext({
       id: item.id,
       name: item.name,
@@ -400,7 +396,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       isVeg: item.isVeg,
       image: item.image,
       isCustomizable: false,
-    });
+    }, restaurantId);
   };
 
   // Increment item quantity
@@ -456,10 +452,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       return;
     }
 
-    // Set restaurant info if this is the first item
-    if (Object.keys(cart).length === 0) {
-      setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
-    }
+    // Always ensure restaurant info is set
+    setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
 
     setSelectedCustomizableItem(item);
     setShowCustomizationModal(true);
@@ -785,8 +779,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         scrollViewRef.current.scrollTo({ y: 0, animated: false });
       }
       fetchRestaurantDetails();
-      // Reset cart view to ensure menu is shown when entering restaurant
-      setShowOrderDetails(false);
     } else if (!visible) {
       // Clear data when screen is not visible to prevent showing old cache
       setRestaurantData(null);
@@ -801,31 +793,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
   }, [menuSections]);
 
-  // Animate order details screen slide in/out
-  useEffect(() => {
-    if (showOrderDetails) {
-      Animated.timing(orderDetailsSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(orderDetailsSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [showOrderDetails]);
-
   // Handle Android back button
   useEffect(() => {
     const backAction = () => {
-      // If cart/order details is open, close it instead of going back
-      if (showOrderDetails) {
-        setShowOrderDetails(false);
-        return true; // Prevent default back behavior
-      }
       // If search is open, close it
       if (showSearch) {
         setShowSearch(false);
@@ -838,14 +808,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
 
     return () => backHandler.remove();
-  }, [showOrderDetails, showSearch]);
-
-  // Auto-open cart/checkout when screen loads if showCart is true
-  useEffect(() => {
-    if (visible && showCart && totalCartItems > 0) {
-      setShowOrderDetails(true);
-    }
-  }, [visible, showCart]);
+  }, [showSearch]);
 
   // Animate background when modal opens/closes
   useEffect(() => {
@@ -1518,7 +1481,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         <View style={styles.cartBar}>
           <TouchableOpacity
             style={styles.cartButton}
-            onPress={() => setShowOrderDetails(true)}
+            onPress={() => {
+              // Navigate to checkout page
+              if (onNavigateToCheckout) {
+                onNavigateToCheckout(restaurantId, restaurantData?.name || restaurantName, 'restaurant');
+              }
+            }}
             activeOpacity={0.8}
           >
             <Text style={styles.cartItemCount}>
@@ -1669,48 +1637,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         }}
         initialFilters={filters}
       /> */}
-
-      {/* Order Details Screen */}
-      <Animated.View
-        style={[
-          styles.orderDetailsOverlay,
-          {
-            transform: [{ translateX: orderDetailsSlide }],
-          },
-        ]}
-        pointerEvents={showOrderDetails ? 'auto' : 'none'}
-      >
-        <OrderDetailsScreen
-          restaurantId={restaurantId}
-          restaurantName={restaurantData?.name || restaurantName}
-          deliveryAddress={
-            restaurantData?.locations?.[0]?.locality ||
-            restaurantData?.location?.locality ||
-            'Location not available'
-          }
-          cartItems={getFlattenedCartItems()}
-          onBack={() => setShowOrderDetails(false)}
-          onEditCustomization={handleEditCustomization}
-          onPlaceOrder={() => {
-            setShowOrderDetails(false);
-            setShowOrderSuccess(true);
-          }}
-          onOrderSuccess={(orderId) => {
-            setShowOrderDetails(false);
-            if (onNavigateToOrders) {
-              onNavigateToOrders(orderId);
-            }
-          }}
-          onOrderCancel={() => {
-            setShowOrderDetails(false);
-            if (onNavigateToHome) {
-              onNavigateToHome();
-            }
-          }}
-          showCustomizationModal={showCustomizationModal}
-          onUpdateCart={handleUpdateCartFromOrderDetails}
-        />
-      </Animated.View>
 
       {/* Search Screen */}
       {showSearch && (
@@ -2470,15 +2396,6 @@ const styles = StyleSheet.create({
   quickMenuCountActive: {
     fontFamily: 'Poppins_600SemiBold',
     opacity: 1,
-  },
-  orderDetailsOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
-    backgroundColor: '#000000',
   },
   searchOverlay: {
     position: 'absolute',

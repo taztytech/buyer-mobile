@@ -62,7 +62,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   showCustomizationModal = false,
   onUpdateCart,
 }) => {
-  const { cart, clearCart } = useCart();
+  const { cart, clearCart, updateQuantity, removeFromCart, setRestaurantInfo, restaurantId: contextRestaurantId } = useCart();
   const { showConfirmation } = useConfirmation();
   const [orderExpanded, setOrderExpanded] = useState(true);
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
@@ -71,7 +71,33 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [billExpanded, setBillExpanded] = useState(true);
   const [cancellationExpanded, setCancellationExpanded] = useState(true);
 
-  const [localCartItems, setLocalCartItems] = useState<CartItem[]>(cartItems);
+  // Initialize localCartItems from CartContext if cartItems prop is empty
+  const [localCartItems, setLocalCartItems] = useState<CartItem[]>(() => {
+    if (cartItems && cartItems.length > 0) {
+      return cartItems;
+    }
+    // Convert cart from context to CartItem[] format
+    return Object.values(cart).flatMap(item => {
+      if (item.isCustomizable && item.variants) {
+        return item.variants.map(variant => ({
+          id: item.id,
+          name: item.name,
+          price: variant.price,
+          quantity: variant.quantity,
+          isVeg: item.isVeg,
+          variantId: variant.variantId,
+          addOnIds: variant.addOns,
+        }));
+      }
+      return [{
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity || 0,
+        isVeg: item.isVeg,
+      }];
+    });
+  });
   const [selectedTip, setSelectedTip] = useState<number | null>(null);
   const [customTipAmount, setCustomTipAmount] = useState('');
   const [selfPickup, setSelfPickup] = useState(false);
@@ -102,6 +128,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
+
+  // Set restaurant info in CartContext when component mounts or props change
+  useEffect(() => {
+    if (restaurantId && restaurantName) {
+      // Only update if different from current context
+      if (contextRestaurantId !== restaurantId) {
+        setRestaurantInfo(restaurantId, restaurantName);
+      }
+    }
+  }, [restaurantId, restaurantName, contextRestaurantId, setRestaurantInfo]);
 
   // Fetch addresses from API
   useEffect(() => {
@@ -177,10 +213,42 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   };
 
-  // Sync local cart items with parent cart items
+  // Sync local cart items with parent cart items or cart context
   useEffect(() => {
-    setLocalCartItems(cartItems);
-  }, [cartItems]);
+    if (cartItems && cartItems.length > 0) {
+      // Use prop if provided
+      setLocalCartItems(cartItems);
+    } else {
+      // Otherwise sync from cart context
+      const items = Object.values(cart).flatMap(item => {
+        if (item.isCustomizable && item.variants) {
+          return item.variants.map(variant => ({
+            id: item.id,
+            name: item.name,
+            price: variant.price,
+            quantity: variant.quantity,
+            isVeg: item.isVeg,
+            variantId: variant.variantId,
+            addOnIds: variant.addOns,
+          }));
+        }
+        return [{
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity || 0,
+          isVeg: item.isVeg,
+        }];
+      });
+      // Only update if items actually changed
+      setLocalCartItems(prevItems => {
+        const prevJson = JSON.stringify(prevItems);
+        const newJson = JSON.stringify(items);
+        return prevJson === newJson ? prevItems : items;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(cart), cartItems?.length]);
 
   // Animate background when modals open/close
   useEffect(() => {
@@ -265,58 +333,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     setIsPlacingOrder(true);
 
     try {
-      const cartItems = Object.values(cart);
+      // Cart is already synced with backend via CartContext
+      // So we can directly create order from the backend cart
 
-      // Step 1: Add all cart items to the server cart
-      for (let i = 0; i < cartItems.length; i++) {
-        const item = cartItems[i];
-
-        // Handle regular items
-        if (!item.isCustomizable || !item.variants) {
-          const addToCartRequest = {
-            restaurant_id: restaurantId,
-            item_id: parseInt(item.id),
-            quantity: item.quantity || 1,
-            special_instructions: notes,
-          };
-
-          const addResult = await ordersService.addToCart(addToCartRequest);
-
-          if (!addResult.success) {
-            throw new Error(`Failed to add ${item.name} to cart: ${addResult.error}`);
-          }
-        } else {
-          // Handle items with variants/customizations
-          for (const variant of item.variants || []) {
-            // Build customizations array from stored customization groups
-            const customizations = [];
-            if (variant.customizationGroups && variant.customizationGroups.length > 0) {
-              variant.customizationGroups.forEach(group => {
-                customizations.push({
-                  customization_group_id: group.group_id,
-                  selected_options: group.selected_option_ids
-                });
-              });
-            }
-
-            const addToCartRequest = {
-              restaurant_id: restaurantId,
-              item_id: parseInt(item.id),
-              quantity: variant.quantity,
-              customizations: customizations.length > 0 ? customizations : undefined,
-              special_instructions: notes,
-            };
-
-            const addResult = await ordersService.addToCart(addToCartRequest);
-
-            if (!addResult.success) {
-              throw new Error(`Failed to add customization to cart: ${addResult.error}`);
-            }
-          }
-        }
-      }
-
-      // Step 2: Create order with online payment
+      // Create order with online payment
       const createOrderRequest = {
         delivery_address_id: parseInt(selectedAddressId),
         payment_method: 'online' as const,
@@ -409,14 +429,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   };
 
-  const handleIncrement = (itemId: string, variantId?: string) => {
+  const handleIncrement = async (itemId: string, variantId?: string) => {
     // Find current item first to get proper quantity
     const currentItem = localCartItems.find(i => variantId ? i.variantId === variantId : i.id === itemId);
     if (!currentItem) return;
 
     const newQuantity = currentItem.quantity + 1;
 
-    // Update local state
+    // Update local state immediately for responsive UI
     setLocalCartItems(prev =>
       prev.map(item => {
         const matchesItem = variantId ? item.variantId === variantId : item.id === itemId;
@@ -426,13 +446,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       })
     );
 
-    // Update parent cart state
+    // Update CartContext (this will sync with backend)
+    await updateQuantity(itemId, newQuantity);
+
+    // Also call parent callback if provided (for backward compatibility)
     if (onUpdateCart) {
       onUpdateCart(itemId, variantId, newQuantity);
     }
   };
 
-  const handleDecrement = (itemId: string, variantId?: string) => {
+  const handleDecrement = async (itemId: string, variantId?: string) => {
     // Find current item first
     const currentItem = localCartItems.find(i => variantId ? i.variantId === variantId : i.id === itemId);
     if (!currentItem) return;
@@ -440,17 +463,20 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     const newQuantity = currentItem.quantity - 1;
 
     if (newQuantity === 0) {
-      // Remove item from cart
+      // Remove item from cart locally
       setLocalCartItems(prev =>
         prev.filter(i => variantId ? i.variantId !== variantId : i.id !== itemId)
       );
 
-      // Update parent cart state
+      // Remove from CartContext (this will sync with backend)
+      await removeFromCart(itemId);
+
+      // Also call parent callback if provided (for backward compatibility)
       if (onUpdateCart) {
         onUpdateCart(itemId, variantId, 0);
       }
     } else {
-      // Decrease quantity
+      // Decrease quantity locally
       setLocalCartItems(prev =>
         prev.map(i => {
           const matchesItem = variantId ? i.variantId === variantId : i.id === itemId;
@@ -460,7 +486,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         })
       );
 
-      // Update parent cart state
+      // Update CartContext (this will sync with backend)
+      await updateQuantity(itemId, newQuantity);
+
+      // Also call parent callback if provided (for backward compatibility)
       if (onUpdateCart) {
         onUpdateCart(itemId, variantId, newQuantity);
       }

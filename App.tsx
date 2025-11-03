@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing } from 'react-native';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
@@ -17,6 +17,7 @@ import { MyAddressesScreen } from '@/screens/Location/MyAddressesScreen';
 import { CategoryResultsScreen } from '@/screens/Category/CategoryResultsScreen';
 import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
 import { RestaurantDetailsScreen } from '@/screens/Restaurant/RestaurantDetailsScreen';
+import { OrderDetailsScreen } from '@/screens/Order/OrderDetailsScreen';
 import { ExploreDishesScreen } from '@/screens/Favorites/ExploreDishesScreen';
 import { ContentPage } from '@/screens/Legal/ContentPage';
 import { HelpScreen } from '@/screens/Help/HelpScreen';
@@ -42,7 +43,7 @@ function AppContent() {
   const { cart, addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart } = useCart();
   const { showConfirmation } = useConfirmation();
 
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'privacyPolicy' | 'termsConditions' | 'help'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -58,7 +59,7 @@ function AppContent() {
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
   const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites' | 'orders'>('home');
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
-  const [shouldShowCart, setShouldShowCart] = React.useState<boolean>(false);
+  const [checkoutCameFrom, setCheckoutCameFrom] = React.useState<'home' | 'restaurant'>('home');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
   const [selectedOrderData, setSelectedOrderData] = React.useState<any>(null);
   const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses'>('home');
@@ -73,6 +74,7 @@ function AppContent() {
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const helpScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const restaurantScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const checkoutScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
   const [fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
@@ -172,6 +174,9 @@ function AppContent() {
           return true;
         case 'restaurant':
           handleBackFromRestaurant();
+          return true;
+        case 'checkout':
+          handleBackFromCheckout();
           return true;
         case 'exploreDishes':
           handleBackFromExploreDishes();
@@ -470,11 +475,10 @@ function AppContent() {
   };
 
   // Restaurant Navigation from Home
-  const handleNavigateToRestaurantFromHome = (restaurantId: number, restaurantName: string, showCart: boolean = false) => {
+  const handleNavigateToRestaurantFromHome = (restaurantId: number, restaurantName: string) => {
     setSelectedRestaurantId(restaurantId);
     setSelectedRestaurantName(restaurantName);
     setRestaurantCameFrom('home');
-    setShouldShowCart(showCart);
     setCurrentScreen('restaurant');
 
     // Animate restaurant screen sliding in from right
@@ -486,11 +490,89 @@ function AppContent() {
     }).start();
   };
 
+  // Checkout Navigation
+  const handleNavigateToCheckout = useCallback((restaurantId: number, restaurantName: string, from: 'home' | 'restaurant' = 'home') => {
+    setSelectedRestaurantId(restaurantId);
+    setSelectedRestaurantName(restaurantName);
+    setCheckoutCameFrom(from);
+
+    // Reset animation to off-screen position first
+    checkoutScreenSlide.setValue(SCREEN_WIDTH);
+
+    // Set screen to checkout
+    setCurrentScreen('checkout');
+
+    // Animate checkout screen sliding in from right (next frame)
+    requestAnimationFrame(() => {
+      Animated.timing(checkoutScreenSlide, {
+        toValue: 0,
+        duration: 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [checkoutScreenSlide]);
+
+  // Back from Checkout
+  const handleBackFromCheckout = useCallback(() => {
+    // Slide out checkout screen
+    Animated.timing(checkoutScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 200,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => {
+      // Navigate based on where we came from
+      if (checkoutCameFrom === 'home') {
+        setCurrentScreen('home');
+      } else {
+        setCurrentScreen('restaurant');
+      }
+    });
+  }, [checkoutScreenSlide, checkoutCameFrom]);
+
+  // Handle place order from checkout
+  const handlePlaceOrderFromCheckout = useCallback(() => {
+    // Navigate to order success/tracking
+    Animated.timing(checkoutScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 200,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, [checkoutScreenSlide]);
+
+  // Handle order success from checkout
+  const handleOrderSuccessFromCheckout = useCallback((orderId: number) => {
+    // Close checkout and navigate to orders
+    Animated.timing(checkoutScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 200,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      if (orderId) {
+        setSelectedOrderId(orderId.toString());
+      }
+      setCurrentScreen('orders');
+    });
+  }, [checkoutScreenSlide]);
+
+  // Handle order cancel from checkout
+  const handleOrderCancelFromCheckout = useCallback(() => {
+    // Close checkout and go to home
+    Animated.timing(checkoutScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 200,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      setCurrentScreen('home');
+    });
+  }, [checkoutScreenSlide]);
+
   // Back from Restaurant (dynamic based on where we came from)
   const handleBackFromRestaurant = () => {
-    // Reset showCart flag when leaving restaurant
-    setShouldShowCart(false);
-
     // Set screen immediately for smoother transition
     if (restaurantCameFrom === 'home') {
       setCurrentScreen('home');
@@ -934,6 +1016,7 @@ function AppContent() {
               onNavigateToAddressSelection={handleNavigateToAddressSelection}
               onNavigateToCategory={handleNavigateToCategoryResults}
               onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
+              onNavigateToCheckout={handleNavigateToCheckout}
               onNavigateToSearch={handleNavigateToSearch}
               selectedLocation={selectedLocation}
               onCategoriesLoaded={setCategoryData}
@@ -1262,8 +1345,8 @@ function AppContent() {
               visible={currentScreen === 'restaurant'}
               restaurantId={selectedRestaurantId}
               restaurantName={selectedRestaurantName}
-              showCart={shouldShowCart}
               onBack={handleBackFromRestaurant}
+              onNavigateToCheckout={handleNavigateToCheckout}
               onNavigateToDetails={handleNavigateToRestaurantDetails}
               onNavigateToOrders={(orderId) => {
                 // Close restaurant screen and navigate to orders
@@ -1306,6 +1389,28 @@ function AppContent() {
               }}
             />
           </Animated.View>
+
+          {/* Checkout Screen */}
+          {currentScreen === 'checkout' && (
+            <Animated.View
+              style={[
+                styles.checkoutOverlay,
+                {
+                  transform: [{ translateX: checkoutScreenSlide }],
+                },
+              ]}
+              pointerEvents="auto"
+            >
+              <OrderDetailsScreen
+                restaurantId={selectedRestaurantId}
+                restaurantName={selectedRestaurantName}
+                onBack={handleBackFromCheckout}
+                onPlaceOrder={handlePlaceOrderFromCheckout}
+                onOrderSuccess={handleOrderSuccessFromCheckout}
+                onOrderCancel={handleOrderCancelFromCheckout}
+              />
+            </Animated.View>
+          )}
 
           {/* Restaurant Details Screen */}
           {currentScreen === 'restaurantDetails' && (
@@ -1511,5 +1616,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 8,
     backgroundColor: '#F5F5F5',
+  },
+  checkoutOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: SCREEN_WIDTH,
+    zIndex: 9,
+    backgroundColor: '#FFFFFF',
   },
 });
