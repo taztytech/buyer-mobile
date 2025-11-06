@@ -21,7 +21,7 @@ interface OrderDetailScreenProps {
   onBack?: () => void;
   onChatWithUs?: () => void;
   onThankDriver?: () => void;
-  onRateOrder?: () => void;
+  onRateOrder?: (orderId: string, orderData?: any) => void;
   onReorder?: () => void;
   onTrackOrder?: () => void;
   onDownloadInvoice?: () => void;
@@ -289,7 +289,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               ) : orderData.status === 'delivered' ? (
                 <TouchableOpacity
                   style={styles.rateButton}
-                  onPress={onRateOrder}
+                  onPress={() => onRateOrder && onRateOrder(orderId || '', orderData)}
                   activeOpacity={0.7}
                 >
                   <MaterialIcons name="star-outline" size={20} color="#001E1F" />
@@ -692,15 +692,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.2)',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
     gap: 8,
   },
   rateButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins',
     fontSize: 14,
     color: '#001E1F',
     lineHeight: 21,
@@ -710,11 +711,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.2)',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
     gap: 6,
   },
   ratingText: {
@@ -728,13 +730,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 8,
     backgroundColor: '#00B14F',
     gap: 8,
   },
   reorderButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins',
     fontSize: 14,
     color: '#FFFFFF',
     lineHeight: 21,

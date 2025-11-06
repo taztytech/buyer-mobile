@@ -328,9 +328,9 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               ]}
             >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior="padding"
             style={styles.keyboardAvoidingView}
-            keyboardVerticalOffset={0}
+            keyboardVerticalOffset={Platform.OS === 'android' ? -200 : 0}
           >
           <ScrollView
             ref={scrollViewRef}

@@ -80,7 +80,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       }
       setError(null);
 
-      const response = await ordersService.getOrders(10, page);
+      const response = await ordersService.getOrders(5, page);
 
       if (response.success && response.data) {
         // Try different response structures the API might return

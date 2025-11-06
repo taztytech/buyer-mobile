@@ -27,6 +27,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
 import { storageService } from '@/services/storage.service';
+import { homeService } from '@/services/home.service';
 import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
 import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
@@ -57,6 +58,7 @@ function AppContent() {
   const [categoryData, setCategoryData] = React.useState<any[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
+  const [selectedRestaurantAddress, setSelectedRestaurantAddress] = React.useState<string>('');
   const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites' | 'orders'>('home');
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
   const [checkoutCameFrom, setCheckoutCameFrom] = React.useState<'home' | 'restaurant'>('home');
@@ -475,9 +477,10 @@ function AppContent() {
   };
 
   // Checkout Navigation
-  const handleNavigateToCheckout = useCallback((restaurantId: number, restaurantName: string, from: 'home' | 'restaurant' = 'home') => {
+  const handleNavigateToCheckout = useCallback((restaurantId: number, restaurantName: string, restaurantAddress?: string, from: 'home' | 'restaurant' = 'home') => {
     setSelectedRestaurantId(restaurantId);
     setSelectedRestaurantName(restaurantName);
+    setSelectedRestaurantAddress(restaurantAddress || '');
     setCheckoutCameFrom(from);
 
     // Reset animation to off-screen position first
@@ -526,9 +529,9 @@ function AppContent() {
     }).start();
   }, [checkoutScreenSlide]);
 
-  // Handle order success from checkout
+  // Handle order success from checkout - View Order button
   const handleOrderSuccessFromCheckout = useCallback((orderId: number) => {
-    // Close checkout and navigate to orders
+    // Close checkout and navigate to order detail
     Animated.timing(checkoutScreenSlide, {
       toValue: SCREEN_WIDTH,
       duration: 200,
@@ -537,12 +540,12 @@ function AppContent() {
     }).start(() => {
       if (orderId) {
         setSelectedOrderId(orderId.toString());
+        setCurrentScreen('orderDetail');
       }
-      setCurrentScreen('orders');
     });
   }, [checkoutScreenSlide]);
 
-  // Handle order cancel from checkout
+  // Handle order cancel from checkout - Close button
   const handleOrderCancelFromCheckout = useCallback(() => {
     // Close checkout and go to home
     Animated.timing(checkoutScreenSlide, {
@@ -866,6 +869,85 @@ function AppContent() {
       const restaurantName = orderData.restaurant.name;
       const restaurantLogo = orderData.restaurant.logo_url;
 
+      // Check if restaurant is currently open
+      // Fetch restaurant details to get timing information
+      const lat = selectedLocation?.latitude || 9.9352300;
+      const lng = selectedLocation?.longitude || 78.1304040;
+
+      const restaurantResponse = await apiService.get(
+        `/api/buyer/restaurants/${restaurantId}?lat=${lat}&lng=${lng}`
+      );
+
+      if (restaurantResponse.success && restaurantResponse.data) {
+        const restaurantData = restaurantResponse.data?.data || restaurantResponse.data;
+
+        // Check if restaurant is within 10km radius
+        // The API returns distance_km when lat/lng are provided
+        const distanceKm = restaurantData.distance_km || restaurantData.distance;
+
+        // Parse distance if it's a string like "5.2 km"
+        let distance = 0;
+        if (typeof distanceKm === 'string') {
+          const match = distanceKm.match(/(\d+\.?\d*)/);
+          distance = match ? parseFloat(match[1]) : 0;
+        } else if (typeof distanceKm === 'number') {
+          distance = distanceKm;
+        }
+
+        // Check if restaurant location exists and calculate distance if not provided by API
+        if (distance === 0 && restaurantData.locations?.[0]) {
+          const restaurantLat = restaurantData.locations[0].latitude;
+          const restaurantLng = restaurantData.locations[0].longitude;
+
+          if (restaurantLat && restaurantLng) {
+            // Calculate distance using Haversine formula
+            const R = 6371; // Earth's radius in km
+            const dLat = (restaurantLat - lat) * Math.PI / 180;
+            const dLng = (restaurantLng - lng) * Math.PI / 180;
+            const a =
+              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat * Math.PI / 180) * Math.cos(restaurantLat * Math.PI / 180) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            distance = R * c;
+          }
+        }
+
+        // Check if restaurant is within 10km radius
+        if (distance > 10) {
+          showConfirmation({
+            title: 'Restaurant Out of Range',
+            message: `${restaurantName} is ${distance.toFixed(1)} km away from your selected address. We only deliver within 10 km radius. Please select a different delivery address.`,
+            confirmText: 'OK',
+            cancelText: 'Close',
+            confirmButtonColor: '#DC2626',
+            onConfirm: () => {},
+          });
+          return;
+        }
+
+        // Check if restaurant is open
+        if (restaurantData.timings) {
+          const isOpen = homeService.isRestaurantOpen(restaurantData.timings);
+
+          if (!isOpen) {
+            // Restaurant is closed
+            const openingMessage = homeService.getRestaurantOpeningMessage(restaurantData.timings);
+            showConfirmation({
+              title: 'Restaurant Closed',
+              message: openingMessage
+                ? `${restaurantName} is currently closed. ${openingMessage}`
+                : `${restaurantName} is currently closed. You can place an order when the restaurant is open.`,
+              confirmText: 'OK',
+              cancelText: 'Close',
+              confirmButtonColor: '#DC2626',
+              onConfirm: () => {},
+            });
+            return;
+          }
+        }
+      }
+
       // Check for restaurant conflict
       const hasConflict = checkRestaurantConflict(restaurantId);
 
@@ -1107,7 +1189,7 @@ function AppContent() {
                 onBack={handleBackFromOrderDetail}
                 onChatWithUs={() => {}}
                 onThankDriver={() => {}}
-                onRateOrder={() => {}}
+                onRateOrder={handleNavigateToRateOrder}
                 onReorder={() => handleReorder(selectedOrderId)}
                 onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId)}
                 onDownloadInvoice={() => {}}
@@ -1389,6 +1471,7 @@ function AppContent() {
               <OrderDetailsScreen
                 restaurantId={selectedRestaurantId}
                 restaurantName={selectedRestaurantName}
+                restaurantAddress={selectedRestaurantAddress}
                 onBack={handleBackFromCheckout}
                 onPlaceOrder={handlePlaceOrderFromCheckout}
                 onOrderSuccess={handleOrderSuccessFromCheckout}

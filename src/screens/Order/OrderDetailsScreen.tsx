@@ -38,6 +38,7 @@ interface CartItem {
 interface OrderDetailsScreenProps {
   restaurantName?: string;
   restaurantId?: number;
+  restaurantAddress?: string;
   deliveryAddress?: string;
   cartItems?: CartItem[];
   onBack?: () => void;
@@ -52,6 +53,7 @@ interface OrderDetailsScreenProps {
 export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   restaurantName = 'KFC',
   restaurantId,
+  restaurantAddress,
   deliveryAddress = 'Chennai | F1, Jeyalakshmi Appartments...',
   cartItems = [],
   onBack,
@@ -394,16 +396,13 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             },
           });
         } else {
-          // Payment failed - cancel the order to prevent it from staying in database
-          try {
-            await ordersService.cancelOrder(orderId, 'Payment failed');
-          } catch (cancelError) {
-            // Failed to cancel order - error is logged silently
-          }
+          // Payment failed - DO NOT cancel order, DO NOT clear cart
+          // The order will be automatically cancelled by backend after timeout
+          // Keep cart items so user can try placing order again
 
           showConfirmation({
             title: 'Payment Failed',
-            message: 'Payment could not be processed. Please try again or contact support if the issue persists.',
+            message: 'Payment could not be processed. Your cart items are still saved. Please try again.',
             confirmText: 'OK',
             cancelText: 'Close',
             confirmButtonColor: '#DC2626',
@@ -570,7 +569,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               <View style={styles.addressContainer}>
                 <MaterialIcons name="location-on" size={14} color="#FFFFFF" />
                 <Text style={styles.addressText} numberOfLines={1}>
-                  {deliveryAddress}
+                  {restaurantAddress || deliveryAddress}
                 </Text>
               </View>
             </View>

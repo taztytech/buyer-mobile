@@ -26,7 +26,7 @@ interface HomeScreenProps {
   onNavigateToAddressSelection?: () => void;
   onNavigateToCategory?: (categoryName: string) => void;
   onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
-  onNavigateToCheckout?: (restaurantId: number, restaurantName: string, from?: 'home' | 'restaurant') => void;
+  onNavigateToCheckout?: (restaurantId: number, restaurantName: string, restaurantAddress?: string, from?: 'home' | 'restaurant') => void;
   onNavigateToSearch?: () => void;
   selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
   onCategoriesLoaded?: (categories: CategoryItem[]) => void;

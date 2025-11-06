@@ -106,9 +106,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
         styles.card,
         restaurant.isOpen === false && styles.cardClosed
       ]}
-      onPress={restaurant.isOpen === false ? undefined : onPress}
+      // TEMPORARY: Enabled for testing - remove these comments later
+      onPress={onPress}
       activeOpacity={0.7}
-      disabled={restaurant.isOpen === false}
+      disabled={false}
       testID={`restaurant-card-${restaurant.id}`}
     >
       {/* Left Side - Image with Heart Button */}

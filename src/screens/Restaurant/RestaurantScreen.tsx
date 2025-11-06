@@ -43,7 +43,7 @@ interface RestaurantScreenProps {
   onNavigateToDetails?: () => void;
   onNavigateToOrders?: (orderId?: number) => void;
   onNavigateToHome?: () => void;
-  onNavigateToCheckout?: (restaurantId: number, restaurantName: string, from?: 'home' | 'restaurant') => void;
+  onNavigateToCheckout?: (restaurantId: number, restaurantName: string, restaurantAddress?: string, from?: 'home' | 'restaurant') => void;
 }
 
 interface AddOn {
@@ -1315,6 +1315,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               </TouchableOpacity>
 
             {section.isExpanded && section.items.map((item) => {
+              // TEMPORARY: Disabled availability checks for testing - re-enable later
               // Check if restaurant is open
               const isRestaurantOpen = restaurantData?.timings
                 ? homeService.isRestaurantOpen(restaurantData.timings)
@@ -1324,7 +1325,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               const isItemCurrentlyAvailable = isItemAvailable(item.timings);
 
               // Item is only available if BOTH restaurant is open AND item timing is available
-              const itemAvailable = isRestaurantOpen && isItemCurrentlyAvailable;
+              // TEMPORARY: Always set to true for testing
+              const itemAvailable = true; // isRestaurantOpen && isItemCurrentlyAvailable;
 
               return (
               <View key={item.id} style={styles.menuItem}>
@@ -1511,7 +1513,16 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             onPress={() => {
               // Navigate to checkout page
               if (onNavigateToCheckout) {
-                onNavigateToCheckout(restaurantId, restaurantData?.name || restaurantName, 'restaurant');
+                // Build restaurant address from available data
+                const restaurantAddress = restaurantData?.locations?.[0]?.address ||
+                  restaurantData?.location?.address ||
+                  [
+                    restaurantData?.locations?.[0]?.locality || restaurantData?.location?.locality,
+                    restaurantData?.locations?.[0]?.city || restaurantData?.location?.city,
+                  ].filter(Boolean).join(', ') ||
+                  'Restaurant Address';
+
+                onNavigateToCheckout(restaurantId, restaurantData?.name || restaurantName, restaurantAddress, 'restaurant');
               }
             }}
             activeOpacity={0.8}
