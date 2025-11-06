@@ -72,7 +72,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         foodTypeParam = undefined; // vegMode is 'off', fetch all
       }
 
-      const dishResponse = await homeService.getDishes(foodTypeParam, 100, 1); // Fetch up to 100 dishes
+      const dishResponse = await homeService.getDishes(foodTypeParam, 500, 1); // Fetch up to 500 dishes (all dishes)
 
       if (dishResponse.success && dishResponse.data?.dishes) {
         // Transform dishes to category format
@@ -226,8 +226,9 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   row: {
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginBottom: 24,
+    gap: 16,
   },
   categoryCard: {
     width: (SCREEN_WIDTH - 80) / 4,
