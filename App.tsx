@@ -1152,6 +1152,7 @@ function AppContent() {
             >
               <SearchScreen
                 onBack={handleBackFromSearch}
+                selectedLocation={selectedLocation}
                 onSelectResult={(result) => {
                   handleBackFromSearch();
                 }}

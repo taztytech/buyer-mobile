@@ -24,8 +24,14 @@ class SearchService {
   /**
    * Get search suggestions based on query
    * @param query - Search query string
+   * @param latitude - User's latitude
+   * @param longitude - User's longitude
    */
-  async getSearchSuggestions(query: string): Promise<ApiResponse<SearchSuggestionsResponse>> {
+  async getSearchSuggestions(
+    query: string,
+    latitude?: number,
+    longitude?: number
+  ): Promise<ApiResponse<SearchSuggestionsResponse>> {
     try {
       if (!query || query.trim().length === 0) {
         return {
@@ -37,12 +43,20 @@ class SearchService {
         };
       }
 
-      // POST method with query and limit in body
+      // POST method with query, limit, and location in body
       const endpoint = '/api/buyer/search/suggestions';
-      const response = await apiService.post<any>(endpoint, {
+      const requestBody: any = {
         query: query,
         limit: 10,
-      });
+      };
+
+      // Add location parameters if provided
+      if (latitude !== undefined && longitude !== undefined) {
+        requestBody.lat = latitude;
+        requestBody.lng = longitude;
+      }
+
+      const response = await apiService.post<any>(endpoint, requestBody);
 
       if (response.success && response.data) {
         // Extract suggestions from response

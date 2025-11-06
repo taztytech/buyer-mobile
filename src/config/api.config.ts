@@ -46,6 +46,8 @@ export const API_CONFIG = {
       CART_UPDATE: '/api/buyer/cart/update',
       CART_REMOVE: '/api/buyer/cart/remove',
       CART_CLEAR: '/api/buyer/cart/clear',
+      // Dish endpoint
+      DISH: '/dish',
     },
     // Add more endpoint groups as needed
   },

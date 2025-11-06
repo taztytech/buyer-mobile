@@ -19,6 +19,9 @@ export interface BannerItem {
   action_url?: string;
   banner_url?: string;
   redirect_url?: string;
+  sequence?: number;
+  promotion_type?: 'restaurant_id' | 'category_id' | 'url';
+  promotion_link?: string;
 }
 
 export interface CategoryItem {
@@ -26,6 +29,19 @@ export interface CategoryItem {
   name: string;
   description?: string;
   icon?: string;
+  sequence?: number;
+  food_type?: string;
+  is_veg?: boolean;
+}
+
+export interface DishItem {
+  id: number | string;
+  name: string;
+  description?: string;
+  image?: string;
+  food_type?: string;
+  is_veg?: boolean;
+  sequence?: number;
 }
 
 export interface RestaurantTiming {
@@ -133,6 +149,148 @@ class HomeService {
     } else {
       // Special case: closes after midnight (e.g., 2200 to 0200)
       return currentTime >= openTime || currentTime <= closeTime;
+    }
+  }
+
+  /**
+   * Get next opening time information for a restaurant
+   * @param timings - Array of restaurant timings
+   * @returns Object with next opening information or null if always closed
+   */
+  getNextOpeningTime(timings?: RestaurantTiming[]): { day: number; time: string; daysUntil: number; minutesUntil: number } | null {
+    if (!timings || timings.length === 0) {
+      return null; // No timing info
+    }
+
+    const now = new Date();
+    const jsDay = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    const currentTime = now.getHours() * 100 + now.getMinutes();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    // Convert JavaScript day to API day format
+    const apiDay = jsDay === 0 ? 7 : jsDay;
+
+    // Check if restaurant opens later today
+    const todayTiming = timings.find(t => t.day === apiDay);
+    if (todayTiming && todayTiming.is_open) {
+      const openTime = parseInt(todayTiming.open_time);
+      if (currentTime < openTime) {
+        // Opens later today
+        const openHour = Math.floor(openTime / 100);
+        const openMinute = openTime % 100;
+        const minutesUntil = (openHour - currentHour) * 60 + (openMinute - currentMinute);
+
+        return {
+          day: apiDay,
+          time: todayTiming.open_time,
+          daysUntil: 0,
+          minutesUntil: minutesUntil,
+        };
+      }
+    }
+
+    // Check next 7 days for opening time
+    for (let i = 1; i <= 7; i++) {
+      const nextDay = (apiDay + i) > 7 ? (apiDay + i) - 7 : (apiDay + i);
+      const nextDayTiming = timings.find(t => t.day === nextDay);
+
+      if (nextDayTiming && nextDayTiming.is_open) {
+        const openTime = parseInt(nextDayTiming.open_time);
+        const openHour = Math.floor(openTime / 100);
+        const openMinute = openTime % 100;
+
+        // Calculate minutes until opening
+        const daysInMinutes = i * 24 * 60;
+        const timeUntilMidnight = (24 - currentHour) * 60 - currentMinute;
+        const timeFromMidnight = openHour * 60 + openMinute;
+        const minutesUntil = timeUntilMidnight + timeFromMidnight + ((i - 1) * 24 * 60);
+
+        return {
+          day: nextDay,
+          time: nextDayTiming.open_time,
+          daysUntil: i,
+          minutesUntil: minutesUntil,
+        };
+      }
+    }
+
+    return null; // No opening found in next 7 days
+  }
+
+  /**
+   * Get formatted message for when restaurant opens
+   * @param timings - Array of restaurant timings
+   * @returns Formatted string like "Opens today in 30 mins" or "Opens in 2 days"
+   */
+  getRestaurantOpeningMessage(timings?: RestaurantTiming[]): string | null {
+    // Check if restaurant is currently open
+    if (this.isRestaurantOpen(timings)) {
+      return null; // Restaurant is open, no message needed
+    }
+
+    const nextOpening = this.getNextOpeningTime(timings);
+
+    if (!nextOpening) {
+      return 'Currently closed'; // No opening info available
+    }
+
+    const { daysUntil, minutesUntil } = nextOpening;
+
+    if (daysUntil === 0) {
+      // Opens today
+      if (minutesUntil < 60) {
+        return `Opens today in ${minutesUntil} min${minutesUntil !== 1 ? 's' : ''}`;
+      } else {
+        const hours = Math.floor(minutesUntil / 60);
+        const mins = minutesUntil % 60;
+        if (mins === 0) {
+          return `Opens today in ${hours} hour${hours !== 1 ? 's' : ''}`;
+        }
+        return `Opens today in ${hours}h ${mins}m`;
+      }
+    } else if (daysUntil === 1) {
+      return 'Opens tomorrow';
+    } else {
+      return `Opens in ${daysUntil} days`;
+    }
+  }
+
+  /**
+   * Fetch dishes based on food type
+   * @param foodType - Food type filter: 'Veg' | 'Non Veg'
+   * @param limit - Number of dishes to fetch (default: 10)
+   * @param page - Page number for pagination (default: 1)
+   */
+  async getDishes(
+    foodType?: string,
+    limit: number = 10,
+    page: number = 1
+  ): Promise<ApiResponse<{ dishes: DishItem[] }>> {
+    try {
+      // Build query params
+      const params = new URLSearchParams();
+      params.append('order_by', 'sequence');
+      params.append('status', 'true');
+      params.append('limit', limit.toString());
+      params.append('page', page.toString());
+
+      if (foodType) {
+        params.append('food_type', foodType);
+      }
+
+      const queryString = params.toString();
+      const endpoint = `${API_CONFIG.ENDPOINTS.BUYER.DISH}?${queryString}`;
+
+      const response = await apiService.get<{ dishes: DishItem[] }>(endpoint);
+
+      return response;
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch dishes',
+        message: error.message,
+      };
     }
   }
 

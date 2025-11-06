@@ -131,7 +131,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: '2-digit'
     });
   };

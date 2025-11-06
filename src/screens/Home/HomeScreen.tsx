@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions, Keyboard, TouchableWithoutFeedback, Platform, ActivityIndicator, Animated, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions, Keyboard, TouchableWithoutFeedback, Platform, ActivityIndicator, Animated, RefreshControl, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
-import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/home.service';
+import { homeService, BannerItem, CategoryItem, Restaurant, DishItem } from '@/services/home.service';
 import { addressService } from '@/services/address.service';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { Shimmer } from '@/components/Shimmer';
@@ -18,6 +18,7 @@ import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const BANNER_WIDTH = SCREEN_WIDTH - 40; // Fixed banner width with 20px padding on each side
 
 interface HomeScreenProps {
   onLogout?: () => void;
@@ -38,6 +39,9 @@ interface CarouselItem {
   description: string;
   buttonText: string;
   imageUrl?: string;
+  sequence?: number;
+  promotionType?: 'restaurant_id' | 'category_id' | 'url';
+  promotionLink?: string;
 }
 
 // Fallback carousel data if API fails
@@ -653,10 +657,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               description: banner.subtitle || banner.description || 'Check out our latest deals!',
               buttonText: banner.cta_button || banner.button_text || 'Order Now!',
               imageUrl: banner.image_url || banner.banner_url,
+              sequence: banner.sequence !== undefined ? banner.sequence : index,
+              promotionType: banner.promotion_type,
+              promotionLink: banner.promotion_link,
             }));
 
-            if (transformedBanners.length > 0) {
-              setCarouselData(transformedBanners);
+            // Sort banners by sequence field
+            const sortedBanners = transformedBanners.sort((a, b) => {
+              const seqA = a.sequence !== undefined ? a.sequence : 999;
+              const seqB = b.sequence !== undefined ? b.sequence : 999;
+              return seqA - seqB;
+            });
+
+            if (sortedBanners.length > 0) {
+              setCarouselData(sortedBanners);
             } else {
               setCarouselData(fallbackCarouselData);
             }
@@ -666,18 +680,86 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           // Handle categories - use fallback if empty or undefined
           if (whatsOnYourMind && Array.isArray(whatsOnYourMind) && whatsOnYourMind.length > 0) {
-            // Add "View All" item at the end
-            const categoriesWithViewAll = [
-              ...whatsOnYourMind,
-              {
-                id: 'view-all',
-                name: 'View All',
-                description: 'See all categories',
-                icon: require('@/assets/Group 1272628220.png'),
+            // Filter categories based on vegMode
+            let filteredCategories = whatsOnYourMind;
+
+            if (vegMode === 'pure') {
+              // Show only Veg categories (food_type === 'Veg' or is_veg === true)
+              filteredCategories = whatsOnYourMind.filter((category: CategoryItem) => {
+                const foodType = category.food_type;
+                const isVeg = category.is_veg;
+                return (foodType && foodType.toLowerCase() === 'veg') || isVeg === true;
+              });
+            } else if (vegMode === 'all') {
+              // Show all categories regardless of food_type
+              filteredCategories = whatsOnYourMind;
+            }
+            // If vegMode is 'off', show all categories (no filtering)
+
+            // If filtered categories is empty, fetch dishes from API based on vegMode
+            if (filteredCategories.length === 0 && vegMode !== 'off') {
+              const foodTypeParam = vegMode === 'pure' ? 'Veg' : undefined;
+              const dishResponse = await homeService.getDishes(foodTypeParam, 10, 1);
+
+              if (dishResponse.success && dishResponse.data?.dishes) {
+                // Transform dishes to category format
+                const dishCategories: CategoryItem[] = dishResponse.data.dishes.map((dish: any) => ({
+                  id: dish.id,
+                  name: dish.name || dish.dish_name,
+                  description: dish.description,
+                  icon: dish.image || dish.image_url || dish.dish_image,
+                  sequence: dish.sequence,
+                  food_type: dish.food_type || dish.foodType || dish.type,
+                  is_veg: dish.is_veg || dish.isVeg || dish.is_vegetarian,
+                }));
+
+                // Sort by sequence
+                const sortedDishCategories = dishCategories.sort((a, b) => {
+                  const seqA = a.sequence !== undefined ? a.sequence : 999;
+                  const seqB = b.sequence !== undefined ? b.sequence : 999;
+                  return seqA - seqB;
+                });
+
+                // Add "View All" at the end
+                const categoriesWithViewAll = [
+                  ...sortedDishCategories,
+                  {
+                    id: 'view-all',
+                    name: 'View All',
+                    description: 'See all categories',
+                    icon: require('@/assets/Group 1272628220.png'),
+                  }
+                ];
+
+                setCategoryData(categoriesWithViewAll);
+                onCategoriesLoaded?.(categoriesWithViewAll);
+              } else {
+                // If dish API also fails, use fallback
+                setCategoryData(fallbackCategoryData);
+                onCategoriesLoaded?.(fallbackCategoryData);
               }
-            ];
-            setCategoryData(categoriesWithViewAll);
-            onCategoriesLoaded?.(categoriesWithViewAll);
+            } else {
+              // Sort filtered categories by sequence field
+              const sortedCategories = [...filteredCategories].sort((a, b) => {
+                const seqA = a.sequence !== undefined ? a.sequence : 999;
+                const seqB = b.sequence !== undefined ? b.sequence : 999;
+                return seqA - seqB;
+              });
+
+              // Add "View All" item at the end (only if we have categories after filtering)
+              const categoriesWithViewAll = sortedCategories.length > 0 ? [
+                ...sortedCategories,
+                {
+                  id: 'view-all',
+                  name: 'View All',
+                  description: 'See all categories',
+                  icon: require('@/assets/Group 1272628220.png'),
+                }
+              ] : sortedCategories;
+
+              setCategoryData(categoriesWithViewAll);
+              onCategoriesLoaded?.(categoriesWithViewAll);
+            }
           } else {
             setCategoryData(fallbackCategoryData);
             onCategoriesLoaded?.(fallbackCategoryData);
@@ -889,10 +971,55 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const viewConfigRef = React.useRef({ viewAreaCoveragePercentThreshold: 50 });
 
+  // Handle banner CTA click based on promotion type
+  const handleBannerCTAClick = React.useCallback((item: CarouselItem) => {
+    if (!item.promotionType || !item.promotionLink) {
+      // No promotion data, do nothing
+      return;
+    }
+
+    switch (item.promotionType) {
+      case 'restaurant_id':
+        // Navigate to restaurant page with the restaurant ID
+        if (onNavigateToRestaurant) {
+          const restaurantId = parseInt(item.promotionLink, 10);
+          if (!isNaN(restaurantId)) {
+            onNavigateToRestaurant(restaurantId, ''); // Restaurant name will be fetched by the restaurant page
+          }
+        }
+        break;
+
+      case 'category_id':
+        // Navigate to category results page with the category ID
+        if (onNavigateToCategory) {
+          onNavigateToCategory(item.promotionLink);
+        }
+        break;
+
+      case 'url':
+        // Open external URL in system browser
+        Linking.openURL(item.promotionLink).catch((err) => {
+          console.error('Failed to open URL:', err);
+          showConfirmation({
+            title: 'Error',
+            message: 'Failed to open the link. Please try again.',
+            confirmText: 'OK',
+            cancelText: 'Cancel',
+            onConfirm: () => {},
+          });
+        });
+        break;
+
+      default:
+        // Unknown promotion type, do nothing
+        break;
+    }
+  }, [onNavigateToRestaurant, onNavigateToCategory, showConfirmation]);
+
   const renderCarouselItem = React.useCallback(({ item }: { item: CarouselItem }) => {
     return (
       <View style={styles.carouselSlide} testID={`carousel-slide-${item.id}`}>
-        <View style={styles.adBanner} testID={`banner-${item.id}`}>
+        <View style={[styles.adBanner, { width: BANNER_WIDTH }]} testID={`banner-${item.id}`}>
           {/* Blob with masked image */}
           {item.imageUrl ? (
             <View style={styles.blobContainer} testID={`blob-container-${item.id}`}>
@@ -920,14 +1047,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <View style={styles.adContent} testID={`banner-content-${item.id}`}>
             <Text style={styles.adTitle} numberOfLines={1} ellipsizeMode="tail" testID={`banner-title-${item.id}`}>{item.title}</Text>
             <Text style={styles.adDescription} testID={`banner-description-${item.id}`}>{item.description}</Text>
-            <TouchableOpacity style={styles.adButton} testID={`banner-button-${item.id}`}>
+            <TouchableOpacity
+              style={styles.adButton}
+              testID={`banner-button-${item.id}`}
+              onPress={() => handleBannerCTAClick(item)}
+              activeOpacity={0.8}
+            >
               <Text style={styles.adButtonText}>{item.buttonText}</Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
     );
-  }, []);
+  }, [handleBannerCTAClick]);
 
   const renderCategoryItem = React.useCallback(({ item }: { item: CategoryItem }) => {
     const imageSource = typeof item.icon === 'string' ? { uri: item.icon } : item.icon;
@@ -1003,8 +1135,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
     // Check if user has scrolled near the bottom (within 500px)
     const distanceFromBottom = contentHeight - (scrollY + layoutHeight);
-    if (distanceFromBottom < 500 && hasMoreRestaurants && !isLoadingMore && !isLoadingRestaurants) {
-      loadMoreRestaurants();
+    if (distanceFromBottom < 500) {
+      if (hasMoreRestaurants && !isLoadingMore && !isLoadingRestaurants) {
+        loadMoreRestaurants();
+      }
     }
   }, [hasMoreRestaurants, isLoadingMore, isLoadingRestaurants, loadMoreRestaurants]);
 
@@ -1204,9 +1338,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               showsHorizontalScrollIndicator={false}
               onViewableItemsChanged={onViewRef.current}
               viewabilityConfig={viewConfigRef.current}
-              decelerationRate="normal"
-              snapToAlignment="center"
+              decelerationRate="fast"
+              snapToAlignment="start"
               snapToInterval={SCREEN_WIDTH}
+              disableIntervalMomentum={true}
+              removeClippedSubviews={false}
+              bounces={false}
+              overScrollMode="never"
+              scrollEventThrottle={16}
+              getItemLayout={(data, index) => ({
+                length: SCREEN_WIDTH,
+                offset: SCREEN_WIDTH * index,
+                index,
+              })}
             />
 
             {/* Pagination Indicators - only show if more than 1 banner */}
@@ -1386,7 +1530,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <MaterialIcons name="store" size={64} color="rgba(0, 0, 0, 0.2)" />
             <Text style={styles.noRestaurantsTitle}>No Restaurants Nearby</Text>
             <Text style={styles.noRestaurantsMessage}>
-              We couldn't find any restaurants within 5km of your location. Try changing your delivery address or check back later.
+              We couldn't find any restaurants within 10km of your location. Try changing your delivery address or check back later.
             </Text>
             <TouchableOpacity
               style={styles.retryButton}
@@ -1621,6 +1765,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             onNavigateToCategory(categoryName);
           }
         }}
+        vegMode={vegMode}
       />
     </View>
   );
@@ -1807,7 +1952,6 @@ const styles = StyleSheet.create({
   carouselContainer: {
     marginTop: -44,
     marginBottom: 16,
-    overflow: 'hidden',
   },
   loadingContainer: {
     width: '100%',
@@ -1818,6 +1962,7 @@ const styles = StyleSheet.create({
   },
   carouselSlide: {
     width: SCREEN_WIDTH,
+    height: 149,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -1828,7 +1973,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'flex-start',
     padding: 14,
-    width: '100%',
     height: 149,
     backgroundColor: '#00BEC8',
     borderRadius: 20,

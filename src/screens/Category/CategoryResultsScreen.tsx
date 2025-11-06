@@ -19,6 +19,8 @@ import { API_CONFIG } from '@/config/api.config';
 import { Shimmer } from '@/components/Shimmer';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { SearchBar } from '@/components/SearchBar';
+import { homeService } from '@/services/home.service';
+import { useVegMode } from '@/context/VegModeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -44,6 +46,13 @@ interface TopRatedItem {
   image: any;
 }
 
+interface RestaurantTiming {
+  day: number;
+  open_time: string;
+  close_time: string;
+  is_open: boolean;
+}
+
 interface RestaurantItem {
   id: number;
   name: string;
@@ -59,6 +68,8 @@ interface RestaurantItem {
   is_open: boolean;
   items_count: number;
   isFavorite: boolean;
+  timings?: RestaurantTiming[];
+  isOpen?: boolean;
 }
 
 // Fallback categories if none provided
@@ -114,6 +125,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
   onBack,
   onNavigateToRestaurant,
 }) => {
+  const { vegMode } = useVegMode();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(categoryName);
   const [restaurants, setRestaurants] = useState<RestaurantItem[]>([]);
@@ -141,10 +153,15 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
       // Default location - you can make this dynamic later
       const lat = 9.93550394286794;
       const lng = 78.13114931086115;
-      const radius = 5;
+      const radius = 10;
 
       const query = selectedCategory.toLowerCase();
-      const apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`;
+      let apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`;
+
+      // Add veg mode parameter if active
+      if (vegMode && vegMode !== 'off') {
+        apiEndpoint += `&veg_mode=${vegMode}`;
+      }
 
       // Add minimum delay to show shimmer animation
       const [response] = await Promise.all([
@@ -154,18 +171,28 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
 
       if (response.data?.success && response.data?.data?.restaurants) {
         // Transform API data to match RestaurantCard interface
-        const restaurantsData = response.data.data.restaurants.map((restaurant: any) => ({
-          id: restaurant.id,
-          name: restaurant.name,
-          cuisine: restaurant.description || 'Restaurant',
-          rating: restaurant.rating || 0,
-          deliveryTime: restaurant.delivery_time || '25-30 mins',
-          location: restaurant.location,
-          distance: restaurant.distance ? `${restaurant.distance.toFixed(1)}Kms` : '0Kms',
-          image: restaurant.logo_url || restaurant.image,
-          isFavorite: restaurant.is_favorite || false,
-          isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
-        }));
+        const restaurantsData = response.data.data.restaurants.map((restaurant: any) => {
+          // Calculate real-time open status using timings if available
+          const timings = restaurant.timings || [];
+          const isOpen = timings.length > 0
+            ? homeService.isRestaurantOpen(timings)
+            : (restaurant.is_open !== undefined ? restaurant.is_open : true);
+
+          return {
+            id: restaurant.id,
+            name: restaurant.name,
+            cuisine: restaurant.description || 'Restaurant',
+            rating: restaurant.rating || 0,
+            deliveryTime: restaurant.delivery_time || '25-30 mins',
+            location: restaurant.location,
+            distance: restaurant.distance ? `${restaurant.distance.toFixed(1)}Kms` : '0Kms',
+            image: restaurant.logo_url || restaurant.image,
+            isFavorite: restaurant.is_favorite || false,
+            isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
+            timings: timings,
+            isOpen: isOpen,
+          };
+        });
 
         setRestaurants(restaurantsData);
 
@@ -201,26 +228,41 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
       // Default location - you can make this dynamic later
       const lat = 9.93550394286794;
       const lng = 78.13114931086115;
-      const radius = 5;
+      const radius = 10;
 
-      const apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`;
+      let apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`;
+
+      // Add veg mode parameter if active
+      if (vegMode && vegMode !== 'off') {
+        apiEndpoint += `&veg_mode=${vegMode}`;
+      }
 
       const response = await apiService.get(apiEndpoint);
 
       if (response.data?.success && response.data?.data?.restaurants) {
         // Transform API data to match RestaurantCard interface
-        const restaurantsData = response.data.data.restaurants.map((restaurant: any) => ({
-          id: restaurant.id,
-          name: restaurant.name,
-          cuisine: restaurant.description || 'Restaurant',
-          rating: restaurant.rating || 0,
-          deliveryTime: restaurant.delivery_time || '25-30 mins',
-          location: restaurant.location,
-          distance: restaurant.distance ? `${restaurant.distance.toFixed(1)}Kms` : '0Kms',
-          image: restaurant.logo_url || restaurant.image,
-          isFavorite: restaurant.is_favorite || false,
-          isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
-        }));
+        const restaurantsData = response.data.data.restaurants.map((restaurant: any) => {
+          // Calculate real-time open status using timings if available
+          const timings = restaurant.timings || [];
+          const isOpen = timings.length > 0
+            ? homeService.isRestaurantOpen(timings)
+            : (restaurant.is_open !== undefined ? restaurant.is_open : true);
+
+          return {
+            id: restaurant.id,
+            name: restaurant.name,
+            cuisine: restaurant.description || 'Restaurant',
+            rating: restaurant.rating || 0,
+            deliveryTime: restaurant.delivery_time || '25-30 mins',
+            location: restaurant.location,
+            distance: restaurant.distance ? `${restaurant.distance.toFixed(1)}Kms` : '0Kms',
+            image: restaurant.logo_url || restaurant.image,
+            isFavorite: restaurant.is_favorite || false,
+            isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
+            timings: timings,
+            isOpen: isOpen,
+          };
+        });
 
         setSearchResults(restaurantsData);
         setHasSearched(true);

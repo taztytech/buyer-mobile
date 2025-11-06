@@ -13,6 +13,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { searchService, SearchSuggestion } from '@/services/search.service';
 import { SearchBar } from '@/components/SearchBar';
+import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Default location fallback (same as HomeScreen)
+const DEFAULT_LOCATION = {
+  latitude: 9.9352300,
+  longitude: 78.1304040,
+};
 
 interface SearchResult {
   id: string;
@@ -26,6 +34,7 @@ interface SearchScreenProps {
   onSelectResult?: (result: SearchResult) => void;
   onSelectItem?: (itemId: number, itemName: string) => void;
   onSelectRestaurant?: (restaurantId: number, restaurantName: string) => void;
+  selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
 }
 
 export const SearchScreen: React.FC<SearchScreenProps> = ({
@@ -33,11 +42,52 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   onSelectResult,
   onSelectItem,
   onSelectRestaurant,
+  selectedLocation,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Get user location on mount or when selectedLocation changes
+  useEffect(() => {
+    getUserLocation();
+  }, [selectedLocation]);
+
+  const getUserLocation = async () => {
+    // Priority 1: Use location from props (passed from App.tsx - same as HomeScreen)
+    if (selectedLocation?.latitude && selectedLocation?.longitude) {
+      setUserLocation({
+        lat: selectedLocation.latitude,
+        lng: selectedLocation.longitude,
+      });
+      return;
+    }
+
+    // Priority 2: Try AsyncStorage (saved location)
+    try {
+      const savedLocationStr = await AsyncStorage.getItem('selectedLocation');
+      if (savedLocationStr) {
+        const savedLocation = JSON.parse(savedLocationStr);
+        if (savedLocation.latitude && savedLocation.longitude) {
+          setUserLocation({
+            lat: savedLocation.latitude,
+            lng: savedLocation.longitude,
+          });
+          return;
+        }
+      }
+    } catch (error) {
+      // AsyncStorage unavailable
+    }
+
+    // Priority 3: Use default location (no device location attempt - too slow)
+    setUserLocation({
+      lat: DEFAULT_LOCATION.latitude,
+      lng: DEFAULT_LOCATION.longitude,
+    });
+  };
 
   // Fetch search suggestions with debouncing
   useEffect(() => {
@@ -53,13 +103,27 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       return;
     }
 
+    // Wait for location to be set before searching
+    if (!userLocation) {
+      // Location is still loading, wait a bit
+      setIsLoading(true);
+      return;
+    }
+
     // Set loading state
     setIsLoading(true);
 
     // Debounce the search
     debounceTimer.current = setTimeout(async () => {
       try {
-        const response = await searchService.getSearchSuggestions(searchQuery);
+        // Pass location if available, otherwise search without location filter
+        const response = userLocation
+          ? await searchService.getSearchSuggestions(
+              searchQuery,
+              userLocation.lat,
+              userLocation.lng
+            )
+          : await searchService.getSearchSuggestions(searchQuery);
 
         if (response.success && response.data) {
           // Combine items and restaurants into a single array
@@ -74,6 +138,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           }));
 
           const combined = [...items, ...restaurants];
+
           setSearchResults(combined);
         } else {
           setSearchResults([]);
@@ -91,7 +156,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         clearTimeout(debounceTimer.current);
       }
     };
-  }, [searchQuery]);
+  }, [searchQuery, userLocation]);
 
   const renderSearchResult = ({ item, index }: { item: SearchSuggestion; index?: number }) => {
     // Get image URL

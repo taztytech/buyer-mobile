@@ -19,6 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { apiService } from '@/services/api.service';
+import { homeService } from '@/services/home.service';
 import { Shimmer } from '@/components/Shimmer';
 import { CustomizationModal } from '@/components/CustomizationModal';
 import { CustomisationsReviewModal } from '@/components/CustomisationsReviewModal';
@@ -1038,22 +1039,37 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             {/* Restaurant Info Card */}
             <View style={styles.restaurantCard}>
               <View style={styles.restaurantTopRow}>
-                <TouchableOpacity
-                  style={styles.restaurantNameRow}
-                  onPress={onNavigateToDetails}
-                  activeOpacity={1}
-                  disabled={!onNavigateToDetails}
-                >
-                  <Text style={styles.restaurantName} numberOfLines={2}>
-                    {restaurantData?.name || restaurantName || 'Restaurant'}
-                    {onNavigateToDetails && (
-                      <Text style={styles.infoIconText}>
-                        {' '}
-                        <MaterialIcons name="info-outline" size={18} color="#00B14F" />
-                      </Text>
-                    )}
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.restaurantNameContainer}>
+                  <TouchableOpacity
+                    style={styles.restaurantNameRow}
+                    onPress={onNavigateToDetails}
+                    activeOpacity={1}
+                    disabled={!onNavigateToDetails}
+                  >
+                    <Text style={styles.restaurantName} numberOfLines={2}>
+                      {restaurantData?.name || restaurantName || 'Restaurant'}
+                      {onNavigateToDetails && (
+                        <Text style={styles.infoIconText}>
+                          {' '}
+                          <MaterialIcons name="info-outline" size={18} color="#00B14F" />
+                        </Text>
+                      )}
+                    </Text>
+                  </TouchableOpacity>
+                  {/* Opening Message */}
+                  {restaurantData?.timings && (() => {
+                    const openingMessage = homeService.getRestaurantOpeningMessage(restaurantData.timings);
+                    if (openingMessage) {
+                      return (
+                        <View style={styles.openingMessageContainer}>
+                          <MaterialIcons name="access-time" size={14} color="#FF6B6B" />
+                          <Text style={styles.openingMessage}>{openingMessage}</Text>
+                        </View>
+                      );
+                    }
+                    return null;
+                  })()}
+                </View>
                 {/* Only show rating and reviews if there's at least one review */}
                 {(restaurantData?.stats?.total_reviews > 0 || restaurantData?.total_reviews > 0) && (
                   <View style={styles.ratingContainer}>
@@ -1299,7 +1315,16 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               </TouchableOpacity>
 
             {section.isExpanded && section.items.map((item) => {
-              const itemAvailable = isItemAvailable(item.timings);
+              // Check if restaurant is open
+              const isRestaurantOpen = restaurantData?.timings
+                ? homeService.isRestaurantOpen(restaurantData.timings)
+                : true; // Default to open if no timing data
+
+              // Check if item is available based on its own timings
+              const isItemCurrentlyAvailable = isItemAvailable(item.timings);
+
+              // Item is only available if BOTH restaurant is open AND item timing is available
+              const itemAvailable = isRestaurantOpen && isItemCurrentlyAvailable;
 
               return (
               <View key={item.id} style={styles.menuItem}>
@@ -1721,9 +1746,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
   },
+  restaurantNameContainer: {
+    flex: 1,
+    gap: 4,
+  },
   restaurantNameRow: {
     position: 'relative',
-    flex: 1,
     marginRight: 8,
   },
   restaurantName: {
@@ -1736,6 +1764,19 @@ const styles = StyleSheet.create({
   },
   infoIconText: {
     lineHeight: 27,
+  },
+  openingMessageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  openingMessage: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#FF6B6B',
   },
   ratingContainer: {
     alignItems: 'center',
@@ -2268,7 +2309,7 @@ const styles = StyleSheet.create({
   },
   floatingMenuButton: {
     position: 'absolute',
-    right: 20,
+    left: 20,
     bottom: 30,
     width: 50,
     height: 50,
@@ -2313,7 +2354,7 @@ const styles = StyleSheet.create({
   },
   closeMenuButton: {
     position: 'absolute',
-    right: 20,
+    left: 20,
     bottom: 30,
     width: 122,
     height: 50,
@@ -2344,7 +2385,7 @@ const styles = StyleSheet.create({
   },
   quickMenuPanel: {
     position: 'absolute',
-    right: 20,
+    left: 20,
     bottom: 100,
     width: '60%',
     maxHeight: 280,

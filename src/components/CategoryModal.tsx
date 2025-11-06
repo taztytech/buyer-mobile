@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,10 @@ import {
   Image,
   Dimensions,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { homeService, DishItem } from '@/services/home.service';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -19,6 +21,7 @@ export interface CategoryItem {
   name: string;
   description: string;
   icon: any;
+  food_type?: string;
 }
 
 interface CategoryModalProps {
@@ -26,6 +29,7 @@ interface CategoryModalProps {
   categories: CategoryItem[];
   onClose: () => void;
   onCategorySelect: (categoryName: string) => void;
+  vegMode?: 'off' | 'pure' | 'all';
 }
 
 export const CategoryModal: React.FC<CategoryModalProps> = ({
@@ -33,8 +37,11 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   categories,
   onClose,
   onCategorySelect,
+  vegMode = 'off',
 }) => {
   const slideAnim = useRef(new Animated.Value(1000)).current;
+  const [allDishes, setAllDishes] = useState<CategoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -44,15 +51,65 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         tension: 65,
         friction: 11,
       }).start();
+
+      // Fetch all dishes when modal opens
+      fetchAllDishes();
     } else {
       slideAnim.setValue(1000);
     }
-  }, [visible]);
+  }, [visible, vegMode]);
+
+  const fetchAllDishes = async () => {
+    setIsLoading(true);
+    try {
+      // Determine food_type parameter based on vegMode
+      let foodTypeParam: string | undefined;
+      if (vegMode === 'pure') {
+        foodTypeParam = 'Veg';
+      } else if (vegMode === 'all') {
+        foodTypeParam = undefined; // Fetch all dishes
+      } else {
+        foodTypeParam = undefined; // vegMode is 'off', fetch all
+      }
+
+      const dishResponse = await homeService.getDishes(foodTypeParam, 100, 1); // Fetch up to 100 dishes
+
+      if (dishResponse.success && dishResponse.data?.dishes) {
+        // Transform dishes to category format
+        const dishCategories: CategoryItem[] = dishResponse.data.dishes.map((dish: any) => ({
+          id: dish.id,
+          name: dish.name || dish.dish_name,
+          description: dish.description,
+          icon: dish.image || dish.image_url || dish.dish_image,
+          food_type: dish.food_type || dish.foodType || dish.type,
+        }));
+
+        setAllDishes(dishCategories);
+      } else {
+        // If API fails, use categories from props
+        const filteredCategories = categories.filter(
+          (cat) => cat.id !== 'view-all' && cat.name !== 'View All'
+        );
+        setAllDishes(filteredCategories);
+      }
+    } catch (error) {
+      // On error, use categories from props
+      const filteredCategories = categories.filter(
+        (cat) => cat.id !== 'view-all' && cat.name !== 'View All'
+      );
+      setAllDishes(filteredCategories);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Filter out the "View All" item from the modal display
   const filteredCategories = categories.filter(
     (cat) => cat.id !== 'view-all' && cat.name !== 'View All'
   );
+
+  // Use dishes from API if loaded, otherwise use categories from props
+  const displayData = allDishes.length > 0 ? allDishes : filteredCategories;
 
   const renderCategoryItem = ({ item }: { item: CategoryItem }) => {
     const imageSource = typeof item.icon === 'string' ? { uri: item.icon } : item.icon;
@@ -111,15 +168,22 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             </TouchableOpacity>
 
             {/* Category Grid */}
-            <FlatList
-              data={filteredCategories}
-              renderItem={renderCategoryItem}
-              keyExtractor={(item) => item.id.toString()}
-              numColumns={4}
-              contentContainerStyle={styles.gridContainer}
-              showsVerticalScrollIndicator={false}
-              columnWrapperStyle={styles.row}
-            />
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#00B14F" />
+                <Text style={styles.loadingText}>Loading dishes...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={displayData}
+                renderItem={renderCategoryItem}
+                keyExtractor={(item) => item.id.toString()}
+                numColumns={4}
+                contentContainerStyle={styles.gridContainer}
+                showsVerticalScrollIndicator={false}
+                columnWrapperStyle={styles.row}
+              />
+            )}
           </TouchableOpacity>
         </Animated.View>
       </TouchableOpacity>
@@ -188,5 +252,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#000000',
     textAlign: 'center',
+  },
+  loadingContainer: {
+    padding: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 200,
+  },
+  loadingText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: '#666666',
+    marginTop: 12,
   },
 });
