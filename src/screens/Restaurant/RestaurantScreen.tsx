@@ -1315,7 +1315,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               </TouchableOpacity>
 
             {section.isExpanded && section.items.map((item) => {
-              // TEMPORARY: Disabled availability checks for testing - re-enable later
               // Check if restaurant is open
               const isRestaurantOpen = restaurantData?.timings
                 ? homeService.isRestaurantOpen(restaurantData.timings)
@@ -1325,8 +1324,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               const isItemCurrentlyAvailable = isItemAvailable(item.timings);
 
               // Item is only available if BOTH restaurant is open AND item timing is available
-              // TEMPORARY: Always set to true for testing
-              const itemAvailable = true; // isRestaurantOpen && isItemCurrentlyAvailable;
+              const itemAvailable = isRestaurantOpen && isItemCurrentlyAvailable;
 
               return (
               <View key={item.id} style={styles.menuItem}>
