@@ -72,15 +72,18 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         foodTypeParam = undefined; // vegMode is 'off', fetch all
       }
 
-      const dishResponse = await homeService.getDishes(foodTypeParam, 500, 1); // Fetch up to 500 dishes (all dishes)
+      const dishResponse = await homeService.getDishes(foodTypeParam, 30, 1); // Fetch up to 30 dishes
 
-      if (dishResponse.success && dishResponse.data?.dishes) {
+      // The API returns dishes in data.data, not data.dishes
+      const dishesArray = dishResponse.data?.data || dishResponse.data?.dishes || [];
+
+      if (dishResponse.success && dishesArray.length > 0) {
         // Transform dishes to category format
-        const dishCategories: CategoryItem[] = dishResponse.data.dishes.map((dish: any) => ({
+        const dishCategories: CategoryItem[] = dishesArray.map((dish: any) => ({
           id: dish.id,
           name: dish.name || dish.dish_name,
           description: dish.description,
-          icon: dish.image || dish.image_url || dish.dish_image,
+          icon: dish.icon || dish.image || dish.image_url || dish.dish_image || dish.images?.[0],
           food_type: dish.food_type || dish.foodType || dish.type,
         }));
 

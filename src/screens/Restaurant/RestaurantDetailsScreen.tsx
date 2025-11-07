@@ -375,23 +375,29 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
               {/* Expanded Timings */}
               {isTimingsExpanded && (
                 <View style={styles.timingsExpanded}>
-                  {restaurantData.timings.map((timing) => (
-                    <View key={timing.day} style={styles.timingRow}>
-                      <Text style={[
-                        styles.timingDay,
-                        timing.day === new Date().getDay() && styles.timingDayToday
-                      ]}>
-                        {getDayName(timing.day)}
-                      </Text>
-                      {timing.is_open ? (
-                        <Text style={styles.timingHours}>
-                          {formatTime(timing.open_time)} - {formatTime(timing.close_time)}
+                  {/* Show all 7 days in order (Sunday=0 to Saturday=6) */}
+                  {[0, 1, 2, 3, 4, 5, 6].map((dayNum) => {
+                    const timing = restaurantData.timings.find(t => t.day === dayNum);
+                    const isToday = dayNum === new Date().getDay();
+
+                    return (
+                      <View key={dayNum} style={styles.timingRow}>
+                        <Text style={[
+                          styles.timingDay,
+                          isToday && styles.timingDayToday
+                        ]}>
+                          {getDayName(dayNum)}
                         </Text>
-                      ) : (
-                        <Text style={styles.timingClosed}>Closed</Text>
-                      )}
-                    </View>
-                  ))}
+                        {timing && timing.open_time && timing.close_time ? (
+                          <Text style={styles.timingHours}>
+                            {formatTime(timing.open_time)} - {formatTime(timing.close_time)}
+                          </Text>
+                        ) : (
+                          <Text style={styles.timingClosed}>Closed</Text>
+                        )}
+                      </View>
+                    );
+                  })}
                 </View>
               )}
             </View>

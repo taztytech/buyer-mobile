@@ -106,9 +106,8 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
         styles.card,
         restaurant.isOpen === false && styles.cardClosed
       ]}
-      onPress={restaurant.isOpen === false ? undefined : onPress}
+      onPress={onPress}
       activeOpacity={0.7}
-      disabled={restaurant.isOpen === false}
       testID={`restaurant-card-${restaurant.id}`}
     >
       {/* Left Side - Image with Heart Button */}
@@ -254,7 +253,8 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   return (
     prevProps.restaurant.id === nextProps.restaurant.id &&
     prevProps.restaurant.isFavorite === nextProps.restaurant.isFavorite &&
-    prevProps.restaurant.name === nextProps.restaurant.name
+    prevProps.restaurant.name === nextProps.restaurant.name &&
+    prevProps.restaurant.isOpen === nextProps.restaurant.isOpen
   );
 });
 

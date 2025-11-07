@@ -21,6 +21,7 @@ import { addressService, AddressResponse } from '@/services/address.service';
 import { paymentService } from '@/services/payment.service';
 import { authService } from '@/services/auth.service';
 import { homeService } from '@/services/home.service';
+import { cartService, CartSummary } from '@/services/cart.service';
 import { useCart } from '@/context/CartContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 
@@ -111,6 +112,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [addresses, setAddresses] = useState<AddressResponse[]>([]);
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
+  const [cartSummary, setCartSummary] = useState<CartSummary | null>(null);
+  const [isLoadingCartSummary, setIsLoadingCartSummary] = useState(false);
 
   const selectedAddress = addresses.find(addr => addr.id.toString() === selectedAddressId);
 
@@ -141,10 +144,32 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   }, [restaurantId, restaurantName, contextRestaurantId, setRestaurantInfo]);
 
-  // Fetch addresses from API
+  // Fetch addresses and cart summary from API
   useEffect(() => {
     fetchAddresses();
+    fetchCartSummary();
   }, []);
+
+  // Fetch cart summary when cart changes
+  useEffect(() => {
+    fetchCartSummary();
+  }, [JSON.stringify(cart)]);
+
+  const fetchCartSummary = async () => {
+    try {
+      setIsLoadingCartSummary(true);
+      const cartData = await cartService.getCart();
+
+      if (cartData && cartData.summary) {
+        setCartSummary(cartData.summary);
+      }
+    } catch (error: any) {
+      // Silently fail - cart summary is optional
+      console.error('Failed to fetch cart summary:', error);
+    } finally {
+      setIsLoadingCartSummary(false);
+    }
+  };
 
   const fetchAddresses = async () => {
     try {
@@ -498,31 +523,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   };
 
-  // Calculate totals
-  const itemTotal = localCartItems.reduce((sum, item) => {
-    const price = Number(item.price) || 0;
-    const quantity = Number(item.quantity) || 0;
-    const subtotal = price * quantity;
-    return sum + subtotal;
-  }, 0);
-
-  const gstAndCharges = Math.round(itemTotal * 0.18); // 18% GST
-  const deliveryFee = selfPickup ? 0 : 29;
-  const platformFee = 10;
-
-  // Calculate tip amount based on selection (DISABLED - always 0)
-  const tipAmount = 0; // Tip feature is disabled
-  // const tipAmount = (() => {
-  //   if (selectedTip === null) return 0;
-  //   if (selectedTip === -1) {
-  //     // "Other" is selected, use custom amount
-  //     const customAmount = parseInt(customTipAmount) || 0;
-  //     return customAmount;
-  //   }
-  //   return selectedTip;
-  // })();
-
-  const totalAmount = itemTotal + gstAndCharges + deliveryFee + platformFee + tipAmount;
+  // Use backend cart summary values instead of local calculations
+  const itemTotal = cartSummary?.subtotal || 0;
+  const gstAndCharges = cartSummary?.tax_amount || 0;
+  const deliveryFee = cartSummary?.delivery_fee || 0;
+  const discountAmount = cartSummary?.discount_amount || 0;
+  const totalAmount = cartSummary?.final_amount || 0;
 
   // If location selection is shown, render it as an overlay
   if (showLocationSelection) {
@@ -871,30 +877,26 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               <View style={styles.sectionContent}>
                 <View style={styles.billRow}>
                   <Text style={styles.billLabel}>Item Total</Text>
-                  <Text style={styles.billValue}>₹{itemTotal}</Text>
+                  <Text style={styles.billValue}>₹{itemTotal.toFixed(2)}</Text>
                 </View>
                 <View style={styles.billRow}>
-                  <Text style={styles.billLabel}>GST and Restaurant Charges</Text>
-                  <Text style={styles.billValue}>₹{gstAndCharges}</Text>
+                  <Text style={styles.billLabel}>Delivery Fee</Text>
+                  <Text style={styles.billValue}>₹{deliveryFee.toFixed(2)}</Text>
                 </View>
                 <View style={styles.billRow}>
-                  <Text style={styles.billLabel}>Delivery Partner Fee</Text>
-                  <Text style={styles.billValue}>₹{deliveryFee}</Text>
+                  <Text style={styles.billLabel}>Taxes and Charges</Text>
+                  <Text style={styles.billValue}>₹{gstAndCharges.toFixed(2)}</Text>
                 </View>
-                <View style={styles.billRow}>
-                  <Text style={styles.billLabel}>Platform Fee</Text>
-                  <Text style={styles.billValue}>₹{platformFee}</Text>
-                </View>
-                {tipAmount > 0 && (
+                {discountAmount > 0 && (
                   <View style={styles.billRow}>
-                    <Text style={styles.billLabel}>Tip for Delivery Partner</Text>
-                    <Text style={styles.billValue}>₹{tipAmount}</Text>
+                    <Text style={styles.billLabel}>Discount</Text>
+                    <Text style={[styles.billValue, { color: '#00B14F' }]}>-₹{discountAmount.toFixed(2)}</Text>
                   </View>
                 )}
                 <View style={styles.billDivider} />
                 <View style={styles.billTotalRow}>
                   <Text style={styles.billTotalLabel}>To Pay</Text>
-                  <Text style={styles.billTotalValue}>₹{totalAmount}</Text>
+                  <Text style={styles.billTotalValue}>₹{totalAmount.toFixed(2)}</Text>
                 </View>
               </View>
             )}

@@ -1,13 +1,16 @@
 /**
  * Timing Utilities
  * Helper functions for formatting and handling item timing information
+ *
+ * IMPORTANT: All day numbers use API format (ISO 8601):
+ * 1 = Monday, 2 = Tuesday, 3 = Wednesday, 4 = Thursday, 5 = Friday, 6 = Saturday, 7 = Sunday
  */
 
 export interface ItemTiming {
-  day_from: number;
-  day_to: number;
-  time_from: string;
-  time_to: string;
+  day_from: number; // API format: 1=Monday, 7=Sunday
+  day_to: number;   // API format: 1=Monday, 7=Sunday
+  time_from: string; // Format: "HHMM" (e.g., "0600", "1430")
+  time_to: string;   // Format: "HHMM" (e.g., "2200", "0030")
   is_available_now: boolean;
 }
 
@@ -26,11 +29,11 @@ export const formatTime = (time: string): string => {
 
 /**
  * Convert day number to short day name
- * @param day - Day number (0=Sunday, 1=Monday, ..., 6=Saturday)
+ * @param day - Day number in API format (1=Monday, 2=Tuesday, ..., 7=Sunday)
  * @returns Short day name (e.g., "Mon", "Tue")
  */
 export const formatDay = (day: number): string => {
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const days = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   return days[day] || '';
 };
 

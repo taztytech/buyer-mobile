@@ -70,6 +70,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [selectedTag, setSelectedTag] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const slideAnim = useRef(new Animated.Value(1000)).current;
   const hasInitializedRef = useRef(false);
   const previousVisibleRef = useRef(visible);
@@ -133,14 +134,16 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
-      () => {
+      (e) => {
         setKeyboardVisible(true);
+        setKeyboardHeight(e.endCoordinates.height);
       }
     );
     const keyboardDidHideListener = Keyboard.addListener(
       'keyboardDidHide',
       () => {
         setKeyboardVisible(false);
+        setKeyboardHeight(0);
       }
     );
 
@@ -312,7 +315,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         <Animated.View
           style={[
             styles.bottomSheetWrapper,
-            keyboardVisible && styles.bottomSheetWrapperWithKeyboard,
+            keyboardVisible && { bottom: Platform.OS === 'android' ? keyboardHeight : 0 },
           ]}
         >
           <TouchableOpacity
@@ -328,9 +331,9 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               ]}
             >
           <KeyboardAvoidingView
-            behavior="padding"
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.keyboardAvoidingView}
-            keyboardVerticalOffset={Platform.OS === 'android' ? -200 : 0}
+            enabled
           >
           <ScrollView
             ref={scrollViewRef}
@@ -578,7 +581,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 10,
     paddingTop: 12,
-    height: '100%',
+    flex: 1,
   },
   keyboardAvoidingView: {
     flex: 1,

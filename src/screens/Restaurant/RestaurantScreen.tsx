@@ -916,7 +916,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 isFavorite: item.is_favorite || false,
                 addOns: addOns.length > 0 ? addOns : undefined,
                 customizations: item.customizations,
-                timings: item.timings || undefined,
+                timings: item.timings || undefined, // Keep API format (1-7)
               };
               return menuItem;
             });
