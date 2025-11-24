@@ -161,6 +161,9 @@ function AppContent() {
         case 'restaurant':
           handleBackFromRestaurant();
           return true;
+        case 'restaurantDetails':
+          handleBackFromRestaurantDetails();
+          return true;
         case 'checkout':
           handleBackFromCheckout();
           return true;
