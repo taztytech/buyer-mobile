@@ -11,7 +11,6 @@ import {
   Dimensions,
   ActivityIndicator,
   Animated,
-  Alert,
   Platform,
   BackHandler,
 } from 'react-native';
@@ -24,14 +23,14 @@ import { Shimmer } from '@/components/Shimmer';
 import { CustomizationModal } from '@/components/CustomizationModal';
 import { CustomisationsReviewModal } from '@/components/CustomisationsReviewModal';
 import { FoodItemDetailModal } from '@/components/FoodItemDetailModal';
-import { FilterModal, FilterState } from '@/components/FilterModal';
+import { FilterState } from '@/components/FilterModal';
 import { OrderSuccessScreen } from '@/screens/Order/OrderSuccessScreen';
 import { SearchScreen } from './SearchScreen';
 import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { favoritesService } from '@/services/favorites.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
-import { ItemTiming as ImportedItemTiming, formatItemTiming, isItemAvailable } from '@/utils/timing.utils';
+import { ItemTiming as ImportedItemTiming, isItemAvailable } from '@/utils/timing.utils';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -100,63 +99,6 @@ interface MenuSection {
   isExpanded: boolean;
 }
 
-const CATEGORIES = ['Briyani', 'Idly', 'Dosa', 'Pongal', 'Fried Rice', 'Noodles'];
-
-const MENU_DATA: MenuSection[] = [
-  {
-    id: '1',
-    title: 'Snacks',
-    isExpanded: false,
-    items: [],
-  },
-  {
-    id: '2',
-    title: 'Morning Tiffin',
-    isExpanded: false,
-    items: [],
-  },
-  {
-    id: '3',
-    title: 'Restaurants Near You',
-    isExpanded: true,
-    items: [
-      {
-        id: '1',
-        name: 'Rava Kichadi',
-        price: 120,
-        description: 'Spicy Coriander leaves in the top and Freshly Cooked Rav with ghee in the top..More',
-        image: require('@/assets/biriyani.png'),
-        isVeg: true,
-        isSpicy: true,
-        isBestSeller: true,
-        isCustomizable: true,
-      },
-      {
-        id: '2',
-        name: 'Idly',
-        price: 120,
-        description: 'Spicy Coriander leaves in the top and Freshly Cooked Rav with ghee in the top..More',
-        image: require('@/assets/idlies.png'),
-        isVeg: true,
-        isSpicy: true,
-        isBestSeller: true,
-        isCustomizable: true,
-      },
-      {
-        id: '3',
-        name: 'Pongal',
-        price: 120,
-        description: 'Spicy Coriander leaves in the top and Freshly Cooked Rav with ghee in the top..More',
-        image: require('@/assets/biriyani.png'),
-        isVeg: true,
-        isSpicy: true,
-        isBestSeller: true,
-        isCustomizable: true,
-      },
-    ],
-  },
-];
-
 interface CustomizationVariant {
   id: string;
   addOns: string[];
@@ -169,26 +111,12 @@ interface CustomizationVariant {
   quantity: number;
 }
 
-interface CartItem {
-  id: string;
-  name: string;
-  price: number;
-  isVeg: boolean;
-  isCustomizable?: boolean;
-  // For non-customizable items
-  quantity?: number;
-  // For customizable items
-  variants?: CustomizationVariant[];
-}
-
 export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   visible,
   restaurantId,
   restaurantName,
   onBack,
   onNavigateToDetails,
-  onNavigateToOrders,
-  onNavigateToHome,
   onNavigateToCheckout,
 }) => {
   const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, checkRestaurantConflict } = useCart();
@@ -199,7 +127,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const [restaurantData, setRestaurantData] = useState<any>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState('Idly');
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
@@ -210,8 +137,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const [editingVariantQuantity, setEditingVariantQuantity] = useState<number | undefined>(undefined);
   const [preselectedAddOns, setPreselectedAddOns] = useState<string[]>([]);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  const [filters, setFilters] = useState<FilterState>({
+  const [filters] = useState<FilterState>({
     sortBy: null,
     dietary: null,
   });
@@ -317,46 +243,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     return cartItem.quantity || 0;
   };
 
-  // Flatten cart items for order details - convert variants into separate line items
-  const getFlattenedCartItems = () => {
-    const flattenedItems: any[] = [];
-
-    Object.values(cart).forEach(cartItem => {
-      if (cartItem.isCustomizable && cartItem.variants) {
-        // For customizable items, add each variant as a separate line item
-        cartItem.variants.forEach(variant => {
-          const item = {
-            id: cartItem.id,  // Original item ID
-            variantId: variant.id,  // Variant ID
-            addOnIds: variant.addOns,  // Array of add-on IDs
-            name: cartItem.name,
-            price: variant.price,
-            quantity: variant.quantity,
-            isVeg: cartItem.isVeg,
-            image: cartItem.image,
-            // Always include customizations text
-            customizations: variant.addOnNames?.length
-              ? variant.addOnNames.join(', ')
-              : '',
-          };
-          flattenedItems.push(item);
-        });
-      } else {
-        // For regular items, add as-is
-        const item = {
-          id: cartItem.id,
-          name: cartItem.name,
-          price: cartItem.price,
-          quantity: cartItem.quantity || 0,
-          isVeg: cartItem.isVeg,
-          image: cartItem.image,
-        };
-        flattenedItems.push(item);
-      }
-    });
-
-    return flattenedItems;
-  };
 
   // Add item to cart (for non-customizable items)
   const addToCart = (item: MenuItem) => {
@@ -521,14 +407,27 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
     if (editingVariantId) {
       // Update existing variant
-      updatedVariants = (existingItem?.variants || []).map(v =>
-        v.id === editingVariantId
-          ? newVariant
-          : v
-      );
+      updatedVariants = (existingItem?.variants || []).map(v => {
+        // Convert CartVariant to CustomizationVariant if needed
+        const variant: CustomizationVariant = {
+          id: v.id,
+          addOns: v.addOns || [],
+          addOnNames: v.addOnNames,
+          price: v.price,
+          quantity: v.quantity,
+        };
+        return v.id === editingVariantId ? newVariant : variant;
+      });
     } else if (existingItem && existingItem.isCustomizable) {
       // Add to existing variants
-      updatedVariants = [...(existingItem.variants || []), newVariant];
+      const existingVariants = (existingItem.variants || []).map(v => ({
+        id: v.id,
+        addOns: v.addOns || [],
+        addOnNames: v.addOnNames,
+        price: v.price,
+        quantity: v.quantity,
+      }));
+      updatedVariants = [...existingVariants, newVariant];
     } else {
       // Create first variant
       updatedVariants = [newVariant];
@@ -550,49 +449,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     setPreselectedAddOns([]);
   };
 
-  // Handle editing customization from order details
-  const handleEditCustomization = (itemId: string, variantId: string, currentAddOnIds: string[], currentQuantity?: number) => {
-    const item = menuSections
-      .flatMap(section => section.items)
-      .find(i => i.id === itemId);
-
-    if (item) {
-      setEditingVariantId(variantId);
-      setEditingVariantQuantity(currentQuantity);
-      setPreselectedAddOns(currentAddOnIds);
-      setSelectedCustomizableItem(item);
-      setShowCustomizationModal(true);
-      // Keep order details open - modal will appear on top
-    }
-  };
-
-  // Handle cart updates from order details screen
-  const handleUpdateCartFromOrderDetails = (itemId: string, variantId: string | undefined, newQuantity: number) => {
-    if (variantId) {
-      // Handle customizable item with variant
-      const item = cart[itemId];
-
-      if (item?.variants) {
-        const updatedVariants = item.variants.map(v =>
-          v.id === variantId ? { ...v, quantity: newQuantity } : v
-        ).filter(v => v.quantity > 0); // Remove variants with 0 quantity
-
-        if (updatedVariants.length === 0) {
-          // Remove item entirely if no variants left
-          removeFromCart(itemId);
-        } else {
-          addToCartContext({
-            ...item,
-            variants: updatedVariants,
-            quantity: updatedVariants.reduce((sum, v) => sum + v.quantity, 0),
-          });
-        }
-      }
-    } else {
-      // Handle non-customizable item
-      updateQuantity(itemId, newQuantity);
-    }
-  };
 
   // Toggle description expansion
   const toggleDescription = (itemId: string) => {
@@ -643,7 +499,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
   };
 
-  const handleEditVariant = (variantId: string) => {
+  const handleEditVariant = () => {
     // For now, just show a placeholder
     // In a full implementation, you would:
     // 1. Find the variant
@@ -813,7 +669,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Animate background when modal opens/closes
   useEffect(() => {
-    if (showDetailModal || showCustomizationModal || showCustomisationsReviewModal || showFilterModal) {
+    if (showDetailModal || showCustomizationModal || showCustomisationsReviewModal) {
       Animated.parallel([
         Animated.timing(scaleAnim, {
           toValue: 0.92,
@@ -840,7 +696,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         }),
       ]).start();
     }
-  }, [showDetailModal, showCustomizationModal, showCustomisationsReviewModal, showFilterModal]);
+  }, [showDetailModal, showCustomizationModal, showCustomisationsReviewModal]);
 
   const fetchRestaurantDetails = async () => {
     try {
@@ -859,7 +715,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       ]);
 
       // Handle nested data structure: response.data.data.data
-      const nestedData = response.data?.data?.data || response.data?.data;
+      const responseData = response.data as any;
+      const nestedData = responseData?.data?.data || responseData?.data;
 
       if (nestedData) {
         const restaurant = nestedData;
@@ -870,7 +727,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
         // Process categories from API response
         if (restaurant.categories && Array.isArray(restaurant.categories)) {
-          const sections: MenuSection[] = restaurant.categories.map((category: any, index: number) => {
+          const sections: MenuSection[] = restaurant.categories.map((category: any) => {
             // Process items in this category
             const items: MenuItem[] = (category.items || []).map((item: any) => {
               // Parse customizations/add-ons from API
@@ -988,7 +845,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Measure section positions after layout
   const handleSectionLayout = (sectionId: string, event: any) => {
-    event.target.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+    event.target.measure((_x: number, _y: number, _width: number, _height: number, _pageX: number, pageY: number) => {
       sectionPositions.current[sectionId] = pageY;
     });
   };
@@ -1005,8 +862,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               { scale: scaleAnim },
               { translateY: translateYAnim },
             ],
-            borderTopLeftRadius: (showCustomizationModal || showCustomisationsReviewModal || showFilterModal || showDetailModal) ? 20 : 0,
-            borderTopRightRadius: (showCustomizationModal || showCustomisationsReviewModal || showFilterModal || showDetailModal) ? 20 : 0,
+            borderTopLeftRadius: (showCustomizationModal || showCustomisationsReviewModal || showDetailModal) ? 20 : 0,
+            borderTopRightRadius: (showCustomizationModal || showCustomisationsReviewModal || showDetailModal) ? 20 : 0,
           },
         ]}
       >
@@ -1294,7 +1151,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             <View
               key={section.id}
               style={styles.menuSection}
-              ref={ref => sectionRefs.current[section.id] = ref}
+              ref={(ref) => {
+                sectionRefs.current[section.id] = ref;
+              }}
               onLayout={(event) => handleSectionLayout(section.id, event)}
             >
               <TouchableOpacity
@@ -1505,7 +1364,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
       {/* Bottom Cart Bar */}
       {totalCartItems > 0 && (
-        <View style={styles.cartBar}>
+        <View style={[styles.cartBar, { bottom: 0, paddingBottom: insets.bottom }]}>
           <TouchableOpacity
             style={styles.cartButton}
             onPress={() => {
@@ -1541,7 +1400,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         <TouchableOpacity
           style={[
             styles.floatingMenuButton,
-            totalCartItems > 0 && styles.floatingMenuButtonWithCart
+            totalCartItems > 0 && styles.floatingMenuButtonWithCart,
+            { bottom: totalCartItems > 0 ? 130 : 30 }
           ]}
           onPress={() => setShowQuickMenu(true)}
         >
@@ -1563,7 +1423,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         <TouchableOpacity
           style={[
             styles.closeMenuButton,
-            totalCartItems > 0 && styles.closeMenuButtonWithCart
+            totalCartItems > 0 && styles.closeMenuButtonWithCart,
+            { bottom: totalCartItems > 0 ? 110 : 30 }
           ]}
           onPress={() => setShowQuickMenu(false)}
           activeOpacity={0.8}
@@ -1577,7 +1438,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       {showQuickMenu && menuSections.length > 0 && (
         <View style={[
           styles.quickMenuPanel,
-          totalCartItems > 0 && styles.quickMenuPanelWithCart
+          totalCartItems > 0 && styles.quickMenuPanelWithCart,
+          { bottom: totalCartItems > 0 ? 180 : 100 }
         ]}>
           <ScrollView style={styles.quickMenuScroll} showsVerticalScrollIndicator={false}>
             {menuSections.map((section) => (
@@ -1638,7 +1500,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           visible={showCustomisationsReviewModal}
           itemName={cart[reviewingItemId].name}
           basePrice={cart[reviewingItemId].price}
-          variants={cart[reviewingItemId].variants || []}
+          variants={(cart[reviewingItemId].variants || []).map(v => ({
+            id: v.id,
+            addOns: v.addOns || [],
+            addOnNames: v.addOnNames,
+            price: v.price,
+            quantity: v.quantity,
+            isVeg: cart[reviewingItemId].isVeg,
+          }))}
           onClose={() => {
             setShowCustomisationsReviewModal(false);
             setReviewingItemId(null);
@@ -1679,7 +1548,25 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         <View style={styles.searchOverlay}>
           <SearchScreen
             menuItems={menuSections}
-            cart={cart}
+            cart={Object.keys(cart).reduce((acc, key) => {
+              const item = cart[key];
+              acc[key] = {
+                id: item.id,
+                name: item.name,
+                price: item.price,
+                isVeg: item.isVeg,
+                isCustomizable: item.isCustomizable,
+                quantity: item.quantity,
+                variants: item.variants?.map(v => ({
+                  id: v.id,
+                  addOns: v.addOns || [],
+                  addOnNames: v.addOnNames,
+                  price: v.price,
+                  quantity: v.quantity,
+                })),
+              };
+              return acc;
+            }, {} as { [key: string]: any })}
             onAddToCart={addToCart}
             onIncrementItem={incrementItem}
             onDecrementItem={decrementItem}
@@ -2263,7 +2150,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 100,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 0,
     shadowColor: '#000000',
@@ -2272,7 +2158,7 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 20,
     paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingTop: 20,
   },
   cartButton: {
     flexDirection: 'row',
@@ -2318,7 +2204,7 @@ const styles = StyleSheet.create({
   },
   floatingMenuButton: {
     position: 'absolute',
-    left: 20,
+    right: 20,
     bottom: 30,
     width: 50,
     height: 50,
@@ -2363,7 +2249,7 @@ const styles = StyleSheet.create({
   },
   closeMenuButton: {
     position: 'absolute',
-    left: 20,
+    right: 20,
     bottom: 30,
     width: 122,
     height: 50,
@@ -2394,7 +2280,7 @@ const styles = StyleSheet.create({
   },
   quickMenuPanel: {
     position: 'absolute',
-    left: 20,
+    right: 20,
     bottom: 100,
     width: '60%',
     maxHeight: 280,
