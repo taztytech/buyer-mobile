@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   StatusBar,
   Image,
   ActivityIndicator,
@@ -15,23 +14,25 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import { Shimmer } from '@/components/Shimmer';
 
-interface OrderItem {
-  id: string;
-  name: string;
-  image?: any;
-  isVeg: boolean;
-}
+// Unused interface - kept for reference
+// interface OrderItem {
+//   id: string;
+//   name: string;
+//   image?: any;
+//   isVeg: boolean;
+// }
 
-interface Order {
-  id: string;
-  restaurantName: string;
-  restaurantLocation: string;
-  restaurantLogo: any;
-  orderDate: string;
-  totalAmount: number;
-  status: 'delivered' | 'cancelled' | 'ongoing';
-  items: OrderItem[];
-}
+// Unused interface - kept for reference
+// interface Order {
+//   id: string;
+//   restaurantName: string;
+//   restaurantLocation: string;
+//   restaurantLogo: any;
+//   orderDate: string;
+//   totalAmount: number;
+//   status: 'delivered' | 'cancelled' | 'ongoing';
+//   items: OrderItem[];
+// }
 
 interface OrdersScreenProps {
   visible?: boolean;
@@ -41,7 +42,7 @@ interface OrdersScreenProps {
   onRateOrder?: (orderId: string, orderData?: any) => void;
   onTrackOrder?: (orderId: string) => void;
   onHelp?: (orderId: string) => void;
-  onViewMore?: () => void;
+  onViewMore?: () => void; // Unused but kept for API compatibility
 }
 
 export const OrdersScreen: React.FC<OrdersScreenProps> = ({
@@ -52,10 +53,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   onRateOrder,
   onTrackOrder,
   onHelp,
-  onViewMore,
+  onViewMore: _onViewMore, // Unused but kept for API compatibility
 }) => {
-  const [searchText, setSearchText] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,19 +82,22 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       const response = await ordersService.getOrders(5, page);
 
       if (response.success && response.data) {
+        // Type assertion to handle different API response structures
+        const responseData = response.data as any;
+        
         // Try different response structures the API might return
         const ordersArray =
-          response.data.data || // Double-wrapped response
-          response.data.orders || // Direct orders array
-          (Array.isArray(response.data) ? response.data : []); // Data is already array
+          responseData.data || // Double-wrapped response
+          responseData.orders || // Direct orders array
+          (Array.isArray(responseData) ? responseData : []); // Data is already array
 
         // Get total from various possible locations in response
         const total =
-          response.data.total ||
-          response.data.meta?.total || // Added meta.total
-          response.data.data?.total ||
-          response.data.pagination?.total ||
-          response.data.metadata?.total ||
+          responseData.total ||
+          responseData.meta?.total || // Added meta.total
+          responseData.data?.total ||
+          responseData.pagination?.total ||
+          responseData.metadata?.total ||
           ordersArray.length; // Fallback to array length
 
         if (reset) {
@@ -519,7 +521,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             <Text style={styles.emptyText}>{error}</Text>
             <TouchableOpacity
               style={styles.retryButton}
-              onPress={fetchOrders}
+              onPress={() => fetchOrders(1, true)}
               activeOpacity={0.7}
             >
               <Text style={styles.retryButtonText}>Retry</Text>
