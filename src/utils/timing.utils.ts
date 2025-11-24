@@ -70,3 +70,59 @@ export const isItemAvailable = (timings?: ItemTiming[]): boolean => {
   if (!timings || timings.length === 0) return true; // If no timings, assume always available
   return timings.some(timing => timing.is_available_now);
 };
+
+const convertJsDayToApiDay = (jsDay: number): number => (jsDay === 0 ? 7 : jsDay);
+
+const isDayWithinRange = (day: number, from: number, to: number): boolean => {
+  if (from <= to) {
+    return day >= from && day <= to;
+  }
+  // Handles wrap-around ranges like Sat-Mon (6-1)
+  return day >= from || day <= to;
+};
+
+const getDateForOffsetAndTime = (base: Date, offsetDays: number, time: string): Date => {
+  const result = new Date(base);
+  const hours = parseInt(time.substring(0, 2), 10);
+  const minutes = parseInt(time.substring(2, 4), 10);
+  result.setSeconds(0, 0);
+  result.setHours(hours, minutes, 0, 0);
+  result.setDate(result.getDate() + offsetDays);
+  return result;
+};
+
+/**
+ * Get a user-friendly message indicating when the item will be available next
+ * @param timings - Array of ItemTiming objects
+ * @returns Message string or null if item is currently available / no info
+ */
+export const getNextItemAvailabilityMessage = (timings?: ItemTiming[]): string | null => {
+  if (!timings || timings.length === 0) return null;
+  if (isItemAvailable(timings)) return null;
+
+  const now = new Date();
+  const today = convertJsDayToApiDay(now.getDay());
+
+  for (let offset = 0; offset < 7; offset++) {
+    const day = ((today - 1 + offset) % 7) + 1; // Cycle through upcoming days
+    const matchingTimings = timings.filter(timing => isDayWithinRange(day, timing.day_from, timing.day_to));
+
+    for (const timing of matchingTimings) {
+      const startTime = getDateForOffsetAndTime(now, offset, timing.time_from);
+      if (startTime <= now) {
+        continue; // This window has already started/passed
+      }
+
+      const formattedTime = formatTime(timing.time_from);
+      if (offset === 0) {
+        return `Available later today at ${formattedTime}`;
+      }
+      if (offset === 1) {
+        return `Available tomorrow at ${formattedTime}`;
+      }
+      return `Available on ${formatDay(day)} at ${formattedTime}`;
+    }
+  }
+
+  return 'Available soon';
+};
