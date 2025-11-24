@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -150,10 +150,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     fetchCartSummary();
   }, []);
 
-  // Fetch cart summary when cart changes
+  // Fetch cart summary when cart changes (debounced to avoid too many API calls)
   useEffect(() => {
-    fetchCartSummary();
-  }, [JSON.stringify(cart)]);
+    // Use a timeout to debounce the API call
+    const timeoutId = setTimeout(() => {
+      fetchCartSummary();
+    }, 300); // Wait 300ms after cart changes before fetching
+
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Object.keys(cart).length, localCartItems.length]); // Use cart length instead of JSON.stringify
 
   const fetchCartSummary = async () => {
     try {
@@ -523,12 +529,48 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   };
 
-  // Use backend cart summary values instead of local calculations
-  const itemTotal = cartSummary?.subtotal || 0;
-  const gstAndCharges = cartSummary?.tax_amount || 0;
-  const deliveryFee = cartSummary?.delivery_fee || 0;
-  const discountAmount = cartSummary?.discount_amount || 0;
-  const totalAmount = cartSummary?.final_amount || 0;
+  // Calculate bill values optimistically from localCartItems for instant UI updates
+  // Always use local calculation for item total to ensure instant updates
+  // Use backend cartSummary only for fees/taxes/discounts that we can't calculate locally
+  const billValues = useMemo(() => {
+    // ALWAYS calculate item total from local cart items for instant UI feedback
+    // This ensures the UI updates immediately when quantity changes
+    const calculatedItemTotal = localCartItems.reduce((sum, item) => {
+      return sum + (item.price * item.quantity);
+    }, 0);
+
+    // Use backend values for fees/taxes/discounts (these don't change with quantity)
+    // These come from backend and are relatively static
+    const deliveryFee = cartSummary?.delivery_fee ?? 0;
+    const gstAndCharges = cartSummary?.tax_amount ?? 0;
+    const discountAmount = cartSummary?.discount_amount ?? 0;
+    
+    // Calculate tax proportionally if we have backend data
+    // This allows us to apply tax to the calculated item total for instant updates
+    let taxAmount = gstAndCharges;
+    if (cartSummary?.subtotal && cartSummary?.tax_amount && cartSummary.subtotal > 0 && calculatedItemTotal > 0) {
+      // Calculate tax rate from backend data and apply to current item total
+      const taxRate = cartSummary.tax_amount / cartSummary.subtotal;
+      taxAmount = calculatedItemTotal * taxRate;
+    } else if (calculatedItemTotal === 0) {
+      // If cart is empty, tax should be 0
+      taxAmount = 0;
+    }
+    
+    // Calculate total: calculatedItemTotal + deliveryFee + taxAmount - discountAmount
+    // Always use calculated item total for instant updates
+    const totalAmount = calculatedItemTotal + deliveryFee + taxAmount - discountAmount;
+
+    return {
+      itemTotal: calculatedItemTotal, // Always use calculated value for instant updates
+      deliveryFee,
+      gstAndCharges: taxAmount,
+      discountAmount,
+      totalAmount,
+    };
+  }, [localCartItems, cartSummary]);
+
+  const { itemTotal, gstAndCharges, deliveryFee, discountAmount, totalAmount } = billValues;
 
   // If location selection is shown, render it as an overlay
   if (showLocationSelection) {
