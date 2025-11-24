@@ -86,7 +86,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
 
   const handleCall = () => {
     // Check if phone number is available in restaurant data
-    const phoneNumber = (restaurantData as any)?.phone || (restaurantData as any)?.contact_number;
+    const phoneNumber = (restaurantData as any)?.phone_number || (restaurantData as any)?.contact_number;
     if (phoneNumber) {
       Linking.openURL(`tel:${phoneNumber}`);
     }
@@ -222,10 +222,10 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
           >
             {/* Restaurant Info */}
             <View style={styles.titleSection}>
-              {restaurantData?.description && (
+              {/* {restaurantData?.description && (
                 <Text style={styles.subtitle}>{restaurantData.description}</Text>
-              )}
-              {restaurantData && (restaurantData.stats?.average_rating > 0 || restaurantData.delivery_time || restaurantData.min_order_value) && (
+              )} */}
+              {/* {restaurantData && (restaurantData.stats?.average_rating > 0 || restaurantData.delivery_time || restaurantData.min_order_value) && (
                 <Text style={styles.cuisines}>
                   {restaurantData.stats?.average_rating > 0 && restaurantData.stats?.total_reviews > 0 && (
                     <>⭐ {restaurantData.stats.average_rating.toFixed(1)} ({restaurantData.stats.total_reviews})</>
@@ -235,7 +235,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                   {restaurantData.delivery_time && restaurantData.min_order_value && ' · '}
                   {restaurantData.min_order_value && `Min ₹${parseFloat(restaurantData.min_order_value).toFixed(0)}`}
                 </Text>
-              )}
+              )} */}
 
               {/* Cuisine Tags */}
               {(() => {
@@ -331,12 +331,12 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                   >
                     <MaterialIcons name="directions" size={18} color="#00B14F" />
                   </TouchableOpacity>
-                  <TouchableOpacity
+                  {/* <TouchableOpacity
                     style={styles.actionButton}
                     onPress={handleShare}
                   >
                     <MaterialIcons name="share" size={18} color="#00B14F" />
-                  </TouchableOpacity>
+                  </TouchableOpacity> */}
                 </View>
               </View>
             )}
@@ -485,10 +485,10 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                 <Text style={styles.legalValue}>{restaurantData.fssai_license}</Text>
               </>
             )}
-            <Text style={styles.termsText}>
+            {/* <Text style={styles.termsText}>
               Please review the terms of service for Tazty{' '}
               <Text style={styles.termsLink}>here</Text>
-            </Text>
+            </Text> */}
           </View>
         </ScrollView>
         )}
