@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,11 @@ interface MenuItem {
   isCustomizable: boolean;
 }
 
+interface MenuSection {
+  id: string;
+  items: MenuItem[];
+}
+
 interface CustomizationVariant {
   id: string;
   addOns: string[];
@@ -47,7 +52,7 @@ interface CartItem {
 
 interface SearchScreenProps {
   onBack?: () => void;
-  menuItems?: any[];
+  menuItems?: MenuSection[];
   cart?: { [key: string]: CartItem };
   onAddToCart?: (item: MenuItem) => void;
   onIncrementItem?: (itemId: string) => void;
@@ -56,6 +61,7 @@ interface SearchScreenProps {
   onImageClick?: (item: MenuItem) => void;
   loadedImages?: Set<string>;
   onImageLoad?: (itemId: string) => void;
+  isRestaurantClosed?: boolean;
 }
 
 export const SearchScreen: React.FC<SearchScreenProps> = ({
@@ -69,6 +75,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   onImageClick,
   loadedImages = new Set(),
   onImageLoad,
+  isRestaurantClosed = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<MenuItem[]>([]);
@@ -85,28 +92,34 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     return cartItem.quantity || 0;
   };
 
-  // Handle search
+  // Handle search text updates
   const handleSearch = (query: string) => {
     setSearchQuery(query);
+  };
 
-    if (!query.trim()) {
+  // Re-compute search results whenever the query or menu items change
+  useEffect(() => {
+    if (!searchQuery.trim()) {
       setSearchResults([]);
       return;
     }
 
-    // Filter menu items based on search query
+    const normalizedQuery = searchQuery.toLowerCase();
     const results: MenuItem[] = [];
+
     menuItems.forEach((section) => {
-      section.items.forEach((item: MenuItem) => {
-        if (item.name.toLowerCase().includes(query.toLowerCase()) ||
-            item.description.toLowerCase().includes(query.toLowerCase())) {
+      section?.items?.forEach((item: MenuItem) => {
+        if (
+          item.name.toLowerCase().includes(normalizedQuery) ||
+          item.description.toLowerCase().includes(normalizedQuery)
+        ) {
           results.push(item);
         }
       });
     });
 
     setSearchResults(results);
-  };
+  }, [searchQuery, menuItems]);
 
   return (
     <View style={styles.container}>
@@ -173,23 +186,20 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                       </Text>
                     </View>
 
-                    {/* Like and Share Buttons */}
-                    <View style={styles.itemActions}>
-                      <TouchableOpacity style={styles.actionButton}>
-                        <MaterialIcons name="favorite-border" size={17} color="rgba(0, 0, 0, 0.5)" />
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.actionButton}>
-                        <MaterialIcons name="share" size={17} color="rgba(0, 0, 0, 0.5)" />
-                      </TouchableOpacity>
-                    </View>
+                    {/* Extra spacing removed now that action icons are hidden */}
                   </View>
 
                   <View style={styles.itemRight}>
                     {/* Item Image with Shimmer */}
                     <TouchableOpacity
                       style={styles.itemImageContainer}
-                      onPress={() => onImageClick && onImageClick(item)}
-                      activeOpacity={0.9}
+                      onPress={() => {
+                        if (!isRestaurantClosed && onImageClick) {
+                          onImageClick(item);
+                        }
+                      }}
+                      disabled={isRestaurantClosed}
+                      activeOpacity={isRestaurantClosed ? 1 : 0.9}
                     >
                       {!loadedImages.has(item.id) && (
                         <Shimmer
@@ -209,7 +219,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     </TouchableOpacity>
 
                     {/* Add Button or Increment/Decrement Controls */}
-                    {loadedImages.has(item.id) && (
+                    {loadedImages.has(item.id) && !isRestaurantClosed && (
                       <>
                         {cart[item.id] ? (
                           // Show increment/decrement controls if item is in cart
@@ -401,21 +411,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: 'rgba(0, 0, 0, 0.6)',
     opacity: 0.85,
-  },
-  itemActions: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 3,
-    width: 53,
-    height: 25,
-  },
-  actionButton: {
-    width: 25,
-    height: 25,
-    borderRadius: 13,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   itemRight: {
     width: 166,
