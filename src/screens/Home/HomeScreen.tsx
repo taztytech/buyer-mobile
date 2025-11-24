@@ -180,7 +180,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
   const [hasShownLocationModal, setHasShownLocationModal] = React.useState(false);
   const [showVegModePopup, setShowVegModePopup] = React.useState(false);
-  const [rememberVegChoice, setRememberVegChoice] = React.useState(false);
   const vegModalSlideAnim = React.useRef(new Animated.Value(500)).current;
   const vegModalOpacityAnim = React.useRef(new Animated.Value(1)).current;
   const [currentSlide, setCurrentSlide] = React.useState(0);
@@ -568,10 +567,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const handleApplyVegMode = () => {
-    setVegMode(tempVegSelection, rememberVegChoice);
+    // Always persist veg mode when enabled (similar to major food delivery apps)
+    setVegMode(tempVegSelection, true);
     handleCloseVegModal();
-    // Reset remember choice for next time
-    setRememberVegChoice(false);
   };
 
   // Mark local (bundled) images as loaded immediately
@@ -1707,20 +1705,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </View>
             </TouchableOpacity>
 
-            {/* Remember Choice Checkbox */}
-            <TouchableOpacity
-              style={styles.vegRememberOption}
-              onPress={() => setRememberVegChoice(!rememberVegChoice)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.checkbox, rememberVegChoice && styles.checkboxChecked]}>
-                {rememberVegChoice && (
-                  <MaterialIcons name="check" size={14} color="#FFFFFF" />
-                )}
-              </View>
-              <Text style={styles.vegRememberText}>Remember my choice going forward</Text>
-            </TouchableOpacity>
-
             {/* Show Restaurants Button */}
             <TouchableOpacity
               style={styles.vegApplyButton}
@@ -2479,35 +2463,6 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: '#00B14F',
-  },
-  vegRememberOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingVertical: 12,
-    gap: 10,
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#CCCCCC',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  checkboxChecked: {
-    backgroundColor: '#00B14F',
-    borderColor: '#00B14F',
-  },
-  vegRememberText: {
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#666666',
-    flex: 1,
   },
   vegApplyButton: {
     flexDirection: 'row',

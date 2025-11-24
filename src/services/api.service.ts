@@ -137,15 +137,34 @@ class ApiService {
       }
 
       const url = buildApiUrl('/authentication/refresh-token');
+      const requestBody = {
+        refresh_token: refreshToken,
+      };
+
+      console.log('[API Request]', {
+        method: 'POST',
+        url,
+        headers: API_CONFIG.HEADERS,
+        body: requestBody,
+        timestamp: new Date().toISOString(),
+      });
+
       const response = await fetch(url, {
         method: 'POST',
         headers: API_CONFIG.HEADERS,
-        body: JSON.stringify({
-          refresh_token: refreshToken,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
+
+      console.log('[API Response]', {
+        method: 'POST',
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        data,
+        timestamp: new Date().toISOString(),
+      });
 
       if (response.ok && data.success) {
         // Validate that we received valid tokens (check both camelCase and snake_case)
@@ -260,13 +279,32 @@ class ApiService {
         config.body = JSON.stringify(data);
       }
 
+      // Log request details
+      const logHeaders = { ...headers };
+      // Mask sensitive token information in logs
+      if (logHeaders['Authorization']) {
+        logHeaders['Authorization'] = logHeaders['Authorization'].substring(0, 20) + '...';
+      }
+
+      console.log('[API Request]', {
+        method,
+        url,
+        endpoint,
+        headers: logHeaders,
+        body: data,
+        retryCount,
+        timestamp: new Date().toISOString(),
+      });
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
+      const startTime = Date.now();
       const response = await fetch(url, {
         ...config,
         signal: controller.signal,
       });
+      const duration = Date.now() - startTime;
 
       clearTimeout(timeoutId);
 
@@ -310,6 +348,19 @@ class ApiService {
 
       const responseData = await response.json();
 
+      // Log response details
+      console.log('[API Response]', {
+        method,
+        url,
+        endpoint,
+        status: response.status,
+        statusText: response.statusText,
+        data: responseData,
+        duration: `${duration}ms`,
+        retryCount,
+        timestamp: new Date().toISOString(),
+      });
+
       if (!response.ok) {
         return {
           success: false,
@@ -324,6 +375,17 @@ class ApiService {
         message: responseData.message,
       };
     } catch (error: any) {
+      // Log error details
+      const errorUrl = buildApiUrl(endpoint);
+      console.error('[API Error]', {
+        method,
+        url: errorUrl,
+        endpoint,
+        error: error.message || error,
+        errorType: error.name,
+        timestamp: new Date().toISOString(),
+      });
+
       const apiError = this.handleError(error);
       return {
         success: false,
