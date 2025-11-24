@@ -1505,7 +1505,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
       {/* Bottom Cart Bar */}
       {totalCartItems > 0 && (
-        <View style={styles.cartBar}>
+        <View style={[styles.cartBar, { bottom: 0, paddingBottom: insets.bottom }]}>
           <TouchableOpacity
             style={styles.cartButton}
             onPress={() => {
@@ -1541,7 +1541,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         <TouchableOpacity
           style={[
             styles.floatingMenuButton,
-            totalCartItems > 0 && styles.floatingMenuButtonWithCart
+            totalCartItems > 0 && styles.floatingMenuButtonWithCart,
+            { bottom: totalCartItems > 0 ? 130 : 30 }
           ]}
           onPress={() => setShowQuickMenu(true)}
         >
@@ -1563,7 +1564,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         <TouchableOpacity
           style={[
             styles.closeMenuButton,
-            totalCartItems > 0 && styles.closeMenuButtonWithCart
+            totalCartItems > 0 && styles.closeMenuButtonWithCart,
+            { bottom: totalCartItems > 0 ? 110 : 30 }
           ]}
           onPress={() => setShowQuickMenu(false)}
           activeOpacity={0.8}
@@ -1577,7 +1579,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       {showQuickMenu && menuSections.length > 0 && (
         <View style={[
           styles.quickMenuPanel,
-          totalCartItems > 0 && styles.quickMenuPanelWithCart
+          totalCartItems > 0 && styles.quickMenuPanelWithCart,
+          { bottom: totalCartItems > 0 ? 180 : 100 }
         ]}>
           <ScrollView style={styles.quickMenuScroll} showsVerticalScrollIndicator={false}>
             {menuSections.map((section) => (
@@ -2263,7 +2266,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 100,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 0,
     shadowColor: '#000000',
@@ -2272,7 +2274,7 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 20,
     paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingTop: 20,
   },
   cartButton: {
     flexDirection: 'row',
@@ -2318,7 +2320,7 @@ const styles = StyleSheet.create({
   },
   floatingMenuButton: {
     position: 'absolute',
-    left: 20,
+    right: 20,
     bottom: 30,
     width: 50,
     height: 50,
@@ -2363,7 +2365,7 @@ const styles = StyleSheet.create({
   },
   closeMenuButton: {
     position: 'absolute',
-    left: 20,
+    right: 20,
     bottom: 30,
     width: 122,
     height: 50,
@@ -2394,7 +2396,7 @@ const styles = StyleSheet.create({
   },
   quickMenuPanel: {
     position: 'absolute',
-    left: 20,
+    right: 20,
     bottom: 100,
     width: '60%',
     maxHeight: 280,
