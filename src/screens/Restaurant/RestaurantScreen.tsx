@@ -635,6 +635,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       if (scrollViewRef.current) {
         scrollViewRef.current.scrollTo({ y: 0, animated: false });
       }
+      // Set loading state immediately when becoming visible to show loading instead of "No menu available"
+      setIsLoading(true);
       fetchRestaurantDetails();
     } else if (!visible) {
       // Clear data when screen is not visible to prevent showing old cache
@@ -762,7 +764,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 id: item.id.toString(),
                 name: item.name,
                 price: parseFloat(item.price?.base_price || 0),
-                description: item.description || '',
+                description: item.long_description || item.full_description || item.detailed_description || item.description || '',
                 image: item.images && item.images.length > 0
                   ? { uri: item.images[0] }
                   : require('@/assets/biriyani.png'),
@@ -1097,19 +1099,23 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
                 {/* Menu Items Shimmer */}
                 {[1, 2, 3].map((itemIndex) => (
-                  <View key={`shimmer-item-${sectionIndex}-${itemIndex}`} style={styles.menuItem}>
-                    <View style={styles.shimmerItemLeft}>
-                      <Shimmer width={120} height={12} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
-                      <Shimmer width={100} height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 6 }} />
-                      <Shimmer width={70} height={14} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
-                      <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
-                      <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" />
-                    </View>
-                    <View style={styles.itemRight}>
-                      <Shimmer width={155} height={137} borderRadius={16} backgroundColor="#E8E8E8" />
+                  <View key={`shimmer-item-${sectionIndex}-${itemIndex}`}>
+                    <View style={styles.menuItem}>
+                      <View style={styles.shimmerItemLeft}>
+                        <Shimmer width={120} height={12} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
+                        <Shimmer width={100} height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 6 }} />
+                        <Shimmer width={70} height={14} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
+                        <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                        <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" />
+                      </View>
+                      <View style={styles.itemRight}>
+                        <Shimmer width={155} height={137} borderRadius={16} backgroundColor="#E8E8E8" />
                     </View>
                   </View>
+                  </View>
                 ))}
+                {/* Line after shimmer items */}
+                <View style={styles.categoryEndLine} />
               </View>
             ))}
           </View>
@@ -1157,7 +1163,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               onLayout={(event) => handleSectionLayout(section.id, event)}
             >
               <TouchableOpacity
-                style={styles.sectionHeader}
+                style={[
+                  styles.sectionHeader,
+                  section.isExpanded && styles.sectionHeaderExpanded
+                ]}
                 onPress={() => toggleSection(section.id)}
                 activeOpacity={0.7}
               >
@@ -1186,7 +1195,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               const itemAvailable = isRestaurantOpen && isItemCurrentlyAvailable;
 
               return (
-              <View key={item.id} style={styles.menuItem}>
+              <View key={item.id}>
+              <View style={styles.menuItem}>
                 <View style={styles.itemLeft}>
                   {/* Veg/Non-Veg Icon and Spicy Badge */}
                   <View style={styles.itemBadges}>
@@ -1353,6 +1363,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     <Text style={styles.customizableText}>Customisable</Text>
                   )}
                 </View>
+              </View>
               </View>
               )
             })}
@@ -1742,7 +1753,7 @@ const styles = StyleSheet.create({
   },
   filterSectionContainer: {
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 10,
     paddingBottom: 0,
     marginTop: -20,
   },
@@ -1851,28 +1862,41 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   loadingMenuContainer: {
-    paddingHorizontal: 5,
     paddingTop: 10,
-    gap: 20,
   },
   menuSection: {
-    gap: 0,
+    // backgroundColor: '#FFFFFF',
+    // borderRadius: 10,
+    marginHorizontal: 10,
+    // marginTop: 16,
+    // marginBottom: 10,
+    paddingBottom: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+    overflow: 'hidden',
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 10,
     paddingVertical: 12,
     marginHorizontal: 0,
     marginVertical: 0,
   },
+  sectionHeaderExpanded: {
+    // borderBottomWidth: 1,
+    // borderBottomColor: '#F0F0F0',
+  },
   sectionTitle: {
     fontFamily: 'Poppins',
     fontWeight: '700',
-    fontSize: 14,
-    lineHeight: 21,
-    textAlign: 'center',
+    fontSize: 18,
+    lineHeight: 27,
+    textAlign: 'left',
     color: '#000000',
     opacity: 0.85,
   },
@@ -1883,10 +1907,20 @@ const styles = StyleSheet.create({
   },
   menuItem: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    marginHorizontal: 10,
+    height: 170,
+    marginTop: 16,
+  },
+  itemDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginHorizontal: 20,
-    height: 192,
+    // marginVertical: 6,
+    marginBottom: 6,
+    height: 1,
   },
   itemLeft: {
     flex: 1,
@@ -2144,6 +2178,39 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  categoryEndLine: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    marginHorizontal: 20,
+    marginTop: 16,
+  },
+  categoryCollapsedContent: {
+    paddingVertical: 20,
+  },
+  categoryCollapsedLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 20,
+    height: 1,
+  },
+  categoryGapLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 20,
+    marginVertical: 16,
+    height: 1,
+  },
+  categoryExpandedLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 0,
+    height: 1,
   },
   cartBar: {
     position: 'absolute',

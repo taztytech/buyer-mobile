@@ -421,17 +421,39 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             },
           });
         } else {
-          // Payment failed - DO NOT cancel order, DO NOT clear cart
-          // The order will be automatically cancelled by backend after timeout
-          // Keep cart items so user can try placing order again
+          // Payment failed - Mark order as payment failed and clear cart
+          try {
+            // Use payment failure endpoint to mark order as payment_failed
+            await paymentService.handlePaymentFailure(orderId, {
+              reason: paymentResult.error || 'Payment could not be processed',
+            });
+          } catch (failureError) {
+            // If payment failure endpoint fails, try cancel order as fallback
+            try {
+              await ordersService.cancelOrder(orderId, `Payment failed: ${paymentResult.error || 'Payment could not be processed'}`);
+            } catch (cancelError) {
+              // If both fail, log but don't block user flow
+              console.error('Failed to mark order as payment failed:', failureError, cancelError);
+            }
+          }
+
+          // Clear cart after payment failure
+          clearCart();
+          setNotes(''); // Reset notes
+          setSelectedTip(null); // Reset tip selection
+          setCustomTipAmount(''); // Reset custom tip amount
 
           showConfirmation({
             title: 'Payment Failed',
-            message: 'Payment could not be processed. Your cart items are still saved. Please try again.',
+            message: 'Payment could not be processed. Your order has been marked as Payment Failed and can be viewed in My Orders.',
             confirmText: 'OK',
-            cancelText: 'Close',
+            cancelText: '', // Remove Close button
             confirmButtonColor: '#DC2626',
-            onConfirm: () => {},
+            onConfirm: () => {
+              if (onOrderCancel) {
+                onOrderCancel();
+              }
+            },
           });
         }
       } else {
@@ -476,6 +498,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // Update CartContext (this will sync with backend)
     await updateQuantity(itemId, newQuantity);
 
+    // Refetch cart summary to update bill details
+    await fetchCartSummary();
+
     // Also call parent callback if provided (for backward compatibility)
     if (onUpdateCart) {
       onUpdateCart(itemId, variantId, newQuantity);
@@ -498,6 +523,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       // Remove from CartContext (this will sync with backend)
       await removeFromCart(itemId);
 
+      // Refetch cart summary to update bill details
+      await fetchCartSummary();
+
       // Also call parent callback if provided (for backward compatibility)
       if (onUpdateCart) {
         onUpdateCart(itemId, variantId, 0);
@@ -516,6 +544,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       // Update CartContext (this will sync with backend)
       await updateQuantity(itemId, newQuantity);
 
+      // Refetch cart summary to update bill details
+      await fetchCartSummary();
+
       // Also call parent callback if provided (for backward compatibility)
       if (onUpdateCart) {
         onUpdateCart(itemId, variantId, newQuantity);
@@ -523,12 +554,45 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   };
 
-  // Use backend cart summary values instead of local calculations
-  const itemTotal = cartSummary?.subtotal || 0;
-  const gstAndCharges = cartSummary?.tax_amount || 0;
-  const deliveryFee = cartSummary?.delivery_fee || 0;
-  const discountAmount = cartSummary?.discount_amount || 0;
-  const totalAmount = cartSummary?.final_amount || 0;
+  // Calculate bill details - use backend summary if available, otherwise calculate from local items
+  const calculateBillDetails = () => {
+    // If we have backend cart summary, use it
+    if (cartSummary && cartSummary.subtotal > 0) {
+      return {
+        itemTotal: cartSummary.subtotal,
+        gstAndCharges: cartSummary.tax_amount || 0,
+        deliveryFee: cartSummary.delivery_fee || 0,
+        discountAmount: cartSummary.discount_amount || 0,
+        totalAmount: cartSummary.final_amount || 0,
+      };
+    }
+
+    // Fallback: Calculate from local cart items for immediate feedback
+    const calculatedItemTotal = localCartItems.reduce((sum, item) => {
+      return sum + (item.price * item.quantity);
+    }, 0);
+
+    // Use backend values for fees/taxes if available, otherwise use defaults
+    const gstAndCharges = cartSummary?.tax_amount || 0;
+    const deliveryFee = cartSummary?.delivery_fee || 0;
+    const discountAmount = cartSummary?.discount_amount || 0;
+    const totalAmount = calculatedItemTotal + gstAndCharges + deliveryFee - discountAmount;
+
+    return {
+      itemTotal: calculatedItemTotal,
+      gstAndCharges,
+      deliveryFee,
+      discountAmount,
+      totalAmount,
+    };
+  };
+
+  const billDetails = calculateBillDetails();
+  const itemTotal = billDetails.itemTotal;
+  const gstAndCharges = billDetails.gstAndCharges;
+  const deliveryFee = billDetails.deliveryFee;
+  const discountAmount = billDetails.discountAmount;
+  const totalAmount = billDetails.totalAmount;
 
   // If location selection is shown, render it as an overlay
   if (showLocationSelection) {

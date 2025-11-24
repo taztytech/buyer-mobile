@@ -128,19 +128,27 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   // Format date to match the design
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit'
-    });
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit'
+      });
+    } catch (error) {
+      return 'N/A';
+    }
   };
 
   // Map API status to UI status
-  const mapStatus = (status: string): 'delivered' | 'cancelled' | 'ongoing' => {
-    const statusMap: { [key: string]: 'delivered' | 'cancelled' | 'ongoing' } = {
+  const mapStatus = (status: string | null | undefined): 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' => {
+    if (!status) return 'ongoing';
+    const statusMap: { [key: string]: 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' } = {
       'delivered': 'delivered',
       'completed': 'delivered',
+      'payment_failed': 'payment_failed',
       'cancelled': 'cancelled',
       'rejected': 'cancelled',
       'pending': 'ongoing',
@@ -281,6 +289,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         bgColor: 'rgba(220, 38, 38, 0.1)',
         icon: 'cancel',
       },
+      payment_failed: {
+        label: 'Payment Failed',
+        color: '#DC2626',
+        bgColor: 'rgba(220, 38, 38, 0.1)',
+        icon: 'payment',
+      },
       ongoing: {
         label: 'On the way',
         color: '#F59E0B',
@@ -289,34 +303,58 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       },
     };
 
-    const mappedStatus = mapStatus(order.status);
-    const status = statusConfig[mappedStatus];
+    // Check for payment failed status - priority check
+    let actualStatus = mapStatus(order.status);
+    
+    // Check payment_status field first - if payment failed, show payment failed regardless of order status
+    if (order.payment_status?.toLowerCase() === 'failed' || 
+        order.payment_status?.toLowerCase() === 'payment_failed' ||
+        order.status?.toLowerCase() === 'payment_failed') {
+      actualStatus = 'payment_failed';
+    } else if (actualStatus === 'cancelled' && order.payment_method === 'online' && 
+        order.cancellation_reason?.toLowerCase().includes('payment failed')) {
+      actualStatus = 'payment_failed';
+    } else if (order.payment_method === 'online' && 
+               order.payment_status?.toLowerCase() === 'pending' && 
+               (order.status?.toLowerCase() === 'pending' || order.status?.toLowerCase() === 'cancelled')) {
+      // If payment is pending but order is cancelled/pending for online payment, it's likely a payment failure
+      actualStatus = 'payment_failed';
+    }
+
+    const status = statusConfig[actualStatus] || statusConfig.ongoing;
 
     // Get location from delivery address
     const location = order.delivery_address?.city || 'Unknown';
     const totalAmount = order.summary?.total_amount || 0;
 
+    // Disable opening order details for payment failed orders
+    const isPaymentFailed = actualStatus === 'payment_failed';
+    
     return (
       <TouchableOpacity
-        style={styles.orderCard}
-        activeOpacity={0.7}
-        onPress={() => handleOrderPress(order.id.toString())}
+        style={[
+          styles.orderCard,
+          { paddingBottom: isPaymentFailed ? 0 : 20 }
+        ]}
+        activeOpacity={isPaymentFailed ? 1 : 0.7}
+        onPress={isPaymentFailed ? undefined : () => handleOrderPress(order.id.toString())}
+        disabled={isPaymentFailed}
       >
         {/* Header Row */}
         <View style={styles.orderHeader}>
           <View style={styles.restaurantInfo}>
             <Image
-              source={{ uri: order.restaurant.logo_url }}
+              source={{ uri: order.restaurant?.logo_url || '' }}
               style={styles.restaurantLogo}
               defaultSource={require('@/assets/dummy-restaurent.png')}
             />
             <View style={styles.restaurantDetails}>
-              <Text style={styles.restaurantName}>{order.restaurant.name}</Text>
+              <Text style={styles.restaurantName}>{order.restaurant?.name || 'Unknown Restaurant'}</Text>
               <Text style={styles.restaurantLocation}>{location}</Text>
             </View>
           </View>
           <View style={styles.orderMeta}>
-            <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
+            <Text style={styles.orderDate}>{formatDate(order.created_at || '')}</Text>
             <Text style={styles.orderAmount}>₹{totalAmount}</Text>
           </View>
         </View>
@@ -334,13 +372,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         <View style={styles.itemsContainer}>
           {/* Show first 2 items */}
           <View style={styles.multipleItems}>
-            {order.items.slice(0, 2).map((item: any, index: number) => (
-              <View key={`${order.id}-item-${item.id}-${index}`} style={styles.itemRow}>
-                <Text style={styles.itemName}>{item.quantity}x {item.item_name}</Text>
+            {(order.items || []).slice(0, 2).map((item: any, index: number) => (
+              <View key={`${order.id}-item-${item.id || index}-${index}`} style={styles.itemRow}>
+                <Text style={styles.itemName}>{item.quantity || 1}x {item.item_name || 'Item'}</Text>
               </View>
             ))}
             {/* Show +X more items if there are more than 2 */}
-            {order.items.length > 2 && (
+            {order.items && order.items.length > 2 && (
               <Text style={styles.moreItemsText}>
                 +{order.items.length - 2} more item{order.items.length - 2 > 1 ? 's' : ''}
               </Text>
@@ -350,7 +388,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
-          {mappedStatus === 'ongoing' ? (
+          {actualStatus === 'ongoing' ? (
             <>
               <TouchableOpacity
                 style={styles.rateButton}
@@ -371,7 +409,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             </>
           ) : (
             <>
-              {mappedStatus === 'cancelled' ? (
+              {actualStatus === 'payment_failed' ? (
+                // For payment failed orders, don't show any buttons
+                null
+              ) : actualStatus === 'cancelled' ? (
                 // For cancelled orders, show Help button
                 <TouchableOpacity
                   style={styles.rateButton}
@@ -398,14 +439,17 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   <Text style={styles.rateButtonText}>Rate Order</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity
-                style={styles.reorderButton}
-                onPress={() => handleReorder(order.id.toString())}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons name="refresh" size={18} color="#FFFFFF" />
-                <Text style={styles.reorderButtonText}>Reorder</Text>
-              </TouchableOpacity>
+              {/* Reorder button - shown for all non-ongoing orders except payment_failed */}
+              {actualStatus !== 'payment_failed' && (
+                <TouchableOpacity
+                  style={styles.reorderButton}
+                  onPress={() => handleReorder(order.id.toString())}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="refresh" size={18} color="#FFFFFF" />
+                  <Text style={styles.reorderButtonText}>Reorder</Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
         </View>
@@ -612,7 +656,10 @@ const styles = StyleSheet.create({
   orderCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 20,
+    paddingTop: 20,
+    paddingLeft: 20,
+    paddingRight: 20,
+    // paddingBottom is set conditionally in component based on payment_failed status
   },
   orderHeader: {
     flexDirection: 'row',
