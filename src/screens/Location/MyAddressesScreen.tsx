@@ -36,6 +36,14 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
     loadAddresses();
   }, []);
 
+  // Refetch addresses whenever the screen becomes visible
+  // This ensures the default badge is updated after editing an address
+  useEffect(() => {
+    if (visible) {
+      loadAddresses();
+    }
+  }, [visible]);
+
   const loadAddresses = async () => {
     setIsLoading(true);
     try {

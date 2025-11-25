@@ -107,7 +107,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
   const [showAddressModal, setShowAddressModal] = useState(false);
-  const [selectedAddressId, setSelectedAddressId] = useState('1');
+  const [selectedAddressId, setSelectedAddressId] = useState<string | undefined>(undefined);
   const [showLocationSelection, setShowLocationSelection] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [addresses, setAddresses] = useState<AddressResponse[]>([]);
@@ -179,7 +179,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       if (response.success && response.data) {
         setAddresses(response.data);
 
-        // Set the default address as selected, or first address if no default
+        // Only set the default address as selected if it exists
+        // Don't auto-select first address if no default exists - let user choose
         const defaultAddress = response.data.find(addr => addr.is_default);
         if (defaultAddress) {
           setSelectedAddressId(defaultAddress.id.toString());
@@ -199,25 +200,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               onConfirm: () => {},
             });
           }
-        } else if (response.data.length > 0) {
-          setSelectedAddressId(response.data[0].id.toString());
-
-          // Check if the first address is within serviceable area (Madurai bounds)
-          const isServiceable = homeService.isLocationServiceable(
-            response.data[0].latitude,
-            response.data[0].longitude
-          );
-
-          if (!isServiceable) {
-            showConfirmation({
-              title: 'Error',
-              message: 'Service not available at the selected location',
-              confirmText: 'OK',
-              cancelText: 'Close',
-              onConfirm: () => {},
-            });
-          }
         }
+        // If no default address exists, don't auto-select any address
+        // User will need to manually select and set one as default
       } else {
         showConfirmation({
           title: 'Error',
@@ -323,6 +308,52 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         confirmText: 'OK',
         cancelText: 'Close',
         onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Check if user has any addresses
+    if (addresses.length === 0) {
+      showConfirmation({
+        title: 'Address Required',
+        message: 'Please add a delivery address to place your order',
+        confirmText: 'Add Address',
+        cancelText: 'Cancel',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {
+          setShowLocationSelection(true);
+        },
+      });
+      return;
+    }
+
+    // Check if an address is selected
+    if (!selectedAddressId || !selectedAddress) {
+      showConfirmation({
+        title: 'Address Required',
+        message: 'Please select a delivery address',
+        confirmText: 'Select Address',
+        cancelText: 'Cancel',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {
+          setShowAddressModal(true);
+        },
+      });
+      return;
+    }
+
+    // Check if there's a default address, if not, require user to set one
+    const hasDefaultAddress = addresses.some(addr => addr.is_default);
+    if (!hasDefaultAddress) {
+      showConfirmation({
+        title: 'Default Address Required',
+        message: 'Please set a default address before placing your order. You can set a default address in the address selection modal.',
+        confirmText: 'Select Address',
+        cancelText: 'Cancel',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {
+          setShowAddressModal(true);
+        },
       });
       return;
     }
@@ -694,50 +725,75 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
           {/* Delivery Details Section */}
           <View style={styles.section}>
-            <TouchableOpacity
-              style={styles.sectionHeader}
-              onPress={() => setDeliveryExpanded(!deliveryExpanded)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.sectionTitle}>Delivery Details</Text>
-              <MaterialIcons
-                name={deliveryExpanded ? 'expand-less' : 'expand-more'}
-                size={24}
-                color="#000000"
-              />
-            </TouchableOpacity>
-
-            {deliveryExpanded && (
+            {addresses.length === 0 ? (
+              // Show only Add Address button when no addresses exist
               <View style={styles.sectionContent}>
-                {/* Delivery At */}
-                <View style={styles.subsection}>
-                  <Text style={styles.subsectionTitle}>Delivery At</Text>
-                  <TouchableOpacity
-                    style={styles.deliveryAtBox}
-                    activeOpacity={0.7}
-                    onPress={() => setShowAddressModal(true)}
-                  >
-                    <View style={styles.deliveryAtContent}>
-                      <MaterialIcons name="location-on" size={20} color="#00B14F" />
-                      <Text style={styles.deliveryAtText} numberOfLines={1}>
-                        {selectedAddress ? formatAddress(selectedAddress) : deliveryAddress}
-                      </Text>
-                    </View>
-                    <MaterialIcons name="expand-more" size={20} color="rgba(0, 0, 0, 0.5)" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Delivery Duration */}
-                <View style={styles.subsection}>
-                  <Text style={styles.subsectionTitle}>Delivery Duration</Text>
-                  <View style={styles.deliveryTimeBox}>
-                    <MaterialIcons name="access-time" size={20} color="#00B14F" />
-                    <Text style={styles.deliveryTimeText}>
-                      Delivery in <Text style={styles.deliveryTimeBold}>15 - 20 mins</Text>
-                    </Text>
-                  </View>
-                </View>
+                <TouchableOpacity
+                  style={styles.addAddressButton}
+                  activeOpacity={0.7}
+                  onPress={() => setShowLocationSelection(true)}
+                >
+                  <MaterialIcons name="add-location" size={20} color="#00B14F" />
+                  <Text style={styles.addAddressButtonText}>Add Address</Text>
+                </TouchableOpacity>
               </View>
+            ) : (
+              // Show full delivery details when addresses exist
+              <>
+                <TouchableOpacity
+                  style={styles.sectionHeader}
+                  onPress={() => setDeliveryExpanded(!deliveryExpanded)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.sectionTitle}>Delivery Details</Text>
+                  <MaterialIcons
+                    name={deliveryExpanded ? 'expand-less' : 'expand-more'}
+                    size={24}
+                    color="#000000"
+                  />
+                </TouchableOpacity>
+
+                {deliveryExpanded && (
+                  <View style={styles.sectionContent}>
+                    {/* Delivery At */}
+                    <View style={styles.subsection}>
+                      <Text style={styles.subsectionTitle}>Delivery At</Text>
+                      <TouchableOpacity
+                        style={styles.deliveryAtBox}
+                        activeOpacity={0.7}
+                        onPress={() => setShowAddressModal(true)}
+                      >
+                        <View style={styles.deliveryAtContent}>
+                          <MaterialIcons name="location-on" size={20} color="#00B14F" />
+                          <Text 
+                            style={[
+                              styles.deliveryAtText,
+                              !selectedAddress && styles.deliveryAtTextPlaceholder
+                            ]} 
+                            numberOfLines={1}
+                          >
+                            {selectedAddress 
+                              ? formatAddress(selectedAddress) 
+                              : 'Select a default address before placing order'}
+                          </Text>
+                        </View>
+                        <MaterialIcons name="expand-more" size={20} color="rgba(0, 0, 0, 0.5)" />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Delivery Duration */}
+                    <View style={styles.subsection}>
+                      <Text style={styles.subsectionTitle}>Delivery Duration</Text>
+                      <View style={styles.deliveryTimeBox}>
+                        <MaterialIcons name="access-time" size={20} color="#00B14F" />
+                        <Text style={styles.deliveryTimeText}>
+                          Delivery in <Text style={styles.deliveryTimeBold}>15 - 20 mins</Text>
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </>
             )}
           </View>
 
@@ -972,7 +1028,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         onClose={() => setShowAddressModal(false)}
         addresses={addresses}
         selectedAddressId={selectedAddressId}
-        onSelectAddress={(addressId) => {
+        onSelectAddress={async (addressId) => {
           // Find the address and check if it's within serviceable area (Madurai bounds)
           const address = addresses.find(addr => addr.id.toString() === addressId);
 
@@ -1001,6 +1057,38 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         onAddNewAddress={() => {
           setShowAddressModal(false);
           setShowLocationSelection(true);
+        }}
+        onSetDefaultAddress={async (addressId) => {
+          try {
+            const updateResponse = await addressService.updateAddress(addressId, {
+              is_default: true,
+            });
+
+            if (updateResponse.success) {
+              // Refresh addresses to get updated list
+              await fetchAddresses();
+              // Also select this address if not already selected
+              if (selectedAddressId !== addressId) {
+                setSelectedAddressId(addressId);
+              }
+            } else {
+              showConfirmation({
+                title: 'Error',
+                message: updateResponse.error || 'Failed to set default address',
+                confirmText: 'OK',
+                cancelText: 'Close',
+                onConfirm: () => {},
+              });
+            }
+          } catch (error: any) {
+            showConfirmation({
+              title: 'Error',
+              message: error.message || 'Failed to set default address',
+              confirmText: 'OK',
+              cancelText: 'Close',
+              onConfirm: () => {},
+            });
+          }
         }}
       />
     </View>
@@ -1279,6 +1367,29 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginLeft: 8,
     flex: 1,
+  },
+  deliveryAtTextPlaceholder: {
+    color: 'rgba(0, 0, 0, 0.4)',
+    fontStyle: 'italic',
+  },
+  addAddressButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+    padding: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#00B14F',
+    borderStyle: 'dashed',
+    marginTop: 8,
+  },
+  addAddressButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#00B14F',
   },
   deliveryOptionBox: {
     flexDirection: 'row',
