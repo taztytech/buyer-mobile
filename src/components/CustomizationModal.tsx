@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ItemTiming, formatItemTiming, isItemAvailable } from '@/utils/timing.utils';
+import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 interface AddOn {
   id: string;
@@ -34,6 +35,7 @@ interface CustomizationModalProps {
   initialQuantity?: number;
   onClose: () => void;
   onAddToCart: (itemId: string, quantity: number, selectedAddOns: string[]) => void;
+  maxQuantity?: number;
 }
 
 export const CustomizationModal: React.FC<CustomizationModalProps> = ({
@@ -43,10 +45,12 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
   initialQuantity,
   onClose,
   onAddToCart,
+  maxQuantity = MAX_ITEM_QUANTITY,
 }) => {
   const [quantity, setQuantity] = useState(1);
   const [selectedAddOns, setSelectedAddOns] = useState<Set<string>>(new Set());
   const slideAnim = useRef(new Animated.Value(1000)).current;
+  const resolvedMaxQuantity = Math.max(1, maxQuantity);
 
   useEffect(() => {
     if (visible) {
@@ -58,7 +62,7 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
       }).start();
 
       // Initialize quantity
-      setQuantity(initialQuantity || 1);
+      setQuantity(Math.min(initialQuantity || 1, resolvedMaxQuantity));
 
       // Initialize selected add-ons if provided
       if (preselectedAddOns && preselectedAddOns.length > 0) {
@@ -69,12 +73,12 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
     } else {
       slideAnim.setValue(1000);
     }
-  }, [visible, preselectedAddOns, initialQuantity]);
+  }, [visible, preselectedAddOns, initialQuantity, resolvedMaxQuantity]);
 
   if (!item) return null;
 
   const handleIncrement = () => {
-    setQuantity(prev => prev + 1);
+    setQuantity(prev => Math.min(prev + 1, resolvedMaxQuantity));
   };
 
   const handleDecrement = () => {
@@ -257,6 +261,8 @@ export const CustomizationModal: React.FC<CustomizationModalProps> = ({
                 onPress={handleIncrement}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                disabled={quantity >= resolvedMaxQuantity}
+                style={quantity >= resolvedMaxQuantity ? styles.quantityButtonDisabled : undefined}
               >
                 <Text style={styles.quantityButton}>+</Text>
               </TouchableOpacity>
@@ -467,6 +473,9 @@ const styles = StyleSheet.create({
     lineHeight: 27,
     color: '#000000',
     opacity: 0.85,
+  },
+  quantityButtonDisabled: {
+    opacity: 0.4,
   },
   quantityText: {
     fontFamily: 'Poppins_500Medium',
