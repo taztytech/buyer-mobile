@@ -137,15 +137,6 @@ class ApiService {
       }
 
       const url = buildApiUrl('/authentication/refresh-token');
-      console.log('[API Request]', {
-        method: 'POST',
-        url,
-        headers: API_CONFIG.HEADERS,
-        body: { refresh_token: '***' },
-        timestamp: new Date().toISOString(),
-      });
-
-      const refreshStartTime = Date.now();
       const response = await fetch(url, {
         method: 'POST',
         headers: API_CONFIG.HEADERS,
@@ -155,16 +146,6 @@ class ApiService {
       });
 
       const data = await response.json();
-
-      console.log('[API Response]', {
-        method: 'POST',
-        url,
-        status: response.status,
-        ok: response.ok,
-        duration: `${Date.now() - refreshStartTime}ms`,
-        data,
-        timestamp: new Date().toISOString(),
-      });
 
       if (response.ok && data.success) {
         // Validate that we received valid tokens (check both camelCase and snake_case)
@@ -282,27 +263,10 @@ class ApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
-      const sanitizedHeaders = { ...headers };
-      if (sanitizedHeaders['Authorization']) {
-        sanitizedHeaders['Authorization'] = `${sanitizedHeaders['Authorization'].slice(0, 20)}...`;
-      }
-
-      console.log('[API Request]', {
-        method,
-        url,
-        endpoint,
-        headers: sanitizedHeaders,
-        body: data,
-        retryCount,
-        timestamp: new Date().toISOString(),
-      });
-
-      const requestStartTime = Date.now();
       const response = await fetch(url, {
         ...config,
         signal: controller.signal,
       });
-      const duration = Date.now() - requestStartTime;
 
       clearTimeout(timeoutId);
 
@@ -346,18 +310,6 @@ class ApiService {
 
       const responseData = await response.json();
 
-      console.log('[API Response]', {
-        method,
-        url,
-        endpoint,
-        status: response.status,
-        ok: response.ok,
-        duration: `${duration}ms`,
-        data: responseData,
-        retryCount,
-        timestamp: new Date().toISOString(),
-      });
-
       if (!response.ok) {
         return {
           success: false,
@@ -372,13 +324,6 @@ class ApiService {
         message: responseData.message,
       };
     } catch (error: any) {
-      console.log('[API Error]', {
-        method,
-        endpoint,
-        error: error?.message || error,
-        timestamp: new Date().toISOString(),
-      });
-
       const apiError = this.handleError(error);
       return {
         success: false,

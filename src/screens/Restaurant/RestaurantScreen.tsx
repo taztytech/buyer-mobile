@@ -31,7 +31,7 @@ import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { favoritesService } from '@/services/favorites.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
-import { ItemTiming as ImportedItemTiming, getNextItemAvailabilityMessage, isItemAvailable } from '@/utils/timing.utils';
+import { ItemTiming as ImportedItemTiming, formatItemTiming, isItemAvailable } from '@/utils/timing.utils';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -1232,7 +1232,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
               // Item is only available if BOTH restaurant is open AND item timing is available
               const itemAvailable = !isRestaurantClosed && isItemCurrentlyAvailable;
-              const nextAvailabilityMessage = getNextItemAvailabilityMessage(item.timings);
 
               return (
               <View key={item.id}>
@@ -1296,9 +1295,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   {/* Item Image with Shimmer */}
                   <TouchableOpacity
                     style={styles.itemImageContainer}
-                    onPress={() => itemAvailable && handleImageClick(item)}
-                    activeOpacity={itemAvailable ? 0.9 : 1}
-                    disabled={!itemAvailable}
+                    onPress={() => handleImageClick(item)}
+                    activeOpacity={0.9}
                   >
                     {!loadedImages.has(item.id) && (
                       <Shimmer
@@ -1399,17 +1397,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     </>
                   )}
 
-                   {/* Availability Message */}
-                   {!itemAvailable && !isItemCurrentlyAvailable && nextAvailabilityMessage && (
-                     <Text style={styles.itemAvailabilityMessage}>{nextAvailabilityMessage}</Text>
-                   )}
-
-                   {/* Customizable Text */}
-                   {loadedImages.has(item.id) && item.isCustomizable && (
-                     <Text style={styles.customizableText}>Customisable</Text>
-                   )}
+                  {/* Customizable Text */}
+                  {loadedImages.has(item.id) && item.isCustomizable && (
+                    <Text style={styles.customizableText}>Customisable</Text>
+                  )}
                 </View>
-              </View>
               </View>
               )
             })}
@@ -2240,15 +2232,6 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.6)',
     opacity: 0.85,
     width: 181,
-  },
-  itemAvailabilityMessage: {
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: 'center',
-    color: '#FF6B6B',
-    paddingHorizontal: 8,
   },
   sectionSeparator: {
     height: 1,

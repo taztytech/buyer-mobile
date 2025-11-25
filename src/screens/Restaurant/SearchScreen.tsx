@@ -12,7 +12,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Shimmer } from '@/components/Shimmer';
 import { SearchBar } from '@/components/SearchBar';
-import { getNextItemAvailabilityMessage, isItemAvailable, ItemTiming } from '@/utils/timing.utils';
 
 interface MenuItem {
   id: string;
@@ -24,7 +23,6 @@ interface MenuItem {
   isSpicy: boolean;
   isBestSeller: boolean;
   isCustomizable: boolean;
-  timings?: ItemTiming[];
 }
 
 interface MenuSection {
@@ -145,12 +143,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         >
           {searchQuery.trim() !== '' && searchResults.length > 0 && (
             <View style={styles.menuContent}>
-              {searchResults.map((item) => {
-                const isItemCurrentlyAvailable = isItemAvailable(item.timings);
-                const itemAvailable = !isRestaurantClosed && isItemCurrentlyAvailable;
-                const nextAvailabilityMessage = getNextItemAvailabilityMessage(item.timings);
-
-                return (
+              {searchResults.map((item) => (
                 <View key={item.id} style={styles.menuItem}>
                   <View style={styles.itemLeft}>
                     {/* Veg/Non-Veg Icon and Spicy Badge */}
@@ -201,12 +194,12 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     <TouchableOpacity
                       style={styles.itemImageContainer}
                       onPress={() => {
-                        if (itemAvailable && onImageClick) {
+                        if (!isRestaurantClosed && onImageClick) {
                           onImageClick(item);
                         }
                       }}
-                      disabled={!itemAvailable}
-                      activeOpacity={itemAvailable ? 0.9 : 1}
+                      disabled={isRestaurantClosed}
+                      activeOpacity={isRestaurantClosed ? 1 : 0.9}
                     >
                       {!loadedImages.has(item.id) && (
                         <Shimmer
@@ -226,7 +219,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     </TouchableOpacity>
 
                     {/* Add Button or Increment/Decrement Controls */}
-                    {loadedImages.has(item.id) && itemAvailable && (
+                    {loadedImages.has(item.id) && !isRestaurantClosed && (
                       <>
                         {cart[item.id] ? (
                           // Show increment/decrement controls if item is in cart
@@ -269,17 +262,13 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                       </>
                     )}
 
-                    {!itemAvailable && !isItemCurrentlyAvailable && nextAvailabilityMessage && (
-                      <Text style={styles.itemAvailabilityMessage}>{nextAvailabilityMessage}</Text>
-                    )}
-
                     {/* Customizable Text */}
                     {loadedImages.has(item.id) && item.isCustomizable && (
                       <Text style={styles.customizableText}>Customisable</Text>
                     )}
                   </View>
                 </View>
-              )})}
+              ))}
             </View>
           )}
 
@@ -524,15 +513,6 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.6)',
     opacity: 0.85,
     width: 181,
-  },
-  itemAvailabilityMessage: {
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: 'center',
-    color: '#FF6B6B',
-    paddingHorizontal: 8,
   },
   noResultsContainer: {
     flex: 1,
