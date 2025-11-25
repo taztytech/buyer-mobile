@@ -209,10 +209,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [tempVegSelection, setTempVegSelection] = React.useState<'pure' | 'all'>('pure');
   const [selectedLocation, setSelectedLocation] = React.useState(externalSelectedLocation || { name: DEFAULT_LOCATION.name, address: DEFAULT_LOCATION.address });
 
-  // Debug: Log whenever selectedLocation changes
-  React.useEffect(() => {
-    // selectedLocation tracking
-  }, [selectedLocation]);
   const [isCategorySectionSticky, setIsCategorySectionSticky] = React.useState(false);
   const [showCategoryModal, setShowCategoryModal] = React.useState(false);
   const flatListRef = React.useRef<FlatList>(null);
@@ -1179,8 +1175,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar barStyle="light-content" backgroundColor="#00B14F" translucent={true} />
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         <ScrollView
           ref={scrollViewRef}
           style={styles.container}
@@ -1210,8 +1206,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Header with Background Image */}
       <ImageBackground
         source={require('@/assets/home_app_bar.png')}
-        style={styles.headerBackground}
-        imageStyle={styles.headerBackgroundImage}
+        style={[styles.headerBackground, { paddingTop: insets.top + 20 }]}
+        imageStyle={[styles.headerBackgroundImage, { top: -insets.top + 10, height: 212 + insets.top + 20 }]}
         testID="header-background"
       >
         {/* Location Section */}
@@ -1340,6 +1336,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </>
           )}
         </View>
+        {/* Gradient fade at bottom */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0, 177, 79, 0.3)', 'rgba(0, 177, 79, 0.6)']}
+          style={styles.headerGradientFade}
+          pointerEvents="none"
+        />
       </ImageBackground>
 
       {/* Unserviceable Location Error Screen */}
@@ -1814,11 +1816,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: '#00B14F',
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
-    backgroundColor: '#00B14F',
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
@@ -1827,16 +1829,21 @@ const styles = StyleSheet.create({
   // Header styles
   headerBackground: {
     width: '100%',
-    height: 212,
     paddingHorizontal: 20,
-    paddingTop: 20,
     paddingBottom: 20,
     gap: 18,
   },
   headerBackgroundImage: {
     width: '120%',
-    height: 212,
+    resizeMode: 'cover',
     left: 0,
+  },
+  headerGradientFade: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 40,
   },
   // Location section
   locationSection: {
@@ -1899,7 +1906,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#00B14F',
+    backgroundColor: '#F7F7F7',
     borderWidth: 2,
     borderColor: '#FFFFFF',
     justifyContent: 'center',
@@ -1911,11 +1918,11 @@ const styles = StyleSheet.create({
   profileAvatarText: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 18,
-    color: '#FFFFFF',
+    color: '#00B14F',
     lineHeight: 22,
   },
   profileAvatarTextDisabled: {
-    color: 'rgba(255, 255, 255, 0.3)',
+    color: 'rgba(0, 177, 79, 0.3)',
   },
   // Search section
   searchSection: {
@@ -2001,7 +2008,6 @@ const styles = StyleSheet.create({
   },
   // Carousel Container
   carouselContainer: {
-    marginTop: -44,
     marginBottom: 16,
   },
   loadingContainer: {

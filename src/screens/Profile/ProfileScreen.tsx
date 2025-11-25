@@ -148,29 +148,31 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   return (
     <View style={styles.rootContainer}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#00B14F"
-        translucent={false}
-      />
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <View style={styles.container}>
+      <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
+        <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
+      </SafeAreaView>
+
+      {/* Green Header */}
+      <View style={styles.header}>
+        {onBack && (
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={onBack}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+          </TouchableOpacity>
+        )}
+        <Text style={styles.headerTitle}>Profile</Text>
+      </View>
+
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+        <View style={styles.container}>
         <ScrollView
           style={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContentContainer}
         >
-          {/* Back Button */}
-          {onBack && (
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={onBack}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
-            </TouchableOpacity>
-          )}
-
           {/* Profile Header */}
           <View style={styles.profileHeader}>
             {/* Left side - Avatar and Info */}
@@ -254,7 +256,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
-      </View>
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -265,9 +267,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#00B14F',
   },
+  safeAreaTop: {
+    backgroundColor: '#00B14F',
+  },
   safeArea: {
     flex: 1,
-    backgroundColor: '#00B14F',
+    backgroundColor: '#F5F5F5',
   },
   container: {
     flex: 1,
@@ -282,6 +287,16 @@ const styles = StyleSheet.create({
     paddingTop: 15,
     backgroundColor: '#F5F5F5',
   },
+  // Green Header
+  header: {
+    backgroundColor: '#00B14F',
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    height: 76,
+  },
   // Back Button
   backButton: {
     width: 40,
@@ -292,7 +307,12 @@ const styles = StyleSheet.create({
     borderColor: '#E4E4E4',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+  },
+  headerTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#FFFFFF',
+    lineHeight: 27,
   },
   // Profile Header
   profileHeader: {
@@ -300,7 +320,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 30,
-    marginBottom: 40,
+    marginBottom: 30,
   },
   profileLeft: {
     flexDirection: 'row',
@@ -315,16 +335,17 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#00B14F',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: '#00B14F',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins',
+    fontWeight: '300',
     fontSize: 20,
-    color: '#FFFFFF',
+    color: '#00B14F',
     lineHeight: 24,
   },
   profileInfo: {
@@ -332,14 +353,14 @@ const styles = StyleSheet.create({
   },
   profileName: {
     fontFamily: 'Poppins',
-    fontWeight: '600',
+    fontWeight: '300',
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
   },
   profilePhone: {
     fontFamily: 'Poppins',
-    fontWeight: '400',
+    fontWeight: '300',
     fontSize: 12,
     lineHeight: 18,
     color: '#000000',
@@ -352,7 +373,7 @@ const styles = StyleSheet.create({
   },
   editProfileText: {
     fontFamily: 'Poppins',
-    fontWeight: '500',
+    fontWeight: '300',
     fontSize: 13,
     lineHeight: 20,
     textAlign: 'center',
@@ -402,12 +423,13 @@ const styles = StyleSheet.create({
   // App Version
   appVersion: {
     fontFamily: 'Poppins',
-    fontWeight: '500',
+    fontWeight: '600',
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
     textAlign: 'center',
     marginBottom: 20,
+    opacity: 0.85,
   },
   // Logout Button
   logoutButton: {

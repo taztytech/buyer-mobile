@@ -65,7 +65,7 @@ function AppContent() {
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
   const [selectedOrderData, setSelectedOrderData] = React.useState<any>(null);
   const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses'>('home');
-  const [orderTrackingCameFrom, setOrderTrackingCameFrom] = React.useState<'orders' | 'checkout'>('orders');
+  const [orderTrackingCameFrom, setOrderTrackingCameFrom] = React.useState<'orders' | 'checkout' | 'orderDetail'>('orders');
   const [editingAddress, setEditingAddress] = React.useState<any>(null);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
@@ -821,9 +821,9 @@ function AppContent() {
   };
 
   // Order Tracking Navigation
-  const handleNavigateToOrderTracking = (orderId: string) => {
+  const handleNavigateToOrderTracking = (orderId: string, cameFrom?: 'orders' | 'checkout' | 'orderDetail') => {
     setSelectedOrderId(orderId);
-    setOrderTrackingCameFrom('orders');
+    setOrderTrackingCameFrom(cameFrom || 'orders');
     setCurrentScreen('orderTracking');
   };
 
@@ -840,6 +840,9 @@ function AppContent() {
       // RestaurantScreen only shows when currentScreen === 'restaurant'
       setCurrentScreen('home');
       setOrderTrackingCameFrom('orders'); // Reset for next time
+    } else if (orderTrackingCameFrom === 'orderDetail') {
+      // If came from order detail, go back to order detail
+      setCurrentScreen('orderDetail');
     } else {
       // If came from orders, go back to orders
       setCurrentScreen('orders');
@@ -1205,7 +1208,12 @@ function AppContent() {
                 onOrderDetails={handleNavigateToOrderDetail}
                 onReorder={handleReorder}
                 onRateOrder={handleNavigateToRateOrder}
-                onTrackOrder={handleNavigateToOrderTracking}
+                onTrackOrder={(orderId) => {
+                  // Navigate directly to tracking, but set flag so back goes to order detail
+                  setSelectedOrderId(orderId);
+                  setOrderTrackingCameFrom('orderDetail');
+                  setCurrentScreen('orderTracking');
+                }}
                 onHelp={(orderId) => {}}
                 onViewMore={() => {}}
               />
@@ -1224,7 +1232,7 @@ function AppContent() {
                 onThankDriver={() => {}}
                 onRateOrder={handleNavigateToRateOrder}
                 onReorder={() => handleReorder(selectedOrderId)}
-                onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId)}
+                onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId, 'orderDetail')}
                 onDownloadInvoice={() => {}}
               />
             </View>
