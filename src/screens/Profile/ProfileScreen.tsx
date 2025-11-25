@@ -175,10 +175,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <View style={styles.profileHeader}>
             {/* Left side - Avatar and Info */}
             <View style={styles.profileLeft}>
-              {/* Avatar with Edit Icon */}
+              {/* Avatar with First Letter */}
               <View style={styles.avatarContainer}>
                 <View style={styles.avatar}>
-                  <MaterialIcons name="person" size={24} color="#FFFFFF" />
+                  <Text style={styles.avatarText}>
+                    {userName && userName.length > 0 ? userName.charAt(0).toUpperCase() : 'U'}
+                  </Text>
                 </View>
               </View>
 
@@ -313,9 +315,17 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#000000',
+    backgroundColor: '#00B14F',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 20,
+    color: '#FFFFFF',
+    lineHeight: 24,
   },
   profileInfo: {
     gap: 2,

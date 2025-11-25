@@ -16,6 +16,7 @@ import { CategoryModal } from '@/components/CategoryModal';
 import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { storageService } from '@/services/storage.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BANNER_WIDTH = SCREEN_WIDTH - 40; // Fixed banner width with 20px padding on each side
@@ -231,6 +232,40 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Location serviceability state
   const [isLocationServiceable, setIsLocationServiceable] = React.useState(true);
+  
+  // User name for avatar
+  const [userName, setUserName] = React.useState('U');
+
+  // Fetch user name for avatar
+  React.useEffect(() => {
+    const fetchUserName = async () => {
+      try {
+        // Try to get from API first
+        const response = await authService.getProfile();
+        if (response.success && response.data?.user) {
+          const name = response.data.user.name || 'User';
+          setUserName(name.charAt(0).toUpperCase());
+        } else {
+          // Fallback to storage
+          const userData = await storageService.getUser();
+          if (userData?.name) {
+            setUserName(userData.name.charAt(0).toUpperCase());
+          }
+        }
+      } catch (error) {
+        // Try storage as fallback
+        try {
+          const userData = await storageService.getUser();
+          if (userData?.name) {
+            setUserName(userData.name.charAt(0).toUpperCase());
+          }
+        } catch (storageError) {
+          // Keep default 'U'
+        }
+      }
+    };
+    fetchUserName();
+  }, []);
 
   // Dismiss keyboard when component mounts (only once)
   React.useEffect(() => {
@@ -1238,7 +1273,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 styles.profileAvatar,
                 (!isLocationServiceable || hasNetworkError) && styles.profileAvatarDisabled
               ]}>
-                <MaterialIcons name="person" size={22} color={(isLocationServiceable && !hasNetworkError) ? "#00B14F" : "rgba(0, 177, 79, 0.3)"} />
+                <Text style={[
+                  styles.profileAvatarText,
+                  (!isLocationServiceable || hasNetworkError) && styles.profileAvatarTextDisabled
+                ]}>
+                  {userName}
+                </Text>
               </View>
             </TouchableOpacity>
           )}
@@ -1859,12 +1899,23 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#F7F7F7',
+    backgroundColor: '#00B14F',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileAvatarDisabled: {
     opacity: 0.4,
+  },
+  profileAvatarText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#FFFFFF',
+    lineHeight: 22,
+  },
+  profileAvatarTextDisabled: {
+    color: 'rgba(255, 255, 255, 0.3)',
   },
   // Search section
   searchSection: {
