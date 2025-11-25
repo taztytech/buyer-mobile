@@ -297,6 +297,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         bgColor: 'rgba(220, 38, 38, 0.1)',
         icon: 'payment',
       },
+      order_placed: {
+        label: 'Order Placed',
+        color: '#00B14F',
+        bgColor: 'rgba(0, 177, 79, 0.1)',
+        icon: 'check-circle',
+      },
       ongoing: {
         label: 'On the way',
         color: '#F59E0B',
@@ -321,6 +327,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                (order.status?.toLowerCase() === 'pending' || order.status?.toLowerCase() === 'cancelled')) {
       // If payment is pending but order is cancelled/pending for online payment, it's likely a payment failure
       actualStatus = 'payment_failed';
+    } else if (actualStatus === 'ongoing') {
+      // Distinguish between newly placed orders and orders on the way
+      const orderStatus = order.status?.toLowerCase();
+      if (orderStatus === 'pending' || orderStatus === 'confirmed') {
+        actualStatus = 'order_placed';
+      }
+      // For other ongoing statuses (preparing, ready, out_for_delivery), keep as 'ongoing' (On the way)
     }
 
     const status = statusConfig[actualStatus] || statusConfig.ongoing;
