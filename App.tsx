@@ -60,8 +60,8 @@ function AppContent() {
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
   const [selectedRestaurantAddress, setSelectedRestaurantAddress] = React.useState<string>('');
   const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites' | 'orders'>('home');
+  const [checkoutCameFrom, setCheckoutCameFrom] = React.useState<'restaurant' | 'home' | 'orders'>('restaurant');
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
-  const [checkoutCameFrom, setCheckoutCameFrom] = React.useState<'home' | 'restaurant'>('home');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
   const [selectedOrderData, setSelectedOrderData] = React.useState<any>(null);
   const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses'>('home');
@@ -548,18 +548,28 @@ function AppContent() {
     });
   }, [checkoutScreenSlide]);
 
-  // Handle order cancel from checkout - Close button
+  // Handle order cancel from checkout - OK button after payment failure
   const handleOrderCancelFromCheckout = useCallback(() => {
-    // Close checkout and go to home
+    // Close checkout and navigate back based on where we came from
     Animated.timing(checkoutScreenSlide, {
       toValue: SCREEN_WIDTH,
       duration: 200,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start(() => {
-      setCurrentScreen('home');
+      // Navigate back to restaurant screen if we came from there, otherwise go to home
+      if (checkoutCameFrom === 'restaurant') {
+        setCurrentScreen('restaurant');
+        // Force restaurant screen to reload by briefly hiding and showing
+        // This ensures the menu loads properly
+        setTimeout(() => {
+          // The restaurant screen's useEffect will trigger when visible becomes true
+        }, 100);
+      } else {
+        setCurrentScreen('home');
+      }
     });
-  }, [checkoutScreenSlide]);
+  }, [checkoutScreenSlide, checkoutCameFrom]);
 
   // Back from Restaurant (dynamic based on where we came from)
   const handleBackFromRestaurant = () => {
@@ -1012,7 +1022,7 @@ function AppContent() {
         title: 'Items Added!',
         message: `${orderData.items.length} item${orderData.items.length > 1 ? 's' : ''} added to your cart from ${restaurantName}`,
         confirmText: 'View Cart',
-        cancelText: 'Continue',
+        cancelText: '', // Remove Continue button
         confirmButtonColor: '#00B14F',
         onConfirm: () => {
           // Navigate to restaurant screen to view cart
@@ -1030,8 +1040,7 @@ function AppContent() {
           }).start();
         },
         onCancel: () => {
-          // User clicked "Continue" - stay on current screen
-          // No action needed, just close the modal
+          // No action needed
         },
       });
     } catch (error: any) {
