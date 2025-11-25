@@ -5,11 +5,9 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   TextInput,
   StatusBar,
   Animated,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -560,6 +558,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   };
 
+  // Calculate tip amount from selected tip or custom tip
+  const calculatedTipAmount = useMemo(() => {
+    if (selectedTip === null) return 0;
+    if (selectedTip === -1) {
+      // Custom tip amount - only use if it's been added (not just entered)
+      // For now, return 0 when "Other" is selected but not yet added
+      return 0;
+    }
+    return selectedTip;
+  }, [selectedTip, customTipAmount]);
+
   // Calculate bill values optimistically from localCartItems for instant UI updates
   // Always use local calculation for item total to ensure instant updates
   // Use backend cartSummary only for fees/taxes/discounts that we can't calculate locally
@@ -588,20 +597,40 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       taxAmount = 0;
     }
     
-    // Calculate total: calculatedItemTotal + deliveryFee + taxAmount - discountAmount
+    // Calculate tip amount - use calculatedTipAmount which handles the logic
+    const tip = calculatedTipAmount;
+    
+    // Calculate total: calculatedItemTotal + deliveryFee + taxAmount + tip - discountAmount
     // Always use calculated item total for instant updates
-    const totalAmount = calculatedItemTotal + deliveryFee + taxAmount - discountAmount;
+    const totalAmount = calculatedItemTotal + deliveryFee + taxAmount + tip - discountAmount;
 
     return {
       itemTotal: calculatedItemTotal, // Always use calculated value for instant updates
       deliveryFee,
       gstAndCharges: taxAmount,
       discountAmount,
+      tipAmount: tip,
       totalAmount,
     };
-  }, [localCartItems, cartSummary]);
+  }, [localCartItems, cartSummary, calculatedTipAmount]);
 
-  const { itemTotal, gstAndCharges, deliveryFee, discountAmount, totalAmount } = billValues;
+  const { itemTotal, gstAndCharges, deliveryFee, discountAmount, tipAmount, totalAmount } = billValues;
+
+  // Handle custom tip add button
+  const handleAddCustomTip = () => {
+    const amount = parseFloat(customTipAmount);
+    if (amount > 0 && !isNaN(amount)) {
+      // Set the custom amount as the selected tip (not -1 anymore)
+      setSelectedTip(amount);
+      setCustomTipAmount(''); // Clear the input after adding
+    }
+  };
+
+  // Handle promo code apply
+  const handleApplyPromoCode = () => {
+    console.log('Promo code entered:', promoCode);
+    // TODO: Add promo code validation and application logic
+  };
 
   // If location selection is shown, render it as an overlay
   if (showLocationSelection) {
@@ -609,7 +638,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       <View style={styles.container}>
         <LocationSelectionScreen
           onBack={() => setShowLocationSelection(false)}
-          onLocationConfirm={async (location) => {
+          onLocationConfirm={async () => {
             setShowLocationSelection(false);
             // Refresh addresses after adding new one
             await fetchAddresses();
@@ -814,14 +843,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             )}
           </View>
 
-          {/* Tip Section - HIDDEN/DISABLED */}
-          {/* <View style={styles.section}>
+          {/* Tip Section */}
+          <View style={styles.section}>
             <TouchableOpacity
               style={styles.sectionHeader}
               onPress={() => setTipExpanded(!tipExpanded)}
               activeOpacity={0.7}
             >
-              <Text style={styles.sectionTitle}>Tip for your delivery partner</Text>
+              <Text style={styles.sectionTitle}>Add a Tip</Text>
               <MaterialIcons
                 name={tipExpanded ? 'expand-less' : 'expand-more'}
                 size={24}
@@ -860,7 +889,15 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                       styles.tipButton,
                       selectedTip === -1 && styles.tipButtonSelected,
                     ]}
-                    onPress={() => setSelectedTip(selectedTip === -1 ? null : -1)}
+                    onPress={() => {
+                      if (selectedTip === -1) {
+                        // If already selected, deselect it
+                        setSelectedTip(null);
+                        setCustomTipAmount('');
+                      } else {
+                        setSelectedTip(-1);
+                      }
+                    }}
                     activeOpacity={0.7}
                   >
                     <Text
@@ -877,16 +914,25 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 {selectedTip === -1 && (
                   <View style={styles.customTipContainer}>
                     <Text style={styles.customTipLabel}>Enter custom tip amount</Text>
-                    <View style={styles.customTipInputContainer}>
-                      <Text style={styles.rupeeSymbol}>₹</Text>
-                      <TextInput
-                        style={styles.customTipInput}
-                        placeholder="0"
-                        placeholderTextColor="rgba(0, 0, 0, 0.4)"
-                        value={customTipAmount}
-                        onChangeText={setCustomTipAmount}
-                        keyboardType="number-pad"
-                      />
+                    <View style={styles.customTipInputRow}>
+                      <View style={styles.customTipInputContainer}>
+                        <Text style={styles.rupeeSymbol}>₹</Text>
+                        <TextInput
+                          style={styles.customTipInput}
+                          placeholder="0"
+                          placeholderTextColor="rgba(0, 0, 0, 0.4)"
+                          value={customTipAmount}
+                          onChangeText={setCustomTipAmount}
+                          keyboardType="number-pad"
+                        />
+                      </View>
+                      <TouchableOpacity
+                        style={styles.addTipButton}
+                        onPress={handleAddCustomTip}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.addTipButtonText}>Add</Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 )}
@@ -896,16 +942,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 </Text>
               </View>
             )}
-          </View> */}
+          </View>
 
-          {/* Apply Promo Code Section - HIDDEN/DISABLED */}
-          {/* <View style={styles.section}>
+          {/* Apply Promo Code Section */}
+          <View style={styles.section}>
             <TouchableOpacity
               style={styles.sectionHeader}
               onPress={() => setPromoExpanded(!promoExpanded)}
               activeOpacity={0.7}
             >
-              <Text style={styles.sectionTitle}>Apply Promo Code</Text>
+              <Text style={styles.sectionTitle}>Promo Code</Text>
               <MaterialIcons
                 name={promoExpanded ? 'expand-less' : 'expand-more'}
                 size={24}
@@ -923,13 +969,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                     value={promoCode}
                     onChangeText={setPromoCode}
                   />
-                  <TouchableOpacity style={styles.applyButton} activeOpacity={0.8}>
-                    <Text style={styles.applyButtonText}>APPLY</Text>
+                  <TouchableOpacity
+                    style={styles.applyButton}
+                    onPress={handleApplyPromoCode}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.applyButtonText}>Apply</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             )}
-          </View> */}
+          </View>
 
           {/* Bill Details Section */}
           <View style={styles.section}>
@@ -960,6 +1010,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   <Text style={styles.billLabel}>Taxes and Charges</Text>
                   <Text style={styles.billValue}>₹{gstAndCharges.toFixed(2)}</Text>
                 </View>
+                {tipAmount > 0 && (
+                  <View style={styles.billRow}>
+                    <Text style={styles.billLabel}>Delivery Partner tip</Text>
+                    <Text style={styles.billValue}>₹{tipAmount.toFixed(2)}</Text>
+                  </View>
+                )}
                 {discountAmount > 0 && (
                   <View style={styles.billRow}>
                     <Text style={styles.billLabel}>Discount</Text>
@@ -1466,7 +1522,13 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.6)',
     marginBottom: 8,
   },
+  customTipInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   customTipInputContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
@@ -1475,6 +1537,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  addTipButton: {
+    backgroundColor: '#00B14F',
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addTipButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#FFFFFF',
   },
   rupeeSymbol: {
     fontFamily: 'Poppins_600SemiBold',
@@ -1518,6 +1594,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    minWidth: 80,
   },
   applyButtonText: {
     fontFamily: 'Poppins_700Bold',

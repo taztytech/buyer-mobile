@@ -404,7 +404,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
           )}
 
           {/* Delivery Service */}
-          {(restaurantData?.delivery_time || restaurantData?.delivery_fee || restaurantData?.min_order_value) && (
+          {/* {(restaurantData?.delivery_time || restaurantData?.delivery_fee || restaurantData?.min_order_value) && (
             <View style={styles.infoRow}>
               <MaterialIcons name="delivery-dining" size={24} color="#666666" />
               <View style={styles.infoContentColumn}>
@@ -427,7 +427,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                 </View>
               </View>
             </View>
-          )}
+          )} */}
 
           {/* Photos */}
           {getRestaurantPhotos().length > 0 && (
