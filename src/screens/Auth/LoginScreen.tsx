@@ -84,10 +84,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           onLoginSuccess(phoneNumber);
         }
       } else {
-        // Show error message
+        // Show error message with better context for rate limiting
+        const errorMessage = response.error || 'Failed to send OTP. Please try again.';
+        const detailedMessage = errorMessage.includes('Failed to generate OTP')
+          ? 'Please try again after a minute.'
+          : errorMessage;
+
         showConfirmation({
           title: 'Error',
-          message: response.error || 'Failed to send OTP. Please try again.',
+          message: detailedMessage,
           confirmText: 'OK',
           cancelText: 'Close',
           onConfirm: () => {},

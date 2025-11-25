@@ -153,10 +153,19 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
           onSuccess(response.data.existing_user);
         }
       } else {
-        // Show error message
+        // Check if OTP is expired or invalid
+        const errorMessage = response.error || response.message || '';
+        const isExpired = errorMessage.toLowerCase().includes('expired') || 
+                         errorMessage.toLowerCase().includes('expire') ||
+                         errorMessage.toLowerCase().includes('expiration');
+        
+        const detailedMessage = isExpired
+          ? 'Code expired. Please click on Resend OTP.'
+          : 'Incorrect OTP. Please enter the 4-digit code.';
+
         showConfirmation({
-          title: 'Incorrect OTP',
-          message: 'Invalid code. Please enter the correct 4 digit code.',
+          title: '',
+          message: detailedMessage,
           confirmText: 'OK',
           cancelText: 'Close',
           onConfirm: () => {},
@@ -284,20 +293,8 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
               ))}
             </View>
 
-            {/* Bottom Action Row - Back, Timer, and Resend Code */}
+            {/* Bottom Action Row - Timer and Resend Code */}
             <View style={styles.resendRow}>
-              <TouchableOpacity
-                onPress={onBack}
-                disabled={timer > 0}
-              >
-                <Text style={[
-                  styles.resendText,
-                  timer === 0 && styles.resendTextActive
-                ]}>
-                  &lt; Back
-                </Text>
-              </TouchableOpacity>
-
               <View style={styles.resendRightGroup}>
                 <TouchableOpacity
                   onPress={handleResendCode}
@@ -457,7 +454,7 @@ const styles = StyleSheet.create({
   },
   resendRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     width: '100%',
     height: 21,

@@ -10,6 +10,7 @@ import {
   Platform,
   Keyboard,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -76,6 +77,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [searchText, setSearchText] = useState(initialSearchQuery);
   const [showAddressForm, setShowAddressForm] = useState(false);
+  const [geocodingData, setGeocodingData] = useState<Location.LocationGeocodedAddress | null>(null);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const bottomPosition = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<any>(null);
   const isUpdatingFromCode = useRef(false);
@@ -84,6 +87,28 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const isDraggingRef = useRef(false);
   const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentMapRegion = useRef<Region>(region);
+
+  // Reset all cached data when switching contexts (editing vs adding new address)
+  useEffect(() => {
+    // Clear any pending timeouts
+    if (geocodingTimeout.current) {
+      clearTimeout(geocodingTimeout.current);
+      geocodingTimeout.current = null;
+    }
+    if (dragTimeoutRef.current) {
+      clearTimeout(dragTimeoutRef.current);
+      dragTimeoutRef.current = null;
+    }
+
+    // Reset geocoding flag
+    isGeocodingRef.current = false;
+    isDraggingRef.current = false;
+    isUpdatingFromCode.current = false;
+
+    // Reset geocoding data when switching contexts
+    setGeocodingData(null);
+    setShowAddressForm(false);
+  }, [editingAddress, initialLatitude, initialLongitude, initialSearchQuery]);
 
   // Update region and location info when editing address changes
   useEffect(() => {
@@ -124,33 +149,116 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         editingAddress.pincode
       ].filter(Boolean).join(', ');
       setLocationAddress(fullAddress);
+      // Clear geocoding data when editing (use address data instead)
+      setGeocodingData(null);
     }
-  }, [editingAddress]);
+    // Note: Non-editing cases (adding new address) are handled by the next useEffect
+  }, [editingAddress, initialLatitude, initialLongitude]);
 
-  // Don't automatically get location on mount
-  // User can click the "Use My Location" button if they want their current location
-  // This prevents the map from showing California while fetching location
+  // Automatically get current location if initialLatitude and initialLongitude are provided (from "Add address" button)
+  // Also handles reset to defaults when not editing and no initial coordinates
   useEffect(() => {
-    // Force map to Madurai on mount if not editing
-    if (!editingAddress && !initialLatitude && !initialLongitude && mapRef.current && isMapAvailable) {
+    // Skip if editing an address (handled by previous useEffect)
+    if (editingAddress) {
+      return;
+    }
+
+    // If initial coordinates are provided, automatically get and set the location
+    if (initialLatitude && initialLongitude) {
+      // Set the region to the provided coordinates
+      const newRegion = {
+        latitude: parseFloat(String(initialLatitude)),
+        longitude: parseFloat(String(initialLongitude)),
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+
+      isUpdatingFromCode.current = true;
+      setRegion(newRegion);
+      currentMapRegion.current = newRegion;
+
+      // Animate map to the location if map is available
+      if (mapRef.current && isMapAvailable) {
+        setTimeout(() => {
+          mapRef.current?.animateToRegion(newRegion, 500);
+          setTimeout(() => {
+            isUpdatingFromCode.current = false;
+          }, 600);
+        }, 100);
+      } else {
+        setTimeout(() => {
+          isUpdatingFromCode.current = false;
+        }, 100);
+      }
+
+      // Get address from coordinates
+      (async () => {
+        try {
+          const { status } = await Location.getForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const addresses = await Location.reverseGeocodeAsync({
+              latitude: newRegion.latitude,
+              longitude: newRegion.longitude,
+            });
+
+            if (addresses.length > 0) {
+              const addr = addresses[0];
+              setLocationName(addr.name || addr.street || 'Current Location');
+              setLocationAddress(
+                `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
+              );
+              // Store geocoding data for pre-filling address form
+              setGeocodingData(addr);
+            }
+          }
+        } catch (error) {
+          // Keep default location name and address
+        }
+      })();
+    } else if (!initialLatitude && !initialLongitude) {
+      // Reset to defaults when not editing and no initial coordinates
       const maduraiRegion = {
         latitude: 9.9252,
         longitude: 78.1198,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       };
-      setTimeout(() => {
-        mapRef.current?.animateToRegion(maduraiRegion, 100);
-      }, 300);
+      
+      isUpdatingFromCode.current = true;
+      setRegion(maduraiRegion);
+      currentMapRegion.current = maduraiRegion;
+      
+      // Reset location name and address to defaults
+      setLocationName('Madurai');
+      setLocationAddress('Madurai, Tamil Nadu, India');
+      setGeocodingData(null);
+      
+      // Animate map to Madurai if map is available
+      if (mapRef.current && isMapAvailable) {
+        setTimeout(() => {
+          mapRef.current?.animateToRegion(maduraiRegion, 300);
+          setTimeout(() => {
+            isUpdatingFromCode.current = false;
+          }, 400);
+        }, 100);
+      } else {
+        setTimeout(() => {
+          isUpdatingFromCode.current = false;
+        }, 100);
+      }
     }
   }, [editingAddress, initialLatitude, initialLongitude]);
 
   // Update searchText and trigger search when initialSearchQuery changes
   useEffect(() => {
+    // Reset search text when initialSearchQuery changes
     if (initialSearchQuery.trim()) {
       setSearchText(initialSearchQuery);
       // Trigger search directly with the query
       performSearch(initialSearchQuery);
+    } else {
+      // Clear search text when initialSearchQuery is empty
+      setSearchText('');
     }
   }, [initialSearchQuery]);
 
@@ -158,11 +266,12 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      () => {
+      (e) => {
         setIsKeyboardVisible(true);
-        // Position search bar just 8px above keyboard
+        const height = e.endCoordinates.height;
+        // Position search bar above keyboard with proper spacing
         Animated.timing(bottomPosition, {
-          toValue: 8,
+          toValue: height + 8,
           duration: Platform.OS === 'ios' ? 250 : 200,
           useNativeDriver: false,
         }).start();
@@ -195,6 +304,13 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   }, []);
 
   const getCurrentLocation = async () => {
+    // Prevent multiple simultaneous requests
+    if (isGettingLocation) {
+      return;
+    }
+
+    setIsGettingLocation(true);
+    
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
@@ -238,6 +354,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             setLocationAddress(
               `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
             );
+            // Store geocoding data for pre-filling address form
+            setGeocodingData(addr);
           }
         } catch (reverseGeoError) {
           setLocationName('Current Location');
@@ -292,6 +410,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
       setLocationName('Madurai');
       setLocationAddress('Madurai, Tamil Nadu, India');
+    } finally {
+      setIsGettingLocation(false);
     }
   };
 
@@ -372,6 +492,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
               setLocationAddress(
                 `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
               );
+              // Store geocoding data for pre-filling address form
+              setGeocodingData(addr);
             }
           } catch (reverseGeoError) {
             // Keep the current location name and address
@@ -394,6 +516,26 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const handleBackPress = () => {
     // Dismiss keyboard before navigating back
     Keyboard.dismiss();
+    
+    // Clear any pending timeouts
+    if (geocodingTimeout.current) {
+      clearTimeout(geocodingTimeout.current);
+      geocodingTimeout.current = null;
+    }
+    if (dragTimeoutRef.current) {
+      clearTimeout(dragTimeoutRef.current);
+      dragTimeoutRef.current = null;
+    }
+    
+    // Reset flags
+    isGeocodingRef.current = false;
+    isDraggingRef.current = false;
+    isUpdatingFromCode.current = false;
+    
+    // Clear cached data
+    setGeocodingData(null);
+    setShowAddressForm(false);
+    
     if (onBack) {
       onBack();
     }
@@ -424,6 +566,15 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   };
 
   const handleAddressSave = (addressData: any) => {
+    // Close the address form first
+    setShowAddressForm(false);
+    
+    // Clear cached data after saving
+    setGeocodingData(null);
+    setSearchText('');
+    
+    // onLocationConfirm handles navigation back to the appropriate screen
+    // Don't call onBack() here as it conflicts with the navigation animation
     if (onLocationConfirm) {
       onLocationConfirm({
         name: locationName,
@@ -432,10 +583,6 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         longitude: currentMapRegion.current.longitude,
         ...addressData,
       });
-    }
-    setShowAddressForm(false);
-    if (onBack) {
-      onBack();
     }
   };
 
@@ -490,10 +637,13 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             setLocationAddress(
               `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
             );
+            // Store geocoding data for pre-filling address form
+            setGeocodingData(addr);
           }
         } catch (reverseGeoError) {
           setLocationName(query);
           setLocationAddress(query);
+          setGeocodingData(null);
         }
 
         // Dismiss keyboard
@@ -601,8 +751,20 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
                 </View>
 
                 {/* Current Location Button */}
-                <TouchableOpacity style={styles.currentLocationButton} onPress={getCurrentLocation}>
-                  <MaterialIcons name="my-location" size={24} color="#001E1F" />
+                <TouchableOpacity 
+                  style={[
+                    styles.currentLocationButton,
+                    isGettingLocation && styles.currentLocationButtonDisabled
+                  ]} 
+                  onPress={getCurrentLocation}
+                  disabled={isGettingLocation}
+                  activeOpacity={0.7}
+                >
+                  {isGettingLocation ? (
+                    <ActivityIndicator size="small" color="#00B14F" />
+                  ) : (
+                    <MaterialIcons name="my-location" size={24} color="#001E1F" />
+                  )}
                 </TouchableOpacity>
               </View>
 
@@ -624,6 +786,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           locationAddress={locationAddress}
           latitude={currentMapRegion.current.latitude}
           longitude={currentMapRegion.current.longitude}
+          geocodingData={geocodingData}
           initialData={editingAddress ? {
             houseNo: editingAddress.address1 || '',
             building: editingAddress.address2 || '',
@@ -819,6 +982,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  currentLocationButtonDisabled: {
+    opacity: 0.6,
   },
   confirmButton: {
     flexDirection: 'row',
