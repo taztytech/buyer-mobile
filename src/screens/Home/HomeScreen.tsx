@@ -29,6 +29,7 @@ interface HomeScreenProps {
   onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
   onNavigateToCheckout?: (restaurantId: number, restaurantName: string, restaurantAddress?: string, from?: 'home' | 'restaurant') => void;
   onNavigateToSearch?: () => void;
+  onNavigateToLocationSelection?: () => void;
   selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
   onCategoriesLoaded?: (categories: CategoryItem[]) => void;
   isFocused?: boolean;
@@ -169,6 +170,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToRestaurant,
   onNavigateToCheckout,
   onNavigateToSearch,
+  onNavigateToLocationSelection,
   selectedLocation: externalSelectedLocation,
   onCategoriesLoaded,
   isFocused = true,
@@ -217,6 +219,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
   const [hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
   const isInitialVegModeLoad = React.useRef(true);
+  const hasCheckedAddressRedirect = React.useRef(false);
+  const isInitialMount = React.useRef(true);
+  const prevCoordsRef = React.useRef<{ latitude: number; longitude: number } | null>(null);
+  const fetchHomeDataRef = React.useRef<((latitude?: number, longitude?: number) => Promise<void>) | null>(null);
+  const prevServiceabilityRef = React.useRef<boolean | null>(null);
 
   // Pagination states
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -289,84 +296,193 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       setSelectedLocation(externalSelectedLocation);
       // User selected a different address, fetch restaurants for the new location
       if (externalSelectedLocation.latitude && externalSelectedLocation.longitude) {
+        // Clear existing restaurant data immediately to prevent showing old distances
+        setRestaurantData([]);
+        setCarouselData([]);
+        setCategoryData([]);
+        setNoRestaurantsFound(false);
+        setHasNetworkError(false);
+        
+        // Update coordinates ref to track the change
+        const newCoords = {
+          latitude: externalSelectedLocation.latitude,
+          longitude: externalSelectedLocation.longitude,
+        };
+        prevCoordsRef.current = newCoords;
+        
+        // Fetch fresh data with new coordinates
         fetchHomeData(externalSelectedLocation.latitude, externalSelectedLocation.longitude);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalSelectedLocation]);
 
-  // Fetch default address on component mount (ONLY ONCE)
-  React.useEffect(() => {
-    const fetchDefaultAddress = async () => {
-      try {
-        const response = await addressService.getAddresses();
+  // Fetch and update address data (reusable function)
+  const fetchDefaultAddress = React.useCallback(async () => {
+    try {
+      const response = await addressService.getAddresses();
 
-        if (response.success && response.data) {
-          // Find the default address
-          const defaultAddress = response.data.find(addr => addr.is_default);
+      if (response.success && response.data) {
+        // Check if user has no addresses at all
+        if (response.data.length === 0 && !hasCheckedAddressRedirect.current && onNavigateToLocationSelection) {
+          // User has no addresses - redirect to location selection (non-mandatory)
+          hasCheckedAddressRedirect.current = true;
+          // Use setTimeout to ensure this happens after the component is fully mounted
+          setTimeout(() => {
+            onNavigateToLocationSelection();
+          }, 500);
+          return;
+        }
 
-          if (defaultAddress) {
-            // User has a default address saved
-            setHasDefaultAddress(true);
-            setDefaultAddressCoords({
-              latitude: defaultAddress.latitude,
-              longitude: defaultAddress.longitude,
-            });
+        // Find the default address
+        const defaultAddress = response.data.find(addr => addr.is_default);
 
-            // Format address type (home -> Home, work -> Work, other -> Other)
-            const formattedType = defaultAddress.type.charAt(0).toUpperCase() + defaultAddress.type.slice(1);
+        if (defaultAddress) {
+          // User has a default address saved
+          const newCoords = {
+            latitude: defaultAddress.latitude,
+            longitude: defaultAddress.longitude,
+          };
 
-            // Update selected location display (only if no external location is set)
-            if (!externalSelectedLocation) {
-              const newLocation = {
-                name: formattedType,
-                address: `${defaultAddress.address1}${defaultAddress.address2 ? ', ' + defaultAddress.address2 : ''}${defaultAddress.address3 ? ', ' + defaultAddress.address3 : ''}, ${defaultAddress.city}`,
-              };
-              setSelectedLocation(newLocation);
-            }
+          // Check if coordinates changed using ref to avoid stale closure issues
+          const prevCoords = prevCoordsRef.current;
+          const coordinatesChanged = 
+            !prevCoords ||
+            prevCoords.latitude !== newCoords.latitude ||
+            prevCoords.longitude !== newCoords.longitude;
 
-            // Fetch home data with default address coordinates
-            await fetchHomeData(parseFloat(defaultAddress.latitude), parseFloat(defaultAddress.longitude));
-          } else {
-            // No default address, use fallback location
-            setHasDefaultAddress(false);
-            setSelectedLocation({
-              name: DEFAULT_LOCATION.name,
-              address: DEFAULT_LOCATION.address,
-            });
+          // Check if serviceability status changed (important when switching addresses)
+          const isServiceable = homeService.isLocationServiceable(newCoords.latitude, newCoords.longitude);
+          const prevServiceable = prevServiceabilityRef.current;
+          const serviceabilityChanged = prevServiceable !== null && prevServiceable !== isServiceable;
+          
+          // Update serviceability ref
+          prevServiceabilityRef.current = isServiceable;
 
-            // Fetch home data with default Madurai coordinates
-            await fetchHomeData();
+          setHasDefaultAddress(true);
+          setDefaultAddressCoords(newCoords);
+          prevCoordsRef.current = newCoords;
+
+          // Format address type (home -> Home, work -> Work, other -> Other)
+          const formattedType = defaultAddress.type.charAt(0).toUpperCase() + defaultAddress.type.slice(1);
+
+          // Update selected location display (only if no external location is set)
+          if (!externalSelectedLocation) {
+            const newLocation = {
+              name: formattedType,
+              address: `${defaultAddress.address1}${defaultAddress.address2 ? ', ' + defaultAddress.address2 : ''}${defaultAddress.address3 ? ', ' + defaultAddress.address3 : ''}, ${defaultAddress.city}`,
+            };
+            setSelectedLocation(newLocation);
+          }
+
+          // Fetch home data if coordinates changed OR serviceability status changed
+          // This ensures proper refresh when switching from non-serviceable to serviceable address
+          if ((coordinatesChanged || serviceabilityChanged) && fetchHomeDataRef.current) {
+            await fetchHomeDataRef.current(defaultAddress.latitude, defaultAddress.longitude);
           }
         } else {
-          // API failed, use fallback location
+          // No default address, but user has addresses - use fallback location
+          const prevCoords = prevCoordsRef.current;
+          const shouldUseFallback = !prevCoords || 
+            prevCoords.latitude !== DEFAULT_LOCATION.latitude ||
+            prevCoords.longitude !== DEFAULT_LOCATION.longitude;
+
+          // Check if serviceability status changed for fallback location
+          const isServiceable = homeService.isLocationServiceable(DEFAULT_LOCATION.latitude, DEFAULT_LOCATION.longitude);
+          const prevServiceable = prevServiceabilityRef.current;
+          const serviceabilityChanged = prevServiceable !== null && prevServiceable !== isServiceable;
+          prevServiceabilityRef.current = isServiceable;
+
           setHasDefaultAddress(false);
+          setDefaultAddressCoords(null);
+          prevCoordsRef.current = null;
           setSelectedLocation({
             name: DEFAULT_LOCATION.name,
             address: DEFAULT_LOCATION.address,
           });
 
-          // Fetch home data with default Madurai coordinates
-          await fetchHomeData();
+          // Fetch home data if we're switching to fallback location OR serviceability changed
+          if ((shouldUseFallback || serviceabilityChanged) && fetchHomeDataRef.current) {
+            await fetchHomeDataRef.current();
+          }
         }
-      } catch (error) {
-        // Error fetching addresses, use fallback location
+      } else {
+        // API failed, use fallback location
+        const prevCoords = prevCoordsRef.current;
+        const shouldUseFallback = !prevCoords || 
+          prevCoords.latitude !== DEFAULT_LOCATION.latitude ||
+          prevCoords.longitude !== DEFAULT_LOCATION.longitude;
+
+        // Check if serviceability status changed for fallback location
+        const isServiceable = homeService.isLocationServiceable(DEFAULT_LOCATION.latitude, DEFAULT_LOCATION.longitude);
+        const prevServiceable = prevServiceabilityRef.current;
+        const serviceabilityChanged = prevServiceable !== null && prevServiceable !== isServiceable;
+        prevServiceabilityRef.current = isServiceable;
+
         setHasDefaultAddress(false);
+        setDefaultAddressCoords(null);
+        prevCoordsRef.current = null;
         setSelectedLocation({
           name: DEFAULT_LOCATION.name,
           address: DEFAULT_LOCATION.address,
         });
 
-        // Fetch home data with default Madurai coordinates
-        await fetchHomeData();
-      } finally {
-        setIsLoadingLocation(false);
+        // Fetch home data if we're switching to fallback location OR serviceability changed
+        if ((shouldUseFallback || serviceabilityChanged) && fetchHomeDataRef.current) {
+          await fetchHomeDataRef.current();
+        }
       }
-    };
+    } catch (error) {
+      // Error fetching addresses, use fallback location
+      const prevCoords = prevCoordsRef.current;
+      const shouldUseFallback = !prevCoords || 
+        prevCoords.latitude !== DEFAULT_LOCATION.latitude ||
+        prevCoords.longitude !== DEFAULT_LOCATION.longitude;
 
+      // Check if serviceability status changed for fallback location
+      const isServiceable = homeService.isLocationServiceable(DEFAULT_LOCATION.latitude, DEFAULT_LOCATION.longitude);
+      const prevServiceable = prevServiceabilityRef.current;
+      const serviceabilityChanged = prevServiceable !== null && prevServiceable !== isServiceable;
+      prevServiceabilityRef.current = isServiceable;
+
+      setHasDefaultAddress(false);
+      setDefaultAddressCoords(null);
+      prevCoordsRef.current = null;
+      setSelectedLocation({
+        name: DEFAULT_LOCATION.name,
+        address: DEFAULT_LOCATION.address,
+      });
+
+      // Fetch home data if we're switching to fallback location OR serviceability changed
+      if ((shouldUseFallback || serviceabilityChanged) && fetchHomeDataRef.current) {
+        await fetchHomeDataRef.current();
+      }
+    } finally {
+      setIsLoadingLocation(false);
+    }
+  }, [externalSelectedLocation, onNavigateToLocationSelection]);
+
+  // Fetch default address on component mount (ONLY ONCE)
+  React.useEffect(() => {
     fetchDefaultAddress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
+
+  // Refresh address data when screen becomes focused (after returning from other screens)
+  React.useEffect(() => {
+    // Skip initial mount - only refresh when returning to the screen
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    if (isFocused) {
+      // Refresh address data to get latest state (e.g., after deletion in profile)
+      // This ensures deleted addresses are removed from the display
+      fetchDefaultAddress();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused, fetchDefaultAddress]);
 
   // Reload home data when screen becomes focused (but don't reset address)
   // DISABLED: Not needed since auto-refresh on focus is disabled
@@ -655,14 +771,38 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       // Check if location is serviceable
       const serviceable = homeService.isLocationServiceable(lat, lng);
+      const prevServiceable = prevServiceabilityRef.current;
+      const wasServiceable = prevServiceable !== null ? prevServiceable : true; // Default to true for first load
+      
+      // Track serviceability transition
+      const transitioningToNonServiceable = wasServiceable && !serviceable;
+      const transitioningToServiceable = !wasServiceable && serviceable;
+      
       setIsLocationServiceable(serviceable);
+      prevServiceabilityRef.current = serviceable;
 
-      // If location is not serviceable, stop loading and don't fetch data
+      // If location is not serviceable, clear data and stop loading
       if (!serviceable) {
+        // Only clear data when transitioning to non-serviceable (not on every fetch)
+        if (transitioningToNonServiceable) {
+          setRestaurantData([]);
+          setCarouselData([]);
+          setCategoryData([]);
+          setNoRestaurantsFound(false);
+          setHasNetworkError(false);
+        }
         setIsLoadingBanners(false);
         setIsLoadingCategories(false);
         setIsLoadingRestaurants(false);
         return;
+      }
+
+      // If transitioning from non-serviceable to serviceable, ensure we fetch fresh data
+      // This handles the case where coordinates might be same but serviceability changed
+      if (transitioningToServiceable) {
+        // Reset flags to ensure fresh fetch
+        setNoRestaurantsFound(false);
+        setHasNetworkError(false);
       }
 
       const response = await homeService.getHomeData(lat, lng, vegMode, 1);
@@ -828,6 +968,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 }
               }
 
+              // Format distance with 2 decimal places
+              let distanceText = '0Kms';
+              if (restaurant.distance !== undefined && restaurant.distance !== null) {
+                // Convert to number if string, then format to 2 decimal places
+                const distanceNum = typeof restaurant.distance === 'string' 
+                  ? parseFloat(restaurant.distance) 
+                  : Number(restaurant.distance);
+                if (!isNaN(distanceNum)) {
+                  distanceText = `${distanceNum.toFixed(2)}Kms`;
+                }
+              }
+
               return {
                 id: restaurant.id,
                 name: restaurant.name,
@@ -836,7 +988,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 reviewCount: restaurant.review_count || restaurant.reviews_count || restaurant.total_reviews || 0,
                 deliveryTime: restaurant.delivery_time || '25-30 mins',
                 location: restaurant.location,
-                distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
+                distance: distanceText,
                 image: restaurant.logo_url || restaurant.image,
                 isFavorite: restaurant.is_favorite || false,
                 isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
@@ -877,6 +1029,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setIsLoadingRestaurants(false);
       }
   }, [vegMode]);
+
+  // Update ref when fetchHomeData is created
+  React.useEffect(() => {
+    fetchHomeDataRef.current = fetchHomeData;
+  }, [fetchHomeData]);
 
   // Load more restaurants function for pagination
   const loadMoreRestaurants = React.useCallback(async () => {
@@ -928,6 +1085,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               }
             }
 
+            // Format distance with 2 decimal places
+            let distanceText = '0Kms';
+            if (restaurant.distance !== undefined && restaurant.distance !== null) {
+              // Convert to number if string, then format to 2 decimal places
+              const distanceNum = typeof restaurant.distance === 'string' 
+                ? parseFloat(restaurant.distance) 
+                : Number(restaurant.distance);
+              if (!isNaN(distanceNum)) {
+                distanceText = `${distanceNum.toFixed(2)}Kms`;
+              }
+            }
+
             return {
               id: restaurant.id,
               name: restaurant.name,
@@ -936,7 +1105,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               reviewCount: restaurant.review_count || restaurant.reviews_count || restaurant.total_reviews || 0,
               deliveryTime: restaurant.delivery_time || '25-30 mins',
               location: restaurant.location,
-              distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
+              distance: distanceText,
               image: restaurant.logo_url || restaurant.image,
               isFavorite: restaurant.is_favorite || false,
               isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
@@ -1029,8 +1198,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       case 'url':
         // Open external URL in system browser
-        Linking.openURL(item.promotionLink).catch((err) => {
-          console.error('Failed to open URL:', err);
+        Linking.openURL(item.promotionLink).catch(() => {
           showConfirmation({
             title: 'Error',
             message: 'Failed to open the link. Please try again.',
