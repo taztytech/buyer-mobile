@@ -432,43 +432,71 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Item Details</Text>
             <View style={styles.itemDetailsContainer}>
-              {orderData.items.map((item: any, index: number) => (
-                <View key={item.id}>
-                  <View style={styles.itemDetailRow}>
-                    <View style={styles.itemDetailLeft}>
-                      <Text style={styles.itemDetailName}>
-                        {item.quantity}x {item.item_name}
-                      </Text>
-                      {item.customizations && item.customizations.length > 0 && (
-                        <View style={styles.customizationsContainer}>
-                          {item.customizations.map((customization: any, idx: number) => (
-                            <Text key={idx} style={styles.customizationText}>
-                              {customization.customization_group_name}:{' '}
-                              {customization.selected_options.map((opt: any) => opt.name).join(', ')}
-                            </Text>
-                          ))}
+              {orderData.items.map((item: any, index: number) => {
+                const isVeg = item.is_veg !== false; // Default to veg if not specified
+                const imageUrl = item.image_url || item.image || null;
+                
+                return (
+                  <View key={item.id}>
+                    <View style={styles.itemDetailRow}>
+                      {/* Product Image */}
+                      {imageUrl && (
+                        <Image
+                          source={{ uri: imageUrl }}
+                          style={styles.itemDetailImage}
+                          resizeMode="cover"
+                          defaultSource={require('@/assets/dummy-restaurent.png')}
+                        />
+                      )}
+                      
+                      <View style={styles.itemDetailLeft}>
+                        <View style={styles.itemDetailNameRow}>
+                          {/* Veg/Non-veg Icon */}
+                          <View style={[
+                            styles.vegIndicator,
+                            !isVeg && styles.nonVegIndicator
+                          ]}>
+                            <View style={[
+                              styles.vegDot,
+                              !isVeg && styles.nonVegDot
+                            ]} />
+                          </View>
+                          {/* Product Name and Quantity */}
+                          <Text style={styles.itemDetailName}>
+                            {item.item_name} × {item.quantity}
+                          </Text>
                         </View>
-                      )}
-                      {item.variants && item.variants.length > 0 && (
-                        <View style={styles.customizationsContainer}>
-                          {item.variants.map((variant: any, idx: number) => (
-                            <Text key={idx} style={styles.customizationText}>
-                              {variant.variant_group_name}: {variant.selected_variant.name}
-                            </Text>
-                          ))}
-                        </View>
-                      )}
-                      {item.special_instructions && (
-                        <Text style={styles.specialInstructionsText}>
-                          Note: {item.special_instructions}
-                        </Text>
-                      )}
+                        {item.customizations && item.customizations.length > 0 && (
+                          <View style={styles.customizationsContainer}>
+                            {item.customizations.map((customization: any, idx: number) => (
+                              <Text key={idx} style={styles.customizationText}>
+                                {customization.customization_group_name}:{' '}
+                                {customization.selected_options.map((opt: any) => opt.name).join(', ')}
+                              </Text>
+                            ))}
+                          </View>
+                        )}
+                        {item.variants && item.variants.length > 0 && (
+                          <View style={styles.customizationsContainer}>
+                            {item.variants.map((variant: any, idx: number) => (
+                              <Text key={idx} style={styles.customizationText}>
+                                {variant.variant_group_name}: {variant.selected_variant.name}
+                              </Text>
+                            ))}
+                          </View>
+                        )}
+                        {item.special_instructions && (
+                          <Text style={styles.specialInstructionsText}>
+                            Note: {item.special_instructions}
+                          </Text>
+                        )}
+                      </View>
+                      <Text style={styles.itemDetailPrice}>₹{item.total_price}</Text>
                     </View>
-                    <Text style={styles.itemDetailPrice}>₹{item.total_price}</Text>
+                    {index < orderData.items.length - 1 && <View style={styles.itemDivider} />}
                   </View>
-                  {index < orderData.items.length - 1 && <View style={styles.itemDivider} />}
-                </View>
-              ))}
+                );
+              })}
             </View>
           </View>
 
@@ -1037,16 +1065,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: 12,
+  },
+  itemDetailImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#E8E8E8',
   },
   itemDetailLeft: {
     flex: 1,
     marginRight: 12,
+  },
+  itemDetailNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
   },
   itemDetailName: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
     color: '#001E1F',
     lineHeight: 21,
+    flex: 1,
+  },
+  vegIndicator: {
+    width: 16,
+    height: 16,
+    borderWidth: 1.5,
+    borderColor: '#00B14F',
+    borderRadius: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  nonVegIndicator: {
+    borderColor: '#DC2626',
+  },
+  vegDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00B14F',
+  },
+  nonVegDot: {
+    backgroundColor: '#DC2626',
   },
   itemDetailPrice: {
     fontFamily: 'Poppins_600SemiBold',
