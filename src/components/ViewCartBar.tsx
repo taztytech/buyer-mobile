@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useCart } from '@/context/CartContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+// import { LinearGradient } from 'expo-linear-gradient';
 
 interface ViewCartBarProps {
   onPress: () => void;
@@ -32,8 +32,8 @@ export const ViewCartBar: React.FC<ViewCartBarProps> = ({
   };
 
   return (
-    <View style={styles.cartBarWrapper}>
-      <View style={[styles.cartBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+    <View style={[styles.cartBarWrapper, { bottom: 0 }]}>
+      <View style={[styles.cartBar, { paddingBottom: insets.bottom }]}>
         <View style={styles.cartContainer}>
         {/* Header Row: Restaurant Info and Checkout Button */}
         <View style={styles.headerRow}>

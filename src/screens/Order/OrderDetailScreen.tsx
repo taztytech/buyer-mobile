@@ -54,6 +54,30 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       const response = await ordersService.getOrderById(Number(orderId));
 
       if (response.success && response.data) {
+        console.log('=== ORDER DATA (Full Response) ===');
+        console.log(JSON.stringify(response.data, null, 2));
+        console.log('=== ORDER SUMMARY ===');
+        console.log('Summary object:', response.data.summary);
+        console.log('Summary subtotal:', response.data.summary?.subtotal);
+        console.log('Summary tax_amount:', response.data.summary?.tax_amount);
+        console.log('Summary delivery_fee:', response.data.summary?.delivery_fee);
+        console.log('Summary discount_amount:', response.data.summary?.discount_amount);
+        console.log('Summary total_amount:', response.data.summary?.total_amount);
+        console.log('=== ORDER ITEMS ===');
+        console.log('Items array:', response.data.items);
+        console.log('Items count:', response.data.items?.length);
+        if (response.data.items && response.data.items.length > 0) {
+          response.data.items.forEach((item: any, index: number) => {
+            console.log(`Item ${index + 1}:`, {
+              id: item.id,
+              name: item.item_name,
+              quantity: item.quantity,
+              price: item.price,
+              total_price: item.total_price,
+              item_total: item.item_total,
+            });
+          });
+        }
         setOrderData(response.data);
       } else {
         setError(response.error || 'Failed to load order details');
@@ -138,17 +162,99 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     });
   };
 
+  // Calculate bill details from items if summary is missing or zero
+  const calculateBillFromItems = (orderData: any) => {
+    console.log('=== CALCULATING BILL FROM ITEMS ===');
+    console.log('OrderData received:', orderData);
+    console.log('OrderData.summary:', orderData?.summary);
+    console.log('OrderData.items:', orderData?.items);
+    
+    if (!orderData.items || !Array.isArray(orderData.items)) {
+      console.log('No items found, returning zeros');
+      return {
+        subtotal: 0,
+        tax_amount: 0,
+        delivery_fee: 0,
+        discount_amount: 0,
+        total_amount: 0,
+      };
+    }
+
+    const subtotal = orderData.items.reduce((sum: number, item: any) => {
+      const itemTotal = item.total_price || item.item_total || (item.price || 0) * (item.quantity || 0);
+      console.log(`Item: ${item.item_name}, quantity: ${item.quantity}, price: ${item.price}, total_price: ${item.total_price}, item_total: ${item.item_total}, calculated: ${itemTotal}`);
+      return sum + itemTotal;
+    }, 0);
+
+    console.log('Calculated subtotal from items:', subtotal);
+
+    // If summary exists and has values, use it; otherwise calculate from items
+    const summary = orderData.summary || {};
+    console.log('Summary object:', summary);
+    
+    const tax_amount = summary.tax_amount || summary.tax || 0;
+    const delivery_fee = summary.delivery_fee || 0;
+    const discount_amount = summary.discount_amount || summary.discount || 0;
+    const summarySubtotal = summary.subtotal || summary.item_total || 0;
+    const summaryTotal = summary.total_amount || summary.total || 0;
+    
+    console.log('Summary values:', {
+      tax_amount,
+      delivery_fee,
+      discount_amount,
+      summarySubtotal,
+      summaryTotal,
+    });
+
+    const finalSubtotal = summarySubtotal || subtotal;
+    const finalTotal = summaryTotal || (finalSubtotal + tax_amount + delivery_fee - discount_amount);
+
+    const bill = {
+      subtotal: finalSubtotal,
+      tax_amount,
+      delivery_fee,
+      discount_amount,
+      total_amount: finalTotal,
+    };
+
+    console.log('=== FINAL BILL CALCULATION ===');
+    console.log('Final bill:', bill);
+    console.log('Calculation: subtotal + tax + delivery - discount = total');
+    console.log(`${finalSubtotal} + ${tax_amount} + ${delivery_fee} - ${discount_amount} = ${finalTotal}`);
+
+    return bill;
+  };
+
   // Helper function to map status
-  const getStatusDisplay = (status: string) => {
+  const getStatusDisplay = (status: string, orderData?: any) => {
+    // Check for payment failed status - priority check
+    let actualStatus = status;
+    
+    // Check payment_status field first - if payment failed, show payment failed regardless of order status
+    if (orderData?.payment_status?.toLowerCase() === 'failed' || 
+        orderData?.payment_status?.toLowerCase() === 'payment_failed' ||
+        status?.toLowerCase() === 'payment_failed') {
+      actualStatus = 'payment_failed';
+    } else if (status === 'cancelled' && orderData?.payment_method === 'online' && 
+        orderData?.cancellation_reason?.toLowerCase().includes('payment failed')) {
+      actualStatus = 'payment_failed';
+    } else if (orderData?.payment_method === 'online' && 
+               orderData?.payment_status?.toLowerCase() === 'pending' && 
+               (status?.toLowerCase() === 'pending' || status?.toLowerCase() === 'cancelled')) {
+      // If payment is pending but order is cancelled/pending for online payment, it's likely a payment failure
+      actualStatus = 'payment_failed';
+    }
+
     const statusMap: { [key: string]: { title: string; color: string } } = {
       'delivered': { title: 'Your order was delivered!', color: '#00B14F' },
       'confirmed': { title: 'Order confirmed!', color: '#00B14F' },
       'preparing': { title: 'Order is being prepared', color: '#F59E0B' },
       'out_for_delivery': { title: 'Order is on the way!', color: '#F59E0B' },
       'pending_payment': { title: 'Payment pending', color: '#DC2626' },
+      'payment_failed': { title: 'Payment Failed', color: '#DC2626' },
       'cancelled': { title: 'Order cancelled', color: '#DC2626' },
     };
-    return statusMap[status] || { title: 'Order status', color: '#00B14F' };
+    return statusMap[actualStatus] || { title: 'Order status', color: '#00B14F' };
   };
 
   return (
@@ -208,13 +314,14 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             <View style={styles.statusHeader}>
               <MaterialIcons
                 name={orderData.status === 'delivered' ? 'check-circle' :
+                      (getStatusDisplay(orderData.status, orderData).title === 'Payment Failed') ? 'payment' :
                       orderData.status === 'cancelled' ? 'cancel' :
                       'access-time'}
                 size={24}
-                color={getStatusDisplay(orderData.status).color}
+                color={getStatusDisplay(orderData.status, orderData).color}
               />
               <View style={styles.statusTextContainer}>
-                <Text style={styles.statusTitle}>{getStatusDisplay(orderData.status).title}</Text>
+                <Text style={styles.statusTitle}>{getStatusDisplay(orderData.status, orderData).title}</Text>
                 <Text style={styles.orderNumberText}>Order #{orderData.order_number}</Text>
               </View>
             </View>
@@ -275,7 +382,10 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               </View>
               <View style={styles.orderMeta}>
                 <Text style={styles.orderDate}>{formatDate(orderData.created_at)}</Text>
-                <Text style={styles.orderAmount}>₹{orderData.summary.total_amount}</Text>
+                <Text style={styles.orderAmount}>₹{(() => {
+                  const bill = calculateBillFromItems(orderData);
+                  return bill.total_amount.toFixed(2);
+                })()}</Text>
               </View>
             </View>
 
@@ -416,35 +526,42 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               )}
             </View>
 
-            <View style={styles.billItems}>
-              <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Subtotal</Text>
-                <Text style={styles.billValue}>₹{orderData.summary.subtotal}</Text>
-              </View>
-              <View style={styles.billRow}>
-                <Text style={styles.billLabel}>GST and Charges</Text>
-                <Text style={styles.billValue}>₹{orderData.summary.tax_amount}</Text>
-              </View>
-              <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Delivery Fee</Text>
-                <Text style={styles.billValue}>₹{orderData.summary.delivery_fee}</Text>
-              </View>
-              {orderData.summary.discount_amount > 0 && (
-                <View style={styles.billRow}>
-                  <Text style={styles.billLabel}>Discount</Text>
-                  <Text style={[styles.billValue, { color: '#00B14F' }]}>
-                    -₹{orderData.summary.discount_amount}
-                  </Text>
-                </View>
-              )}
-            </View>
+            {(() => {
+              const bill = calculateBillFromItems(orderData);
+              return (
+                <>
+                  <View style={styles.billItems}>
+                    <View style={styles.billRow}>
+                      <Text style={styles.billLabel}>Subtotal</Text>
+                      <Text style={styles.billValue}>₹{bill.subtotal.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.billRow}>
+                      <Text style={styles.billLabel}>GST and Charges</Text>
+                      <Text style={styles.billValue}>₹{bill.tax_amount.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.billRow}>
+                      <Text style={styles.billLabel}>Delivery Fee</Text>
+                      <Text style={styles.billValue}>₹{bill.delivery_fee.toFixed(2)}</Text>
+                    </View>
+                    {bill.discount_amount > 0 && (
+                      <View style={styles.billRow}>
+                        <Text style={styles.billLabel}>Discount</Text>
+                        <Text style={[styles.billValue, { color: '#00B14F' }]}>
+                          -₹{bill.discount_amount.toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
 
-            <View style={styles.dashedDivider} />
+                  <View style={styles.dashedDivider} />
 
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>₹{orderData.summary.total_amount}</Text>
-            </View>
+                  <View style={styles.totalRow}>
+                    <Text style={styles.totalLabel}>Total</Text>
+                    <Text style={styles.totalValue}>₹{bill.total_amount.toFixed(2)}</Text>
+                  </View>
+                </>
+              );
+            })()}
           </View>
 
           {/* Payment Method Card */}
