@@ -8,6 +8,7 @@ import {
   Switch,
   ScrollView,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -109,6 +110,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     });
   };
 
+  const handleLinkPress = (url: string) => {
+    Linking.openURL(url).catch(err => {});
+  };
+
   // Menu item component
   const MenuItem = ({
     label,
@@ -206,7 +211,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <MenuItem label="My Orders" icon="receipt-long" onPress={onMyOrders} />
             <MenuItem label="My Addresses" icon="location-on" onPress={onMyAddresses} />
             <MenuItem label="Favorites" icon="favorite" onPress={onFavorites} />
-            <MenuItem label="Chat With Us" icon="chat" onPress={onChatWithUs} />
+            {/* <MenuItem label="Chat With Us" icon="chat" onPress={onChatWithUs} /> */}
 
             {/* Notification Toggle */}
             <View style={styles.menuItem}>
@@ -226,11 +231,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </View>
             <View style={styles.divider} />
 
-            <MenuItem label="Privacy Policy" icon="shield" onPress={onPrivacyPolicy} />
+            <MenuItem 
+              label="Privacy Policy" 
+              icon="shield" 
+              onPress={() => handleLinkPress('https://tazty.in/privacy')} 
+            />
             <MenuItem
               label="Terms & Conditions"
               icon="description"
-              onPress={onTermsConditions}
+              onPress={() => handleLinkPress('https://tazty.in/terms')}
               showArrow={false}
               showDivider={false}
             />

@@ -9,11 +9,13 @@ import {
   FlatList,
   ScrollView,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { addressService, AddressResponse } from '@/services/address.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface SavedAddress {
   id: string;
@@ -24,12 +26,19 @@ interface SavedAddress {
   latitude: number;
   longitude: number;
   isDefault: boolean;
+  // Full address details for API updates
+  address1?: string;
+  address2?: string;
+  address3?: string;
+  state?: string;
+  pincode?: string;
+  alternate_phone_number?: number;
 }
 
 interface AddressSelectionScreenProps {
   onBack?: () => void;
   onAddAddress?: () => void;
-  onUseCurrentLocation?: () => void;
+  onUseCurrentLocation?: (latitude?: number, longitude?: number) => void;
   onSelectAddress?: (address: SavedAddress) => void;
   onSearch?: (searchQuery: string) => void;
   visible?: boolean; // To track when screen becomes visible
@@ -43,10 +52,12 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
   onSearch,
   visible = true,
 }) => {
+  const { showConfirmation } = useConfirmation();
   const [searchText, setSearchText] = useState('');
   const [currentLocationName, setCurrentLocationName] = useState('Getting location...');
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [updatingAddressId, setUpdatingAddressId] = useState<string | null>(null);
 
   // Fetch addresses on initial mount
   useEffect(() => {
@@ -76,6 +87,13 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
           latitude: addr.latitude,
           longitude: addr.longitude,
           isDefault: addr.is_default,
+          // Store full address details for API updates
+          address1: addr.address1,
+          address2: addr.address2 || undefined,
+          address3: addr.address3 || undefined,
+          state: addr.state,
+          pincode: addr.pincode,
+          alternate_phone_number: addr.alternate_phone_number,
         }));
 
         setSavedAddresses(addresses);
@@ -115,17 +133,37 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
       const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status === 'granted') {
+        // Get current location coordinates
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Platform.OS === 'ios'
+            ? Location.Accuracy.Balanced
+            : Location.Accuracy.High,
+        });
+
+        if (onUseCurrentLocation) {
+          // Pass coordinates to callback so LocationSelectionScreen can use them
+          onUseCurrentLocation(location.coords.latitude, location.coords.longitude);
+        }
+      } else {
+        // Permission denied, still navigate but without coordinates
         if (onUseCurrentLocation) {
           onUseCurrentLocation();
         }
       }
     } catch (error) {
+      // Error getting location, still navigate but without coordinates
+      if (onUseCurrentLocation) {
+        onUseCurrentLocation();
+      }
     }
   };
 
   const handleSearchSubmit = () => {
     if (searchText.trim() && onSearch) {
-      onSearch(searchText.trim());
+      const query = searchText.trim();
+      onSearch(query);
+      // Clear search text after submitting to avoid confusion on next search
+      setSearchText('');
     }
   };
 
@@ -146,12 +184,65 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
     return type.charAt(0).toUpperCase() + type.slice(1);
   };
 
-  const renderAddressItem = ({ item }: { item: SavedAddress }) => (
-    <TouchableOpacity
-      style={styles.addressItem}
-      onPress={() => onSelectAddress && onSelectAddress(item)}
-      activeOpacity={0.7}
-    >
+  const handleAddressSelect = async (address: SavedAddress) => {
+    // If address is already default, just proceed with selection
+    if (address.isDefault) {
+      if (onSelectAddress) {
+        onSelectAddress(address);
+      }
+      return;
+    }
+
+    // Update address to be default
+    setUpdatingAddressId(address.id);
+    try {
+      const response = await addressService.updateAddress(address.id, {
+        is_default: true,
+      });
+
+      if (response.success) {
+        // Refresh addresses to get updated list
+        await fetchAddresses();
+        
+        // Update the address object to reflect the change
+        const updatedAddress = { ...address, isDefault: true };
+        
+        // Proceed with address selection
+        if (onSelectAddress) {
+          onSelectAddress(updatedAddress);
+        }
+      } else {
+        showConfirmation({
+          title: 'Error',
+          message: response.error || 'Failed to update address. Please try again.',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
+      }
+    } catch (error: any) {
+      showConfirmation({
+        title: 'Error',
+        message: error.message || 'An unexpected error occurred. Please try again.',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+    } finally {
+      setUpdatingAddressId(null);
+    }
+  };
+
+  const renderAddressItem = ({ item }: { item: SavedAddress }) => {
+    const isUpdating = updatingAddressId === item.id;
+    
+    return (
+      <TouchableOpacity
+        style={styles.addressItem}
+        onPress={() => handleAddressSelect(item)}
+        activeOpacity={0.7}
+        disabled={isUpdating}
+      >
       <View style={styles.addressIconContainer}>
         <MaterialIcons name={getIconForType(item.type)} size={24} color="#00B14F" />
       </View>
@@ -163,6 +254,9 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
               <Text style={styles.defaultBadgeText}>Default</Text>
             </View>
           )}
+          {isUpdating && (
+            <ActivityIndicator size="small" color="#00B14F" style={styles.updatingIndicator} />
+          )}
         </View>
         <Text style={styles.addressCity}>{item.address}</Text>
       </View>
@@ -170,7 +264,8 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         <Text style={styles.addressDistance}>{item.distance}</Text>
       )}
     </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <View style={styles.wrapper}>
@@ -494,5 +589,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#4285F4',
+  },
+  updatingIndicator: {
+    marginLeft: 8,
   },
 });

@@ -32,6 +32,7 @@ import { useVegMode } from '@/context/VegModeContext';
 import { favoritesService } from '@/services/favorites.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { ItemTiming as ImportedItemTiming, isItemAvailable } from '@/utils/timing.utils';
+import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -267,12 +268,33 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     return cartItem.quantity || 0;
   };
 
+  const isItemAtMaxQuantity = (itemId: string): boolean => getItemQuantity(itemId) >= MAX_ITEM_QUANTITY;
+
+  const getRemainingQuantityForItem = (itemId: string): number =>
+    Math.max(0, MAX_ITEM_QUANTITY - getItemQuantity(itemId));
+
+  const showMaxQuantityAlert = () => {
+    showConfirmation({
+      title: 'Quantity limit reached',
+      message: `You can add up to ${MAX_ITEM_QUANTITY} units of each item.`,
+      confirmText: 'OK',
+      cancelText: '',
+      confirmButtonColor: '#00B14F',
+      onConfirm: () => {},
+    });
+  };
+
+  const ensureUnderQuantityLimit = (itemId: string): boolean => {
+    if (isItemAtMaxQuantity(itemId)) {
+      showMaxQuantityAlert();
+      return false;
+    }
+    return true;
+  };
+
 
   // Add item to cart (for non-customizable items)
   const addToCart = (item: MenuItem) => {
-    if (!ensureRestaurantOpen()) {
-      return;
-    }
     // Check if there's a restaurant conflict
     if (checkRestaurantConflict(restaurantId)) {
       showConfirmation({
@@ -315,9 +337,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Increment item quantity
   const incrementItem = (itemId: string) => {
-    if (!ensureRestaurantOpen()) {
-      return;
-    }
     const cartItem = cart[itemId];
 
     // If item is customizable, open review modal instead
@@ -350,9 +369,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle opening customization modal
   const handleCustomizableItemClick = (item: MenuItem) => {
-    if (!ensureRestaurantOpen()) {
-      return;
-    }
     // Check if there's a restaurant conflict
     if (checkRestaurantConflict(restaurantId)) {
       showConfirmation({
@@ -428,6 +444,17 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
 
     const existingItem = cart[itemId];
+    const currentTotalQuantity = getItemQuantity(itemId);
+    const editingVariantQuantity = editingVariantId
+      ? existingItem?.variants?.find(v => v.id === editingVariantId)?.quantity || 0
+      : 0;
+    const remainingQuantity = Math.max(0, MAX_ITEM_QUANTITY - (currentTotalQuantity - editingVariantQuantity));
+    const normalizedQuantity = Math.min(quantity, remainingQuantity);
+
+    if (normalizedQuantity <= 0) {
+      showMaxQuantityAlert();
+      return;
+    }
 
     // Create new variant
     const newVariant: CustomizationVariant = {
@@ -436,7 +463,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       addOnNames: addOnNames,
       customizationGroups: customizationGroups,
       price: totalPrice,
-      quantity: quantity,
+      quantity: normalizedQuantity,
     };
 
     let updatedVariants: CustomizationVariant[];
@@ -505,6 +532,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       return;
     }
     if (!reviewingItemId) return;
+    if (isItemAtMaxQuantity(reviewingItemId)) {
+      showMaxQuantityAlert();
+      return;
+    }
 
     const item = cart[reviewingItemId];
     if (!item?.variants) return;
@@ -551,6 +582,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       return;
     }
     if (!reviewingItemId) return;
+    if (getRemainingQuantityForItem(reviewingItemId) <= 0) {
+      showMaxQuantityAlert();
+      return;
+    }
 
     const item = menuSections
       .flatMap(section => section.items)
@@ -657,19 +692,21 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle adding item from detail modal
   const handleAddFromDetail = (itemId: string, quantity: number) => {
-    if (!ensureRestaurantOpen()) {
-      return;
-    }
     const item = menuSections
       .flatMap(section => section.items)
       .find(i => i.id === itemId);
 
     if (item) {
+      const safeQuantity = Math.min(quantity, MAX_ITEM_QUANTITY);
+      if (safeQuantity <= 0) {
+        return;
+      }
+      
       addToCartContext({
         id: item.id,
         name: item.name,
         price: item.price,
-        quantity: quantity,
+        quantity: safeQuantity,
         isVeg: item.isVeg,
         isCustomizable: false,
       });
@@ -1227,11 +1264,20 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               </TouchableOpacity>
 
             {section.isExpanded && section.items.map((item) => {
+              // Check if restaurant is open
+              const isRestaurantOpen = restaurantData?.timings
+                ? homeService.isRestaurantOpen(restaurantData.timings)
+                : true; // Default to open if no timing data
+
               // Check if item is available based on its own timings
               const isItemCurrentlyAvailable = isItemAvailable(item.timings);
 
               // Item is only available if BOTH restaurant is open AND item timing is available
               const itemAvailable = !isRestaurantClosed && isItemCurrentlyAvailable;
+
+              // Get current quantity and check if at limit
+              const currentItemQuantity = getItemQuantity(item.id);
+              const isAtQuantityLimit = currentItemQuantity >= MAX_ITEM_QUANTITY;
 
               return (
               <View key={item.id}>
@@ -1365,12 +1411,16 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                           >
                             <Text style={styles.quantityButtonText}>-</Text>
                           </TouchableOpacity>
-                          <Text style={styles.quantityText}>{getItemQuantity(item.id)}</Text>
+                          <Text style={styles.quantityText}>{currentItemQuantity}</Text>
                           <TouchableOpacity
-                            style={styles.quantityButton}
+                            style={[
+                              styles.quantityButton,
+                              isAtQuantityLimit && styles.quantityButtonDisabled,
+                            ]}
                             onPress={() => incrementItem(item.id)}
                             activeOpacity={0.7}
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            disabled={isAtQuantityLimit}
                           >
                             <Text style={styles.quantityButtonText}>+</Text>
                           </TouchableOpacity>
@@ -1532,6 +1582,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         item={selectedCustomizableItem}
         preselectedAddOns={preselectedAddOns}
         initialQuantity={editingVariantQuantity}
+        maxQuantity={
+          selectedCustomizableItem
+            ? Math.max(1, getRemainingQuantityForItem(selectedCustomizableItem.id))
+            : MAX_ITEM_QUANTITY
+        }
         onClose={() => {
           // Just close the modal and reset editing state
           setShowCustomizationModal(false);
@@ -1567,6 +1622,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           onEdit={handleEditVariant}
           onAddNewCustomisation={handleAddNewCustomisation}
           onConfirm={handleConfirmCustomisations}
+          maxQuantityReached={isItemAtMaxQuantity(reviewingItemId)}
         />
       )}
 
@@ -1575,6 +1631,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         visible={showDetailModal}
         item={selectedDetailItem}
         initialQuantity={selectedDetailItem ? (cart[selectedDetailItem.id]?.quantity || undefined) : undefined}
+        maxQuantity={MAX_ITEM_QUANTITY}
         onClose={() => {
           setShowDetailModal(false);
           setSelectedDetailItem(null);
@@ -2207,6 +2264,9 @@ const styles = StyleSheet.create({
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  quantityButtonDisabled: {
+    opacity: 0.4,
   },
   quantityButtonText: {
     fontFamily: 'Poppins',
