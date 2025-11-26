@@ -5,6 +5,7 @@
 
 import { apiService, ApiResponse } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
+import type { VegModeType } from '@/context/VegModeContext';
 
 // Types
 export interface BannerItem {
@@ -265,7 +266,8 @@ class HomeService {
   async getDishes(
     foodType?: string,
     limit: number = 10,
-    page: number = 1
+    page: number = 1,
+    vegMode: VegModeType = 'off'
   ): Promise<ApiResponse<{ dishes: DishItem[] }>> {
     try {
       // Build query params
@@ -277,6 +279,15 @@ class HomeService {
 
       if (foodType) {
         params.append('food_type', foodType);
+      }
+
+      if (vegMode && vegMode !== 'off') {
+        // API expects explicit food_type when veg mode filters are active
+        if (vegMode === 'pure') {
+          params.set('food_type', 'pure-veg');
+        } else if (vegMode === 'all') {
+          params.set('food_type', 'veg');
+        }
       }
 
       const queryString = params.toString();

@@ -137,15 +137,34 @@ class ApiService {
       }
 
       const url = buildApiUrl('/authentication/refresh-token');
+      const requestBody = {
+        refresh_token: refreshToken,
+      };
+
+      console.log('[API Request]', {
+        method: 'POST',
+        url,
+        headers: API_CONFIG.HEADERS,
+        body: requestBody,
+        timestamp: new Date().toISOString(),
+      });
+
       const response = await fetch(url, {
         method: 'POST',
         headers: API_CONFIG.HEADERS,
-        body: JSON.stringify({
-          refresh_token: refreshToken,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
+
+      console.log('[API Response]', {
+        method: 'POST',
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        data,
+        timestamp: new Date().toISOString(),
+      });
 
       if (response.ok && data.success) {
         // Validate that we received valid tokens (check both camelCase and snake_case)
@@ -264,16 +283,19 @@ class ApiService {
       console.log('[apiService][request]', {
         method,
         endpoint: url,
+        body: config.body? JSON.parse(config.body as string): undefined,
         hasBody: Boolean(config.body),
       });
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
+      const startTime = Date.now();
       const response = await fetch(url, {
         ...config,
         signal: controller.signal,
       });
+      const duration = Date.now() - startTime;
 
       clearTimeout(timeoutId);
 

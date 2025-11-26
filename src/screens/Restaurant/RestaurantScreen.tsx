@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,6 @@ import {
   Dimensions,
   ActivityIndicator,
   Animated,
-  Modal,
   Platform,
   BackHandler,
 } from 'react-native';
@@ -32,7 +31,6 @@ import { useVegMode } from '@/context/VegModeContext';
 import { favoritesService } from '@/services/favorites.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { ItemTiming as ImportedItemTiming, isItemAvailable } from '@/utils/timing.utils';
-import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -145,34 +143,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   });
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
-  const [selectedDetailItemAvailable, setSelectedDetailItemAvailable] = useState<boolean>(true);
   const [activeDietaryFilter, setActiveDietaryFilter] = useState<'veg' | 'non-veg' | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showOrderSuccess, setShowOrderSuccess] = useState(false);
   const [togglingFavoriteItemId, setTogglingFavoriteItemId] = useState<string | null>(null);
-  const [showClosedModal, setShowClosedModal] = useState(false);
-
-  const restaurantOpeningMessage = useMemo(
-    () => (restaurantData?.timings ? homeService.getRestaurantOpeningMessage(restaurantData.timings) : null),
-    [restaurantData?.timings]
-  );
-  const isRestaurantClosed = Boolean(restaurantOpeningMessage);
-
-  const showRestaurantClosedAlert = useCallback(() => {
-    setShowClosedModal(true);
-  }, []);
-
-  const ensureRestaurantOpen = useCallback((): boolean => {
-    if (isRestaurantClosed) {
-      showRestaurantClosedAlert();
-      return false;
-    }
-    return true;
-  }, [isRestaurantClosed, showRestaurantClosedAlert]);
-
-  const handleCloseClosedModal = useCallback(() => {
-    setShowClosedModal(false);
-  }, []);
 
   const scrollViewRef = React.useRef<ScrollView>(null);
   const sectionRefs = React.useRef<{ [key: string]: View | null }>({});
@@ -355,9 +329,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Increment item quantity
   const incrementItem = (itemId: string) => {
-    if (!ensureUnderQuantityLimit(itemId)) {
-      return;
-    }
     const cartItem = cart[itemId];
 
     // If item is customizable, open review modal instead
@@ -417,9 +388,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle adding customizable item to cart with add-ons
   const handleAddCustomizableItem = (itemId: string, quantity: number, selectedAddOns: string[]) => {
-    if (!ensureRestaurantOpen()) {
-      return;
-    }
     const item = menuSections
       .flatMap(section => section.items)
       .find(i => i.id === itemId);
@@ -464,17 +432,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
 
     const existingItem = cart[itemId];
-    const currentTotalQuantity = getItemQuantity(itemId);
-    const editingVariantQuantity = editingVariantId
-      ? existingItem?.variants?.find(v => v.id === editingVariantId)?.quantity || 0
-      : 0;
-    const remainingQuantity = Math.max(0, MAX_ITEM_QUANTITY - (currentTotalQuantity - editingVariantQuantity));
-    const normalizedQuantity = Math.min(quantity, remainingQuantity);
-
-    if (normalizedQuantity <= 0) {
-      showMaxQuantityAlert();
-      return;
-    }
 
     // Create new variant
     const newVariant: CustomizationVariant = {
@@ -483,7 +440,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       addOnNames: addOnNames,
       customizationGroups: customizationGroups,
       price: totalPrice,
-      quantity: normalizedQuantity,
+      quantity: quantity,
     };
 
     let updatedVariants: CustomizationVariant[];
@@ -548,14 +505,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handlers for CustomisationsReviewModal
   const handleIncrementVariant = (variantId: string) => {
-    if (!ensureRestaurantOpen()) {
-      return;
-    }
     if (!reviewingItemId) return;
-    if (isItemAtMaxQuantity(reviewingItemId)) {
-      showMaxQuantityAlert();
-      return;
-    }
 
     const item = cart[reviewingItemId];
     if (!item?.variants) return;
@@ -598,14 +548,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   };
 
   const handleAddNewCustomisation = () => {
-    if (!ensureRestaurantOpen()) {
-      return;
-    }
     if (!reviewingItemId) return;
-    if (getRemainingQuantityForItem(reviewingItemId) <= 0) {
-      showMaxQuantityAlert();
-      return;
-    }
 
     const item = menuSections
       .flatMap(section => section.items)
@@ -625,22 +568,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle opening detail modal
   const handleImageClick = (item: MenuItem) => {
-    if (!ensureRestaurantOpen()) {
-      return;
-    }
-    // Check if restaurant is open
-    const isRestaurantOpen = restaurantData?.timings
-      ? homeService.isRestaurantOpen(restaurantData.timings)
-      : true; // Default to open if no timing data
-
-    // Check if item is available based on its own timings
-    const isItemCurrentlyAvailable = isItemAvailable(item.timings);
-
-    // Item is only available if BOTH restaurant is open AND item timing is available
-    const itemAvailable = isRestaurantOpen && isItemCurrentlyAvailable;
-    
     setSelectedDetailItem(item);
-    setSelectedDetailItemAvailable(itemAvailable);
     setShowDetailModal(true);
   };
 
@@ -655,23 +583,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
   };
 
-  // Helper function to check if item is available (considering both restaurant and item timings)
-  const isItemFullyAvailable = (item: MenuItem): boolean => {
-    // Check if restaurant is open
-    const isRestaurantOpen = restaurantData?.timings
-      ? homeService.isRestaurantOpen(restaurantData.timings)
-      : true; // Default to open if no timing data
-
-    // Check if item is available based on its own timings
-    const isItemCurrentlyAvailable = isItemAvailable(item.timings);
-
-    // Item is only available if BOTH restaurant is open AND item timing is available
-    return isRestaurantOpen && isItemCurrentlyAvailable;
-  };
-
   // Get filtered menu sections based on active dietary filter and global veg mode
   const getFilteredMenuSections = (): MenuSection[] => {
-    const processedSections = menuSections
+    return menuSections
       .map(section => {
         // Filter items
         let filteredItems = section.items.filter(item => {
@@ -711,45 +625,24 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           return true;
         });
 
-        // Sort items: enabled items first, disabled items last
-        // This considers both restaurant timings and item timings
-        filteredItems = [...filteredItems].sort((a, b) => {
-          const aAvailable = isItemFullyAvailable(a);
-          const bAvailable = isItemFullyAvailable(b);
-
-          if (aAvailable === bAvailable) {
-            // If both have same availability, apply price sorting if filter is active
-            if (filters.sortBy) {
-              if (filters.sortBy === 'lowToHigh') {
-                return a.price - b.price;
-              } else if (filters.sortBy === 'highToLow') {
-                return b.price - a.price;
-              }
+        // Apply sorting if filter is active
+        if (filters.sortBy) {
+          filteredItems = [...filteredItems].sort((a, b) => {
+            if (filters.sortBy === 'lowToHigh') {
+              return a.price - b.price;
+            } else if (filters.sortBy === 'highToLow') {
+              return b.price - a.price;
             }
             return 0;
-          }
-          return aAvailable ? -1 : 1; // Available items come first
-        });
-
-        // Check if category has any enabled items
-        const hasEnabledItems = filteredItems.some(item => isItemFullyAvailable(item));
+          });
+        }
 
         return {
           ...section,
           items: filteredItems,
-          hasEnabledItems, // Add flag to track if category has enabled items
         };
       })
       .filter(section => section.items.length > 0); // Remove empty sections
-
-    // Sort categories: categories with enabled items first, categories with only disabled items last
-    const sortedSections = [...processedSections].sort((a, b) => {
-      if (a.hasEnabledItems === b.hasEnabledItems) return 0;
-      return a.hasEnabledItems ? -1 : 1; // Categories with enabled items come first
-    });
-
-    // Remove the hasEnabledItems flag before returning (it was just for sorting)
-    return sortedSections.map(({ hasEnabledItems, ...section }) => section);
   };
 
   const filteredMenuSections = getFilteredMenuSections();
@@ -758,15 +651,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const hasNoVegItems = vegMode === 'all' && filteredMenuSections.length === 0 && menuSections.length > 0;
 
   const handleAddFromDetail = (itemId: string, quantity: number) => {
-    if (quantity > MAX_ITEM_QUANTITY) {
-      showMaxQuantityAlert();
-      return;
-    }
-    const safeQuantity = Math.min(quantity, MAX_ITEM_QUANTITY);
-    if (safeQuantity <= 0) {
-      return;
-    }
-
     const item = menuSections
       .flatMap(section => section.items)
       .find(i => i.id === itemId);
@@ -1111,13 +995,19 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                       )}
                     </Text>
                   </TouchableOpacity>
-                 {/* Opening Message */}
-                 {restaurantOpeningMessage && (
-                   <View style={styles.openingMessageContainer}>
-                     <MaterialIcons name="access-time" size={14} color="#FF6B6B" />
-                     <Text style={styles.openingMessage}>{restaurantOpeningMessage}</Text>
-                   </View>
-                 )}
+                  {/* Opening Message */}
+                  {restaurantData?.timings && (() => {
+                    const openingMessage = homeService.getRestaurantOpeningMessage(restaurantData.timings);
+                    if (openingMessage) {
+                      return (
+                        <View style={styles.openingMessageContainer}>
+                          <MaterialIcons name="access-time" size={14} color="#FF6B6B" />
+                          <Text style={styles.openingMessage}>{openingMessage}</Text>
+                        </View>
+                      );
+                    }
+                    return null;
+                  })()}
                 </View>
                 {/* Only show rating and reviews if there's at least one review */}
                 {(restaurantData?.stats?.total_reviews > 0 || restaurantData?.total_reviews > 0) && (
@@ -1258,15 +1148,13 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             </View>
 
             {/* Search Button - right aligned */}
-            {!isRestaurantClosed && (
-              <TouchableOpacity
-                style={styles.searchButton}
-                onPress={() => setShowSearch(true)}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="search" size={24} color="#00B14F" />
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={styles.searchButton}
+              onPress={() => setShowSearch(true)}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="search" size={24} color="#00B14F" />
+            </TouchableOpacity>
           </View>
           </View>
         </SafeAreaView>
@@ -1375,8 +1263,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               </TouchableOpacity>
 
             {section.isExpanded && section.items.map((item) => {
-              const currentItemQuantity = getItemQuantity(item.id);
-              const isAtQuantityLimit = currentItemQuantity >= MAX_ITEM_QUANTITY;
               // Check if restaurant is open
               const isRestaurantOpen = restaurantData?.timings
                 ? homeService.isRestaurantOpen(restaurantData.timings)
@@ -1386,7 +1272,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               const isItemCurrentlyAvailable = isItemAvailable(item.timings);
 
               // Item is only available if BOTH restaurant is open AND item timing is available
-              const itemAvailable = !isRestaurantClosed && isItemCurrentlyAvailable;
+              const itemAvailable = isRestaurantOpen && isItemCurrentlyAvailable;
 
               return (
               <View key={item.id}>
@@ -1464,10 +1350,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     )}
                     <Image
                       source={item.image}
-                      style={[
-                        styles.itemImage,
-                        !itemAvailable && styles.itemImageDisabled
-                      ]}
+                      style={styles.itemImage}
                       resizeMode="cover"
                       onLoad={() => handleImageLoad(item.id)}
                       fadeDuration={0}
@@ -1523,16 +1406,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                           >
                             <Text style={styles.quantityButtonText}>-</Text>
                           </TouchableOpacity>
-                          <Text style={styles.quantityText}>{currentItemQuantity}</Text>
+                          <Text style={styles.quantityText}>{getItemQuantity(item.id)}</Text>
                           <TouchableOpacity
-                            style={[
-                              styles.quantityButton,
-                              isAtQuantityLimit && styles.quantityButtonDisabled,
-                            ]}
+                            style={styles.quantityButton}
                             onPress={() => incrementItem(item.id)}
                             activeOpacity={0.7}
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                            disabled={isAtQuantityLimit}
                           >
                             <Text style={styles.quantityButtonText}>+</Text>
                           </TouchableOpacity>
@@ -1695,11 +1574,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         item={selectedCustomizableItem}
         preselectedAddOns={preselectedAddOns}
         initialQuantity={editingVariantQuantity}
-        maxQuantity={
-          selectedCustomizableItem
-            ? Math.max(1, getRemainingQuantityForItem(selectedCustomizableItem.id))
-            : MAX_ITEM_QUANTITY
-        }
         onClose={() => {
           // Just close the modal and reset editing state
           setShowCustomizationModal(false);
@@ -1735,7 +1609,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           onEdit={handleEditVariant}
           onAddNewCustomisation={handleAddNewCustomisation}
           onConfirm={handleConfirmCustomisations}
-          maxQuantityReached={isItemAtMaxQuantity(reviewingItemId)}
         />
       )}
 
@@ -1744,12 +1617,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         visible={showDetailModal}
         item={selectedDetailItem}
         initialQuantity={selectedDetailItem ? (cart[selectedDetailItem.id]?.quantity || undefined) : undefined}
-        maxQuantity={MAX_ITEM_QUANTITY}
-        isAvailable={selectedDetailItemAvailable}
         onClose={() => {
           setShowDetailModal(false);
           setSelectedDetailItem(null);
-          setSelectedDetailItemAvailable(true);
         }}
         onAddToCart={handleAddFromDetail}
       />
@@ -1796,7 +1666,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             onImageClick={handleImageClick}
             loadedImages={loadedImages}
             onImageLoad={handleImageLoad}
-            isRestaurantClosed={isRestaurantClosed}
             onBack={() => setShowSearch(false)}
           />
         </View>
@@ -1813,29 +1682,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           />
         </View>
       )}
-
-      {/* Restaurant Closed Modal */}
-      <Modal
-        visible={showClosedModal}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={handleCloseClosedModal}
-      >
-        <View style={styles.closedModalOverlay}>
-          <View style={styles.closedModalContent}>
-            <MaterialIcons name="access-time" size={32} color="#FF6B6B" />
-            <Text style={styles.closedModalTitle}>Restaurant is currently closed</Text>
-            <TouchableOpacity
-              style={styles.closedModalButton}
-              onPress={handleCloseClosedModal}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.closedModalButtonText}>Got it</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
@@ -2290,9 +2136,6 @@ const styles = StyleSheet.create({
     height: 137,
     borderRadius: 16,
   },
-  itemImageDisabled: {
-    opacity: 0.5,
-  },
   itemGradientOverlayTop: {
     position: 'absolute',
     top: 0,
@@ -2382,9 +2225,6 @@ const styles = StyleSheet.create({
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  quantityButtonDisabled: {
-    opacity: 0.4,
   },
   quantityButtonText: {
     fontFamily: 'Poppins',
@@ -2660,49 +2500,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 1001,
-  },
-  closedModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  closedModalContent: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    gap: 12,
-  },
-  closedModalTitle: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 18,
-    lineHeight: 27,
-    color: '#111111',
-    textAlign: 'center',
-  },
-  closedModalMessage: {
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    lineHeight: 20,
-    color: 'rgba(0, 0, 0, 0.7)',
-    textAlign: 'center',
-  },
-  closedModalButton: {
-    marginTop: 12,
-    backgroundColor: '#00B14F',
-    borderRadius: 10,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-  },
-  closedModalButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#FFFFFF',
   },
   noItemsContainer: {
     flex: 1,
