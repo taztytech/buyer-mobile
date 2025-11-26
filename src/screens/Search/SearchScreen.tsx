@@ -119,14 +119,12 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     debounceTimer.current = setTimeout(async () => {
       try {
         // Pass location if available, otherwise search without location filter
-        const response = userLocation
-          ? await searchService.getSearchSuggestions(
-              searchQuery,
-              userLocation.lat,
-              userLocation.lng,
-              vegMode
-            )
-          : await searchService.getSearchSuggestions(searchQuery, undefined, undefined, vegMode);
+        const response = await searchService.getSearchSuggestions(
+          searchQuery,
+          userLocation?.lat,
+          userLocation?.lng,
+          vegMode
+        );
 
         if (response.success && response.data) {
           // Combine items and restaurants into a single array

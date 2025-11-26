@@ -4,7 +4,7 @@
  */
 
 import { apiService, ApiResponse } from './api.service';
-import { VegModeType } from '@/context/VegModeContext';
+import type { VegModeType } from '@/context/VegModeContext';
 
 export interface SearchSuggestion {
   id: number;
@@ -48,11 +48,11 @@ class SearchService {
       // POST method with query, limit, and location in body
       const endpoint = '/api/buyer/search/suggestions';
       const requestBody: any = {
-        query: query.trim(),
+        query: query,
         limit: 10,
       };
 
-      // Add location parameters if provided
+      // Add location object if provided (API expects nested location payload)
       if (latitude !== undefined && longitude !== undefined) {
         requestBody.location = {
           lat: latitude,
@@ -60,7 +60,8 @@ class SearchService {
         };
       }
 
-      if (vegMode === 'pure') {
+      // Apply dietary preference filter for veg modes
+      if (vegMode === 'pure' || vegMode === 'all') {
         requestBody.filters = {
           ...requestBody.filters,
           dietary_preference: 'veg',

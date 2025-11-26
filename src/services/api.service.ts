@@ -283,6 +283,7 @@ class ApiService {
       console.log('[apiService][request]', {
         method,
         endpoint: url,
+        body: config.body? JSON.parse(config.body as string): undefined,
         hasBody: Boolean(config.body),
       });
 
