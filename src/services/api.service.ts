@@ -279,21 +279,11 @@ class ApiService {
         config.body = JSON.stringify(data);
       }
 
-      // Log request details
-      const logHeaders = { ...headers };
-      // Mask sensitive token information in logs
-      if (logHeaders['Authorization']) {
-        logHeaders['Authorization'] = logHeaders['Authorization'].substring(0, 20) + '...';
-      }
-
-      console.log('[API Request]', {
+      // Centralized request logging for debugging purposes
+      console.log('[apiService][request]', {
         method,
-        url,
-        endpoint,
-        headers: logHeaders,
-        body: data,
-        retryCount,
-        timestamp: new Date().toISOString(),
+        endpoint: url,
+        hasBody: Boolean(config.body),
       });
 
       const controller = new AbortController();
@@ -348,17 +338,12 @@ class ApiService {
 
       const responseData = await response.json();
 
-      // Log response details
-      console.log('[API Response]', {
+      console.log('[apiService][response]', {
         method,
-        url,
-        endpoint,
+        endpoint: url,
         status: response.status,
-        statusText: response.statusText,
-        data: responseData,
-        duration: `${duration}ms`,
-        retryCount,
-        timestamp: new Date().toISOString(),
+        success: response.ok,
+        data: responseData?.data ?? responseData,
       });
 
       if (!response.ok) {
@@ -375,17 +360,11 @@ class ApiService {
         message: responseData.message,
       };
     } catch (error: any) {
-      // Log error details
-      const errorUrl = buildApiUrl(endpoint);
-      console.error('[API Error]', {
+      console.log('[apiService][response_error]', {
         method,
-        url: errorUrl,
         endpoint,
-        error: error.message || error,
-        errorType: error.name,
-        timestamp: new Date().toISOString(),
+        message: error?.message,
       });
-
       const apiError = this.handleError(error);
       return {
         success: false,

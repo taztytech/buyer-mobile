@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Shimmer } from '@/components/Shimmer';
 import { SearchBar } from '@/components/SearchBar';
+import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 interface MenuItem {
   id: string;
@@ -23,6 +24,11 @@ interface MenuItem {
   isSpicy: boolean;
   isBestSeller: boolean;
   isCustomizable: boolean;
+}
+
+interface MenuSection {
+  id: string;
+  items: MenuItem[];
 }
 
 interface CustomizationVariant {
@@ -47,7 +53,7 @@ interface CartItem {
 
 interface SearchScreenProps {
   onBack?: () => void;
-  menuItems?: any[];
+  menuItems?: MenuSection[];
   cart?: { [key: string]: CartItem };
   onAddToCart?: (item: MenuItem) => void;
   onIncrementItem?: (itemId: string) => void;
@@ -56,6 +62,7 @@ interface SearchScreenProps {
   onImageClick?: (item: MenuItem) => void;
   loadedImages?: Set<string>;
   onImageLoad?: (itemId: string) => void;
+  isRestaurantClosed?: boolean;
 }
 
 export const SearchScreen: React.FC<SearchScreenProps> = ({
@@ -69,6 +76,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   onImageClick,
   loadedImages = new Set(),
   onImageLoad,
+  isRestaurantClosed = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<MenuItem[]>([]);
@@ -85,28 +93,34 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     return cartItem.quantity || 0;
   };
 
-  // Handle search
+  // Handle search text updates
   const handleSearch = (query: string) => {
     setSearchQuery(query);
+  };
 
-    if (!query.trim()) {
+  // Re-compute search results whenever the query or menu items change
+  useEffect(() => {
+    if (!searchQuery.trim()) {
       setSearchResults([]);
       return;
     }
 
-    // Filter menu items based on search query
+    const normalizedQuery = searchQuery.toLowerCase();
     const results: MenuItem[] = [];
+
     menuItems.forEach((section) => {
-      section.items.forEach((item: MenuItem) => {
-        if (item.name.toLowerCase().includes(query.toLowerCase()) ||
-            item.description.toLowerCase().includes(query.toLowerCase())) {
+      section?.items?.forEach((item: MenuItem) => {
+        if (
+          item.name.toLowerCase().includes(normalizedQuery) ||
+          item.description.toLowerCase().includes(normalizedQuery)
+        ) {
           results.push(item);
         }
       });
     });
 
     setSearchResults(results);
-  };
+  }, [searchQuery, menuItems]);
 
   return (
     <View style={styles.container}>
@@ -130,7 +144,11 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         >
           {searchQuery.trim() !== '' && searchResults.length > 0 && (
             <View style={styles.menuContent}>
-              {searchResults.map((item) => (
+              {searchResults.map((item) => {
+                const currentQuantity = getItemQuantity(item.id);
+                const isAtQuantityLimit = currentQuantity >= MAX_ITEM_QUANTITY;
+
+                return (
                 <View key={item.id} style={styles.menuItem}>
                   <View style={styles.itemLeft}>
                     {/* Veg/Non-Veg Icon and Spicy Badge */}
@@ -173,23 +191,20 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                       </Text>
                     </View>
 
-                    {/* Like and Share Buttons */}
-                    <View style={styles.itemActions}>
-                      <TouchableOpacity style={styles.actionButton}>
-                        <MaterialIcons name="favorite-border" size={17} color="rgba(0, 0, 0, 0.5)" />
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.actionButton}>
-                        <MaterialIcons name="share" size={17} color="rgba(0, 0, 0, 0.5)" />
-                      </TouchableOpacity>
-                    </View>
+                    {/* Extra spacing removed now that action icons are hidden */}
                   </View>
 
                   <View style={styles.itemRight}>
                     {/* Item Image with Shimmer */}
                     <TouchableOpacity
                       style={styles.itemImageContainer}
-                      onPress={() => onImageClick && onImageClick(item)}
-                      activeOpacity={0.9}
+                      onPress={() => {
+                        if (!isRestaurantClosed && onImageClick) {
+                          onImageClick(item);
+                        }
+                      }}
+                      disabled={isRestaurantClosed}
+                      activeOpacity={isRestaurantClosed ? 1 : 0.9}
                     >
                       {!loadedImages.has(item.id) && (
                         <Shimmer
@@ -209,7 +224,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     </TouchableOpacity>
 
                     {/* Add Button or Increment/Decrement Controls */}
-                    {loadedImages.has(item.id) && (
+                    {loadedImages.has(item.id) && !isRestaurantClosed && (
                       <>
                         {cart[item.id] ? (
                           // Show increment/decrement controls if item is in cart
@@ -222,12 +237,16 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                             >
                               <Text style={styles.quantityButtonText}>-</Text>
                             </TouchableOpacity>
-                            <Text style={styles.quantityText}>{getItemQuantity(item.id)}</Text>
+                            <Text style={styles.quantityText}>{currentQuantity}</Text>
                             <TouchableOpacity
-                              style={styles.quantityButton}
+                              style={[
+                                styles.quantityButton,
+                                isAtQuantityLimit && styles.quantityButtonDisabled,
+                              ]}
                               onPress={() => onIncrementItem && onIncrementItem(item.id)}
                               activeOpacity={0.7}
                               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              disabled={isAtQuantityLimit}
                             >
                               <Text style={styles.quantityButtonText}>+</Text>
                             </TouchableOpacity>
@@ -258,7 +277,8 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     )}
                   </View>
                 </View>
-              ))}
+              );
+              })}
             </View>
           )}
 
@@ -402,21 +422,6 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.6)',
     opacity: 0.85,
   },
-  itemActions: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 3,
-    width: 53,
-    height: 25,
-  },
-  actionButton: {
-    width: 25,
-    height: 25,
-    borderRadius: 13,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   itemRight: {
     width: 166,
     alignItems: 'flex-start',
@@ -492,6 +497,9 @@ const styles = StyleSheet.create({
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  quantityButtonDisabled: {
+    opacity: 0.4,
   },
   quantityButtonText: {
     fontFamily: 'Poppins',

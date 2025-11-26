@@ -54,30 +54,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       const response = await ordersService.getOrderById(Number(orderId));
 
       if (response.success && response.data) {
-        console.log('=== ORDER DATA (Full Response) ===');
-        console.log(JSON.stringify(response.data, null, 2));
-        console.log('=== ORDER SUMMARY ===');
-        console.log('Summary object:', response.data.summary);
-        console.log('Summary subtotal:', response.data.summary?.subtotal);
-        console.log('Summary tax_amount:', response.data.summary?.tax_amount);
-        console.log('Summary delivery_fee:', response.data.summary?.delivery_fee);
-        console.log('Summary discount_amount:', response.data.summary?.discount_amount);
-        console.log('Summary total_amount:', response.data.summary?.total_amount);
-        console.log('=== ORDER ITEMS ===');
-        console.log('Items array:', response.data.items);
-        console.log('Items count:', response.data.items?.length);
-        if (response.data.items && response.data.items.length > 0) {
-          response.data.items.forEach((item: any, index: number) => {
-            console.log(`Item ${index + 1}:`, {
-              id: item.id,
-              name: item.item_name,
-              quantity: item.quantity,
-              price: item.price,
-              total_price: item.total_price,
-              item_total: item.item_total,
-            });
-          });
-        }
+
         setOrderData(response.data);
       } else {
         setError(response.error || 'Failed to load order details');
@@ -164,13 +141,9 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
   // Calculate bill details from items if summary is missing or zero
   const calculateBillFromItems = (orderData: any) => {
-    console.log('=== CALCULATING BILL FROM ITEMS ===');
-    console.log('OrderData received:', orderData);
-    console.log('OrderData.summary:', orderData?.summary);
-    console.log('OrderData.items:', orderData?.items);
     
     if (!orderData.items || !Array.isArray(orderData.items)) {
-      console.log('No items found, returning zeros');
+      
       return {
         subtotal: 0,
         tax_amount: 0,
@@ -182,15 +155,11 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
     const subtotal = orderData.items.reduce((sum: number, item: any) => {
       const itemTotal = item.total_price || item.item_total || (item.price || 0) * (item.quantity || 0);
-      console.log(`Item: ${item.item_name}, quantity: ${item.quantity}, price: ${item.price}, total_price: ${item.total_price}, item_total: ${item.item_total}, calculated: ${itemTotal}`);
       return sum + itemTotal;
     }, 0);
 
-    console.log('Calculated subtotal from items:', subtotal);
-
     // If summary exists and has values, use it; otherwise calculate from items
     const summary = orderData.summary || {};
-    console.log('Summary object:', summary);
     
     const tax_amount = summary.tax_amount || summary.tax || 0;
     const delivery_fee = summary.delivery_fee || 0;
@@ -198,14 +167,6 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     const summarySubtotal = summary.subtotal || summary.item_total || 0;
     const summaryTotal = summary.total_amount || summary.total || 0;
     
-    console.log('Summary values:', {
-      tax_amount,
-      delivery_fee,
-      discount_amount,
-      summarySubtotal,
-      summaryTotal,
-    });
-
     const finalSubtotal = summarySubtotal || subtotal;
     const finalTotal = summaryTotal || (finalSubtotal + tax_amount + delivery_fee - discount_amount);
 
@@ -216,11 +177,6 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       discount_amount,
       total_amount: finalTotal,
     };
-
-    console.log('=== FINAL BILL CALCULATION ===');
-    console.log('Final bill:', bill);
-    console.log('Calculation: subtotal + tax + delivery - discount = total');
-    console.log(`${finalSubtotal} + ${tax_amount} + ${delivery_fee} - ${discount_amount} = ${finalTotal}`);
 
     return bill;
   };
@@ -432,43 +388,71 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Item Details</Text>
             <View style={styles.itemDetailsContainer}>
-              {orderData.items.map((item: any, index: number) => (
-                <View key={item.id}>
-                  <View style={styles.itemDetailRow}>
-                    <View style={styles.itemDetailLeft}>
-                      <Text style={styles.itemDetailName}>
-                        {item.quantity}x {item.item_name}
-                      </Text>
-                      {item.customizations && item.customizations.length > 0 && (
-                        <View style={styles.customizationsContainer}>
-                          {item.customizations.map((customization: any, idx: number) => (
-                            <Text key={idx} style={styles.customizationText}>
-                              {customization.customization_group_name}:{' '}
-                              {customization.selected_options.map((opt: any) => opt.name).join(', ')}
-                            </Text>
-                          ))}
+              {orderData.items.map((item: any, index: number) => {
+                const isVeg = item.is_veg !== false; // Default to veg if not specified
+                const imageUrl = item.image_url || item.image || null;
+                
+                return (
+                  <View key={item.id}>
+                    <View style={styles.itemDetailRow}>
+                      {/* Product Image */}
+                      {imageUrl && (
+                        <Image
+                          source={{ uri: imageUrl }}
+                          style={styles.itemDetailImage}
+                          resizeMode="cover"
+                          defaultSource={require('@/assets/dummy-restaurent.png')}
+                        />
+                      )}
+                      
+                      <View style={styles.itemDetailLeft}>
+                        <View style={styles.itemDetailNameRow}>
+                          {/* Veg/Non-veg Icon */}
+                          <View style={[
+                            styles.vegIndicator,
+                            !isVeg && styles.nonVegIndicator
+                          ]}>
+                            <View style={[
+                              styles.vegDot,
+                              !isVeg && styles.nonVegDot
+                            ]} />
+                          </View>
+                          {/* Product Name and Quantity */}
+                          <Text style={styles.itemDetailName}>
+                            {item.item_name} × {item.quantity}
+                          </Text>
                         </View>
-                      )}
-                      {item.variants && item.variants.length > 0 && (
-                        <View style={styles.customizationsContainer}>
-                          {item.variants.map((variant: any, idx: number) => (
-                            <Text key={idx} style={styles.customizationText}>
-                              {variant.variant_group_name}: {variant.selected_variant.name}
-                            </Text>
-                          ))}
-                        </View>
-                      )}
-                      {item.special_instructions && (
-                        <Text style={styles.specialInstructionsText}>
-                          Note: {item.special_instructions}
-                        </Text>
-                      )}
+                        {item.customizations && item.customizations.length > 0 && (
+                          <View style={styles.customizationsContainer}>
+                            {item.customizations.map((customization: any, idx: number) => (
+                              <Text key={idx} style={styles.customizationText}>
+                                {customization.customization_group_name}:{' '}
+                                {customization.selected_options.map((opt: any) => opt.name).join(', ')}
+                              </Text>
+                            ))}
+                          </View>
+                        )}
+                        {item.variants && item.variants.length > 0 && (
+                          <View style={styles.customizationsContainer}>
+                            {item.variants.map((variant: any, idx: number) => (
+                              <Text key={idx} style={styles.customizationText}>
+                                {variant.variant_group_name}: {variant.selected_variant.name}
+                              </Text>
+                            ))}
+                          </View>
+                        )}
+                        {item.special_instructions && (
+                          <Text style={styles.specialInstructionsText}>
+                            Note: {item.special_instructions}
+                          </Text>
+                        )}
+                      </View>
+                      <Text style={styles.itemDetailPrice}>₹{item.total_price}</Text>
                     </View>
-                    <Text style={styles.itemDetailPrice}>₹{item.total_price}</Text>
+                    {index < orderData.items.length - 1 && <View style={styles.itemDivider} />}
                   </View>
-                  {index < orderData.items.length - 1 && <View style={styles.itemDivider} />}
-                </View>
-              ))}
+                );
+              })}
             </View>
           </View>
 
@@ -1037,16 +1021,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: 12,
+  },
+  itemDetailImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#E8E8E8',
   },
   itemDetailLeft: {
     flex: 1,
     marginRight: 12,
+  },
+  itemDetailNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
   },
   itemDetailName: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
     color: '#001E1F',
     lineHeight: 21,
+    flex: 1,
+  },
+  vegIndicator: {
+    width: 16,
+    height: 16,
+    borderWidth: 1.5,
+    borderColor: '#00B14F',
+    borderRadius: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  nonVegIndicator: {
+    borderColor: '#DC2626',
+  },
+  vegDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00B14F',
+  },
+  nonVegDot: {
+    backgroundColor: '#DC2626',
   },
   itemDetailPrice: {
     fontFamily: 'Poppins_600SemiBold',

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ItemTiming, formatItemTiming, isItemAvailable } from '@/utils/timing.utils';
+import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 interface FoodItemDetailModalProps {
   visible: boolean;
@@ -27,19 +28,24 @@ interface FoodItemDetailModalProps {
     timings?: ItemTiming[];
   } | null;
   initialQuantity?: number;
+  isAvailable?: boolean;
   onClose: () => void;
   onAddToCart: (itemId: string, quantity: number) => void;
+  maxQuantity?: number;
 }
 
 export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
   visible,
   item,
   initialQuantity,
+  isAvailable = true,
   onClose,
   onAddToCart,
+  maxQuantity = MAX_ITEM_QUANTITY,
 }) => {
   const [quantity, setQuantity] = useState(1);
   const slideAnim = useRef(new Animated.Value(1000)).current;
+  const resolvedMaxQuantity = Math.max(1, maxQuantity);
 
   useEffect(() => {
     if (visible) {
@@ -51,16 +57,16 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
       }).start();
 
       // Initialize quantity
-      setQuantity(initialQuantity || 1);
+      setQuantity(Math.min(initialQuantity || 1, resolvedMaxQuantity));
     } else {
       slideAnim.setValue(1000);
     }
-  }, [visible, initialQuantity]);
+  }, [visible, initialQuantity, resolvedMaxQuantity]);
 
   if (!item) return null;
 
   const handleIncrement = () => {
-    setQuantity(prev => prev + 1);
+    setQuantity(prev => Math.min(prev + 1, resolvedMaxQuantity));
   };
 
   const handleDecrement = () => {
@@ -189,26 +195,48 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
                   onPress={handleDecrement}
                   activeOpacity={0.7}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  disabled={!isAvailable || quantity <= 1}
+                  style={(!isAvailable || quantity <= 1) ? styles.quantityButtonDisabled : undefined}
                 >
-                  <Text style={styles.quantityButton}>-</Text>
+                  <Text style={[
+                    styles.quantityButton,
+                    (!isAvailable || quantity <= 1) && styles.quantityButtonTextDisabled
+                  ]}>-</Text>
                 </TouchableOpacity>
-                <Text style={styles.quantityText}>{quantity}</Text>
+                <Text style={[
+                  styles.quantityText,
+                  !isAvailable && styles.quantityTextDisabled
+                ]}>{quantity}</Text>
                 <TouchableOpacity
                   onPress={handleIncrement}
                   activeOpacity={0.7}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  disabled={!isAvailable || quantity >= resolvedMaxQuantity}
+                  style={(!isAvailable || quantity >= resolvedMaxQuantity) ? styles.quantityButtonDisabled : undefined}
                 >
-                  <Text style={styles.quantityButton}>+</Text>
+                  <Text style={[
+                    styles.quantityButton,
+                    (!isAvailable || quantity >= resolvedMaxQuantity) && styles.quantityButtonTextDisabled
+                  ]}>+</Text>
                 </TouchableOpacity>
               </View>
 
               {/* Add Item Button */}
               <TouchableOpacity
-                style={styles.addItemButton}
+                style={[
+                  styles.addItemButton,
+                  !isAvailable && styles.addItemButtonDisabled
+                ]}
                 onPress={handleAddItem}
                 activeOpacity={0.8}
+                disabled={!isAvailable}
               >
-                <Text style={styles.addItemText}>Add Item ₹{totalPrice}</Text>
+                <Text style={[
+                  styles.addItemText,
+                  !isAvailable && styles.addItemTextDisabled
+                ]}>
+                  Add Item ₹{totalPrice}
+                </Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -380,6 +408,12 @@ const styles = StyleSheet.create({
     color: '#000000',
     opacity: 0.85,
   },
+  quantityButtonDisabled: {
+    opacity: 0.4,
+  },
+  quantityButtonTextDisabled: {
+    opacity: 0.4,
+  },
   quantityText: {
     fontFamily: 'Poppins',
     fontWeight: '500',
@@ -387,6 +421,9 @@ const styles = StyleSheet.create({
     lineHeight: 27,
     color: '#000000',
     opacity: 0.85,
+  },
+  quantityTextDisabled: {
+    opacity: 0.4,
   },
   addItemButton: {
     flex: 1,
@@ -398,6 +435,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: 40,
   },
+  addItemButtonDisabled: {
+    backgroundColor: '#CCCCCC',
+    opacity: 0.6,
+  },
   addItemText: {
     fontFamily: 'Poppins',
     fontWeight: '500',
@@ -405,6 +446,10 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#FFFFFF',
     opacity: 0.85,
+  },
+  addItemTextDisabled: {
+    color: '#666666',
+    opacity: 0.8,
   },
   timingSection: {
     backgroundColor: '#F5FFF5',

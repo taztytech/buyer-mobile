@@ -5,11 +5,9 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   TextInput,
   StatusBar,
   Animated,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +22,7 @@ import { homeService } from '@/services/home.service';
 import { cartService, CartSummary } from '@/services/cart.service';
 import { useCart } from '@/context/CartContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 interface CartItem {
   id: string;
@@ -74,6 +73,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [billExpanded, setBillExpanded] = useState(true);
   const [cancellationExpanded, setCancellationExpanded] = useState(true);
 
+  const showQuantityLimitAlert = () => {
+    showConfirmation({
+      title: 'Quantity limit reached',
+      message: `You can add up to ${MAX_ITEM_QUANTITY} units of each item.`,
+      confirmText: 'OK',
+      cancelText: '',
+      confirmButtonColor: '#00B14F',
+      onConfirm: () => {},
+    });
+  };
+
   // Initialize localCartItems from CartContext if cartItems prop is empty
   const [localCartItems, setLocalCartItems] = useState<CartItem[]>(() => {
     if (cartItems && cartItems.length > 0) {
@@ -101,19 +111,32 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       }];
     });
   });
+  const getLocalItemTotalQuantity = (itemId: string) => {
+    return localCartItems.reduce((sum, cartItem) => {
+      if (cartItem.id === itemId) {
+        return sum + cartItem.quantity;
+      }
+      return sum;
+    }, 0);
+  };
+
   const [selectedTip, setSelectedTip] = useState<number | null>(null);
   const [customTipAmount, setCustomTipAmount] = useState('');
   const [selfPickup, setSelfPickup] = useState(false);
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
   const [showAddressModal, setShowAddressModal] = useState(false);
-  const [selectedAddressId, setSelectedAddressId] = useState('1');
+  const [selectedAddressId, setSelectedAddressId] = useState<string | undefined>(undefined);
   const [showLocationSelection, setShowLocationSelection] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [addresses, setAddresses] = useState<AddressResponse[]>([]);
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
   const [cartSummary, setCartSummary] = useState<CartSummary | null>(null);
   const [isLoadingCartSummary, setIsLoadingCartSummary] = useState(false);
+  const [isUpdatingTip, setIsUpdatingTip] = useState(false);
+
+  // Constants
+  const MAX_TIP_AMOUNT = 100;
 
   const selectedAddress = addresses.find(addr => addr.id.toString() === selectedAddressId);
 
@@ -133,6 +156,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
+  const customTipInputRef = useRef<TextInput>(null);
 
   // Set restaurant info in CartContext when component mounts or props change
   useEffect(() => {
@@ -168,6 +192,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
       if (cartData && cartData.summary) {
         setCartSummary(cartData.summary);
+
+        // tip_amount might be in the response even if not in the type definition
+        const tipAmount = (cartData.summary as any).tip_amount;
+        if (tipAmount !== undefined && tipAmount !== null) {
+          setSelectedTip(tipAmount > 0 ? tipAmount : null);
+        }
       }
     } catch (error: any) {
       // Silently fail - cart summary is optional
@@ -185,7 +215,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       if (response.success && response.data) {
         setAddresses(response.data);
 
-        // Set the default address as selected, or first address if no default
+        // Only set the default address as selected if it exists
+        // Don't auto-select first address if no default exists - let user choose
         const defaultAddress = response.data.find(addr => addr.is_default);
         if (defaultAddress) {
           setSelectedAddressId(defaultAddress.id.toString());
@@ -205,25 +236,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               onConfirm: () => {},
             });
           }
-        } else if (response.data.length > 0) {
-          setSelectedAddressId(response.data[0].id.toString());
-
-          // Check if the first address is within serviceable area (Madurai bounds)
-          const isServiceable = homeService.isLocationServiceable(
-            response.data[0].latitude,
-            response.data[0].longitude
-          );
-
-          if (!isServiceable) {
-            showConfirmation({
-              title: 'Error',
-              message: 'Service not available at the selected location',
-              confirmText: 'OK',
-              cancelText: 'Close',
-              onConfirm: () => {},
-            });
-          }
         }
+        // If no default address exists, don't auto-select any address
+        // User will need to manually select and set one as default
       } else {
         showConfirmation({
           title: 'Error',
@@ -333,6 +348,52 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       return;
     }
 
+    // Check if user has any addresses
+    if (addresses.length === 0) {
+      showConfirmation({
+        title: 'Address Required',
+        message: 'Please add a delivery address to place your order',
+        confirmText: 'Add Address',
+        cancelText: 'Cancel',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {
+          setShowLocationSelection(true);
+        },
+      });
+      return;
+    }
+
+    // Check if an address is selected
+    if (!selectedAddressId || !selectedAddress) {
+      showConfirmation({
+        title: 'Address Required',
+        message: 'Please select a delivery address',
+        confirmText: 'Select Address',
+        cancelText: 'Cancel',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {
+          setShowAddressModal(true);
+        },
+      });
+      return;
+    }
+
+    // Check if there's a default address, if not, require user to set one
+    const hasDefaultAddress = addresses.some(addr => addr.is_default);
+    if (!hasDefaultAddress) {
+      showConfirmation({
+        title: 'Default Address Required',
+        message: 'Please set a default address before placing your order. You can set a default address in the address selection modal.',
+        confirmText: 'Select Address',
+        cancelText: 'Cancel',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {
+          setShowAddressModal(true);
+        },
+      });
+      return;
+    }
+
     // Check if the selected address is within serviceable area (Madurai bounds)
     if (selectedAddress) {
       const isServiceable = homeService.isLocationServiceable(
@@ -379,10 +440,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       const orderResponse = await ordersService.createOrder(createOrderRequest);
 
       if (orderResponse.success && orderResponse.data) {
-        // Get order data - API returns data nested under 'order' key
-        const orderData = orderResponse.data.order || orderResponse.data;
+        // Get order data - API might return data nested under 'order' key or directly
+        const responseData = orderResponse.data as any;
+        const orderData = responseData.order || responseData;
         const orderNumber = orderData.order_number || orderData.orderNumber || 'N/A';
-        const orderId = orderData.id || orderData.order_id;
+        const orderId = orderData.id || orderData.order_id || orderData.order_id;
 
         // Process online payment via Razorpay
         // Get user details for payment
@@ -409,8 +471,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             message: orderNumber !== 'N/A'
               ? `Your order #${orderNumber} has been placed and paid successfully.`
               : 'Your order has been placed and paid successfully.',
-            confirmText: 'View Order',
-            cancelText: 'Close',
+            confirmText: 'Track Order',
+            cancelText: '',
             confirmButtonColor: '#00B14F',
             showRibbon: false,
             onConfirm: () => {
@@ -488,6 +550,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // Find current item first to get proper quantity
     const currentItem = localCartItems.find(i => variantId ? i.variantId === variantId : i.id === itemId);
     if (!currentItem) return;
+    const totalQuantityForItem = getLocalItemTotalQuantity(itemId);
+    if (totalQuantityForItem >= MAX_ITEM_QUANTITY) {
+      showQuantityLimitAlert();
+      return;
+    }
 
     const newQuantity = currentItem.quantity + 1;
 
@@ -560,6 +627,93 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   };
 
+  // Calculate tip amount from selected tip or custom tip
+  const calculatedTipAmount = useMemo(() => {
+    if (selectedTip === null) return 0;
+    if (selectedTip === -1) {
+      // Custom tip amount - only use if it's been added (not just entered)
+      // For now, return 0 when "Other" is selected but not yet added
+      return 0;
+    }
+    return selectedTip;
+  }, [selectedTip, customTipAmount]);
+
+  // Handle tip selection and API call
+  const handleTipSelection = async (amount: number | null) => {
+    // If deselecting (amount is null), set tip to 0
+    const tipToSend = amount === null ? 0 : amount;
+
+    // Validate tip amount
+    if (tipToSend > MAX_TIP_AMOUNT) {
+      showConfirmation({
+        title: 'Invalid Tip Amount',
+        message: `Maximum tip amount is ₹${MAX_TIP_AMOUNT}. Please enter a lower amount.`,
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Optimistic update: Update selectedTip immediately for instant UI feedback
+    const previousTip = selectedTip;
+    setSelectedTip(amount);
+
+    try {
+      setIsUpdatingTip(true);
+      
+      // Call API to update tip in cart
+      const response = await cartService.createTip(tipToSend);
+
+      if (response.success) {
+        // Update local state        
+        // Refresh cart summary to get updated bill details
+        if (response.cart_summary) {
+          setCartSummary(response.cart_summary);
+          // Update selectedTip from API response to ensure consistency
+          // Use tip_amount from response, or fallback to what we set optimistically
+          // tip_amount might be in the response even if not in the type definition
+          const tipFromResponse = (response.cart_summary as any).tip_amount;
+          if (tipFromResponse !== undefined && tipFromResponse !== null) {
+            const finalTip = tipFromResponse > 0 ? tipFromResponse : null;
+            setSelectedTip(finalTip);
+            // If it's a custom tip (not 10, 20, 30), update customTipAmount to match
+            if (finalTip !== null && finalTip !== 10 && finalTip !== 20 && finalTip !== 30) {
+              setCustomTipAmount(finalTip.toString());
+            }
+          }
+        } else {
+          // If summary not in response, fetch it
+          await fetchCartSummary();
+        }
+      } else {
+        // Revert optimistic update on error
+        setSelectedTip(previousTip);
+        // Show error if API call failed
+        showConfirmation({
+          title: 'Error',
+          message: response.message || 'Failed to update tip amount',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
+      }
+    } catch (error: any) {
+      // Revert optimistic update on error
+      setSelectedTip(previousTip);
+      // Show error message
+      showConfirmation({
+        title: 'Error',
+        message: error.message || 'Failed to update tip amount. Please try again.',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+    } finally {
+      setIsUpdatingTip(false);
+    }
+  };
+
   // Calculate bill values optimistically from localCartItems for instant UI updates
   // Always use local calculation for item total to ensure instant updates
   // Use backend cartSummary only for fees/taxes/discounts that we can't calculate locally
@@ -588,20 +742,65 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       taxAmount = 0;
     }
     
-    // Calculate total: calculatedItemTotal + deliveryFee + taxAmount - discountAmount
+    // Calculate tip amount - use calculatedTipAmount which handles the logic
+    const tip = calculatedTipAmount;
+    
+    // Calculate total: calculatedItemTotal + deliveryFee + taxAmount + tip - discountAmount
     // Always use calculated item total for instant updates
-    const totalAmount = calculatedItemTotal + deliveryFee + taxAmount - discountAmount;
-
+    const totalAmount = calculatedItemTotal + deliveryFee + taxAmount + tip - discountAmount;
+    
     return {
       itemTotal: calculatedItemTotal, // Always use calculated value for instant updates
       deliveryFee,
       gstAndCharges: taxAmount,
       discountAmount,
+      tipAmount: tip,
       totalAmount,
     };
-  }, [localCartItems, cartSummary]);
+  }, [localCartItems, cartSummary, calculatedTipAmount]);
 
-  const { itemTotal, gstAndCharges, deliveryFee, discountAmount, totalAmount } = billValues;
+  const { itemTotal, gstAndCharges, deliveryFee, discountAmount, tipAmount, totalAmount } = billValues;
+
+  // Handle custom tip add button
+  const handleAddCustomTip = async () => {
+    const amount = parseFloat(customTipAmount);
+    
+    // Validate input
+    if (isNaN(amount) || amount <= 0) {
+      showConfirmation({
+        title: 'Invalid Amount',
+        message: 'Please enter a valid tip amount greater than 0.',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Validate max tip amount
+    if (amount > MAX_TIP_AMOUNT) {
+      showConfirmation({
+        title: 'Invalid Tip Amount',
+        message: `Maximum tip amount is ₹${MAX_TIP_AMOUNT}. Please enter a lower amount.`,
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Call API to update tip (handleTipSelection will update selectedTip optimistically)
+    await handleTipSelection(amount);
+    
+    // Keep the customTipAmount so the button can display it
+    // Don't clear it - it will be used to show the selected custom tip amount
+  };
+
+  // Handle promo code apply
+  const handleApplyPromoCode = () => {
+    console.log('Promo code entered:', promoCode);
+    // TODO: Add promo code validation and application logic
+  };
 
   // If location selection is shown, render it as an overlay
   if (showLocationSelection) {
@@ -609,7 +808,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       <View style={styles.container}>
         <LocationSelectionScreen
           onBack={() => setShowLocationSelection(false)}
-          onLocationConfirm={async (location) => {
+          onLocationConfirm={async () => {
             setShowLocationSelection(false);
             // Refresh addresses after adding new one
             await fetchAddresses();
@@ -679,6 +878,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               <View style={styles.sectionContent}>
                 {/* Order Items */}
                 {localCartItems.map((item) => {
+                  const isAtQuantityLimit = getLocalItemTotalQuantity(item.id) >= MAX_ITEM_QUANTITY;
                   const itemPrice = item.price * item.quantity;
 
                   return (
@@ -733,8 +933,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                           onPress={() => handleIncrement(item.id, item.variantId)}
                           activeOpacity={0.7}
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          disabled={isAtQuantityLimit}
                         >
-                          <Text style={styles.quantityButton}>+</Text>
+                          <Text
+                            style={[
+                              styles.quantityButton,
+                              isAtQuantityLimit && styles.quantityButtonDisabled,
+                            ]}
+                          >
+                            +
+                          </Text>
                         </TouchableOpacity>
                       </View>
                       <View style={styles.priceContainer}>
@@ -767,61 +975,86 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
           {/* Delivery Details Section */}
           <View style={styles.section}>
-            <TouchableOpacity
-              style={styles.sectionHeader}
-              onPress={() => setDeliveryExpanded(!deliveryExpanded)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.sectionTitle}>Delivery Details</Text>
-              <MaterialIcons
-                name={deliveryExpanded ? 'expand-less' : 'expand-more'}
-                size={24}
-                color="#000000"
-              />
-            </TouchableOpacity>
-
-            {deliveryExpanded && (
+            {addresses.length === 0 ? (
+              // Show only Add Address button when no addresses exist
               <View style={styles.sectionContent}>
-                {/* Delivery At */}
-                <View style={styles.subsection}>
-                  <Text style={styles.subsectionTitle}>Delivery At</Text>
-                  <TouchableOpacity
-                    style={styles.deliveryAtBox}
-                    activeOpacity={0.7}
-                    onPress={() => setShowAddressModal(true)}
-                  >
-                    <View style={styles.deliveryAtContent}>
-                      <MaterialIcons name="location-on" size={20} color="#00B14F" />
-                      <Text style={styles.deliveryAtText} numberOfLines={1}>
-                        {selectedAddress ? formatAddress(selectedAddress) : deliveryAddress}
-                      </Text>
-                    </View>
-                    <MaterialIcons name="expand-more" size={20} color="rgba(0, 0, 0, 0.5)" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Delivery Duration */}
-                <View style={styles.subsection}>
-                  <Text style={styles.subsectionTitle}>Delivery Duration</Text>
-                  <View style={styles.deliveryTimeBox}>
-                    <MaterialIcons name="access-time" size={20} color="#00B14F" />
-                    <Text style={styles.deliveryTimeText}>
-                      Delivery in <Text style={styles.deliveryTimeBold}>15 - 20 mins</Text>
-                    </Text>
-                  </View>
-                </View>
+                <TouchableOpacity
+                  style={styles.addAddressButton}
+                  activeOpacity={0.7}
+                  onPress={() => setShowLocationSelection(true)}
+                >
+                  <MaterialIcons name="add-location" size={20} color="#00B14F" />
+                  <Text style={styles.addAddressButtonText}>Add Address</Text>
+                </TouchableOpacity>
               </View>
+            ) : (
+              // Show full delivery details when addresses exist
+              <>
+                <TouchableOpacity
+                  style={styles.sectionHeader}
+                  onPress={() => setDeliveryExpanded(!deliveryExpanded)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.sectionTitle}>Delivery Details</Text>
+                  <MaterialIcons
+                    name={deliveryExpanded ? 'expand-less' : 'expand-more'}
+                    size={24}
+                    color="#000000"
+                  />
+                </TouchableOpacity>
+
+                {deliveryExpanded && (
+                  <View style={styles.sectionContent}>
+                    {/* Delivery At */}
+                    <View style={styles.subsection}>
+                      <Text style={styles.subsectionTitle}>Delivery At</Text>
+                      <TouchableOpacity
+                        style={styles.deliveryAtBox}
+                        activeOpacity={0.7}
+                        onPress={() => setShowAddressModal(true)}
+                      >
+                        <View style={styles.deliveryAtContent}>
+                          <MaterialIcons name="location-on" size={20} color="#00B14F" />
+                          <Text 
+                            style={[
+                              styles.deliveryAtText,
+                              !selectedAddress && styles.deliveryAtTextPlaceholder
+                            ]} 
+                            numberOfLines={1}
+                          >
+                            {selectedAddress 
+                              ? formatAddress(selectedAddress) 
+                              : 'Select a default address before placing order'}
+                          </Text>
+                        </View>
+                        <MaterialIcons name="expand-more" size={20} color="rgba(0, 0, 0, 0.5)" />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Delivery Duration */}
+                    <View style={styles.subsection}>
+                      <Text style={styles.subsectionTitle}>Delivery Duration</Text>
+                      <View style={styles.deliveryTimeBox}>
+                        <MaterialIcons name="access-time" size={20} color="#00B14F" />
+                        <Text style={styles.deliveryTimeText}>
+                          Delivery in <Text style={styles.deliveryTimeBold}>15 - 20 mins</Text>
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </>
             )}
           </View>
 
-          {/* Tip Section - HIDDEN/DISABLED */}
-          {/* <View style={styles.section}>
+          {/* Tip Section */}
+          <View style={styles.section}>
             <TouchableOpacity
               style={styles.sectionHeader}
               onPress={() => setTipExpanded(!tipExpanded)}
               activeOpacity={0.7}
             >
-              <Text style={styles.sectionTitle}>Tip for your delivery partner</Text>
+              <Text style={styles.sectionTitle}>Add a Tip</Text>
               <MaterialIcons
                 name={tipExpanded ? 'expand-less' : 'expand-more'}
                 size={24}
@@ -838,12 +1071,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                       style={[
                         styles.tipButton,
                         selectedTip === amount && styles.tipButtonSelected,
+                        isUpdatingTip && styles.tipButtonDisabled,
                       ]}
                       onPress={() => {
-                        setSelectedTip(selectedTip === amount ? null : amount);
+                        if (isUpdatingTip) return;
+                        // Toggle: if already selected, deselect (send 0), otherwise select (send amount)
+                        const newTip = selectedTip === amount ? null : amount;
+                        handleTipSelection(newTip);
                         setCustomTipAmount(''); // Clear custom amount when selecting preset
                       }}
                       activeOpacity={0.7}
+                      disabled={isUpdatingTip}
                     >
                       <Text
                         style={[
@@ -855,38 +1093,121 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                       </Text>
                     </TouchableOpacity>
                   ))}
-                  <TouchableOpacity
-                    style={[
-                      styles.tipButton,
-                      selectedTip === -1 && styles.tipButtonSelected,
-                    ]}
-                    onPress={() => setSelectedTip(selectedTip === -1 ? null : -1)}
-                    activeOpacity={0.7}
-                  >
-                    <Text
+                  {/* Show entered amount as button if user has typed something OR if a custom tip is selected, otherwise show "Other" */}
+                  {(customTipAmount && customTipAmount.trim() !== '') || (selectedTip !== null && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30 && selectedTip !== -1) ? (
+                    <TouchableOpacity
                       style={[
-                        styles.tipButtonText,
-                        selectedTip === -1 && styles.tipButtonTextSelected,
+                        styles.tipButton,
+                        (selectedTip === -1 || (selectedTip !== null && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30)) && styles.tipButtonSelected,
+                        isUpdatingTip && styles.tipButtonDisabled,
                       ]}
+                      onPress={() => {
+                        if (isUpdatingTip) return;
+                        // Clicking the entered amount button allows editing
+                        // If we have a selected custom tip amount, populate the input with it
+                        if (selectedTip !== null && selectedTip !== -1 && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30) {
+                          setCustomTipAmount(selectedTip.toString());
+                        }
+                        // Set selectedTip to -1 to show input field and focus it
+                        setSelectedTip(-1);
+                        // Focus the input field after a short delay to ensure it's rendered
+                        setTimeout(() => {
+                          customTipInputRef.current?.focus();
+                        }, 100);
+                      }}
+                      activeOpacity={0.7}
+                      disabled={isUpdatingTip}
                     >
-                      Other
-                    </Text>
-                  </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.tipButtonText,
+                          (selectedTip === -1 || (selectedTip !== null && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30)) && styles.tipButtonTextSelected,
+                        ]}
+                      >
+                        ₹{(() => {
+                          // Show customTipAmount if available, otherwise show selectedTip if it's a custom amount
+                          if (customTipAmount && customTipAmount.trim() !== '') {
+                            return customTipAmount;
+                          }
+                          if (selectedTip !== null && selectedTip !== -1 && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30) {
+                            return selectedTip.toString();
+                          }
+                          return '0';
+                        })()}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[
+                        styles.tipButton,
+                        selectedTip === -1 && styles.tipButtonSelected,
+                        isUpdatingTip && styles.tipButtonDisabled,
+                      ]}
+                      onPress={() => {
+                        if (isUpdatingTip) return;
+                        if (selectedTip === -1) {
+                          // If already selected, deselect it (send 0)
+                          handleTipSelection(null);
+                          setCustomTipAmount('');
+                        } else {
+                          // Just show input, don't call API yet
+                          // Update state immediately for instant UI feedback
+                          setSelectedTip(-1);
+                          setCustomTipAmount('');
+                        }
+                      }}
+                      activeOpacity={0.7}
+                      disabled={isUpdatingTip}
+                    >
+                      <Text
+                        style={[
+                          styles.tipButtonText,
+                          selectedTip === -1 && styles.tipButtonTextSelected,
+                        ]}
+                      >
+                        Other
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 {selectedTip === -1 && (
                   <View style={styles.customTipContainer}>
                     <Text style={styles.customTipLabel}>Enter custom tip amount</Text>
-                    <View style={styles.customTipInputContainer}>
-                      <Text style={styles.rupeeSymbol}>₹</Text>
-                      <TextInput
-                        style={styles.customTipInput}
-                        placeholder="0"
-                        placeholderTextColor="rgba(0, 0, 0, 0.4)"
-                        value={customTipAmount}
-                        onChangeText={setCustomTipAmount}
-                        keyboardType="number-pad"
-                      />
+                    <View style={styles.customTipInputRow}>
+                      <View style={styles.customTipInputContainer}>
+                        <Text style={styles.rupeeSymbol}>₹</Text>
+                        <TextInput
+                          ref={customTipInputRef}
+                          style={styles.customTipInput}
+                          placeholder="0"
+                          placeholderTextColor="rgba(0, 0, 0, 0.4)"
+                          value={customTipAmount}
+                          onChangeText={(text) => {
+                            // Only allow numbers and decimal point
+                            const numericValue = text.replace(/[^0-9.]/g, '');
+                            // Prevent multiple decimal points
+                            const parts = numericValue.split('.');
+                            const formattedValue = parts.length > 2 
+                              ? parts[0] + '.' + parts.slice(1).join('')
+                              : numericValue;
+                            setCustomTipAmount(formattedValue);
+                          }}
+                          keyboardType="number-pad"
+                        />
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.addTipButton, isUpdatingTip && styles.addTipButtonDisabled]}
+                        onPress={handleAddCustomTip}
+                        activeOpacity={0.7}
+                        disabled={isUpdatingTip}
+                      >
+                        {isUpdatingTip ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text style={styles.addTipButtonText}>Add</Text>
+                        )}
+                      </TouchableOpacity>
                     </View>
                   </View>
                 )}
@@ -896,16 +1217,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 </Text>
               </View>
             )}
-          </View> */}
+          </View>
 
-          {/* Apply Promo Code Section - HIDDEN/DISABLED */}
-          {/* <View style={styles.section}>
+          {/* Apply Promo Code Section */}
+          <View style={styles.section}>
             <TouchableOpacity
               style={styles.sectionHeader}
               onPress={() => setPromoExpanded(!promoExpanded)}
               activeOpacity={0.7}
             >
-              <Text style={styles.sectionTitle}>Apply Promo Code</Text>
+              <Text style={styles.sectionTitle}>Promo Code</Text>
               <MaterialIcons
                 name={promoExpanded ? 'expand-less' : 'expand-more'}
                 size={24}
@@ -923,13 +1244,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                     value={promoCode}
                     onChangeText={setPromoCode}
                   />
-                  <TouchableOpacity style={styles.applyButton} activeOpacity={0.8}>
-                    <Text style={styles.applyButtonText}>APPLY</Text>
+                  <TouchableOpacity
+                    style={styles.applyButton}
+                    onPress={handleApplyPromoCode}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.applyButtonText}>Apply</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             )}
-          </View> */}
+          </View>
 
           {/* Bill Details Section */}
           <View style={styles.section}>
@@ -956,6 +1281,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   <Text style={styles.billLabel}>Delivery Fee</Text>
                   <Text style={styles.billValue}>₹{deliveryFee.toFixed(2)}</Text>
                 </View>
+                {tipAmount > 0 && (
+                  <View style={styles.billRow}>
+                    <Text style={styles.billLabel}>Delivery Partner tip</Text>
+                    <Text style={styles.billValue}>₹{tipAmount.toFixed(2)}</Text>
+                  </View>
+                )}
                 <View style={styles.billRow}>
                   <Text style={styles.billLabel}>Taxes and Charges</Text>
                   <Text style={styles.billValue}>₹{gstAndCharges.toFixed(2)}</Text>
@@ -1045,7 +1376,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         onClose={() => setShowAddressModal(false)}
         addresses={addresses}
         selectedAddressId={selectedAddressId}
-        onSelectAddress={(addressId) => {
+        onSelectAddress={async (addressId) => {
           // Find the address and check if it's within serviceable area (Madurai bounds)
           const address = addresses.find(addr => addr.id.toString() === addressId);
 
@@ -1074,6 +1405,38 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         onAddNewAddress={() => {
           setShowAddressModal(false);
           setShowLocationSelection(true);
+        }}
+        onSetDefaultAddress={async (addressId) => {
+          try {
+            const updateResponse = await addressService.updateAddress(addressId, {
+              is_default: true,
+            });
+
+            if (updateResponse.success) {
+              // Refresh addresses to get updated list
+              await fetchAddresses();
+              // Also select this address if not already selected
+              if (selectedAddressId !== addressId) {
+                setSelectedAddressId(addressId);
+              }
+            } else {
+              showConfirmation({
+                title: 'Error',
+                message: updateResponse.error || 'Failed to set default address',
+                confirmText: 'OK',
+                cancelText: 'Close',
+                onConfirm: () => {},
+              });
+            }
+          } catch (error: any) {
+            showConfirmation({
+              title: 'Error',
+              message: error.message || 'Failed to set default address',
+              confirmText: 'OK',
+              cancelText: 'Close',
+              onConfirm: () => {},
+            });
+          }
         }}
       />
     </View>
@@ -1257,6 +1620,9 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: '#00B14F',
   },
+  quantityButtonDisabled: {
+    opacity: 0.4,
+  },
   quantityText: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 12,
@@ -1353,6 +1719,29 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
   },
+  deliveryAtTextPlaceholder: {
+    color: 'rgba(0, 0, 0, 0.4)',
+    fontStyle: 'italic',
+  },
+  addAddressButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+    padding: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#00B14F',
+    borderStyle: 'dashed',
+    marginTop: 8,
+  },
+  addAddressButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#00B14F',
+  },
   deliveryOptionBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1447,6 +1836,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Poppins_600SemiBold',
   },
+  tipButtonDisabled: {
+    opacity: 0.5,
+  },
   tipInfo: {
     fontFamily: 'Poppins',
     fontWeight: '400',
@@ -1466,7 +1858,13 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.6)',
     marginBottom: 8,
   },
+  customTipInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   customTipInputContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
@@ -1475,6 +1873,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  addTipButton: {
+    backgroundColor: '#00B14F',
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addTipButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#FFFFFF',
+  },
+  addTipButtonDisabled: {
+    opacity: 0.6,
   },
   rupeeSymbol: {
     fontFamily: 'Poppins_600SemiBold',
@@ -1518,6 +1933,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    minWidth: 80,
   },
   applyButtonText: {
     fontFamily: 'Poppins_700Bold',

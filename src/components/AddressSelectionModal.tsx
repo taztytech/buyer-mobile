@@ -25,6 +25,7 @@ interface AddressSelectionModalProps {
   selectedAddressId?: string;
   onSelectAddress: (addressId: string) => void;
   onAddNewAddress: () => void;
+  onSetDefaultAddress?: (addressId: string) => Promise<void>;
 }
 
 export const AddressSelectionModal: React.FC<AddressSelectionModalProps> = ({
@@ -34,6 +35,7 @@ export const AddressSelectionModal: React.FC<AddressSelectionModalProps> = ({
   selectedAddressId,
   onSelectAddress,
   onAddNewAddress,
+  onSetDefaultAddress,
 }) => {
   const slideAnim = useRef(new Animated.Value(1000)).current;
   const [selectedId, setSelectedId] = useState(selectedAddressId);
@@ -52,11 +54,29 @@ export const AddressSelectionModal: React.FC<AddressSelectionModalProps> = ({
   }, [visible]);
 
   useEffect(() => {
-    setSelectedId(selectedAddressId);
-  }, [selectedAddressId]);
+    // Use the provided selectedAddressId if available, otherwise pre-select default address only if it exists
+    if (selectedAddressId) {
+      setSelectedId(selectedAddressId);
+    } else {
+      // Only pre-select default address if it exists
+      // Don't auto-select first address if no default exists
+      const defaultAddress = addresses.find(addr => addr.is_default);
+      if (defaultAddress) {
+        setSelectedId(defaultAddress.id.toString());
+      }
+      // If no default address, don't pre-select any address - let user choose
+    }
+  }, [selectedAddressId, addresses]);
 
-  const handleSelectAddress = (addressId: string) => {
+  const handleSelectAddress = async (addressId: string) => {
     setSelectedId(addressId);
+    
+    // If there's no default address, automatically set the selected one as default
+    const hasDefaultAddress = addresses.some(addr => addr.is_default);
+    if (!hasDefaultAddress && onSetDefaultAddress) {
+      await onSetDefaultAddress(addressId);
+    }
+    
     onSelectAddress(addressId);
   };
 
@@ -138,7 +158,14 @@ export const AddressSelectionModal: React.FC<AddressSelectionModalProps> = ({
                         />
                       </View>
                       <View style={styles.addressInfo}>
-                        <Text style={styles.addressLabel}>{getAddressLabel(address.type)}</Text>
+                        <View style={styles.addressLabelRow}>
+                          <Text style={styles.addressLabel}>{getAddressLabel(address.type)}</Text>
+                          {address.is_default && (
+                            <View style={styles.defaultBadge}>
+                              <Text style={styles.defaultBadgeText}>Default</Text>
+                            </View>
+                          )}
+                        </View>
                         <Text style={styles.addressText}>{formatAddress(address)}</Text>
                       </View>
                     </View>
@@ -231,11 +258,28 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 5,
   },
+  addressLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   addressLabel: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#000000',
+  },
+  defaultBadge: {
+    backgroundColor: '#00B14F',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  defaultBadgeText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 10,
+    lineHeight: 12,
+    color: '#FFFFFF',
   },
   addressText: {
     fontFamily: 'Poppins',
