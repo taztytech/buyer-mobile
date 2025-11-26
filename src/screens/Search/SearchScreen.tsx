@@ -15,6 +15,7 @@ import { searchService, SearchSuggestion } from '@/services/search.service';
 import { SearchBar } from '@/components/SearchBar';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useVegMode } from '@/context/VegModeContext';
 
 // Default location fallback (same as HomeScreen)
 const DEFAULT_LOCATION = {
@@ -49,6 +50,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const { vegMode } = useVegMode();
 
   // Get user location on mount or when selectedLocation changes
   useEffect(() => {
@@ -117,13 +119,12 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     debounceTimer.current = setTimeout(async () => {
       try {
         // Pass location if available, otherwise search without location filter
-        const response = userLocation
-          ? await searchService.getSearchSuggestions(
-              searchQuery,
-              userLocation.lat,
-              userLocation.lng
-            )
-          : await searchService.getSearchSuggestions(searchQuery);
+        const response = await searchService.getSearchSuggestions(
+          searchQuery,
+          userLocation?.lat,
+          userLocation?.lng,
+          vegMode
+        );
 
         if (response.success && response.data) {
           // Combine items and restaurants into a single array
@@ -156,7 +157,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         clearTimeout(debounceTimer.current);
       }
     };
-  }, [searchQuery, userLocation]);
+  }, [searchQuery, userLocation, vegMode]);
 
   const renderSearchResult = ({ item, index }: { item: SearchSuggestion; index?: number }) => {
     // Get image URL

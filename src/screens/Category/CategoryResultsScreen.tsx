@@ -160,7 +160,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
 
       // Add veg mode parameter if active
       if (vegMode && vegMode !== 'off') {
-        apiEndpoint += `&veg_mode=${vegMode}`;
+        apiEndpoint += `&veg_mode=${vegMode}&dietary_preference=veg`;
       }
 
       // Add minimum delay to show shimmer animation
@@ -234,7 +234,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
 
       // Add veg mode parameter if active
       if (vegMode && vegMode !== 'off') {
-        apiEndpoint += `&veg_mode=${vegMode}`;
+        apiEndpoint += `&veg_mode=${vegMode}&dietary_preference=veg`;
       }
 
       const response = await apiService.get(apiEndpoint);
