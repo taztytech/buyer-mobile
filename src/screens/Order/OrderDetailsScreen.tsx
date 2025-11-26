@@ -471,8 +471,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             message: orderNumber !== 'N/A'
               ? `Your order #${orderNumber} has been placed and paid successfully.`
               : 'Your order has been placed and paid successfully.',
-            confirmText: 'View Order',
-            cancelText: 'Close',
+            confirmText: 'Track Order',
+            cancelText: '',
             confirmButtonColor: '#00B14F',
             showRibbon: false,
             onConfirm: () => {
