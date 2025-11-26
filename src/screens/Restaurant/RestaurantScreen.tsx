@@ -121,7 +121,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   onNavigateToDetails,
   onNavigateToCheckout,
 }) => {
-  const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, checkRestaurantConflict } = useCart();
+  const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, reloadCart, checkRestaurantConflict, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName, restaurantLogo: cartRestaurantLogo } = useCart();
   const { vegMode, setVegMode } = useVegMode();
   const { showConfirmation } = useConfirmation();
   const insets = useSafeAreaInsets();
@@ -269,54 +269,70 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     return cartItem.quantity || 0;
   };
 
-  const isItemAtMaxQuantity = (itemId: string): boolean => getItemQuantity(itemId) >= MAX_ITEM_QUANTITY;
+  // Flatten cart items for order details - convert variants into separate line items
+  const getFlattenedCartItems = () => {
+    const flattenedItems: any[] = [];
 
-  const getRemainingQuantityForItem = (itemId: string): number =>
-    Math.max(0, MAX_ITEM_QUANTITY - getItemQuantity(itemId));
-
-  const showMaxQuantityAlert = () => {
-    showConfirmation({
-      title: 'Quantity limit reached',
-      message: `You can add up to ${MAX_ITEM_QUANTITY} units of each item.`,
-      confirmText: 'OK',
-      cancelText: '',
-      confirmButtonColor: '#00B14F',
-      onConfirm: () => {},
+    Object.values(cart).forEach(cartItem => {
+      if (cartItem.isCustomizable && cartItem.variants) {
+        // For customizable items, add each variant as a separate line item
+        cartItem.variants.forEach(variant => {
+          const item = {
+            id: cartItem.id,  // Original item ID
+            variantId: variant.id,  // Variant ID
+            addOnIds: variant.addOns,  // Array of add-on IDs
+            name: cartItem.name,
+            price: variant.price,
+            quantity: variant.quantity,
+            isVeg: cartItem.isVeg,
+            image: cartItem.image,
+            // Always include customizations text
+            customizations: variant.addOnNames?.length
+              ? variant.addOnNames.join(', ')
+              : '',
+          };
+          flattenedItems.push(item);
+        });
+      } else {
+        // For regular items, add as-is
+        const item = {
+          id: cartItem.id,
+          name: cartItem.name,
+          price: cartItem.price,
+          quantity: cartItem.quantity || 0,
+          isVeg: cartItem.isVeg,
+          image: cartItem.image,
+        };
+        flattenedItems.push(item);
+      }
     });
+
+    return flattenedItems;
   };
 
-  const ensureUnderQuantityLimit = (itemId: string): boolean => {
-    if (isItemAtMaxQuantity(itemId)) {
-      showMaxQuantityAlert();
-      return false;
-    }
-    return true;
-  };
-
-
-  // Add item to cart (for non-customizable items)
   const addToCart = (item: MenuItem) => {
-    if (!ensureUnderQuantityLimit(item.id)) {
-      return;
-    }
-    // Check if there's a restaurant conflict
-    if (checkRestaurantConflict(restaurantId)) {
+    const cartItemCount = Object.keys(cart).length;
+    const hasConflict = cartItemCount > 0 && 
+                       (cartRestaurantId === null || cartRestaurantId !== restaurantId);
+    
+    if (hasConflict) {
       showConfirmation({
         title: 'Replace cart item?',
         message: 'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
         confirmText: 'Replace',
         cancelText: 'Cancel',
         confirmButtonColor: '#FF0000',
-        onConfirm: () => {
-          // Clear cart and add new item
-          clearCart();
+        onConfirm: async () => {
+          await clearCart();
           setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
           addToCartContext({
             id: item.id,
+            itemId: parseInt(item.id, 10),
             name: item.name,
             price: item.price,
             quantity: 1,
             isVeg: item.isVeg,
+            image: item.image,
             isCustomizable: false,
           }, restaurantId);
         },
@@ -324,12 +340,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       return;
     }
 
-    // Always ensure restaurant info is set before adding items
     setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
-
-    // Pass restaurantId directly to avoid race condition
     addToCartContext({
       id: item.id,
+      itemId: parseInt(item.id, 10),
       name: item.name,
       price: item.price,
       quantity: 1,
@@ -374,23 +388,20 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     updateQuantity(itemId, quantity - 1); // updateQuantity will remove if quantity becomes 0
   };
 
-  // Handle opening customization modal
   const handleCustomizableItemClick = (item: MenuItem) => {
-    if (getRemainingQuantityForItem(item.id) <= 0) {
-      showMaxQuantityAlert();
-      return;
-    }
-    // Check if there's a restaurant conflict
-    if (checkRestaurantConflict(restaurantId)) {
+    const cartItemCount = Object.keys(cart).length;
+    const hasConflict = cartItemCount > 0 && 
+                       (cartRestaurantId === null || cartRestaurantId !== restaurantId);
+    
+    if (hasConflict) {
       showConfirmation({
         title: 'Replace cart item?',
         message: 'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
         confirmText: 'Replace',
         cancelText: 'Cancel',
         confirmButtonColor: '#FF0000',
-        onConfirm: () => {
-          // Clear cart and open customization modal
-          clearCart();
+        onConfirm: async () => {
+          await clearCart();
           setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
           setSelectedCustomizableItem(item);
           setShowCustomizationModal(true);
@@ -399,9 +410,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       return;
     }
 
-    // Always ensure restaurant info is set
     setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
-
     setSelectedCustomizableItem(item);
     setShowCustomizationModal(true);
   };
@@ -748,7 +757,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const hasNoItemsAtAll = !isLoading && menuSections.length === 0;
   const hasNoVegItems = vegMode === 'all' && filteredMenuSections.length === 0 && menuSections.length > 0;
 
-  // Handle adding item from detail modal
   const handleAddFromDetail = (itemId: string, quantity: number) => {
     if (quantity > MAX_ITEM_QUANTITY) {
       showMaxQuantityAlert();
@@ -763,79 +771,73 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       .flatMap(section => section.items)
       .find(i => i.id === itemId);
 
-    if (item) {
-      const safeQuantity = Math.min(quantity, MAX_ITEM_QUANTITY);
+    if (!item) return;
+
+    const cartItemCount = Object.keys(cart).length;
+    const hasConflict = cartItemCount > 0 && 
+                       (cartRestaurantId === null || cartRestaurantId !== restaurantId);
+    
+    if (hasConflict) {
+      showConfirmation({
+        title: 'Replace cart item?',
+        message: 'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
+        confirmText: 'Replace',
+        cancelText: 'Cancel',
+        confirmButtonColor: '#FF0000',
+        onConfirm: async () => {
+          await clearCart();
+          setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
+          const safeQuantity = Math.min(quantity, MAX_ITEM_QUANTITY);
       if (safeQuantity <= 0) {
         return;
       }
       
-      // Check if item already exists in cart
-      const existingCartItem = cart[itemId];
-      
-      if (existingCartItem) {
-        // Increment existing quantity
-        const currentQuantity = existingCartItem.quantity || 0;
-        const newQuantity = Math.min(currentQuantity + safeQuantity, MAX_ITEM_QUANTITY);
-        updateQuantity(itemId, newQuantity);
-      } else {
-        // Add new item to cart
-        // Check if there's a restaurant conflict
-        if (checkRestaurantConflict(restaurantId)) {
-          showConfirmation({
-            title: 'Replace cart item?',
-            message: 'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
-            confirmText: 'Replace',
-            cancelText: 'Cancel',
-            confirmButtonColor: '#FF0000',
-            onConfirm: () => {
-              // Clear cart and add new item
-              clearCart();
-              setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
-              addToCartContext({
-                id: item.id,
-                name: item.name,
-                price: item.price,
-                quantity: safeQuantity,
-                isVeg: item.isVeg,
-                isCustomizable: false,
-                image: item.image,
-              }, restaurantId);
-            },
-          });
-          return;
-        }
-
-        // Always ensure restaurant info is set before adding items
-        setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
-
-        // Pass restaurantId directly to avoid race condition
-        addToCartContext({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: safeQuantity,
-          isVeg: item.isVeg,
-          image: item.image,
-          isCustomizable: false,
-        }, restaurantId);
-      }
+      addToCartContext({
+            id: item.id,
+            itemId: parseInt(item.id, 10),
+            name: item.name,
+            price: item.price,
+            quantity: quantity,
+            isVeg: item.isVeg,
+            image: item.image,
+            isCustomizable: false,
+          }, restaurantId);
+        },
+      });
+      return;
     }
+
+    setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
+    addToCartContext({
+      id: item.id,
+      itemId: parseInt(item.id, 10),
+      name: item.name,
+      price: item.price,
+      quantity: quantity,
+      isVeg: item.isVeg,
+      image: item.image,
+      isCustomizable: false,
+    }, restaurantId);
   };
 
-  // Fetch restaurant details from API
+  const cartReloadedRef = useRef(false);
+
   useEffect(() => {
     if (visible && restaurantId) {
-      // Reset scroll immediately when becoming visible
       if (scrollViewRef.current) {
         scrollViewRef.current.scrollTo({ y: 0, animated: false });
       }
-      // Set loading state immediately when becoming visible to show loading instead of "No menu available"
-      setIsLoading(true);
+      
+      if (!cartReloadedRef.current) {
+        reloadCart().catch(() => {});
+        cartReloadedRef.current = true;
+      }
+      
       fetchRestaurantDetails();
     } else if (!visible) {
-      // Clear data when screen is not visible to prevent showing old cache
       setRestaurantData(null);
       setMenuSections([]);
+      cartReloadedRef.current = false;
     }
   }, [visible, restaurantId]);
 
@@ -1579,7 +1581,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             style={styles.cartButton}
             onPress={() => {
               // Navigate to checkout page
-              if (onNavigateToCheckout) {
+              if (onNavigateToCheckout && cartRestaurantId) {
+                // Use cart's restaurant info (the restaurant whose items are in the cart)
                 // Build restaurant address from available data
                 const restaurantAddress = restaurantData?.locations?.[0]?.address ||
                   restaurantData?.location?.address ||
@@ -1589,7 +1592,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   ].filter(Boolean).join(', ') ||
                   'Restaurant Address';
 
-                onNavigateToCheckout(restaurantId, restaurantData?.name || restaurantName, restaurantAddress, 'restaurant');
+                onNavigateToCheckout(cartRestaurantId, cartRestaurantName || 'Restaurant', restaurantAddress, 'restaurant');
               }
             }}
             activeOpacity={0.8}

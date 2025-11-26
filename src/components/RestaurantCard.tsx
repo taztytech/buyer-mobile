@@ -219,15 +219,19 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
 
         {/* Rating and Delivery Time */}
         <View style={styles.ratingDeliveryRow}>
-          <View style={styles.ratingContainer}>
-            <MaterialIcons name="star" size={16} color="#00B14F" />
-            <Text style={styles.ratingText}>
-              {restaurant.rating.toFixed(1)} ({restaurant.reviewCount && restaurant.reviewCount >= 1000
-                ? `${(restaurant.reviewCount / 1000).toFixed(1)}K+`
-                : restaurant.reviewCount || '0'})
-            </Text>
-          </View>
-          <Text style={styles.deliveryDot}>•</Text>
+          {(restaurant.reviewCount && restaurant.reviewCount > 0) && (
+            <>
+              <View style={styles.ratingContainer}>
+                <MaterialIcons name="star" size={16} color="#00B14F" />
+                <Text style={styles.ratingText}>
+                  {restaurant.rating.toFixed(1)} ({restaurant.reviewCount >= 1000
+                    ? `${(restaurant.reviewCount / 1000).toFixed(1)}K+`
+                    : restaurant.reviewCount})
+                </Text>
+              </View>
+              <Text style={styles.deliveryDot}>•</Text>
+            </>
+          )}
           <Text style={styles.deliveryText}>{restaurant.deliveryTime}</Text>
         </View>
 

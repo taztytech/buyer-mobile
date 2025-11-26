@@ -1947,23 +1947,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </ScrollView>
       </SafeAreaView>
 
-      {/* View Cart Bar - shows when cart has items */}
-      <ViewCartBar
-        onPress={() => {
-          // Navigate directly to checkout page
-          if (restaurantId && onNavigateToCheckout) {
-            onNavigateToCheckout(restaurantId, restaurantName, 'home');
-          }
-        }}
-        onViewMenu={() => {
-          // Navigate to restaurant menu
-          if (restaurantId && onNavigateToRestaurant) {
-            onNavigateToRestaurant(restaurantId, restaurantName);
-          }
-        }}
-        restaurantLogo={restaurantLogo}
-        deliveryLocation={selectedLocation.name}
-      />
+      {/* View Cart Bar - shows when cart has items and location is serviceable */}
+      {isLocationServiceable && (
+        <ViewCartBar
+          onPress={() => {
+            // Navigate directly to checkout page
+            if (restaurantId && onNavigateToCheckout) {
+              onNavigateToCheckout(restaurantId, restaurantName, 'home');
+            }
+          }}
+          onViewMenu={() => {
+            // Navigate to restaurant menu
+            if (restaurantId && onNavigateToRestaurant) {
+              onNavigateToRestaurant(restaurantId, restaurantName);
+            }
+          }}
+          restaurantLogo={restaurantLogo}
+          deliveryLocation={selectedLocation.name}
+        />
+      )}
 
       {/* Category Modal */}
       <CategoryModal

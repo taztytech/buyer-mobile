@@ -49,11 +49,12 @@ class AddressService {
 
   /**
    * Clear the address cache
-   * Call this after adding, updating, or deleting an address
+   * Call this after adding, updating, or deleting an address, or when switching accounts
    */
-  private clearCache(): void {
+  clearCache(): void {
     this.addressCache = null;
     this.cacheTimestamp = null;
+    this.inFlightRequest = null;
   }
 
   /**
