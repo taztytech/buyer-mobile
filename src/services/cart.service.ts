@@ -5,6 +5,7 @@
 
 import { apiService } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
+import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 // Type definitions for cart
 export interface CartCustomization {
@@ -96,6 +97,9 @@ class CartService {
    * Add item to cart
    */
   async addToCart(data: AddToCartRequest): Promise<AddToCartResponse> {
+    if (data.quantity > MAX_ITEM_QUANTITY) {
+      throw new Error(`Maximum quantity per item is ${MAX_ITEM_QUANTITY}`);
+    }
     try {
       const response = await apiService.post<AddToCartResponse>(
         API_CONFIG.ENDPOINTS.BUYER.CART_ADD,
@@ -160,6 +164,9 @@ class CartService {
       special_instructions?: string;
     }
   ): Promise<{ success: boolean; cart_summary?: CartSummary }> {
+    if (updates.quantity && updates.quantity > MAX_ITEM_QUANTITY) {
+      throw new Error(`Maximum quantity per item is ${MAX_ITEM_QUANTITY}`);
+    }
     try {
       const response = await apiService.put(
         API_CONFIG.ENDPOINTS.BUYER.CART_UPDATE,

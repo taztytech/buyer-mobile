@@ -22,6 +22,7 @@ import { homeService } from '@/services/home.service';
 import { cartService, CartSummary } from '@/services/cart.service';
 import { useCart } from '@/context/CartContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 interface CartItem {
   id: string;
@@ -72,6 +73,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [billExpanded, setBillExpanded] = useState(true);
   const [cancellationExpanded, setCancellationExpanded] = useState(true);
 
+  const showQuantityLimitAlert = () => {
+    showConfirmation({
+      title: 'Quantity limit reached',
+      message: `You can add up to ${MAX_ITEM_QUANTITY} units of each item.`,
+      confirmText: 'OK',
+      cancelText: '',
+      confirmButtonColor: '#00B14F',
+      onConfirm: () => {},
+    });
+  };
+
   // Initialize localCartItems from CartContext if cartItems prop is empty
   const [localCartItems, setLocalCartItems] = useState<CartItem[]>(() => {
     if (cartItems && cartItems.length > 0) {
@@ -99,6 +111,15 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       }];
     });
   });
+  const getLocalItemTotalQuantity = (itemId: string) => {
+    return localCartItems.reduce((sum, cartItem) => {
+      if (cartItem.id === itemId) {
+        return sum + cartItem.quantity;
+      }
+      return sum;
+    }, 0);
+  };
+
   const [selectedTip, setSelectedTip] = useState<number | null>(null);
   const [customTipAmount, setCustomTipAmount] = useState('');
   const [selfPickup, setSelfPickup] = useState(false);
@@ -529,6 +550,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // Find current item first to get proper quantity
     const currentItem = localCartItems.find(i => variantId ? i.variantId === variantId : i.id === itemId);
     if (!currentItem) return;
+    const totalQuantityForItem = getLocalItemTotalQuantity(itemId);
+    if (totalQuantityForItem >= MAX_ITEM_QUANTITY) {
+      showQuantityLimitAlert();
+      return;
+    }
 
     const newQuantity = currentItem.quantity + 1;
 
@@ -852,6 +878,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               <View style={styles.sectionContent}>
                 {/* Order Items */}
                 {localCartItems.map((item) => {
+                  const isAtQuantityLimit = getLocalItemTotalQuantity(item.id) >= MAX_ITEM_QUANTITY;
                   const itemPrice = item.price * item.quantity;
 
                   return (
@@ -906,8 +933,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                           onPress={() => handleIncrement(item.id, item.variantId)}
                           activeOpacity={0.7}
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          disabled={isAtQuantityLimit}
                         >
-                          <Text style={styles.quantityButton}>+</Text>
+                          <Text
+                            style={[
+                              styles.quantityButton,
+                              isAtQuantityLimit && styles.quantityButtonDisabled,
+                            ]}
+                          >
+                            +
+                          </Text>
                         </TouchableOpacity>
                       </View>
                       <View style={styles.priceContainer}>
@@ -1584,6 +1619,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     color: '#00B14F',
+  },
+  quantityButtonDisabled: {
+    opacity: 0.4,
   },
   quantityText: {
     fontFamily: 'Poppins_600SemiBold',

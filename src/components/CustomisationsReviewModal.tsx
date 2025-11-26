@@ -30,6 +30,7 @@ interface CustomisationsReviewModalProps {
   onEdit: (variantId: string) => void;
   onAddNewCustomisation: () => void;
   onConfirm: () => void;
+  maxQuantityReached?: boolean;
 }
 
 export const CustomisationsReviewModal: React.FC<CustomisationsReviewModalProps> = ({
@@ -43,6 +44,7 @@ export const CustomisationsReviewModal: React.FC<CustomisationsReviewModalProps>
   onEdit,
   onAddNewCustomisation,
   onConfirm,
+  maxQuantityReached = false,
 }) => {
   const slideAnim = useRef(new Animated.Value(1000)).current;
 
@@ -146,6 +148,8 @@ export const CustomisationsReviewModal: React.FC<CustomisationsReviewModalProps>
                     <TouchableOpacity
                       onPress={() => onIncrement(variant.id)}
                       activeOpacity={0.7}
+                      disabled={maxQuantityReached}
+                      style={maxQuantityReached ? styles.quantityButtonDisabled : undefined}
                     >
                       <Text style={styles.quantityButton}>+</Text>
                     </TouchableOpacity>
@@ -297,6 +301,9 @@ const styles = StyleSheet.create({
     lineHeight: 30,
     color: '#00B14F',
     opacity: 0.85,
+  },
+  quantityButtonDisabled: {
+    opacity: 0.4,
   },
   quantityText: {
     fontFamily: 'Poppins_600SemiBold',

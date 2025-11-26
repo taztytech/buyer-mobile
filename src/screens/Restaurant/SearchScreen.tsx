@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Shimmer } from '@/components/Shimmer';
 import { SearchBar } from '@/components/SearchBar';
+import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 interface MenuItem {
   id: string;
@@ -130,7 +131,11 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         >
           {searchQuery.trim() !== '' && searchResults.length > 0 && (
             <View style={styles.menuContent}>
-              {searchResults.map((item) => (
+              {searchResults.map((item) => {
+                const currentQuantity = getItemQuantity(item.id);
+                const isAtQuantityLimit = currentQuantity >= MAX_ITEM_QUANTITY;
+
+                return (
                 <View key={item.id} style={styles.menuItem}>
                   <View style={styles.itemLeft}>
                     {/* Veg/Non-Veg Icon and Spicy Badge */}
@@ -222,12 +227,16 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                             >
                               <Text style={styles.quantityButtonText}>-</Text>
                             </TouchableOpacity>
-                            <Text style={styles.quantityText}>{getItemQuantity(item.id)}</Text>
+                            <Text style={styles.quantityText}>{currentQuantity}</Text>
                             <TouchableOpacity
-                              style={styles.quantityButton}
+                              style={[
+                                styles.quantityButton,
+                                isAtQuantityLimit && styles.quantityButtonDisabled,
+                              ]}
                               onPress={() => onIncrementItem && onIncrementItem(item.id)}
                               activeOpacity={0.7}
                               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              disabled={isAtQuantityLimit}
                             >
                               <Text style={styles.quantityButtonText}>+</Text>
                             </TouchableOpacity>
@@ -258,7 +267,8 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     )}
                   </View>
                 </View>
-              ))}
+              );
+              })}
             </View>
           )}
 
@@ -492,6 +502,9 @@ const styles = StyleSheet.create({
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  quantityButtonDisabled: {
+    opacity: 0.4,
   },
   quantityButtonText: {
     fontFamily: 'Poppins',
