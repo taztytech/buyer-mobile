@@ -144,6 +144,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   });
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
+  const [selectedDetailItemAvailable, setSelectedDetailItemAvailable] = useState<boolean>(true);
   const [activeDietaryFilter, setActiveDietaryFilter] = useState<'veg' | 'non-veg' | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showOrderSuccess, setShowOrderSuccess] = useState(false);
@@ -582,7 +583,19 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle opening detail modal
   const handleImageClick = (item: MenuItem) => {
+    // Check if restaurant is open
+    const isRestaurantOpen = restaurantData?.timings
+      ? homeService.isRestaurantOpen(restaurantData.timings)
+      : true; // Default to open if no timing data
+
+    // Check if item is available based on its own timings
+    const isItemCurrentlyAvailable = isItemAvailable(item.timings);
+
+    // Item is only available if BOTH restaurant is open AND item timing is available
+    const itemAvailable = isRestaurantOpen && isItemCurrentlyAvailable;
+    
     setSelectedDetailItem(item);
+    setSelectedDetailItemAvailable(itemAvailable);
     setShowDetailModal(true);
   };
 
@@ -668,6 +681,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const handleAddFromDetail = (itemId: string, quantity: number) => {
     if (quantity > MAX_ITEM_QUANTITY) {
       showMaxQuantityAlert();
+      return;
     }
     const safeQuantity = Math.min(quantity, MAX_ITEM_QUANTITY);
     if (safeQuantity <= 0) {
@@ -679,14 +693,56 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       .find(i => i.id === itemId);
 
     if (item) {
-      addToCartContext({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: safeQuantity,
-        isVeg: item.isVeg,
-        isCustomizable: false,
-      });
+      // Check if item already exists in cart
+      const existingCartItem = cart[itemId];
+      
+      if (existingCartItem) {
+        // Increment existing quantity
+        const currentQuantity = existingCartItem.quantity || 0;
+        const newQuantity = Math.min(currentQuantity + safeQuantity, MAX_ITEM_QUANTITY);
+        updateQuantity(itemId, newQuantity);
+      } else {
+        // Add new item to cart
+        // Check if there's a restaurant conflict
+        if (checkRestaurantConflict(restaurantId)) {
+          showConfirmation({
+            title: 'Replace cart item?',
+            message: 'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
+            confirmText: 'Replace',
+            cancelText: 'Cancel',
+            confirmButtonColor: '#FF0000',
+            onConfirm: () => {
+              // Clear cart and add new item
+              clearCart();
+              setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
+              addToCartContext({
+                id: item.id,
+                name: item.name,
+                price: item.price,
+                quantity: safeQuantity,
+                isVeg: item.isVeg,
+                isCustomizable: false,
+                image: item.image,
+              }, restaurantId);
+            },
+          });
+          return;
+        }
+
+        // Always ensure restaurant info is set before adding items
+        setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
+
+        // Pass restaurantId directly to avoid race condition
+        addToCartContext({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: safeQuantity,
+          isVeg: item.isVeg,
+          image: item.image,
+          isCustomizable: false,
+        }, restaurantId);
+      }
     }
   };
 
@@ -1334,7 +1390,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     )}
                     <Image
                       source={item.image}
-                      style={styles.itemImage}
+                      style={[
+                        styles.itemImage,
+                        !itemAvailable && styles.itemImageDisabled
+                      ]}
                       resizeMode="cover"
                       onLoad={() => handleImageLoad(item.id)}
                       fadeDuration={0}
@@ -1611,9 +1670,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         item={selectedDetailItem}
         initialQuantity={selectedDetailItem ? (cart[selectedDetailItem.id]?.quantity || undefined) : undefined}
         maxQuantity={MAX_ITEM_QUANTITY}
+        isAvailable={selectedDetailItemAvailable}
         onClose={() => {
           setShowDetailModal(false);
           setSelectedDetailItem(null);
+          setSelectedDetailItemAvailable(true);
         }}
         onAddToCart={handleAddFromDetail}
       />
@@ -2129,6 +2190,9 @@ const styles = StyleSheet.create({
     width: 155,
     height: 137,
     borderRadius: 16,
+  },
+  itemImageDisabled: {
+    opacity: 0.5,
   },
   itemGradientOverlayTop: {
     position: 'absolute',

@@ -28,6 +28,7 @@ interface FoodItemDetailModalProps {
     timings?: ItemTiming[];
   } | null;
   initialQuantity?: number;
+  isAvailable?: boolean;
   onClose: () => void;
   onAddToCart: (itemId: string, quantity: number) => void;
   maxQuantity?: number;
@@ -37,6 +38,7 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
   visible,
   item,
   initialQuantity,
+  isAvailable = true,
   onClose,
   onAddToCart,
   maxQuantity = MAX_ITEM_QUANTITY,
@@ -210,11 +212,20 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
 
               {/* Add Item Button */}
               <TouchableOpacity
-                style={styles.addItemButton}
+                style={[
+                  styles.addItemButton,
+                  !isAvailable && styles.addItemButtonDisabled
+                ]}
                 onPress={handleAddItem}
                 activeOpacity={0.8}
+                disabled={!isAvailable}
               >
-                <Text style={styles.addItemText}>Add Item ₹{totalPrice}</Text>
+                <Text style={[
+                  styles.addItemText,
+                  !isAvailable && styles.addItemTextDisabled
+                ]}>
+                  Add Item ₹{totalPrice}
+                </Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -407,6 +418,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: 40,
   },
+  addItemButtonDisabled: {
+    backgroundColor: '#CCCCCC',
+    opacity: 0.6,
+  },
   addItemText: {
     fontFamily: 'Poppins',
     fontWeight: '500',
@@ -414,6 +429,10 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#FFFFFF',
     opacity: 0.85,
+  },
+  addItemTextDisabled: {
+    color: '#666666',
+    opacity: 0.8,
   },
   timingSection: {
     backgroundColor: '#F5FFF5',
