@@ -195,18 +195,29 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
                   onPress={handleDecrement}
                   activeOpacity={0.7}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  disabled={!isAvailable || quantity <= 1}
+                  style={(!isAvailable || quantity <= 1) ? styles.quantityButtonDisabled : undefined}
                 >
-                  <Text style={styles.quantityButton}>-</Text>
+                  <Text style={[
+                    styles.quantityButton,
+                    (!isAvailable || quantity <= 1) && styles.quantityButtonTextDisabled
+                  ]}>-</Text>
                 </TouchableOpacity>
-                <Text style={styles.quantityText}>{quantity}</Text>
+                <Text style={[
+                  styles.quantityText,
+                  !isAvailable && styles.quantityTextDisabled
+                ]}>{quantity}</Text>
                 <TouchableOpacity
                   onPress={handleIncrement}
                   activeOpacity={0.7}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  disabled={quantity >= resolvedMaxQuantity}
-                  style={quantity >= resolvedMaxQuantity ? styles.quantityButtonDisabled : undefined}
+                  disabled={!isAvailable || quantity >= resolvedMaxQuantity}
+                  style={(!isAvailable || quantity >= resolvedMaxQuantity) ? styles.quantityButtonDisabled : undefined}
                 >
-                  <Text style={styles.quantityButton}>+</Text>
+                  <Text style={[
+                    styles.quantityButton,
+                    (!isAvailable || quantity >= resolvedMaxQuantity) && styles.quantityButtonTextDisabled
+                  ]}>+</Text>
                 </TouchableOpacity>
               </View>
 
@@ -400,6 +411,9 @@ const styles = StyleSheet.create({
   quantityButtonDisabled: {
     opacity: 0.4,
   },
+  quantityButtonTextDisabled: {
+    opacity: 0.4,
+  },
   quantityText: {
     fontFamily: 'Poppins',
     fontWeight: '500',
@@ -407,6 +421,9 @@ const styles = StyleSheet.create({
     lineHeight: 27,
     color: '#000000',
     opacity: 0.85,
+  },
+  quantityTextDisabled: {
+    opacity: 0.4,
   },
   addItemButton: {
     flex: 1,
