@@ -295,6 +295,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Add item to cart (for non-customizable items)
   const addToCart = (item: MenuItem) => {
+    if (!ensureUnderQuantityLimit(item.id)) {
+      return;
+    }
     // Check if there's a restaurant conflict
     if (checkRestaurantConflict(restaurantId)) {
       showConfirmation({
@@ -337,6 +340,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Increment item quantity
   const incrementItem = (itemId: string) => {
+    if (!ensureUnderQuantityLimit(itemId)) {
+      return;
+    }
     const cartItem = cart[itemId];
 
     // If item is customizable, open review modal instead
@@ -369,6 +375,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle opening customization modal
   const handleCustomizableItemClick = (item: MenuItem) => {
+    if (getRemainingQuantityForItem(item.id) <= 0) {
+      showMaxQuantityAlert();
+      return;
+    }
     // Check if there's a restaurant conflict
     if (checkRestaurantConflict(restaurantId)) {
       showConfirmation({
@@ -692,6 +702,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle adding item from detail modal
   const handleAddFromDetail = (itemId: string, quantity: number) => {
+    if (quantity > MAX_ITEM_QUANTITY) {
+      showMaxQuantityAlert();
+    }
+    const safeQuantity = Math.min(quantity, MAX_ITEM_QUANTITY);
+    if (safeQuantity <= 0) {
+      return;
+    }
+
     const item = menuSections
       .flatMap(section => section.items)
       .find(i => i.id === itemId);
@@ -1264,6 +1282,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               </TouchableOpacity>
 
             {section.isExpanded && section.items.map((item) => {
+              const currentItemQuantity = getItemQuantity(item.id);
+              const isAtQuantityLimit = currentItemQuantity >= MAX_ITEM_QUANTITY;
               // Check if restaurant is open
               const isRestaurantOpen = restaurantData?.timings
                 ? homeService.isRestaurantOpen(restaurantData.timings)
@@ -1274,10 +1294,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
               // Item is only available if BOTH restaurant is open AND item timing is available
               const itemAvailable = !isRestaurantClosed && isItemCurrentlyAvailable;
-
-              // Get current quantity and check if at limit
-              const currentItemQuantity = getItemQuantity(item.id);
-              const isAtQuantityLimit = currentItemQuantity >= MAX_ITEM_QUANTITY;
 
               return (
               <View key={item.id}>

@@ -66,6 +66,7 @@ function AppContent() {
   const [selectedOrderData, setSelectedOrderData] = React.useState<any>(null);
   const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses' | 'registration'>('home');
   const [locationSelectionCameFrom, setLocationSelectionCameFrom] = React.useState<'home' | 'addressSelection' | 'myAddresses'>('home');
+  const [orderTrackingCameFrom, setOrderTrackingCameFrom] = React.useState<'orders' | 'checkout' | 'orderDetail'>('orders');
   const [editingAddress, setEditingAddress] = React.useState<any>(null);
   const [helpOrderData, setHelpOrderData] = React.useState<OrderListItem | null>(null);
   const [isRegistrationFlow, setIsRegistrationFlow] = React.useState(false);
@@ -641,20 +642,24 @@ function AppContent() {
     }).start();
   }, [checkoutScreenSlide]);
 
-  // Handle order success from checkout - View Order button
+  // Handle order success from checkout - Track Order button
   const handleOrderSuccessFromCheckout = useCallback((orderId: number) => {
-    // Close checkout and navigate to order detail
-    Animated.timing(checkoutScreenSlide, {
-      toValue: SCREEN_WIDTH,
-      duration: 200,
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: true,
-    }).start(() => {
-      if (orderId) {
-        setSelectedOrderId(orderId.toString());
-        setCurrentScreen('orderDetail');
-      }
-    });
+    if (orderId) {
+      // Set order ID and tracking source immediately
+      setSelectedOrderId(orderId.toString());
+      setOrderTrackingCameFrom('checkout');
+      
+      // Set screen to orderTracking immediately to ensure correct screen is shown
+      setCurrentScreen('orderTracking');
+      
+      // Close checkout screen with animation (it will be unmounted since currentScreen !== 'checkout')
+      Animated.timing(checkoutScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 200,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }).start();
+    }
   }, [checkoutScreenSlide]);
 
   // Handle order cancel from checkout - OK button after payment failure
@@ -977,13 +982,32 @@ function AppContent() {
   };
 
   // Order Tracking Navigation
-  const handleNavigateToOrderTracking = (orderId: string) => {
+  const handleNavigateToOrderTracking = (orderId: string, cameFrom?: 'orders' | 'checkout' | 'orderDetail') => {
     setSelectedOrderId(orderId);
+    setOrderTrackingCameFrom(cameFrom || 'orders');
     setCurrentScreen('orderTracking');
   };
 
   const handleBackFromOrderTracking = () => {
-    setCurrentScreen('orders');
+    if (orderTrackingCameFrom === 'checkout') {
+      // If came from payment success, go back to home
+      // Ensure restaurant screen is properly hidden and reset state
+      restaurantScreenSlide.setValue(SCREEN_WIDTH);
+      // Reset restaurant selection to prevent any unwanted rendering
+      setSelectedRestaurantId(1);
+      setSelectedRestaurantName('');
+      setSelectedRestaurantAddress('');
+      // Set screen to home immediately - this ensures RestaurantScreen is not visible
+      // RestaurantScreen only shows when currentScreen === 'restaurant'
+      setCurrentScreen('home');
+      setOrderTrackingCameFrom('orders'); // Reset for next time
+    } else if (orderTrackingCameFrom === 'orderDetail') {
+      // If came from order detail, go back to order detail
+      setCurrentScreen('orderDetail');
+    } else {
+      // If came from orders, go back to orders
+      setCurrentScreen('orders');
+    }
   };
 
   // Search Navigation
@@ -1362,7 +1386,7 @@ function AppContent() {
                 onThankDriver={() => {}}
                 onRateOrder={handleNavigateToRateOrder}
                 onReorder={() => handleReorder(selectedOrderId)}
-                onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId)}
+                onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId, 'orderDetail')}
                 onDownloadInvoice={() => {}}
               />
             </View>
@@ -1386,6 +1410,7 @@ function AppContent() {
           {currentScreen === 'orderTracking' && (
             <View style={styles.orderTrackingOverlay}>
               <OrderTrackingScreen
+                orderId={selectedOrderId}
                 onBack={handleBackFromOrderTracking}
                 onCallPartner={() => {}}
               />
@@ -1765,7 +1790,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 7,
+    zIndex: 10,
     backgroundColor: '#E9E9E9',
   },
   searchOverlay: {

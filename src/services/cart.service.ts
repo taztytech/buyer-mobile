@@ -241,6 +241,34 @@ class CartService {
       throw error;
     }
   }
+
+  /**
+   * Update tip amount in cart
+   */
+  async createTip(tipAmount: number): Promise<{ success: boolean; cart_summary?: CartSummary; message?: string }> {
+    try {
+      const response = await apiService.put(
+        API_CONFIG.ENDPOINTS.BUYER.CART_TIP,
+        {
+          tip_amount: tipAmount,
+        }
+      );
+
+      // Handle potential double-nested response structure
+      let responseData: any = response.data || response;
+      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+        responseData = responseData.data;
+      }
+
+      return {
+        success: response.success,
+        cart_summary: responseData.cart_summary,
+        message: responseData.message || response.message,
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance
