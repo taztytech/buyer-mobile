@@ -133,6 +133,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
   const [cartSummary, setCartSummary] = useState<CartSummary | null>(null);
   const [isLoadingCartSummary, setIsLoadingCartSummary] = useState(false);
+  const [isUpdatingTip, setIsUpdatingTip] = useState(false);
+
+  // Constants
+  const MAX_TIP_AMOUNT = 100;
 
   const selectedAddress = addresses.find(addr => addr.id.toString() === selectedAddressId);
 
@@ -152,6 +156,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
+  const customTipInputRef = useRef<TextInput>(null);
 
   // Set restaurant info in CartContext when component mounts or props change
   useEffect(() => {
@@ -187,6 +192,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
       if (cartData && cartData.summary) {
         setCartSummary(cartData.summary);
+
+        // tip_amount might be in the response even if not in the type definition
+        const tipAmount = (cartData.summary as any).tip_amount;
+        if (tipAmount !== undefined && tipAmount !== null) {
+          setSelectedTip(tipAmount > 0 ? tipAmount : null);
+        }
       }
     } catch (error: any) {
       // Silently fail - cart summary is optional
@@ -429,10 +440,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       const orderResponse = await ordersService.createOrder(createOrderRequest);
 
       if (orderResponse.success && orderResponse.data) {
-        // Get order data - API returns data nested under 'order' key
-        const orderData = orderResponse.data.order || orderResponse.data;
+        // Get order data - API might return data nested under 'order' key or directly
+        const responseData = orderResponse.data as any;
+        const orderData = responseData.order || responseData;
         const orderNumber = orderData.order_number || orderData.orderNumber || 'N/A';
-        const orderId = orderData.id || orderData.order_id;
+        const orderId = orderData.id || orderData.order_id || orderData.order_id;
 
         // Process online payment via Razorpay
         // Get user details for payment
@@ -626,6 +638,82 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     return selectedTip;
   }, [selectedTip, customTipAmount]);
 
+  // Handle tip selection and API call
+  const handleTipSelection = async (amount: number | null) => {
+    // If deselecting (amount is null), set tip to 0
+    const tipToSend = amount === null ? 0 : amount;
+
+    // Validate tip amount
+    if (tipToSend > MAX_TIP_AMOUNT) {
+      showConfirmation({
+        title: 'Invalid Tip Amount',
+        message: `Maximum tip amount is ₹${MAX_TIP_AMOUNT}. Please enter a lower amount.`,
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Optimistic update: Update selectedTip immediately for instant UI feedback
+    const previousTip = selectedTip;
+    setSelectedTip(amount);
+
+    try {
+      setIsUpdatingTip(true);
+      
+      // Call API to update tip in cart
+      const response = await cartService.createTip(tipToSend);
+
+      if (response.success) {
+        // Update local state        
+        // Refresh cart summary to get updated bill details
+        if (response.cart_summary) {
+          setCartSummary(response.cart_summary);
+          // Update selectedTip from API response to ensure consistency
+          // Use tip_amount from response, or fallback to what we set optimistically
+          // tip_amount might be in the response even if not in the type definition
+          const tipFromResponse = (response.cart_summary as any).tip_amount;
+          if (tipFromResponse !== undefined && tipFromResponse !== null) {
+            const finalTip = tipFromResponse > 0 ? tipFromResponse : null;
+            setSelectedTip(finalTip);
+            // If it's a custom tip (not 10, 20, 30), update customTipAmount to match
+            if (finalTip !== null && finalTip !== 10 && finalTip !== 20 && finalTip !== 30) {
+              setCustomTipAmount(finalTip.toString());
+            }
+          }
+        } else {
+          // If summary not in response, fetch it
+          await fetchCartSummary();
+        }
+      } else {
+        // Revert optimistic update on error
+        setSelectedTip(previousTip);
+        // Show error if API call failed
+        showConfirmation({
+          title: 'Error',
+          message: response.message || 'Failed to update tip amount',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
+      }
+    } catch (error: any) {
+      // Revert optimistic update on error
+      setSelectedTip(previousTip);
+      // Show error message
+      showConfirmation({
+        title: 'Error',
+        message: error.message || 'Failed to update tip amount. Please try again.',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+    } finally {
+      setIsUpdatingTip(false);
+    }
+  };
+
   // Calculate bill values optimistically from localCartItems for instant UI updates
   // Always use local calculation for item total to ensure instant updates
   // Use backend cartSummary only for fees/taxes/discounts that we can't calculate locally
@@ -660,7 +748,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // Calculate total: calculatedItemTotal + deliveryFee + taxAmount + tip - discountAmount
     // Always use calculated item total for instant updates
     const totalAmount = calculatedItemTotal + deliveryFee + taxAmount + tip - discountAmount;
-
+    
     return {
       itemTotal: calculatedItemTotal, // Always use calculated value for instant updates
       deliveryFee,
@@ -674,13 +762,38 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const { itemTotal, gstAndCharges, deliveryFee, discountAmount, tipAmount, totalAmount } = billValues;
 
   // Handle custom tip add button
-  const handleAddCustomTip = () => {
+  const handleAddCustomTip = async () => {
     const amount = parseFloat(customTipAmount);
-    if (amount > 0 && !isNaN(amount)) {
-      // Set the custom amount as the selected tip (not -1 anymore)
-      setSelectedTip(amount);
-      setCustomTipAmount(''); // Clear the input after adding
+    
+    // Validate input
+    if (isNaN(amount) || amount <= 0) {
+      showConfirmation({
+        title: 'Invalid Amount',
+        message: 'Please enter a valid tip amount greater than 0.',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+      return;
     }
+
+    // Validate max tip amount
+    if (amount > MAX_TIP_AMOUNT) {
+      showConfirmation({
+        title: 'Invalid Tip Amount',
+        message: `Maximum tip amount is ₹${MAX_TIP_AMOUNT}. Please enter a lower amount.`,
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Call API to update tip (handleTipSelection will update selectedTip optimistically)
+    await handleTipSelection(amount);
+    
+    // Keep the customTipAmount so the button can display it
+    // Don't clear it - it will be used to show the selected custom tip amount
   };
 
   // Handle promo code apply
@@ -958,12 +1071,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                       style={[
                         styles.tipButton,
                         selectedTip === amount && styles.tipButtonSelected,
+                        isUpdatingTip && styles.tipButtonDisabled,
                       ]}
                       onPress={() => {
-                        setSelectedTip(selectedTip === amount ? null : amount);
+                        if (isUpdatingTip) return;
+                        // Toggle: if already selected, deselect (send 0), otherwise select (send amount)
+                        const newTip = selectedTip === amount ? null : amount;
+                        handleTipSelection(newTip);
                         setCustomTipAmount(''); // Clear custom amount when selecting preset
                       }}
                       activeOpacity={0.7}
+                      disabled={isUpdatingTip}
                     >
                       <Text
                         style={[
@@ -975,31 +1093,82 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                       </Text>
                     </TouchableOpacity>
                   ))}
-                  <TouchableOpacity
-                    style={[
-                      styles.tipButton,
-                      selectedTip === -1 && styles.tipButtonSelected,
-                    ]}
-                    onPress={() => {
-                      if (selectedTip === -1) {
-                        // If already selected, deselect it
-                        setSelectedTip(null);
-                        setCustomTipAmount('');
-                      } else {
-                        setSelectedTip(-1);
-                      }
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text
+                  {/* Show entered amount as button if user has typed something OR if a custom tip is selected, otherwise show "Other" */}
+                  {(customTipAmount && customTipAmount.trim() !== '') || (selectedTip !== null && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30 && selectedTip !== -1) ? (
+                    <TouchableOpacity
                       style={[
-                        styles.tipButtonText,
-                        selectedTip === -1 && styles.tipButtonTextSelected,
+                        styles.tipButton,
+                        (selectedTip === -1 || (selectedTip !== null && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30)) && styles.tipButtonSelected,
+                        isUpdatingTip && styles.tipButtonDisabled,
                       ]}
+                      onPress={() => {
+                        if (isUpdatingTip) return;
+                        // Clicking the entered amount button allows editing
+                        // If we have a selected custom tip amount, populate the input with it
+                        if (selectedTip !== null && selectedTip !== -1 && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30) {
+                          setCustomTipAmount(selectedTip.toString());
+                        }
+                        // Set selectedTip to -1 to show input field and focus it
+                        setSelectedTip(-1);
+                        // Focus the input field after a short delay to ensure it's rendered
+                        setTimeout(() => {
+                          customTipInputRef.current?.focus();
+                        }, 100);
+                      }}
+                      activeOpacity={0.7}
+                      disabled={isUpdatingTip}
                     >
-                      Other
-                    </Text>
-                  </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.tipButtonText,
+                          (selectedTip === -1 || (selectedTip !== null && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30)) && styles.tipButtonTextSelected,
+                        ]}
+                      >
+                        ₹{(() => {
+                          // Show customTipAmount if available, otherwise show selectedTip if it's a custom amount
+                          if (customTipAmount && customTipAmount.trim() !== '') {
+                            return customTipAmount;
+                          }
+                          if (selectedTip !== null && selectedTip !== -1 && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30) {
+                            return selectedTip.toString();
+                          }
+                          return '0';
+                        })()}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[
+                        styles.tipButton,
+                        selectedTip === -1 && styles.tipButtonSelected,
+                        isUpdatingTip && styles.tipButtonDisabled,
+                      ]}
+                      onPress={() => {
+                        if (isUpdatingTip) return;
+                        if (selectedTip === -1) {
+                          // If already selected, deselect it (send 0)
+                          handleTipSelection(null);
+                          setCustomTipAmount('');
+                        } else {
+                          // Just show input, don't call API yet
+                          // Update state immediately for instant UI feedback
+                          setSelectedTip(-1);
+                          setCustomTipAmount('');
+                        }
+                      }}
+                      activeOpacity={0.7}
+                      disabled={isUpdatingTip}
+                    >
+                      <Text
+                        style={[
+                          styles.tipButtonText,
+                          selectedTip === -1 && styles.tipButtonTextSelected,
+                        ]}
+                      >
+                        Other
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 {selectedTip === -1 && (
@@ -1009,20 +1178,35 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                       <View style={styles.customTipInputContainer}>
                         <Text style={styles.rupeeSymbol}>₹</Text>
                         <TextInput
+                          ref={customTipInputRef}
                           style={styles.customTipInput}
                           placeholder="0"
                           placeholderTextColor="rgba(0, 0, 0, 0.4)"
                           value={customTipAmount}
-                          onChangeText={setCustomTipAmount}
+                          onChangeText={(text) => {
+                            // Only allow numbers and decimal point
+                            const numericValue = text.replace(/[^0-9.]/g, '');
+                            // Prevent multiple decimal points
+                            const parts = numericValue.split('.');
+                            const formattedValue = parts.length > 2 
+                              ? parts[0] + '.' + parts.slice(1).join('')
+                              : numericValue;
+                            setCustomTipAmount(formattedValue);
+                          }}
                           keyboardType="number-pad"
                         />
                       </View>
                       <TouchableOpacity
-                        style={styles.addTipButton}
+                        style={[styles.addTipButton, isUpdatingTip && styles.addTipButtonDisabled]}
                         onPress={handleAddCustomTip}
                         activeOpacity={0.7}
+                        disabled={isUpdatingTip}
                       >
-                        <Text style={styles.addTipButtonText}>Add</Text>
+                        {isUpdatingTip ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text style={styles.addTipButtonText}>Add</Text>
+                        )}
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1097,16 +1281,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   <Text style={styles.billLabel}>Delivery Fee</Text>
                   <Text style={styles.billValue}>₹{deliveryFee.toFixed(2)}</Text>
                 </View>
-                <View style={styles.billRow}>
-                  <Text style={styles.billLabel}>Taxes and Charges</Text>
-                  <Text style={styles.billValue}>₹{gstAndCharges.toFixed(2)}</Text>
-                </View>
                 {tipAmount > 0 && (
                   <View style={styles.billRow}>
                     <Text style={styles.billLabel}>Delivery Partner tip</Text>
                     <Text style={styles.billValue}>₹{tipAmount.toFixed(2)}</Text>
                   </View>
                 )}
+                <View style={styles.billRow}>
+                  <Text style={styles.billLabel}>Taxes and Charges</Text>
+                  <Text style={styles.billValue}>₹{gstAndCharges.toFixed(2)}</Text>
+                </View>
                 {discountAmount > 0 && (
                   <View style={styles.billRow}>
                     <Text style={styles.billLabel}>Discount</Text>
@@ -1652,6 +1836,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Poppins_600SemiBold',
   },
+  tipButtonDisabled: {
+    opacity: 0.5,
+  },
   tipInfo: {
     fontFamily: 'Poppins',
     fontWeight: '400',
@@ -1700,6 +1887,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     color: '#FFFFFF',
+  },
+  addTipButtonDisabled: {
+    opacity: 0.6,
   },
   rupeeSymbol: {
     fontFamily: 'Poppins_600SemiBold',
