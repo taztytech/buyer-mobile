@@ -41,6 +41,13 @@ interface OrderDetailsScreenProps {
   restaurantAddress?: string;
   deliveryAddress?: string;
   cartItems?: CartItem[];
+  selectedLocation?: {
+    name: string;
+    address: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  visible?: boolean;
   onBack?: () => void;
   onEditCustomization?: (itemId: string, variantId: string, currentAddOnIds: string[], currentQuantity?: number) => void;
   onPlaceOrder?: () => void;
@@ -51,11 +58,13 @@ interface OrderDetailsScreenProps {
 }
 
 export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
-  restaurantName = 'KFC',
+  restaurantName,
   restaurantId,
   restaurantAddress,
-  deliveryAddress = 'Chennai | F1, Jeyalakshmi Appartments...',
+  deliveryAddress,
   cartItems = [],
+  selectedLocation,
+  visible = true,
   onBack,
   onEditCustomization,
   onPlaceOrder,
@@ -64,7 +73,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   showCustomizationModal = false,
   onUpdateCart,
 }) => {
-  const { cart, clearCart, updateQuantity, removeFromCart, setRestaurantInfo, restaurantId: contextRestaurantId } = useCart();
+  const { cart, clearCart, updateQuantity, removeFromCart, setRestaurantInfo, restaurantId: contextRestaurantId, restaurantName: contextRestaurantName } = useCart();
   const { showConfirmation } = useConfirmation();
   const [orderExpanded, setOrderExpanded] = useState(true);
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
@@ -133,6 +142,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
   const [cartSummary, setCartSummary] = useState<CartSummary | null>(null);
   const [isLoadingCartSummary, setIsLoadingCartSummary] = useState(false);
+  const [cartData, setCartData] = useState<any>(null);
   const [isUpdatingTip, setIsUpdatingTip] = useState(false);
 
   // Constants
@@ -158,21 +168,21 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const translateYAnim = useRef(new Animated.Value(0)).current;
   const customTipInputRef = useRef<TextInput>(null);
 
-  // Set restaurant info in CartContext when component mounts or props change
-  useEffect(() => {
-    if (restaurantId && restaurantName) {
-      // Only update if different from current context
-      if (contextRestaurantId !== restaurantId) {
-        setRestaurantInfo(restaurantId, restaurantName);
-      }
-    }
-  }, [restaurantId, restaurantName, contextRestaurantId, setRestaurantInfo]);
+  // Use cart context restaurant info if available, otherwise use props
+  const effectiveRestaurantId = contextRestaurantId || restaurantId;
 
   // Fetch addresses and cart summary from API
   useEffect(() => {
     fetchAddresses();
     fetchCartSummary();
   }, []);
+
+  // Refetch addresses when screen becomes visible (e.g., after account switch)
+  useEffect(() => {
+    if (visible) {
+      fetchAddresses();
+    }
+  }, [visible]);
 
   // Fetch cart summary when cart changes (debounced to avoid too many API calls)
   useEffect(() => {
@@ -188,10 +198,15 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const fetchCartSummary = async () => {
     try {
       setIsLoadingCartSummary(true);
-      const cartData = await cartService.getCart();
+      const cartResponse = await cartService.getCart();
 
-      if (cartData && cartData.summary) {
-        setCartSummary(cartData.summary);
+      if (cartResponse) {
+        setCartData(cartResponse);
+        if (cartResponse.summary) {
+          setCartSummary(cartResponse.summary);
+        }
+      } else {
+        setCartData(null);
 
         // tip_amount might be in the response even if not in the type definition
         const tipAmount = (cartData.summary as any).tip_amount;
@@ -200,12 +215,15 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         }
       }
     } catch (error: any) {
-      // Silently fail - cart summary is optional
-      console.error('Failed to fetch cart summary:', error);
+      setCartData(null);
     } finally {
       setIsLoadingCartSummary(false);
     }
   };
+
+  // Get restaurant name and address from cart API data
+  const displayRestaurantName = cartData?.restaurant_name || contextRestaurantName || restaurantName || '';
+  const displayRestaurantAddress = cartData?.restaurant_address  || '';
 
   const fetchAddresses = async () => {
     try {
@@ -229,10 +247,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
           if (!isServiceable) {
             showConfirmation({
-              title: 'Error',
+              title: 'Oops!',
               message: 'Service not available at the selected location',
               confirmText: 'OK',
-              cancelText: 'Close',
+              cancelText: '',
               onConfirm: () => {},
             });
           }
@@ -337,7 +355,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   }, [showAddressModal, showLocationSelection, showCustomizationModal]);
 
   const handlePlaceOrder = async () => {
-    if (!restaurantId) {
+    if (!effectiveRestaurantId) {
       showConfirmation({
         title: 'Error',
         message: 'Restaurant information is missing',
@@ -403,10 +421,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
       if (!isServiceable) {
         showConfirmation({
-          title: 'Error',
+          title: 'Oops!',
           message: 'Service not available at the selected location',
           confirmText: 'OK',
-          cancelText: 'Close',
+          cancelText: '',
           onConfirm: () => {},
         });
         return;
@@ -842,15 +860,19 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.7}>
               <MaterialIcons name="chevron-left" size={24} color="#000000" />
             </TouchableOpacity>
-            <View style={styles.headerTextContainer}>
-              <Text style={styles.restaurantName}>{restaurantName}</Text>
-              <View style={styles.addressContainer}>
-                <MaterialIcons name="location-on" size={14} color="#FFFFFF" />
-                <Text style={styles.addressText} numberOfLines={1}>
-                  {restaurantAddress || deliveryAddress}
-                </Text>
-              </View>
-            </View>
+             <View style={styles.headerTextContainer}>
+               {displayRestaurantName ? (
+                 <Text style={styles.restaurantName}>{displayRestaurantName}</Text>
+               ) : null}
+               {displayRestaurantAddress ? (
+                 <View style={styles.addressContainer}>
+                   <MaterialIcons name="location-on" size={14} color="#FFFFFF" />
+                   <Text style={styles.addressText} numberOfLines={1}>
+                     {displayRestaurantAddress}
+                   </Text>
+                 </View>
+               ) : null}
+             </View>
           </View>
         </SafeAreaView>
       </View>
@@ -962,7 +984,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   <Text style={styles.notesLabel}>Notes</Text>
                   <TextInput
                     style={styles.notesInput}
-                    placeholder="I need more spicy and tasty"
+                    placeholder="Add special instructions for your order (optional)"
                     placeholderTextColor="rgba(0, 0, 0, 0.4)"
                     value={notes}
                     onChangeText={setNotes}
@@ -1388,10 +1410,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
             if (!isServiceable) {
               showConfirmation({
-                title: 'Error',
+                title: 'Oops!',
                 message: 'Service not available at the selected location',
                 confirmText: 'OK',
-                cancelText: 'Close',
+                cancelText: '',
                 onConfirm: () => {},
               });
               setShowAddressModal(false);
@@ -1399,8 +1421,27 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             }
           }
 
+          // Set the selected address as default if it's not already the default
+          const selectedAddress = addresses.find(addr => addr.id.toString() === addressId);
+          if (selectedAddress && !selectedAddress.is_default) {
+            try {
+              const updateResponse = await addressService.updateAddress(addressId, {
+                is_default: true,
+              });
+
+              if (updateResponse.success) {
+                // Refresh addresses to get updated list with new default
+                await fetchAddresses();
+              }
+            } catch (error: any) {
+              // If setting default fails, still proceed with address selection
+              console.error('Failed to set default address:', error);
+            }
+          }
+
           setSelectedAddressId(addressId);
           setShowAddressModal(false);
+          await fetchCartSummary();
         }}
         onAddNewAddress={() => {
           setShowAddressModal(false);

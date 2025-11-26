@@ -33,6 +33,7 @@ interface CartContextType {
   removeFromCart: (itemId: string) => Promise<void>;
   updateQuantity: (itemId: string, quantity: number) => Promise<void>;
   clearCart: () => Promise<void>;
+  reloadCart: () => Promise<void>; // Reload cart from backend
   getTotalItems: () => number;
   getTotalPrice: () => number;
   restaurantId: number | null;
@@ -89,74 +90,76 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [syncWithBackend, setSyncWithBackend] = useState<boolean>(false);
   const [isCartLoaded, setIsCartLoaded] = useState<boolean>(false);
 
+  const loadCartFromBackend = async () => {
+    try {
+      const token = await storageService.getAccessToken();
+      if (!token) {
+        setIsCartLoaded(true);
+        return;
+      }
+
+      const backendCart = await cartService.getCart();
+
+      if (backendCart && backendCart.items && Array.isArray(backendCart.items) && backendCart.items.length > 0) {
+        setRestaurantId(backendCart.restaurant_id);
+        setRestaurantName(backendCart.restaurant_name);
+        setRestaurantLogo(backendCart.restaurant_logo);
+
+        const localCart: { [key: string]: CartItem } = {};
+
+        backendCart.items.forEach((item) => {
+          const isVeg = item.dietary_preference === 'veg' ||
+                        item.dietary_preference === 'vegetarian';
+
+          const cartItem: CartItem = {
+            id: item.item_id.toString(),
+            itemId: item.item_id,
+            cartItemId: item.id,
+            name: item.item_name,
+            price: item.unit_price,
+            quantity: item.quantity,
+            isVeg: isVeg,
+            image: item.item_images?.[0],
+            specialInstructions: item.special_instructions || undefined,
+            isCustomizable: item.has_customizations || (item.customizations && item.customizations.length > 0),
+          };
+
+          if (item.customizations && item.customizations.length > 0) {
+            cartItem.variants = item.customizations.map((customization) => ({
+              id: `${item.item_id}-${customization.customization_group_id}`,
+              variantId: customization.customization_group_id.toString(),
+              variantName: customization.customization_group_name,
+              addOns: customization.selected_options.map((opt) => opt.id.toString()),
+              addOnNames: customization.selected_options.map((opt) => opt.name || ''),
+              quantity: item.quantity,
+              price: item.unit_price,
+            }));
+          }
+
+          localCart[item.item_id.toString()] = cartItem;
+        });
+
+        setCart(localCart);
+      } else {
+        setCart({});
+        setRestaurantId(null);
+        setRestaurantName('');
+        setRestaurantLogo(null);
+      }
+    } catch (error) {
+    } finally {
+      setIsCartLoaded(true);
+    }
+  };
+
+  const reloadCart = async () => {
+    await loadCartFromBackend();
+  };
+
   /**
    * Load cart from backend on app startup
    */
   useEffect(() => {
-    const loadCartFromBackend = async () => {
-      try {
-        const token = await storageService.getAccessToken();
-
-        // Only load cart if user is authenticated
-        if (!token) {
-          setIsCartLoaded(true);
-          return;
-        }
-
-        const backendCart = await cartService.getCart();
-
-        if (backendCart && backendCart.items && Array.isArray(backendCart.items) && backendCart.items.length > 0) {
-          // Set restaurant info
-          setRestaurantId(backendCart.restaurant_id);
-          setRestaurantName(backendCart.restaurant_name);
-          setRestaurantLogo(backendCart.restaurant_logo);
-
-          // Convert backend cart items to local cart format
-          const localCart: { [key: string]: CartItem } = {};
-
-          backendCart.items.forEach((item) => {
-            // Map dietary_preference to isVeg
-            const isVeg = item.dietary_preference === 'veg' ||
-                          item.dietary_preference === 'vegetarian';
-
-            const cartItem: CartItem = {
-              id: item.item_id.toString(),
-              itemId: item.item_id,
-              cartItemId: item.id, // Backend cart_item_id
-              name: item.item_name,
-              price: item.unit_price,
-              quantity: item.quantity,
-              isVeg: isVeg,
-              image: item.item_images?.[0],
-              specialInstructions: item.special_instructions || undefined,
-              isCustomizable: item.has_customizations || (item.customizations && item.customizations.length > 0),
-            };
-
-            // Convert customizations to variants if present
-            if (item.customizations && item.customizations.length > 0) {
-              cartItem.variants = item.customizations.map((customization) => ({
-                id: `${item.item_id}-${customization.customization_group_id}`,
-                variantId: customization.customization_group_id.toString(),
-                variantName: customization.customization_group_name,
-                addOns: customization.selected_options.map((opt) => opt.id.toString()),
-                addOnNames: customization.selected_options.map((opt) => opt.name || ''),
-                quantity: item.quantity,
-                price: item.unit_price,
-              }));
-            }
-
-            localCart[item.item_id.toString()] = cartItem;
-          });
-
-          setCart(localCart);
-        }
-      } catch (error) {
-        // Continue with empty cart if loading fails
-      } finally {
-        setIsCartLoaded(true);
-      }
-    };
-
     loadCartFromBackend();
   }, []); // Only run once on mount
 
@@ -401,9 +404,14 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const checkRestaurantConflict = (newRestaurantId: number): boolean => {
-    // If cart is empty or no restaurant is set, no conflict
-    if (Object.keys(cart).length === 0 || restaurantId === null) {
+    // If cart is empty, no conflict
+    const cartItemCount = Object.keys(cart).length;
+    if (cartItemCount === 0) {
       return false;
+    }
+
+    if (restaurantId === null) {
+      return true;
     }
 
     // Check if the new restaurant is different from the current one
@@ -418,6 +426,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         removeFromCart,
         updateQuantity,
         clearCart,
+        reloadCart,
         getTotalItems,
         getTotalPrice,
         restaurantId,
