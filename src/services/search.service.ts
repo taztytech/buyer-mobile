@@ -4,6 +4,7 @@
  */
 
 import { apiService, ApiResponse } from './api.service';
+import { VegModeType } from '@/context/VegModeContext';
 
 export interface SearchSuggestion {
   id: number;
@@ -30,7 +31,8 @@ class SearchService {
   async getSearchSuggestions(
     query: string,
     latitude?: number,
-    longitude?: number
+    longitude?: number,
+    vegMode: VegModeType = 'off'
   ): Promise<ApiResponse<SearchSuggestionsResponse>> {
     try {
       if (!query || query.trim().length === 0) {
@@ -46,14 +48,23 @@ class SearchService {
       // POST method with query, limit, and location in body
       const endpoint = '/api/buyer/search/suggestions';
       const requestBody: any = {
-        query: query,
+        query: query.trim(),
         limit: 10,
       };
 
       // Add location parameters if provided
       if (latitude !== undefined && longitude !== undefined) {
-        requestBody.lat = latitude;
-        requestBody.lng = longitude;
+        requestBody.location = {
+          lat: latitude,
+          lng: longitude,
+        };
+      }
+
+      if (vegMode === 'pure') {
+        requestBody.filters = {
+          ...requestBody.filters,
+          dietary_preference: 'veg',
+        };
       }
 
       const response = await apiService.post<any>(endpoint, requestBody);

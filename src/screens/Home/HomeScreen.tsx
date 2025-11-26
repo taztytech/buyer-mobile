@@ -66,6 +66,20 @@ const fallbackCarouselData: CarouselItem[] = [
   },
 ];
 
+// Utility to normalize veg food types returned by API (handles values like "pure-veg")
+const isVegFoodType = (foodType?: string, isVegFlag?: boolean): boolean => {
+  if (isVegFlag) {
+    return true;
+  }
+
+  if (!foodType) {
+    return false;
+  }
+
+  const normalized = foodType.trim().toLowerCase();
+  return normalized === 'veg' || normalized === 'pure-veg' || normalized === 'pure veg' || normalized === 'pureveg';
+};
+
 // Default location coordinates (Madurai)
 const DEFAULT_LOCATION = {
   name: 'Madurai',
@@ -682,12 +696,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             let filteredCategories = whatsOnYourMind;
 
             if (vegMode === 'pure') {
-              // Show only Veg categories (food_type === 'Veg' or is_veg === true)
-              filteredCategories = whatsOnYourMind.filter((category: CategoryItem) => {
-                const foodType = category.food_type;
-                const isVeg = category.is_veg;
-                return (foodType && foodType.toLowerCase() === 'veg') || isVeg === true;
-              });
+              // Show only Veg categories (handles values like "pure-veg")
+              filteredCategories = whatsOnYourMind.filter((category: CategoryItem) =>
+                isVegFoodType(category.food_type, category.is_veg)
+              );
             } else if (vegMode === 'all') {
               // Show all categories regardless of food_type
               filteredCategories = whatsOnYourMind;
@@ -769,11 +781,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             let filteredRestaurants = nearbyRestaurants;
 
             if (vegMode === 'pure') {
-              // Show only Veg restaurants (food_type === 'Veg')
-              filteredRestaurants = nearbyRestaurants.filter((restaurant: any) => {
-                const foodType = restaurant.food_type;
-                return foodType && foodType.toLowerCase() === 'veg';
-              });
+              // Show only Veg restaurants (handles values like "pure-veg")
+              filteredRestaurants = nearbyRestaurants.filter((restaurant: any) =>
+                isVegFoodType(restaurant.food_type, restaurant.is_veg)
+              );
             } else if (vegMode === 'all') {
               // Show all restaurants regardless of food_type
               filteredRestaurants = nearbyRestaurants;
@@ -870,11 +881,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           let filteredRestaurants = nearbyRestaurants;
 
           if (vegMode === 'pure') {
-            // Show only Veg restaurants (food_type === 'Veg')
-            filteredRestaurants = nearbyRestaurants.filter((restaurant: any) => {
-              const foodType = restaurant.food_type;
-              return foodType && foodType.toLowerCase() === 'veg';
-            });
+            // Show only Veg restaurants (handles values like "pure-veg")
+            filteredRestaurants = nearbyRestaurants.filter((restaurant: any) =>
+              isVegFoodType(restaurant.food_type, restaurant.is_veg)
+            );
           } else if (vegMode === 'all') {
             // Show all restaurants regardless of food_type
             filteredRestaurants = nearbyRestaurants;
