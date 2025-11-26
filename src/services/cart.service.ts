@@ -138,13 +138,12 @@ class CartService {
       // Handle double-nested response structure
       // Backend returns: { success: true, data: { success: true, data: { actual cart } } }
       let cartData = response.data;
-
       // Check if data is double-nested
       if (cartData && typeof cartData === 'object' && 'data' in cartData) {
         cartData = (cartData as any).data;
       }
-
-      return response.success && cartData ? cartData : null;
+      console.log('cartData', cartData);
+      return response.success && cartData ? cartData.data : null;
     } catch (error) {
       // Return null if cart doesn't exist or error occurs
       return null;
@@ -244,8 +243,17 @@ class CartService {
 
   /**
    * Update tip amount in cart
+   * Returns updated cart summary along with tip metadata from backend.
    */
-  async createTip(tipAmount: number): Promise<{ success: boolean; cart_summary?: CartSummary; message?: string }> {
+  async createTip(
+    tipAmount: number
+  ): Promise<{
+    success: boolean;
+    cart_summary?: CartSummary;
+    message?: string;
+    tip_amount?: number;
+    max_tip_amount?: number;
+  }> {
     try {
       const response = await apiService.put(
         API_CONFIG.ENDPOINTS.BUYER.CART_TIP,
@@ -264,6 +272,8 @@ class CartService {
         success: response.success,
         cart_summary: responseData.cart_summary,
         message: responseData.message || response.message,
+        tip_amount: responseData.tip_amount,
+        max_tip_amount: responseData.max_tip_amount,
       };
     } catch (error) {
       throw error;
