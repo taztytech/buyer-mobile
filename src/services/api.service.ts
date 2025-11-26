@@ -260,6 +260,13 @@ class ApiService {
         config.body = JSON.stringify(data);
       }
 
+      // Centralized request logging for debugging purposes
+      console.log('[apiService][request]', {
+        method,
+        endpoint: url,
+        hasBody: Boolean(config.body),
+      });
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
@@ -310,6 +317,14 @@ class ApiService {
 
       const responseData = await response.json();
 
+      console.log('[apiService][response]', {
+        method,
+        endpoint: url,
+        status: response.status,
+        success: response.ok,
+        data: responseData?.data ?? responseData,
+      });
+
       if (!response.ok) {
         return {
           success: false,
@@ -324,6 +339,11 @@ class ApiService {
         message: responseData.message,
       };
     } catch (error: any) {
+      console.log('[apiService][response_error]', {
+        method,
+        endpoint,
+        message: error?.message,
+      });
       const apiError = this.handleError(error);
       return {
         success: false,

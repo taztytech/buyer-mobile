@@ -215,7 +215,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <MenuItem label="My Orders" icon="receipt-long" onPress={onMyOrders} />
             <MenuItem label="My Addresses" icon="location-on" onPress={onMyAddresses} />
             <MenuItem label="Favorites" icon="favorite" onPress={onFavorites} />
-            <MenuItem label="Chat With Us" icon="chat" onPress={onChatWithUs} />
+            {/* <MenuItem label="Chat With Us" icon="chat" onPress={onChatWithUs} /> */}
 
             {/* Notification Toggle */}
             <View style={styles.menuItem}>

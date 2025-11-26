@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { cartService, AddToCartRequest } from '@/services/cart.service';
 import { storageService } from '@/services/storage.service';
+import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 export interface CartVariant {
   id: string;
@@ -43,6 +44,42 @@ interface CartContextType {
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
+
+const clampQuantity = (quantity: number) => Math.min(quantity, MAX_ITEM_QUANTITY);
+
+const normalizeCartItemQuantities = (item: CartItem): CartItem => {
+  if (item.isCustomizable && item.variants) {
+    let remaining = MAX_ITEM_QUANTITY;
+    const normalizedVariants = item.variants
+      .map(variant => {
+        if (remaining <= 0) {
+          return { ...variant, quantity: 0 };
+        }
+        const allowed = Math.min(variant.quantity, remaining);
+        remaining -= allowed;
+        return { ...variant, quantity: allowed };
+      })
+      .filter(variant => variant.quantity > 0);
+
+    return {
+      ...item,
+      variants: normalizedVariants,
+    };
+  }
+
+  return {
+    ...item,
+    quantity: clampQuantity(item.quantity || 1),
+  };
+};
+
+const getCartItemTotalQuantity = (item: CartItem | undefined): number => {
+  if (!item) return 0;
+  if (item.isCustomizable && item.variants) {
+    return item.variants.reduce((sum, variant) => sum + variant.quantity, 0);
+  }
+  return item.quantity || 0;
+};
 
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [cart, setCart] = useState<{ [key: string]: CartItem }>({});
@@ -127,10 +164,12 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    * Add item to cart (local + backend sync)
    */
   const addToCart = async (item: CartItem, overrideRestaurantId?: number) => {
+    const normalizedItem = normalizeCartItemQuantities(item);
+
     // Update local cart immediately for responsive UI
     setCart(prev => ({
       ...prev,
-      [item.id]: item,
+      [normalizedItem.id]: normalizedItem,
     }));
 
     // Sync with backend
@@ -150,15 +189,15 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Prepare backend request
       const backendRequest: AddToCartRequest = {
         restaurant_id: effectiveRestaurantId,
-        item_id: item.itemId || parseInt(item.id, 10), // Use itemId if available, fallback to id
-        quantity: item.quantity || 1,
-        special_instructions: item.specialInstructions,
+        item_id: normalizedItem.itemId || parseInt(normalizedItem.id, 10), // Use itemId if available, fallback to id
+        quantity: normalizedItem.quantity || getCartItemTotalQuantity(normalizedItem) || 1,
+        special_instructions: normalizedItem.specialInstructions,
       };
 
       // Add customizations if item has variants (customizable items)
-      if (item.isCustomizable && item.variants && item.variants.length > 0) {
+      if (normalizedItem.isCustomizable && normalizedItem.variants && normalizedItem.variants.length > 0) {
         // Map frontend variants to backend customizations structure
-        backendRequest.customizations = item.variants.map((variant) => ({
+        backendRequest.customizations = normalizedItem.variants.map((variant) => ({
           customization_group_id: parseInt(variant.variantId || '0', 10),
           selected_options: (variant.addOns || []).map(addOnId => ({
             id: parseInt(addOnId, 10),
@@ -173,8 +212,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Update local cart with backend cart_item_id
         setCart(prev => ({
           ...prev,
-          [item.id]: {
-            ...prev[item.id],
+          [normalizedItem.id]: {
+            ...prev[normalizedItem.id],
             cartItemId: response.cart_item_id,
           },
         }));
@@ -220,19 +259,33 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    * Update item quantity (local + backend sync)
    */
   const updateQuantity = async (itemId: string, quantity: number) => {
+    const item = cart[itemId];
+    if (!item) {
+      return;
+    }
+
     if (quantity <= 0) {
       await removeFromCart(itemId);
       return;
     }
 
-    const item = cart[itemId];
+    const safeQuantity = clampQuantity(quantity);
+
+    if (quantity > MAX_ITEM_QUANTITY) {
+      console.warn(`Quantity for item ${itemId} capped at ${MAX_ITEM_QUANTITY}`);
+    }
+
+    // Avoid unnecessary updates
+    if ((item.quantity || 0) === safeQuantity) {
+      return;
+    }
 
     // Update local cart immediately for responsive UI
     setCart(prev => ({
       ...prev,
       [itemId]: {
         ...prev[itemId],
-        quantity,
+        quantity: safeQuantity,
       },
     }));
 
@@ -251,7 +304,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const backendRequest: AddToCartRequest = {
           restaurant_id: restaurantId,
           item_id: item.itemId || parseInt(item.id, 10),
-          quantity: quantity,
+            quantity: safeQuantity,
           special_instructions: item.specialInstructions,
         };
 
@@ -286,7 +339,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const response = await cartService.updateCartItem(item.cartItemId, {
         restaurant_id: restaurantId,
-        quantity,
+        quantity: safeQuantity,
       });
     } catch (error) {
       // Quantity already updated in local cart

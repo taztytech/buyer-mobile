@@ -31,7 +31,7 @@ import { homeService } from '@/services/home.service';
 import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
 import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
-import { ordersService } from '@/services/orders.service';
+import { ordersService, OrderListItem } from '@/services/orders.service';
 import CustomSplashScreen from '@/components/CustomSplashScreen';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -41,7 +41,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Inner component with cart and confirmation context access
 function AppContent() {
-  const { cart, addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart } = useCart();
+  const { addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart } = useCart();
   const { showConfirmation } = useConfirmation();
 
   const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help'>('login');
@@ -68,6 +68,7 @@ function AppContent() {
   const [locationSelectionCameFrom, setLocationSelectionCameFrom] = React.useState<'home' | 'addressSelection' | 'myAddresses'>('home');
   const [orderTrackingCameFrom, setOrderTrackingCameFrom] = React.useState<'orders' | 'checkout' | 'orderDetail'>('orders');
   const [editingAddress, setEditingAddress] = React.useState<any>(null);
+  const [helpOrderData, setHelpOrderData] = React.useState<OrderListItem | null>(null);
   const [isRegistrationFlow, setIsRegistrationFlow] = React.useState(false);
   const [initialLocationCoords, setInitialLocationCoords] = React.useState<{ latitude?: number; longitude?: number } | null>(null);
 
@@ -82,7 +83,7 @@ function AppContent() {
   const restaurantScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const checkoutScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
-  const [fontsLoaded] = useFonts({
+  const [_fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
     'Poppins_400Regular': Poppins_400Regular,
     'Poppins_500Medium': Poppins_500Medium,
@@ -880,37 +881,82 @@ function AppContent() {
   };
 
   // Help Navigation
-  const handleNavigateToHelp = () => {
+  const [helpCameFrom, setHelpCameFrom] = React.useState<'profile' | 'orders'>('profile');
+  const [isHelpClosing, setIsHelpClosing] = React.useState(false);
+
+  const handleNavigateToHelp = (from: 'profile' | 'orders' = 'profile', order?: OrderListItem) => {
+    setHelpCameFrom(from);
+    setHelpOrderData(order ?? null);
     setCurrentScreen('help');
 
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
+    setIsHelpClosing(false);
+
+    if (from === 'profile') {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: -SCREEN_WIDTH,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(helpScreenSlide, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      helpScreenSlide.setValue(SCREEN_WIDTH);
       Animated.timing(helpScreenSlide, {
         toValue: 0,
         duration: 200,
         useNativeDriver: true,
-      }),
-    ]).start();
+      }).start();
+    }
   };
 
-  const handleBackFromHelp = () => {
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
+  const closeHelpScreen = (
+    targetScreen: typeof currentScreen,
+    afterStateCallback?: () => void
+  ) => {
+    if (currentScreen !== targetScreen) {
+      setCurrentScreen(targetScreen);
+    }
+    setIsHelpClosing(true);
+    const animations = [
       Animated.timing(helpScreenSlide, {
         toValue: SCREEN_WIDTH,
         duration: 180,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setCurrentScreen('profile');
+    ];
+
+    if (helpCameFrom === 'profile') {
+      animations.push(
+        Animated.timing(profileScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        })
+      );
+    }
+
+    Animated.parallel(animations).start(() => {
+      setIsHelpClosing(false);
+      setHelpOrderData(null);
+      afterStateCallback?.();
+    });
+  };
+
+  const handleBackFromHelp = () => {
+    closeHelpScreen(helpCameFrom);
+  };
+
+  const handleHelpViewOrder = (orderId: string) => {
+    if (!orderId) {
+      return;
+    }
+    closeHelpScreen('orderDetail', () => {
+      setSelectedOrderId(orderId);
     });
   };
 
@@ -1031,7 +1077,8 @@ function AppContent() {
       );
 
       if (restaurantResponse.success && restaurantResponse.data) {
-        const restaurantData = restaurantResponse.data?.data || restaurantResponse.data;
+        const restaurantPayload = restaurantResponse.data as any;
+        const restaurantData = restaurantPayload?.data || restaurantPayload;
 
         // Check if restaurant is within 10km radius
         // The API returns distance_km when lat/lng are provided
@@ -1193,10 +1240,6 @@ function AppContent() {
     }
   };
 
-  // Check if app is ready
-  const isAppReady = fontsLoaded && !isCheckingAuth;
-  // const showSplash = !animationComplete;
-
   // Hide native splash screen INSTANTLY
   React.useEffect(() => {
     // Hide immediately on mount
@@ -1324,13 +1367,8 @@ function AppContent() {
                 onOrderDetails={handleNavigateToOrderDetail}
                 onReorder={handleReorder}
                 onRateOrder={handleNavigateToRateOrder}
-                onTrackOrder={(orderId) => {
-                  // Navigate directly to tracking, but set flag so back goes to order detail
-                  setSelectedOrderId(orderId);
-                  setOrderTrackingCameFrom('orderDetail');
-                  setCurrentScreen('orderTracking');
-                }}
-                onHelp={(orderId) => {}}
+                onTrackOrder={handleNavigateToOrderTracking}
+                onHelp={(order) => handleNavigateToHelp('orders', order)}
                 onViewMore={() => {}}
               />
             </View>
@@ -1393,10 +1431,10 @@ function AppContent() {
               <SearchScreen
                 onBack={handleBackFromSearch}
                 selectedLocation={selectedLocation}
-                onSelectResult={(result) => {
+                onSelectResult={(_result) => {
                   handleBackFromSearch();
                 }}
-                onSelectItem={(itemId, itemName) => {
+                onSelectItem={(_itemId, itemName) => {
                   // Navigate to category results screen to show restaurants with this dish
                   setSelectedCategory(itemName);
                   setCategoryCameFrom('search');
@@ -1525,10 +1563,13 @@ function AppContent() {
                 transform: [{ translateX: helpScreenSlide }],
               },
             ]}
-            pointerEvents={currentScreen === 'help' ? 'auto' : 'none'}
+            pointerEvents={currentScreen === 'help' && !isHelpClosing ? 'auto' : 'none'}
           >
             <HelpScreen
+              visible={currentScreen === 'help'}
               onBack={handleBackFromHelp}
+              onViewOrder={handleHelpViewOrder}
+              initialOrder={helpOrderData || undefined}
             />
           </Animated.View>
 
@@ -1537,7 +1578,7 @@ function AppContent() {
             <View style={styles.editProfileOverlay}>
               <EditProfileScreen
                 onBack={handleBackFromEditProfile}
-                onSave={(data) => {
+                onSave={(_data) => {
                   handleBackFromEditProfile();
                 }}
               />

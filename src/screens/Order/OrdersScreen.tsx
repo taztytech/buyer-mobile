@@ -41,7 +41,7 @@ interface OrdersScreenProps {
   onReorder?: (orderId: string) => void;
   onRateOrder?: (orderId: string, orderData?: any) => void;
   onTrackOrder?: (orderId: string) => void;
-  onHelp?: (orderId: string) => void;
+  onHelp?: (order: OrderListItem) => void;
   onViewMore?: () => void; // Unused but kept for API compatibility
 }
 
@@ -265,9 +265,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  const handleHelp = (orderId: string) => {
+  const handleHelp = (order: OrderListItem) => {
     if (onHelp) {
-      onHelp(orderId);
+      onHelp(order);
     }
   };
 
@@ -277,7 +277,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  const renderOrderCard = (order: any) => {
+  const renderOrderCard = (order: OrderListItem) => {
     const statusConfig = {
       delivered: {
         label: 'Delivered',
@@ -407,7 +407,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             <>
               <TouchableOpacity
                 style={styles.rateButton}
-                onPress={() => handleHelp(order.id.toString())}
+                onPress={() => handleHelp(order)}
                 activeOpacity={0.7}
               >
                 <MaterialIcons name="help-outline" size={18} color="#001E1F" />
@@ -431,7 +431,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 // For cancelled orders, show Help button
                 <TouchableOpacity
                   style={styles.rateButton}
-                  onPress={() => handleHelp(order.id.toString())}
+                  onPress={() => handleHelp(order)}
                   activeOpacity={0.7}
                 >
                   <MaterialIcons name="help-outline" size={18} color="#001E1F" />
