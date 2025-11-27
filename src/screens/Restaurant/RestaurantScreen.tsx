@@ -145,6 +145,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   });
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
+  const [selectedDetailItemAvailable, setSelectedDetailItemAvailable] = useState<boolean>(true);
   const [activeDietaryFilter, setActiveDietaryFilter] = useState<'veg' | 'non-veg' | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showOrderSuccess, setShowOrderSuccess] = useState(false);
@@ -612,10 +613,20 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle opening detail modal
   const handleImageClick = (item: MenuItem) => {
-    if (!ensureRestaurantOpen()) {
-      return;
-    }
+    // Allow opening modal even if restaurant is closed (to show disabled state)
+    // Check if restaurant is open
+    const isRestaurantOpen = restaurantData?.timings
+      ? homeService.isRestaurantOpen(restaurantData.timings)
+      : true; // Default to open if no timing data
+
+    // Check if item is available based on its own timings
+    const isItemCurrentlyAvailable = isItemAvailable(item.timings);
+
+    // Item is only available if BOTH restaurant is open AND item timing is available
+    const itemAvailable = isRestaurantOpen && isItemCurrentlyAvailable;
+    
     setSelectedDetailItem(item);
+    setSelectedDetailItemAvailable(itemAvailable);
     setShowDetailModal(true);
   };
 
@@ -631,8 +642,22 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   };
 
   // Get filtered menu sections based on active dietary filter and global veg mode
+  // Helper function to check if item is fully available (considering both restaurant and item timings)
+  const isItemFullyAvailable = (item: MenuItem): boolean => {
+    // Check if restaurant is open
+    const isRestaurantOpen = restaurantData?.timings
+      ? homeService.isRestaurantOpen(restaurantData.timings)
+      : true; // Default to open if no timing data
+
+    // Check if item is available based on its own timings
+    const isItemCurrentlyAvailable = isItemAvailable(item.timings);
+
+    // Item is only available if BOTH restaurant is open AND item timing is available
+    return isRestaurantOpen && isItemCurrentlyAvailable;
+  };
+
   const getFilteredMenuSections = (): MenuSection[] => {
-    return menuSections
+    const processedSections = menuSections
       .map(section => {
         // Filter items
         let filteredItems = section.items.filter(item => {
@@ -672,24 +697,49 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           return true;
         });
 
-        // Apply sorting if filter is active
-        if (filters.sortBy) {
-          filteredItems = [...filteredItems].sort((a, b) => {
+        // Sort items within category: enabled items first, then disabled items
+        filteredItems = [...filteredItems].sort((a, b) => {
+          const aAvailable = isItemFullyAvailable(a);
+          const bAvailable = isItemFullyAvailable(b);
+
+          // Primary sort: availability (enabled items come first)
+          if (aAvailable !== bAvailable) {
+            return aAvailable ? -1 : 1; // true (available) comes before false (disabled)
+          }
+
+          // Secondary sort: price (if filter is active and both have same availability)
+          if (filters.sortBy) {
             if (filters.sortBy === 'lowToHigh') {
               return a.price - b.price;
             } else if (filters.sortBy === 'highToLow') {
               return b.price - a.price;
             }
-            return 0;
-          });
-        }
+          }
+
+          return 0;
+        });
+
+        // Check if category has any enabled items
+        const hasEnabledItems = filteredItems.some(item => isItemFullyAvailable(item));
 
         return {
           ...section,
           items: filteredItems,
+          hasEnabledItems, // Add flag for category sorting
         };
       })
       .filter(section => section.items.length > 0); // Remove empty sections
+
+    // Sort categories: categories with enabled items first, then categories with only disabled items
+    const sortedSections = [...processedSections].sort((a, b) => {
+      if (a.hasEnabledItems !== b.hasEnabledItems) {
+        return a.hasEnabledItems ? -1 : 1; // Categories with enabled items come first
+      }
+      return 0;
+    });
+
+    // Remove the hasEnabledItems flag before returning (it was just for sorting)
+    return sortedSections.map(({ hasEnabledItems, ...section }) => section);
   };
 
   const filteredMenuSections = getFilteredMenuSections();
@@ -1446,7 +1496,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     )}
                     <Image
                       source={item.image}
-                      style={styles.itemImage}
+                      style={[
+                        styles.itemImage,
+                        !itemAvailable && styles.itemImageDisabled
+                      ]}
                       resizeMode="cover"
                       onLoad={() => handleImageLoad(item.id)}
                       fadeDuration={0}
@@ -1713,9 +1766,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         visible={showDetailModal}
         item={selectedDetailItem}
         initialQuantity={selectedDetailItem ? (cart[selectedDetailItem.id]?.quantity || undefined) : undefined}
+        maxQuantity={MAX_ITEM_QUANTITY}
+        isAvailable={selectedDetailItemAvailable}
         onClose={() => {
           setShowDetailModal(false);
           setSelectedDetailItem(null);
+          setSelectedDetailItemAvailable(true);
         }}
         onAddToCart={handleAddFromDetail}
       />
@@ -2255,6 +2311,9 @@ const styles = StyleSheet.create({
     width: 155,
     height: 137,
     borderRadius: 16,
+  },
+  itemImageDisabled: {
+    opacity: 0.5,
   },
   itemGradientOverlayTop: {
     position: 'absolute',
