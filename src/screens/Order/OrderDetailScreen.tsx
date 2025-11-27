@@ -8,18 +8,18 @@ import {
   Image,
   StatusBar,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
-import { Shimmer } from '@/components/Shimmer';
+import { storageService } from '@/services/storage.service';
 
 interface OrderDetailScreenProps {
   orderId?: string;
   visible?: boolean;
   onBack?: () => void;
-  onChatWithUs?: () => void;
   onThankDriver?: () => void;
   onRateOrder?: (orderId: string, orderData?: any) => void;
   onReorder?: () => void;
@@ -31,7 +31,6 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   orderId,
   visible = false,
   onBack,
-  onChatWithUs,
   onThankDriver,
   onRateOrder,
   onReorder,
@@ -42,6 +41,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState<string>('');
+  const [supportNumber, setSupportNumber] = useState<string>('');
 
   // Fetch order details function
   const fetchOrderDetails = useCallback(async () => {
@@ -98,35 +98,46 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     fetchUserPhone();
   }, []);
 
-  // Mock data fallback (for reference)
-  const mockOrderData = {
-    status: 'delivered',
-    driver: {
-      name: 'John Peter',
-      avatar: require('@/assets/icon.png'),
-    },
-    restaurant: {
-      name: 'KFC',
-      location: 'Velachery',
-      logo: require('@/assets/icon.png'),
-    },
-    date: 'July 05, 2025',
-    total: 69,
-    items: [
-      { id: '1', name: 'Chicken Roll', isVeg: false },
-    ],
-    deliveryAddress: {
-      address: 'F1, Jeyalakshmi Apartments, Chennai - 98',
-      phone: '+91 87451 254869',
-    },
-    billSummary: {
-      itemTotal: 29,
-      gstAndCharges: 29,
-      deliveryFee: 29,
-      platformFee: 10,
-      toPay: 195,
-    },
-    paymentMethod: 'Paid By UPI',
+  // Fetch support number (same logic as ContactUsScreen)
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
+    const fetchSupportDetails = async () => {
+      try {
+        // Try API first
+        const response = await authService.getProfile();
+
+        if (response.success && response.data?.user) {
+          const user = response.data.user as any;
+          setSupportNumber(user.support_number || '');
+        } else {
+          // Fallback to stored user
+          const storedUser = await storageService.getUser();
+          if (storedUser) {
+            setSupportNumber((storedUser as any).support_number || '');
+          }
+        }
+      } catch {
+        try {
+          const storedUser = await storageService.getUser();
+          if (storedUser) {
+            setSupportNumber((storedUser as any).support_number || '');
+          }
+        } catch {
+          // Silent fail – leave default
+        }
+      }
+    };
+
+    fetchSupportDetails();
+  }, [visible]);
+
+  const handleCallSupport = () => {
+    if (!supportNumber) return;
+    const telUrl = `tel:${supportNumber.replace(/\s+/g, '')}`;
+    Linking.openURL(telUrl).catch(() => {});
   };
 
   // Helper function to format date
@@ -227,11 +238,11 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         <Text style={styles.headerTitle}>Order Details</Text>
         <TouchableOpacity
           style={styles.chatButton}
-          onPress={onChatWithUs}
+          onPress={handleCallSupport}
           activeOpacity={0.7}
         >
-          <MaterialIcons name="support-agent" size={20} color="#FFFFFF" />
-          <Text style={styles.chatButtonText}>Chat with us</Text>
+          <MaterialIcons name="phone" size={20} color="#FFFFFF" />
+          <Text style={styles.chatButtonText}>Call For Support</Text>
         </TouchableOpacity>
       </View>
 
@@ -747,21 +758,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginTop: 4,
-  },
-  vegIndicator: {
-    width: 16,
-    height: 16,
-    borderWidth: 1.5,
-    borderColor: '#00B14F',
-    borderRadius: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  vegDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#00B14F',
   },
   itemName: {
     fontFamily: 'Poppins',

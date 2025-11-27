@@ -405,14 +405,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         <View style={styles.actionButtons}>
           {actualStatus === 'ongoing' ? (
             <>
-              <TouchableOpacity
+              {/* <TouchableOpacity
                 style={styles.rateButton}
                 onPress={() => handleHelp(order)}
                 activeOpacity={0.7}
               >
                 <MaterialIcons name="help-outline" size={18} color="#001E1F" />
                 <Text style={styles.rateButtonText}>Help</Text>
-              </TouchableOpacity>
+              </TouchableOpacity> */}
               <TouchableOpacity
                 style={styles.reorderButton}
                 onPress={() => handleTrackOrder(order.id.toString())}
