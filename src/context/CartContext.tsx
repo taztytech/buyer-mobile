@@ -116,8 +116,19 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           backendCart.items.forEach((item) => {
             // Map dietary_preference to isVeg
-            const isVeg = item.dietary_preference === 'veg' ||
-                          item.dietary_preference === 'vegetarian';
+            // Check multiple possible values and field names from API response
+            let isVeg = false;
+            
+            // Check dietary_preference field (string)
+            if (item.dietary_preference) {
+              const dietaryPref = item.dietary_preference.toLowerCase();
+              isVeg = dietaryPref === 'veg' || dietaryPref === 'vegetarian';
+            }
+            // Check is_veg field (boolean/number)
+            else if (item.is_veg !== undefined) {
+              isVeg = item.is_veg === true || item.is_veg === 1;
+            }
+            // If neither field is present, default to false (non-veg) to be safe
 
             const cartItem: CartItem = {
               id: item.item_id.toString(),

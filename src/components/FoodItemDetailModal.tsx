@@ -8,7 +8,9 @@ import {
   Image,
   ScrollView,
   Animated,
+  Platform,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ItemTiming, formatItemTiming, isItemAvailable } from '@/utils/timing.utils';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
@@ -47,6 +49,7 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
   const [isAdding, setIsAdding] = useState(false);
   const slideAnim = useRef(new Animated.Value(1000)).current;
   const resolvedMaxQuantity = Math.max(1, maxQuantity);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (visible) {
@@ -111,19 +114,21 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
       statusBarTranslucent={true}
       onRequestClose={onClose}
     >
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <Animated.View
-          style={[
-            styles.modalContainer,
-            {
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+      <View style={styles.overlayContainer}>
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={onClose}
         >
+          <Animated.View
+            style={[
+              styles.modalContainer,
+              {
+                transform: [{ translateY: slideAnim }],
+                paddingBottom: Math.max(insets.bottom, 0),
+              },
+            ]}
+          >
           <TouchableOpacity
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
@@ -263,11 +268,17 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
           </TouchableOpacity>
         </Animated.View>
       </TouchableOpacity>
+      </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
+  overlayContainer: {
+    flex: 1,
+    zIndex: 9999,
+    elevation: 9999,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -278,6 +289,19 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     maxHeight: '85%',
+    zIndex: 10000,
+    elevation: 10000,
+    ...Platform.select({
+      android: {
+        elevation: 10000,
+      },
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+    }),
   },
   scrollContent: {
     padding: 20,
