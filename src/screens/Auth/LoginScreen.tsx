@@ -8,7 +8,6 @@ import {
   StatusBar,
   Image,
   Dimensions,
-  Linking,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,9 +20,15 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface LoginScreenProps {
   onLoginSuccess?: (phoneNumber: string) => void;
+  onOpenTerms?: () => void;
+  onOpenPrivacy?: () => void;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({
+  onLoginSuccess,
+  onOpenTerms,
+  onOpenPrivacy,
+}) => {
   const { showConfirmation } = useConfirmation();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [error, setError] = useState('');
@@ -115,10 +120,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     // TODO: Implement Google login
   };
 
-  const handleLinkPress = (url: string) => {
-    Linking.openURL(url).catch(err => {});
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
@@ -208,14 +209,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             By Clicking, You agree our{' '}
             <Text
               style={styles.termsLink}
-              onPress={() => handleLinkPress('https://tazty.in/terms')}
+              onPress={onOpenTerms}
             >
               T&C
             </Text>
             {' and '}
             <Text
               style={styles.termsLink}
-              onPress={() => handleLinkPress('https://tazty.in/privacy')}
+              onPress={onOpenPrivacy}
             >
               Privacy Policy
             </Text>
@@ -286,7 +287,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 20,
+    paddingBottom: 36,
     justifyContent: 'space-between',
   },
   formContainer: {
@@ -415,6 +416,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     textAlign: 'center',
     color: 'rgba(0, 30, 31, 0.5)',
+    marginBottom: 8,
   },
   termsLink: {
     fontFamily: 'Poppins_600SemiBold',

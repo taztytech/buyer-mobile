@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { addressService, AddAddressRequest } from '@/services/address.service';
+import { addressService, AddAddressRequest, MAX_ADDRESSES } from '@/services/address.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import * as Location from 'expo-location';
 
@@ -303,7 +303,29 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     setLoading(true);
 
     try {
-      // Log received coordinates
+      // For new addresses, enforce a maximum of saved addresses from a single source of truth
+      if (!editMode) {
+        try {
+          // Ensure we read a fresh list from the API, not stale cache
+          addressService.clearCache();
+          const existingResponse = await addressService.getAddresses();
+
+          if (existingResponse.success && existingResponse.data && existingResponse.data.length >= MAX_ADDRESSES) {
+            setLoading(false);
+            showConfirmation({
+              title: 'Address Limit Reached',
+              message:
+                `You can save up to ${MAX_ADDRESSES} delivery addresses.`,
+              confirmText: 'OK',
+              cancelText: 'Close',
+              onConfirm: () => {},
+            });
+            return;
+          }
+        } catch {
+          // If the pre-check fails, continue gracefully and let the API enforce any additional limits
+        }
+      }
 
       // Prepare address data for API
       const addressData: AddAddressRequest = {
@@ -831,6 +853,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#00B14F',
     borderRadius: 10,
     gap: 10,
+    marginBottom: 30,
   },
   continueButtonDisabled: {
     backgroundColor: '#80D8A7',

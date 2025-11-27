@@ -351,11 +351,6 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
           )}
         </ScrollView>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>powered by </Text>
-          <Text style={styles.footerGoogle}>Google</Text>
-        </View>
       </View>
     </View>
   );

@@ -6,6 +6,8 @@
 import { apiService, ApiResponse } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 
+export const MAX_ADDRESSES = 5;
+
 // Types
 export interface AddAddressRequest {
   address1: string;
