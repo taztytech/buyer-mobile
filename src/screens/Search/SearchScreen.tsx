@@ -120,7 +120,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       try {
         // Pass location if available, otherwise search without location filter
         const response = await searchService.getSearchSuggestions(
-          searchQuery,
+              searchQuery,
           userLocation?.lat,
           userLocation?.lng,
           vegMode
