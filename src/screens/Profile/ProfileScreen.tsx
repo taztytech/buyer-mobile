@@ -6,10 +6,10 @@ import {
   StatusBar,
   TouchableOpacity,
   ScrollView,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { storageService } from '@/services/storage.service';
 import { authService } from '@/services/auth.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
@@ -42,6 +42,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const { showConfirmation } = useConfirmation();
   const [userName, setUserName] = useState('User');
   const [userPhone, setUserPhone] = useState('');
+
+  // Get app version dynamically from Expo Constants
+  // Try multiple sources to ensure we get the version in all environments
+  const appVersion = 
+    Constants.expoConfig?.version || 
+    Constants.manifest?.version || 
+    Constants.manifest2?.extra?.expoClient?.version ||
+    ''; // Fallback version if none found
 
   // Fetch user data from API whenever screen becomes visible
   useEffect(() => {
@@ -108,7 +116,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   };
 
   const handleLinkPress = (url: string) => {
-    Linking.openURL(url).catch(() => {});
+    Linking.openURL(url).catch(err => {});
   };
 
   // Menu item component
@@ -235,12 +243,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <MenuItem 
               label="Privacy Policy" 
               icon="shield" 
-              onPress={() => handleLinkPress('https://tazty.in/privacy')} 
+              onPress={onPrivacyPolicy} 
             />
             <MenuItem
               label="Terms & Conditions"
               icon="description"
-              onPress={() => handleLinkPress('https://tazty.in/terms')}
+              onPress={onTermsConditions}
               showArrow={false}
               showDivider={false}
             />
@@ -250,7 +258,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         {/* Bottom Section - App Version & Logout Button */}
         <View style={styles.bottomSection}>
           {/* App Version */}
-          <Text style={styles.appVersion}>App Version 1.2</Text>
+          <Text style={styles.appVersion}>App Version {appVersion}</Text>
 
           {/* Logout Button */}
           <TouchableOpacity
@@ -325,7 +333,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 30,
+    marginTop: 20,
     marginBottom: 30,
   },
   profileLeft: {

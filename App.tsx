@@ -73,6 +73,7 @@ function AppContent() {
   const [helpOrderData, setHelpOrderData] = React.useState<OrderListItem | null>(null);
   const [isRegistrationFlow, setIsRegistrationFlow] = React.useState(false);
   const [initialLocationCoords, setInitialLocationCoords] = React.useState<{ latitude?: number; longitude?: number } | null>(null);
+  const [legalCameFrom, setLegalCameFrom] = React.useState<'profile' | 'login'>('profile');
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -820,73 +821,117 @@ function AppContent() {
   };
 
   // Privacy Policy Navigation
-  const handleNavigateToPrivacyPolicy = () => {
+  const handleNavigateToPrivacyPolicy = (from: 'profile' | 'login' = 'profile') => {
+    setLegalCameFrom(from);
     setCurrentScreen('privacyPolicy');
 
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
+    if (from === 'profile') {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: -SCREEN_WIDTH,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(privacyPolicyScreenSlide, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // Coming from login: only animate the privacy policy screen
+      privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
       Animated.timing(privacyPolicyScreenSlide, {
         toValue: 0,
         duration: 200,
         useNativeDriver: true,
-      }),
-    ]).start();
+      }).start();
+    }
   };
 
   const handleBackFromPrivacyPolicy = () => {
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
+    if (legalCameFrom === 'login') {
       Animated.timing(privacyPolicyScreenSlide, {
         toValue: SCREEN_WIDTH,
         duration: 180,
         useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('profile');
-    });
+      }).start(() => {
+        setCurrentScreen('login');
+        setLegalCameFrom('profile');
+      });
+    } else {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(privacyPolicyScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('profile');
+      });
+    }
   };
 
   // Terms & Conditions Navigation
-  const handleNavigateToTermsConditions = () => {
+  const handleNavigateToTermsConditions = (from: 'profile' | 'login' = 'profile') => {
+    setLegalCameFrom(from);
     setCurrentScreen('termsConditions');
 
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
+    if (from === 'profile') {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: -SCREEN_WIDTH,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(termsConditionsScreenSlide, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // Coming from login: only animate the terms & conditions screen
+      termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
       Animated.timing(termsConditionsScreenSlide, {
         toValue: 0,
         duration: 200,
         useNativeDriver: true,
-      }),
-    ]).start();
+      }).start();
+    }
   };
 
   const handleBackFromTermsConditions = () => {
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
+    if (legalCameFrom === 'login') {
       Animated.timing(termsConditionsScreenSlide, {
         toValue: SCREEN_WIDTH,
         duration: 180,
         useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('profile');
-    });
+      }).start(() => {
+        setCurrentScreen('login');
+        setLegalCameFrom('profile');
+      });
+    } else {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(termsConditionsScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('profile');
+      });
+    }
   };
 
   // Help Navigation
@@ -1296,7 +1341,11 @@ function AppContent() {
     <>
       <SafeAreaProvider>
         {!isCheckingAuth && currentScreen === 'login' ? (
-        <LoginScreen onLoginSuccess={handleLoginSuccess} />
+        <LoginScreen
+          onLoginSuccess={handleLoginSuccess}
+          onOpenTerms={() => handleNavigateToTermsConditions('login')}
+          onOpenPrivacy={() => handleNavigateToPrivacyPolicy('login')}
+        />
       ) : !isCheckingAuth && currentScreen === 'otp' ? (
         <OTPVerificationScreen
           phoneNumber={phoneNumber}
@@ -1581,6 +1630,7 @@ function AppContent() {
           >
             <ContentPage
               title="Privacy Policy"
+              url="https://tazty.in/privacy"
               onBack={handleBackFromPrivacyPolicy}
             />
           </Animated.View>
@@ -1597,6 +1647,7 @@ function AppContent() {
           >
             <ContentPage
               title="Terms & Conditions"
+              url="https://tazty.in/terms"
               onBack={handleBackFromTermsConditions}
             />
           </Animated.View>

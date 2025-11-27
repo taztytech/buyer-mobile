@@ -11,6 +11,8 @@ import {
   Keyboard,
   Animated,
   ActivityIndicator,
+  Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -310,106 +312,105 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     }
 
     setIsGettingLocation(true);
-    
+
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        // Use balanced accuracy to get stable location without continuous updates
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Platform.OS === 'ios'
+      // First check existing permission
+      let permission = await Location.getForegroundPermissionsAsync();
+
+      // If not granted, request it (this will trigger the system popup,
+      // similar to the "Add address" button flow)
+      if (permission.status !== 'granted') {
+        permission = await Location.requestForegroundPermissionsAsync();
+      }
+
+      if (permission.status !== 'granted') {
+        // Still not granted – guide the user instead of silently falling back
+        if (!permission.canAskAgain) {
+          // Permission is blocked ("Don't ask again") – send user to settings
+          Alert.alert(
+            'Enable Location',
+            'To use your current location, please enable location access for Tazty in your device settings.',
+            [
+              { text: 'Not now', style: 'cancel' },
+              {
+                text: 'Open Settings',
+                onPress: () => {
+                  try {
+                    Linking.openSettings();
+                  } catch {
+                    // Ignore Linking errors
+                  }
+                },
+              },
+            ]
+          );
+        } else {
+          // Permission was denied but can be asked again – show a clear, actionable message
+          Alert.alert(
+            'Turn on location access',
+            'To fetch your current location, please turn on device location and allow Tazty to access your location (choose “While using this app” or “Allow all the time”).'
+          );
+        }
+
+        return;
+      }
+
+      // Permission granted – fetch current location
+      const location = await Location.getCurrentPositionAsync({
+        accuracy:
+          Platform.OS === 'ios'
             ? Location.Accuracy.Balanced
             : Location.Accuracy.High,
-        });
+      });
 
-        const newRegion = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        };
-
-        isUpdatingFromCode.current = true;
-        setRegion(newRegion);
-        currentMapRegion.current = newRegion;
-
-        // Animate map to new location if map is available
-        if (mapRef.current && isMapAvailable) {
-          mapRef.current.animateToRegion(newRegion, 1000);
-        }
-
-        setTimeout(() => {
-          isUpdatingFromCode.current = false;
-        }, 1500);
-
-        // Get address from coordinates
-        try {
-          const addresses = await Location.reverseGeocodeAsync({
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          });
-
-          if (addresses.length > 0) {
-            const addr = addresses[0];
-            setLocationName(addr.name || addr.street || 'Current Location');
-            setLocationAddress(
-              `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
-            );
-            // Store geocoding data for pre-filling address form
-            setGeocodingData(addr);
-          }
-        } catch (reverseGeoError) {
-          setLocationName('Current Location');
-          setLocationAddress('Current Location');
-        }
-      } else {
-        // Permission denied - ensure we use Madurai default
-        const maduraiRegion = {
-          latitude: 9.9252,
-          longitude: 78.1198,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        };
-
-        isUpdatingFromCode.current = true;
-        setRegion(maduraiRegion);
-        currentMapRegion.current = maduraiRegion;
-
-        // Animate map to Madurai if map is available
-        if (mapRef.current && isMapAvailable) {
-          mapRef.current.animateToRegion(maduraiRegion, 1000);
-        }
-
-        setTimeout(() => {
-          isUpdatingFromCode.current = false;
-        }, 1500);
-
-        // Set Madurai as location
-        setLocationName('Madurai');
-        setLocationAddress('Madurai, Tamil Nadu, India');
-      }
-    } catch (error) {
-      // Error getting location - fallback to Madurai
-      const maduraiRegion = {
-        latitude: 9.9252,
-        longitude: 78.1198,
+      const newRegion = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       };
 
       isUpdatingFromCode.current = true;
-      setRegion(maduraiRegion);
-      currentMapRegion.current = maduraiRegion;
+      setRegion(newRegion);
+      currentMapRegion.current = newRegion;
 
+      // Animate map to new location if map is available
       if (mapRef.current && isMapAvailable) {
-        mapRef.current.animateToRegion(maduraiRegion, 1000);
+        mapRef.current.animateToRegion(newRegion, 1000);
       }
 
       setTimeout(() => {
         isUpdatingFromCode.current = false;
       }, 1500);
 
-      setLocationName('Madurai');
-      setLocationAddress('Madurai, Tamil Nadu, India');
+      // Get address from coordinates
+      try {
+        const addresses = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+
+        if (addresses.length > 0) {
+          const addr = addresses[0];
+          setLocationName(addr.name || addr.street || 'Current Location');
+          setLocationAddress(
+            `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${
+              addr.country || ''
+            }`,
+          );
+          // Store geocoding data for pre-filling address form
+          setGeocodingData(addr);
+        }
+      } catch (reverseGeoError) {
+        setLocationName('Current Location');
+        setLocationAddress('Current Location');
+      }
+    } catch (error) {
+      // Keep existing map state; show a helpful, actionable message
+      Alert.alert(
+        'Turn on location access',
+        'We could not fetch your current location. Please turn on device location and allow Tazty to access your location (choose “While using this app” or “Allow all the time”), then try again.'
+      );
     } finally {
       setIsGettingLocation(false);
     }

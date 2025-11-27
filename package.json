@@ -12,7 +12,11 @@
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "type-check": "tsc --noEmit",
     "build:ios": "eas build --platform ios",
-    "build:android": "eas build --platform android"
+    "build:android": "eas build --platform android",
+    "build:android:all:release:dev": "node scripts/build-android.js dev apk all",
+    "build:android:all:release:prod": "node scripts/build-android.js prod apk all",
+    "build:android:all:bundle:dev": "node scripts/build-android.js dev bundle all",
+    "build:android:all:bundle:prod": "node scripts/build-android.js prod bundle all"
   },
   "dependencies": {
     "@expo-google-fonts/poppins": "^0.4.1",
@@ -40,7 +44,8 @@
     "react-native": "0.81.5",
     "react-native-maps": "1.20.1",
     "react-native-razorpay": "^2.3.1",
-    "react-native-safe-area-context": "^5.6.1"
+    "react-native-safe-area-context": "^5.6.1",
+    "react-native-webview": "13.15.0"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
