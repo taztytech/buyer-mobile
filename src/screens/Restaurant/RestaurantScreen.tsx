@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Animated,
+  Modal,
   Platform,
   BackHandler,
 } from 'react-native';
@@ -147,6 +148,29 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const [showSearch, setShowSearch] = useState(false);
   const [showOrderSuccess, setShowOrderSuccess] = useState(false);
   const [togglingFavoriteItemId, setTogglingFavoriteItemId] = useState<string | null>(null);
+  const [showClosedModal, setShowClosedModal] = useState(false);
+
+  const restaurantOpeningMessage = useMemo(
+    () => (restaurantData?.timings ? homeService.getRestaurantOpeningMessage(restaurantData.timings) : null),
+    [restaurantData?.timings]
+  );
+  const isRestaurantClosed = Boolean(restaurantOpeningMessage);
+
+  const showRestaurantClosedAlert = useCallback(() => {
+    setShowClosedModal(true);
+  }, []);
+
+  const ensureRestaurantOpen = useCallback((): boolean => {
+    if (isRestaurantClosed) {
+      showRestaurantClosedAlert();
+      return false;
+    }
+    return true;
+  }, [isRestaurantClosed, showRestaurantClosedAlert]);
+
+  const handleCloseClosedModal = useCallback(() => {
+    setShowClosedModal(false);
+  }, []);
 
   const scrollViewRef = React.useRef<ScrollView>(null);
   const sectionRefs = React.useRef<{ [key: string]: View | null }>({});
@@ -285,6 +309,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   };
 
   const addToCart = (item: MenuItem) => {
+    if (!ensureRestaurantOpen()) {
+      return;
+    }
     const cartItemCount = Object.keys(cart).length;
     const hasConflict = cartItemCount > 0 && 
                        (cartRestaurantId === null || cartRestaurantId !== restaurantId);
@@ -329,6 +356,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Increment item quantity
   const incrementItem = (itemId: string) => {
+    if (!ensureRestaurantOpen()) {
+      return;
+    }
     const cartItem = cart[itemId];
 
     // If item is customizable, open review modal instead
@@ -360,6 +390,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   };
 
   const handleCustomizableItemClick = (item: MenuItem) => {
+    if (!ensureRestaurantOpen()) {
+      return;
+    }
     const cartItemCount = Object.keys(cart).length;
     const hasConflict = cartItemCount > 0 && 
                        (cartRestaurantId === null || cartRestaurantId !== restaurantId);
@@ -388,6 +421,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle adding customizable item to cart with add-ons
   const handleAddCustomizableItem = (itemId: string, quantity: number, selectedAddOns: string[]) => {
+    if (!ensureRestaurantOpen()) {
+      return;
+    }
     const item = menuSections
       .flatMap(section => section.items)
       .find(i => i.id === itemId);
@@ -505,6 +541,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handlers for CustomisationsReviewModal
   const handleIncrementVariant = (variantId: string) => {
+    if (!ensureRestaurantOpen()) {
+      return;
+    }
     if (!reviewingItemId) return;
 
     const item = cart[reviewingItemId];
@@ -548,6 +587,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   };
 
   const handleAddNewCustomisation = () => {
+    if (!ensureRestaurantOpen()) {
+      return;
+    }
     if (!reviewingItemId) return;
 
     const item = menuSections
@@ -568,6 +610,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle opening detail modal
   const handleImageClick = (item: MenuItem) => {
+    if (!ensureRestaurantOpen()) {
+      return;
+    }
     setSelectedDetailItem(item);
     setShowDetailModal(true);
   };
@@ -651,6 +696,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const hasNoVegItems = vegMode === 'all' && filteredMenuSections.length === 0 && menuSections.length > 0;
 
   const handleAddFromDetail = (itemId: string, quantity: number) => {
+    if (!ensureRestaurantOpen()) {
+      return;
+    }
     const item = menuSections
       .flatMap(section => section.items)
       .find(i => i.id === itemId);
@@ -995,19 +1043,13 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                       )}
                     </Text>
                   </TouchableOpacity>
-                  {/* Opening Message */}
-                  {restaurantData?.timings && (() => {
-                    const openingMessage = homeService.getRestaurantOpeningMessage(restaurantData.timings);
-                    if (openingMessage) {
-                      return (
-                        <View style={styles.openingMessageContainer}>
-                          <MaterialIcons name="access-time" size={14} color="#FF6B6B" />
-                          <Text style={styles.openingMessage}>{openingMessage}</Text>
-                        </View>
-                      );
-                    }
-                    return null;
-                  })()}
+                 {/* Opening Message */}
+                 {restaurantOpeningMessage && (
+                   <View style={styles.openingMessageContainer}>
+                     <MaterialIcons name="access-time" size={14} color="#FF6B6B" />
+                     <Text style={styles.openingMessage}>{restaurantOpeningMessage}</Text>
+                   </View>
+                 )}
                 </View>
                 {/* Only show rating and reviews if there's at least one review */}
                 {(restaurantData?.stats?.total_reviews > 0 || restaurantData?.total_reviews > 0) && (
@@ -1148,13 +1190,15 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             </View>
 
             {/* Search Button - right aligned */}
-            <TouchableOpacity
-              style={styles.searchButton}
-              onPress={() => setShowSearch(true)}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="search" size={24} color="#00B14F" />
-            </TouchableOpacity>
+            {!isRestaurantClosed && (
+              <TouchableOpacity
+                style={styles.searchButton}
+                onPress={() => setShowSearch(true)}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="search" size={24} color="#00B14F" />
+              </TouchableOpacity>
+            )}
           </View>
           </View>
         </SafeAreaView>
@@ -1263,16 +1307,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               </TouchableOpacity>
 
             {section.isExpanded && section.items.map((item) => {
-              // Check if restaurant is open
-              const isRestaurantOpen = restaurantData?.timings
-                ? homeService.isRestaurantOpen(restaurantData.timings)
-                : true; // Default to open if no timing data
-
               // Check if item is available based on its own timings
               const isItemCurrentlyAvailable = isItemAvailable(item.timings);
 
               // Item is only available if BOTH restaurant is open AND item timing is available
-              const itemAvailable = isRestaurantOpen && isItemCurrentlyAvailable;
+              const itemAvailable = !isRestaurantClosed && isItemCurrentlyAvailable;
 
               return (
               <View key={item.id}>
@@ -1666,6 +1705,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             onImageClick={handleImageClick}
             loadedImages={loadedImages}
             onImageLoad={handleImageLoad}
+            isRestaurantClosed={isRestaurantClosed}
             onBack={() => setShowSearch(false)}
           />
         </View>
@@ -1682,6 +1722,29 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           />
         </View>
       )}
+
+      {/* Restaurant Closed Modal */}
+      <Modal
+        visible={showClosedModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={handleCloseClosedModal}
+      >
+        <View style={styles.closedModalOverlay}>
+          <View style={styles.closedModalContent}>
+            <MaterialIcons name="access-time" size={32} color="#FF6B6B" />
+            <Text style={styles.closedModalTitle}>Restaurant is currently closed</Text>
+            <TouchableOpacity
+              style={styles.closedModalButton}
+              onPress={handleCloseClosedModal}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.closedModalButtonText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -2500,6 +2563,49 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 1001,
+  },
+  closedModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  closedModalContent: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    gap: 12,
+  },
+  closedModalTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    lineHeight: 27,
+    color: '#111111',
+    textAlign: 'center',
+  },
+  closedModalMessage: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(0, 0, 0, 0.7)',
+    textAlign: 'center',
+  },
+  closedModalButton: {
+    marginTop: 12,
+    backgroundColor: '#00B14F',
+    borderRadius: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  closedModalButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#FFFFFF',
   },
   noItemsContainer: {
     flex: 1,
