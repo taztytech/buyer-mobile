@@ -44,6 +44,7 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
   maxQuantity = MAX_ITEM_QUANTITY,
 }) => {
   const [quantity, setQuantity] = useState(1);
+  const [isAdding, setIsAdding] = useState(false);
   const slideAnim = useRef(new Animated.Value(1000)).current;
   const resolvedMaxQuantity = Math.max(1, maxQuantity);
 
@@ -56,12 +57,15 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
         friction: 11,
       }).start();
 
-      // Initialize quantity
-      setQuantity(Math.min(initialQuantity || 1, resolvedMaxQuantity));
+      // Initialize quantity to 1 (representing "add 1 more" if item exists, or "add 1" if new)
+      // The quantity selector allows user to add more if needed
+      setQuantity(1);
+      setIsAdding(false);
     } else {
       slideAnim.setValue(1000);
+      setIsAdding(false);
     }
-  }, [visible, initialQuantity, resolvedMaxQuantity]);
+  }, [visible, slideAnim]);
 
   if (!item) return null;
 
@@ -76,9 +80,25 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
   };
 
   const handleAddItem = () => {
-    onAddToCart(item.id, quantity);
+    // Prevent multiple rapid clicks
+    if (isAdding) return;
+    
+    setIsAdding(true);
+    
+    // Always add exactly 1 item when clicking "Add Item" button
+    // This ensures consistent behavior regardless of quantity selector value
+    onAddToCart(item.id, 1);
+    
+    // Reset quantity and close modal
     setQuantity(1);
+    
+    // Close modal immediately
     onClose();
+    
+    // Reset adding state after a short delay to allow modal to close
+    setTimeout(() => {
+      setIsAdding(false);
+    }, 300);
   };
 
   const totalPrice = item.price * quantity;
@@ -225,11 +245,11 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
               <TouchableOpacity
                 style={[
                   styles.addItemButton,
-                  !isAvailable && styles.addItemButtonDisabled
+                  (!isAvailable || isAdding) && styles.addItemButtonDisabled
                 ]}
                 onPress={handleAddItem}
                 activeOpacity={0.8}
-                disabled={!isAvailable}
+                disabled={!isAvailable || isAdding}
               >
                 <Text style={[
                   styles.addItemText,

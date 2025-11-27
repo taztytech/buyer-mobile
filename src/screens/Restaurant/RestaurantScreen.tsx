@@ -177,6 +177,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const scrollViewRef = React.useRef<ScrollView>(null);
   const sectionRefs = React.useRef<{ [key: string]: View | null }>({});
   const sectionPositions = React.useRef<{ [key: string]: number }>({});
+  const updatingItemsRef = React.useRef<Set<string>>(new Set());
 
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -749,7 +750,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const hasNoVegItems = vegMode === 'all' && filteredMenuSections.length === 0 && menuSections.length > 0;
 
   // Handle adding item from detail modal
-  const handleAddFromDetail = (itemId: string, quantity: number) => {
+  const handleAddFromDetail = useCallback((itemId: string, quantity: number) => {
+    // Prevent concurrent updates for the same item
+    if (updatingItemsRef.current.has(itemId)) {
+      return;
+    }
+
     if (quantity > MAX_ITEM_QUANTITY) {
       showMaxQuantityAlert();
       return;
@@ -764,19 +770,27 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       .find(i => i.id === itemId);
 
     if (item) {
-      const safeQuantity = Math.min(quantity, MAX_ITEM_QUANTITY);
-      if (safeQuantity <= 0) {
-        return;
-      }
-      
       // Check if item already exists in cart
       const existingCartItem = cart[itemId];
       
       if (existingCartItem) {
-        // Increment existing quantity
+        // Mark item as being updated
+        updatingItemsRef.current.add(itemId);
+        
+        // Get current quantity and calculate new quantity
         const currentQuantity = existingCartItem.quantity || 0;
         const newQuantity = Math.min(currentQuantity + safeQuantity, MAX_ITEM_QUANTITY);
-        updateQuantity(itemId, newQuantity);
+        
+        // Only update if the new quantity is different and valid
+        if (newQuantity > currentQuantity && newQuantity <= MAX_ITEM_QUANTITY) {
+          updateQuantity(itemId, newQuantity).finally(() => {
+            // Remove from updating set after update completes
+            updatingItemsRef.current.delete(itemId);
+          });
+        } else {
+          // Remove from updating set if no update needed
+          updatingItemsRef.current.delete(itemId);
+        }
       } else {
         // Add new item to cart
         // Check if there's a restaurant conflict
@@ -820,7 +834,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         }, restaurantId);
       }
     }
-  };
+  }, [cart, menuSections, updateQuantity, addToCartContext, checkRestaurantConflict, restaurantId, restaurantData, restaurantName, setRestaurantInfo, clearCart, showConfirmation, showMaxQuantityAlert]);
 
   // Fetch restaurant details from API
   useEffect(() => {
