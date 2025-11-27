@@ -32,6 +32,7 @@ import { useVegMode } from '@/context/VegModeContext';
 import { favoritesService } from '@/services/favorites.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { ItemTiming as ImportedItemTiming, isItemAvailable } from '@/utils/timing.utils';
+import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -144,6 +145,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   });
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
+  const [selectedDetailItemAvailable, setSelectedDetailItemAvailable] = useState<boolean>(true);
   const [activeDietaryFilter, setActiveDietaryFilter] = useState<'veg' | 'non-veg' | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showOrderSuccess, setShowOrderSuccess] = useState(false);
@@ -175,6 +177,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const scrollViewRef = React.useRef<ScrollView>(null);
   const sectionRefs = React.useRef<{ [key: string]: View | null }>({});
   const sectionPositions = React.useRef<{ [key: string]: number }>({});
+  const updatingItemsRef = React.useRef<Set<string>>(new Set());
 
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -610,10 +613,20 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle opening detail modal
   const handleImageClick = (item: MenuItem) => {
-    if (!ensureRestaurantOpen()) {
-      return;
-    }
+    // Allow opening modal even if restaurant is closed (to show disabled state)
+    // Check if restaurant is open
+    const isRestaurantOpen = restaurantData?.timings
+      ? homeService.isRestaurantOpen(restaurantData.timings)
+      : true; // Default to open if no timing data
+
+    // Check if item is available based on its own timings
+    const isItemCurrentlyAvailable = isItemAvailable(item.timings);
+
+    // Item is only available if BOTH restaurant is open AND item timing is available
+    const itemAvailable = isRestaurantOpen && isItemCurrentlyAvailable;
+    
     setSelectedDetailItem(item);
+    setSelectedDetailItemAvailable(itemAvailable);
     setShowDetailModal(true);
   };
 
@@ -629,8 +642,22 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   };
 
   // Get filtered menu sections based on active dietary filter and global veg mode
+  // Helper function to check if item is fully available (considering both restaurant and item timings)
+  const isItemFullyAvailable = (item: MenuItem): boolean => {
+    // Check if restaurant is open
+    const isRestaurantOpen = restaurantData?.timings
+      ? homeService.isRestaurantOpen(restaurantData.timings)
+      : true; // Default to open if no timing data
+
+    // Check if item is available based on its own timings
+    const isItemCurrentlyAvailable = isItemAvailable(item.timings);
+
+    // Item is only available if BOTH restaurant is open AND item timing is available
+    return isRestaurantOpen && isItemCurrentlyAvailable;
+  };
+
   const getFilteredMenuSections = (): MenuSection[] => {
-    return menuSections
+    const processedSections = menuSections
       .map(section => {
         // Filter items
         let filteredItems = section.items.filter(item => {
@@ -670,24 +697,49 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           return true;
         });
 
-        // Apply sorting if filter is active
-        if (filters.sortBy) {
-          filteredItems = [...filteredItems].sort((a, b) => {
+        // Sort items within category: enabled items first, then disabled items
+        filteredItems = [...filteredItems].sort((a, b) => {
+          const aAvailable = isItemFullyAvailable(a);
+          const bAvailable = isItemFullyAvailable(b);
+
+          // Primary sort: availability (enabled items come first)
+          if (aAvailable !== bAvailable) {
+            return aAvailable ? -1 : 1; // true (available) comes before false (disabled)
+          }
+
+          // Secondary sort: price (if filter is active and both have same availability)
+          if (filters.sortBy) {
             if (filters.sortBy === 'lowToHigh') {
               return a.price - b.price;
             } else if (filters.sortBy === 'highToLow') {
               return b.price - a.price;
             }
-            return 0;
-          });
-        }
+          }
+
+          return 0;
+        });
+
+        // Check if category has any enabled items
+        const hasEnabledItems = filteredItems.some(item => isItemFullyAvailable(item));
 
         return {
           ...section,
           items: filteredItems,
+          hasEnabledItems, // Add flag for category sorting
         };
       })
       .filter(section => section.items.length > 0); // Remove empty sections
+
+    // Sort categories: categories with enabled items first, then categories with only disabled items
+    const sortedSections = [...processedSections].sort((a, b) => {
+      if (a.hasEnabledItems !== b.hasEnabledItems) {
+        return a.hasEnabledItems ? -1 : 1; // Categories with enabled items come first
+      }
+      return 0;
+    });
+
+    // Remove the hasEnabledItems flag before returning (it was just for sorting)
+    return sortedSections.map(({ hasEnabledItems, ...section }) => section);
   };
 
   const filteredMenuSections = getFilteredMenuSections();
@@ -695,62 +747,117 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const hasNoItemsAtAll = !isLoading && menuSections.length === 0;
   const hasNoVegItems = vegMode === 'all' && filteredMenuSections.length === 0 && menuSections.length > 0;
 
-  const handleAddFromDetail = (itemId: string, quantity: number) => {
+  // Show max quantity alert function
+  const showMaxQuantityAlert = useCallback(() => {
+    showConfirmation({
+      title: 'Quantity limit reached',
+      message: `You can add up to ${MAX_ITEM_QUANTITY} units of each item.`,
+      confirmText: 'OK',
+      cancelText: '',
+      confirmButtonColor: '#00B14F',
+      onConfirm: () => {},
+    });
+  }, [showConfirmation]);
+
+  // Handle adding item from detail modal
+  // This function combines both "Incoming" and "Current" flows:
+  // - Incoming flow: Uses useCallback, prevents concurrent updates, checks MAX_ITEM_QUANTITY
+  // - Current flow: Checks ensureRestaurantOpen, handles restaurant conflicts with itemId field
+  const handleAddFromDetail = useCallback((itemId: string, quantity: number) => {
+    // Current flow: Check if restaurant is open first
     if (!ensureRestaurantOpen()) {
       return;
     }
+
+    // Incoming flow: Prevent concurrent updates for the same item
+    if (updatingItemsRef.current.has(itemId)) {
+      return;
+    }
+
+    // Incoming flow: Check quantity limit
+    if (quantity > MAX_ITEM_QUANTITY) {
+      showMaxQuantityAlert();
+      return;
+    }
+
     const item = menuSections
       .flatMap(section => section.items)
       .find(i => i.id === itemId);
 
     if (!item) return;
 
-    const cartItemCount = Object.keys(cart).length;
-    const hasConflict = cartItemCount > 0 && 
-                       (cartRestaurantId === null || cartRestaurantId !== restaurantId);
-    
-    if (hasConflict) {
-      showConfirmation({
-        title: 'Replace cart item?',
-        message: 'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
-        confirmText: 'Replace',
-        cancelText: 'Cancel',
-        confirmButtonColor: '#FF0000',
-        onConfirm: async () => {
-          await clearCart();
-          setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
-          const safeQuantity = Math.min(quantity, MAX_ITEM_QUANTITY);
-      if (safeQuantity <= 0) {
-        return;
-      }
-      
-      addToCartContext({
-            id: item.id,
-            itemId: parseInt(item.id, 10),
-            name: item.name,
-            price: item.price,
-            quantity: quantity,
-            isVeg: item.isVeg,
-            image: item.image,
-            isCustomizable: false,
-          }, restaurantId);
-        },
-      });
+    const safeQuantity = Math.min(quantity, MAX_ITEM_QUANTITY);
+    if (safeQuantity <= 0) {
       return;
     }
+    
+    // Check if item already exists in cart
+    const existingCartItem = cart[itemId];
+    
+    if (existingCartItem) {
+      // Incoming flow: Mark item as being updated to prevent concurrent updates
+      updatingItemsRef.current.add(itemId);
+      
+      // Get current quantity and calculate new quantity
+      const currentQuantity = existingCartItem.quantity || 0;
+      const newQuantity = Math.min(currentQuantity + safeQuantity, MAX_ITEM_QUANTITY);
+      
+      // Only update if the new quantity is different and valid
+      if (newQuantity > currentQuantity && newQuantity <= MAX_ITEM_QUANTITY) {
+        updateQuantity(itemId, newQuantity).finally(() => {
+          // Remove from updating set after update completes
+          updatingItemsRef.current.delete(itemId);
+        });
+      } else {
+        // Remove from updating set if no update needed
+        updatingItemsRef.current.delete(itemId);
+      }
+    } else {
+      // Add new item to cart
+      // Current flow: Check if there's a restaurant conflict using checkRestaurantConflict
+      if (checkRestaurantConflict(restaurantId)) {
+        showConfirmation({
+          title: 'Replace cart item?',
+          message: 'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
+          confirmText: 'Replace',
+          cancelText: 'Cancel',
+          confirmButtonColor: '#FF0000',
+          onConfirm: async () => {
+            // Clear cart and add new item
+            await clearCart();
+            setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
+            addToCartContext({
+              id: item.id,
+              itemId: parseInt(item.id, 10),
+              name: item.name,
+              price: item.price,
+              quantity: safeQuantity,
+              isVeg: item.isVeg,
+              image: item.image,
+              isCustomizable: false,
+            }, restaurantId);
+          },
+        });
+        return;
+      }
 
-    setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
-    addToCartContext({
-      id: item.id,
-      itemId: parseInt(item.id, 10),
-      name: item.name,
-      price: item.price,
-      quantity: quantity,
-      isVeg: item.isVeg,
-      image: item.image,
-      isCustomizable: false,
-    }, restaurantId);
-  };
+      // Always ensure restaurant info is set before adding items
+      setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
+
+      // Pass restaurantId directly to avoid race condition
+      // Current flow: Include itemId field for compatibility
+      addToCartContext({
+        id: item.id,
+        itemId: parseInt(item.id, 10),
+        name: item.name,
+        price: item.price,
+        quantity: safeQuantity,
+        isVeg: item.isVeg,
+        image: item.image,
+        isCustomizable: false,
+      }, restaurantId);
+    }
+  }, [cart, menuSections, updateQuantity, addToCartContext, checkRestaurantConflict, restaurantId, restaurantData, restaurantName, setRestaurantInfo, clearCart, showConfirmation, showMaxQuantityAlert, ensureRestaurantOpen]);
 
   const cartReloadedRef = useRef(false);
 
@@ -1389,7 +1496,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     )}
                     <Image
                       source={item.image}
-                      style={styles.itemImage}
+                      style={[
+                        styles.itemImage,
+                        !itemAvailable && styles.itemImageDisabled
+                      ]}
                       resizeMode="cover"
                       onLoad={() => handleImageLoad(item.id)}
                       fadeDuration={0}
@@ -1656,9 +1766,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         visible={showDetailModal}
         item={selectedDetailItem}
         initialQuantity={selectedDetailItem ? (cart[selectedDetailItem.id]?.quantity || undefined) : undefined}
+        maxQuantity={MAX_ITEM_QUANTITY}
+        isAvailable={selectedDetailItemAvailable}
         onClose={() => {
           setShowDetailModal(false);
           setSelectedDetailItem(null);
+          setSelectedDetailItemAvailable(true);
         }}
         onAddToCart={handleAddFromDetail}
       />
@@ -2198,6 +2311,9 @@ const styles = StyleSheet.create({
     width: 155,
     height: 137,
     borderRadius: 16,
+  },
+  itemImageDisabled: {
+    opacity: 0.5,
   },
   itemGradientOverlayTop: {
     position: 'absolute',

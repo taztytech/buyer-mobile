@@ -8,7 +8,9 @@ import {
   Image,
   ScrollView,
   Animated,
+  Platform,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ItemTiming, formatItemTiming, isItemAvailable } from '@/utils/timing.utils';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
@@ -44,8 +46,10 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
   maxQuantity = MAX_ITEM_QUANTITY,
 }) => {
   const [quantity, setQuantity] = useState(1);
+  const [isAdding, setIsAdding] = useState(false);
   const slideAnim = useRef(new Animated.Value(1000)).current;
   const resolvedMaxQuantity = Math.max(1, maxQuantity);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (visible) {
@@ -56,12 +60,15 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
         friction: 11,
       }).start();
 
-      // Initialize quantity
-      setQuantity(Math.min(initialQuantity || 1, resolvedMaxQuantity));
+      // Initialize quantity to 1 (representing "add 1 more" if item exists, or "add 1" if new)
+      // The quantity selector allows user to add more if needed
+      setQuantity(1);
+      setIsAdding(false);
     } else {
       slideAnim.setValue(1000);
+      setIsAdding(false);
     }
-  }, [visible, initialQuantity, resolvedMaxQuantity]);
+  }, [visible, slideAnim]);
 
   if (!item) return null;
 
@@ -76,9 +83,25 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
   };
 
   const handleAddItem = () => {
-    onAddToCart(item.id, quantity);
+    // Prevent multiple rapid clicks
+    if (isAdding) return;
+    
+    setIsAdding(true);
+    
+    // Always add exactly 1 item when clicking "Add Item" button
+    // This ensures consistent behavior regardless of quantity selector value
+    onAddToCart(item.id, 1);
+    
+    // Reset quantity and close modal
     setQuantity(1);
+    
+    // Close modal immediately
     onClose();
+    
+    // Reset adding state after a short delay to allow modal to close
+    setTimeout(() => {
+      setIsAdding(false);
+    }, 300);
   };
 
   const totalPrice = item.price * quantity;
@@ -91,19 +114,21 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
       statusBarTranslucent={true}
       onRequestClose={onClose}
     >
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <Animated.View
-          style={[
-            styles.modalContainer,
-            {
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+      <View style={styles.overlayContainer}>
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={onClose}
         >
+          <Animated.View
+            style={[
+              styles.modalContainer,
+              {
+                transform: [{ translateY: slideAnim }],
+                paddingBottom: Math.max(insets.bottom, 0),
+              },
+            ]}
+          >
           <TouchableOpacity
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
@@ -225,11 +250,11 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
               <TouchableOpacity
                 style={[
                   styles.addItemButton,
-                  !isAvailable && styles.addItemButtonDisabled
+                  (!isAvailable || isAdding) && styles.addItemButtonDisabled
                 ]}
                 onPress={handleAddItem}
                 activeOpacity={0.8}
-                disabled={!isAvailable}
+                disabled={!isAvailable || isAdding}
               >
                 <Text style={[
                   styles.addItemText,
@@ -243,11 +268,17 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
           </TouchableOpacity>
         </Animated.View>
       </TouchableOpacity>
+      </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
+  overlayContainer: {
+    flex: 1,
+    zIndex: 9999,
+    elevation: 9999,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -258,6 +289,19 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     maxHeight: '85%',
+    zIndex: 10000,
+    elevation: 10000,
+    ...Platform.select({
+      android: {
+        elevation: 10000,
+      },
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+    }),
   },
   scrollContent: {
     padding: 20,
