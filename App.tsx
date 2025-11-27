@@ -22,6 +22,7 @@ import { OrderDetailsScreen } from '@/screens/Order/OrderDetailsScreen';
 import { ExploreDishesScreen } from '@/screens/Favorites/ExploreDishesScreen';
 import { ContentPage } from '@/screens/Legal/ContentPage';
 import { HelpScreen } from '@/screens/Help/HelpScreen';
+import { ContactUsScreen } from '@/screens/Help/ContactUsScreen';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -42,10 +43,10 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Inner component with cart and confirmation context access
 function AppContent() {
-  const { cart, addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName, restaurantLogo: cartRestaurantLogo } = useCart();
+  const { addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName } = useCart();
   const { showConfirmation } = useConfirmation();
 
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -81,6 +82,7 @@ function AppContent() {
   const addressScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const helpScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const contactUsScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const restaurantScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const checkoutScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
@@ -181,6 +183,9 @@ function AppContent() {
           return true;
         case 'termsConditions':
           handleBackFromTermsConditions();
+          return true;
+        case 'contactUs':
+          handleBackFromContactUs();
           return true;
         case 'help':
           handleBackFromHelp();
@@ -888,6 +893,41 @@ function AppContent() {
   const [helpCameFrom, setHelpCameFrom] = React.useState<'profile' | 'orders'>('profile');
   const [isHelpClosing, setIsHelpClosing] = React.useState(false);
 
+  // Contact Us Navigation
+  const handleNavigateToContactUs = () => {
+    setCurrentScreen('contactUs');
+
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(contactUsScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromContactUs = () => {
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(contactUsScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('profile');
+    });
+  };
+
   const handleNavigateToHelp = (from: 'profile' | 'orders' = 'profile', order?: OrderListItem) => {
     setHelpCameFrom(from);
     setHelpOrderData(order ?? null);
@@ -1309,7 +1349,7 @@ function AppContent() {
               onMyOrders={handleNavigateToOrders}
               onMyAddresses={handleNavigateToMyAddresses}
               onFavorites={handleNavigateToExploreDishes}
-              onChatWithUs={handleNavigateToHelp}
+              onContactUs={handleNavigateToContactUs}
               onPrivacyPolicy={handleNavigateToPrivacyPolicy}
               onTermsConditions={handleNavigateToTermsConditions}
             />
@@ -1576,6 +1616,22 @@ function AppContent() {
               onBack={handleBackFromHelp}
               onViewOrder={handleHelpViewOrder}
               initialOrder={helpOrderData || undefined}
+            />
+          </Animated.View>
+
+          {/* Contact Us Screen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.contactUsOverlay,
+              {
+                transform: [{ translateX: contactUsScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'contactUs' ? 'auto' : 'none'}
+          >
+            <ContactUsScreen
+              visible={currentScreen === 'contactUs'}
+              onBack={handleBackFromContactUs}
             />
           </Animated.View>
 
@@ -1847,6 +1903,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   helpOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  contactUsOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,

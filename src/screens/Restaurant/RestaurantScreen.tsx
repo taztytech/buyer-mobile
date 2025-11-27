@@ -847,7 +847,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 description: item.long_description || item.full_description || item.detailed_description || item.description || '',
                 image: item.images && item.images.length > 0
                   ? { uri: item.images[0] }
-                  : require('@/assets/biriyani.png'),
+                  : require('@/assets/noProductAvailable.png'),
                 isVeg: isVeg,
                 isSpicy: false, // API doesn't provide this info
                 isBestSeller: item.is_recommended || false,
@@ -2135,6 +2135,7 @@ const styles = StyleSheet.create({
     width: 155,
     height: 137,
     borderRadius: 16,
+    padding: 2,
   },
   itemGradientOverlayTop: {
     position: 'absolute',

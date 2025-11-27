@@ -208,11 +208,14 @@ class AuthService {
       // If fetch successful, update stored user data
       // API returns user data directly in response.data (not response.data.user)
       if (response.success && response.data) {
+
         const updatedUser = {
           id: response.data.id?.toString() || '',
           phoneNumber: response.data.phone_number?.toString() || '',
           name: response.data.name || '',
           email: response.data.email || '',
+          support_email: response.data.support_email || '',
+          support_number: response.data.support_number || '',
         };
         await storageService.saveUser(updatedUser);
 
@@ -225,6 +228,8 @@ class AuthService {
               phoneNumber: response.data.phone_number?.toString() || '',
               name: response.data.name || '',
               email: response.data.email || '',
+              support_email: response.data.support_email || '',
+              support_number: response.data.support_number || '',
             }
           },
           message: response.message,
