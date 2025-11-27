@@ -790,9 +790,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // Calculate tip amount - use calculatedTipAmount which handles the logic
     const tip = calculatedTipAmount;
     
-    // Calculate total: calculatedItemTotal + deliveryFee + taxAmount + tip - discountAmount
+    // Fixed platform fee (hidden in UI but included in calculation)
+    const PLATFORM_FEE = 10;
+
+    // Calculate total: calculatedItemTotal + deliveryFee + taxAmount + tip - discountAmount + platform fee
     // Always use calculated item total for instant updates
-    const totalAmount = calculatedItemTotal + deliveryFee + taxAmount + tip - discountAmount;
+    const totalAmount = calculatedItemTotal + deliveryFee + taxAmount + tip - discountAmount + PLATFORM_FEE;
     
     return {
       itemTotal: calculatedItemTotal, // Always use calculated value for instant updates
@@ -1327,6 +1330,13 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 <View style={styles.billRow}>
                   <Text style={styles.billLabel}>Delivery Fee</Text>
                   <Text style={styles.billValue}>₹{deliveryFee.toFixed(2)}</Text>
+                </View>
+                <View style={styles.billRow}>
+                  <Text style={styles.billLabel}>Platform Fee</Text>
+                  <View style={styles.platformFeeValueContainer}>
+                    <Text style={styles.billValueStrikethrough}>₹10.00</Text>
+                    <Text style={styles.billValue}>₹0.00</Text>
+                  </View>
                 </View>
                 {tipAmount > 0 && (
                   <View style={styles.billRow}>
@@ -2033,6 +2043,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     color: '#000000',
+  },
+  platformFeeValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  billValueStrikethrough: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 13,
+    lineHeight: 20,
+    color: 'rgba(0, 0, 0, 0.5)',
+    textDecorationLine: 'line-through',
   },
   billDivider: {
     height: 1,

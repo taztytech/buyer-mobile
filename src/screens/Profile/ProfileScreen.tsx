@@ -5,9 +5,8 @@ import {
   StyleSheet,
   StatusBar,
   TouchableOpacity,
-  Switch,
   ScrollView,
-  Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -23,9 +22,10 @@ interface ProfileScreenProps {
   onMyOrders?: () => void;
   onMyAddresses?: () => void;
   onFavorites?: () => void;
-  onChatWithUs?: () => void;
+  onContactUs?: () => void;
   onPrivacyPolicy?: () => void;
   onTermsConditions?: () => void;
+  onFaq?: () => void;
   onLogout?: () => void;
 }
 
@@ -36,13 +36,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onMyOrders,
   onMyAddresses,
   onFavorites,
-  onChatWithUs,
+  onContactUs,
   onPrivacyPolicy,
   onTermsConditions,
+  onFaq,
   onLogout,
 }) => {
   const { showConfirmation } = useConfirmation();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [userName, setUserName] = useState('User');
   const [userPhone, setUserPhone] = useState('');
 
@@ -61,7 +61,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         try {
           // First try to get data from API
           const response = await authService.getProfile();
-
+          
           if (response.success && response.data?.user) {
             const user = response.data.user;
             setUserName(user.name || 'User');
@@ -219,10 +219,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <MenuItem label="My Orders" icon="receipt-long" onPress={onMyOrders} />
             <MenuItem label="My Addresses" icon="location-on" onPress={onMyAddresses} />
             <MenuItem label="Favorites" icon="favorite" onPress={onFavorites} />
-            {/* <MenuItem label="Chat With Us" icon="chat" onPress={onChatWithUs} /> */}
+            <MenuItem label="Contact Us" icon="chat" onPress={onContactUs} />
 
             {/* Notification Toggle */}
-            <View style={styles.menuItem}>
+            {/* <View style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <MaterialIcons name="notifications" size={20} color="#00B14F" />
                 <Text style={styles.menuItemText}>Notification</Text>
@@ -237,12 +237,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 />
               </View>
             </View>
-            <View style={styles.divider} />
+            <View style={styles.divider} /> */}
 
             <MenuItem 
               label="Privacy Policy" 
               icon="shield" 
               onPress={onPrivacyPolicy} 
+            />
+            <MenuItem 
+              label="FAQ" 
+              icon="help-outline" 
+              onPress={onFaq} 
             />
             <MenuItem
               label="Terms & Conditions"
