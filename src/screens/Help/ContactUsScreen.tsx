@@ -85,13 +85,15 @@ export const ContactUsScreen: React.FC<ContactUsScreenProps> = ({
       <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
         <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={onBack}
-            style={styles.backButton}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="chevron-left" size={24} color="#000000" />
-          </TouchableOpacity>
+          {onBack && (
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={onBack}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+            </TouchableOpacity>
+          )}
           <Text style={styles.headerTitle}>Contact Us</Text>
         </View>
       </SafeAreaView>
@@ -171,24 +173,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
   },
   header: {
+    backgroundColor: '#00B14F',
+    paddingHorizontal: 20,
+    paddingVertical: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#00B14F',
+    gap: 12,
+    height: 76,
   },
   backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 50,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E4E4E4',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
   },
   headerTitle: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 18,
     color: '#FFFFFF',
+    lineHeight: 27,
   },
   container: {
     flex: 1,
