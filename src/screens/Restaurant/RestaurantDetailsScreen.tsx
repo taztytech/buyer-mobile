@@ -376,7 +376,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
               {isTimingsExpanded && (
                 <View style={styles.timingsExpanded}>
                   {/* Show all 7 days in order (Sunday=0 to Saturday=6) */}
-                  {[0, 1, 2, 3, 4, 5, 6].map((dayNum) => {
+                  {[1, 2, 3, 4, 5, 6, 7].map((dayNum) => {
                     const timing = restaurantData.timings.find(t => t.day === dayNum);
                     const isToday = dayNum === new Date().getDay();
 
@@ -386,7 +386,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                           styles.timingDay,
                           isToday && styles.timingDayToday
                         ]}>
-                          {getDayName(dayNum)}
+                          {getDayName(dayNum - 1)}
                         </Text>
                         {timing && timing.open_time && timing.close_time ? (
                           <Text style={styles.timingHours}>
