@@ -46,7 +46,7 @@ function AppContent() {
   const { addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName } = useCart();
   const { showConfirmation } = useConfirmation();
 
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -84,6 +84,7 @@ function AppContent() {
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const helpScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const contactUsScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const faqScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const restaurantScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const checkoutScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
@@ -184,6 +185,9 @@ function AppContent() {
           return true;
         case 'termsConditions':
           handleBackFromTermsConditions();
+          return true;
+        case 'faq':
+          handleBackFromFaq();
           return true;
         case 'contactUs':
           handleBackFromContactUs();
@@ -934,6 +938,53 @@ function AppContent() {
     }
   };
 
+  // FAQ Navigation
+  const handleNavigateToFaq = () => {
+    setCurrentScreen('faq');
+    setLegalCameFrom('profile');
+
+    Animated.parallel([
+      Animated.timing(profileScreenSlide, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(faqScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBackFromFaq = () => {
+    if (legalCameFrom === 'login') {
+      Animated.timing(faqScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }).start(() => {
+        setCurrentScreen('login');
+        setLegalCameFrom('profile');
+      });
+    } else {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(faqScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('profile');
+      });
+    }
+  };
+
   // Help Navigation
   const [helpCameFrom, setHelpCameFrom] = React.useState<'profile' | 'orders'>('profile');
   const [isHelpClosing, setIsHelpClosing] = React.useState(false);
@@ -1401,6 +1452,7 @@ function AppContent() {
               onContactUs={handleNavigateToContactUs}
               onPrivacyPolicy={handleNavigateToPrivacyPolicy}
               onTermsConditions={handleNavigateToTermsConditions}
+              onFaq={handleNavigateToFaq}
             />
           </Animated.View>
 
@@ -1649,6 +1701,22 @@ function AppContent() {
               title="Terms & Conditions"
               url="https://tazty.in/terms"
               onBack={handleBackFromTermsConditions}
+            />
+          </Animated.View>
+
+          {/* FAQ Screen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.faqOverlay,
+              {
+                transform: [{ translateX: faqScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'faq' ? 'auto' : 'none'}
+          >
+            <ContentPage
+              title="FAQ"
+              onBack={handleBackFromFaq}
             />
           </Animated.View>
 
@@ -1945,6 +2013,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   termsConditionsOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 7,
+    backgroundColor: '#FFFFFF',
+  },
+  faqOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,

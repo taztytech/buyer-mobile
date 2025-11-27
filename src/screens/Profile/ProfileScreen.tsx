@@ -6,6 +6,7 @@ import {
   StatusBar,
   TouchableOpacity,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -24,6 +25,7 @@ interface ProfileScreenProps {
   onContactUs?: () => void;
   onPrivacyPolicy?: () => void;
   onTermsConditions?: () => void;
+  onFaq?: () => void;
   onLogout?: () => void;
 }
 
@@ -37,6 +39,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onContactUs,
   onPrivacyPolicy,
   onTermsConditions,
+  onFaq,
   onLogout,
 }) => {
   const { showConfirmation } = useConfirmation();
@@ -113,10 +116,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         }
       },
     });
-  };
-
-  const handleLinkPress = (url: string) => {
-    Linking.openURL(url).catch(err => {});
   };
 
   // Menu item component
@@ -244,6 +243,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               label="Privacy Policy" 
               icon="shield" 
               onPress={onPrivacyPolicy} 
+            />
+            <MenuItem 
+              label="FAQ" 
+              icon="help-outline" 
+              onPress={onFaq} 
             />
             <MenuItem
               label="Terms & Conditions"
