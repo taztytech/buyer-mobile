@@ -14,6 +14,7 @@ import { SearchScreen } from '@/screens/Search/SearchScreen';
 import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { MyAddressesScreen } from '@/screens/Location/MyAddressesScreen';
+import { addressService } from '@/services/address.service';
 import { CategoryResultsScreen } from '@/screens/Category/CategoryResultsScreen';
 import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
 import { RestaurantDetailsScreen } from '@/screens/Restaurant/RestaurantDetailsScreen';
@@ -41,7 +42,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Inner component with cart and confirmation context access
 function AppContent() {
-  const { addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart } = useCart();
+  const { cart, addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName, restaurantLogo: cartRestaurantLogo } = useCart();
   const { showConfirmation } = useConfirmation();
 
   const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help'>('login');
@@ -244,6 +245,9 @@ function AppContent() {
   const handleLogout = async () => {
     // Clear authentication tokens and user data
     await authService.logout();
+
+    // Clear address cache to prevent showing previous account's addresses
+    addressService.clearCache();
 
     // Reset all animated values to their initial state
     homeScreenSlide.setValue(0);
@@ -1054,7 +1058,7 @@ function AppContent() {
       if (!orderResponse.success || !orderResponse.data) {
         showConfirmation({
           title: 'Error',
-          message: orderResponse.error || 'Failed to fetch order details',
+          message: typeof orderResponse.error === 'string' ? orderResponse.error : 'Failed to fetch order details',
           confirmText: 'OK',
           cancelText: 'Close',
           onConfirm: () => {},
@@ -1077,8 +1081,10 @@ function AppContent() {
       );
 
       if (restaurantResponse.success && restaurantResponse.data) {
-        const restaurantPayload = restaurantResponse.data as any;
-        const restaurantData = restaurantPayload?.data || restaurantPayload;
+        // Handle both nested data structure and direct data structure
+        const restaurantData = (restaurantResponse.data && typeof restaurantResponse.data === 'object' && 'data' in restaurantResponse.data)
+          ? (restaurantResponse.data as { data: any }).data
+          : restaurantResponse.data;
 
         // Check if restaurant is within 10km radius
         // The API returns distance_km when lat/lng are provided
@@ -1171,7 +1177,7 @@ function AppContent() {
     } catch (error: any) {
       showConfirmation({
         title: 'Error',
-        message: error.message || 'Failed to reorder',
+        message: typeof error?.message === 'string' ? error.message : 'Failed to reorder',
         confirmText: 'OK',
         cancelText: 'Close',
         onConfirm: () => {},
@@ -1232,7 +1238,7 @@ function AppContent() {
     } catch (error: any) {
       showConfirmation({
         title: 'Error',
-        message: error.message || 'Failed to add items to cart',
+        message: typeof error?.message === 'string' ? error.message : 'Failed to add items to cart',
         confirmText: 'OK',
         cancelText: 'Close',
         onConfirm: () => {},
@@ -1668,9 +1674,11 @@ function AppContent() {
               pointerEvents="auto"
             >
               <OrderDetailsScreen
-                restaurantId={selectedRestaurantId}
-                restaurantName={selectedRestaurantName}
+                restaurantId={cartRestaurantId || selectedRestaurantId}
+                restaurantName={cartRestaurantName || selectedRestaurantName}
                 restaurantAddress={selectedRestaurantAddress}
+                selectedLocation={selectedLocation}
+                visible={currentScreen === 'checkout'}
                 onBack={handleBackFromCheckout}
                 onPlaceOrder={handlePlaceOrderFromCheckout}
                 onOrderSuccess={handleOrderSuccessFromCheckout}

@@ -121,7 +121,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   onNavigateToDetails,
   onNavigateToCheckout,
 }) => {
-  const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, checkRestaurantConflict } = useCart();
+  const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, reloadCart, checkRestaurantConflict, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName, restaurantLogo: cartRestaurantLogo } = useCart();
   const { vegMode, setVegMode } = useVegMode();
   const { showConfirmation } = useConfirmation();
   const insets = useSafeAreaInsets();
@@ -145,7 +145,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   });
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
-  const [selectedDetailItemAvailable, setSelectedDetailItemAvailable] = useState<boolean>(true);
   const [activeDietaryFilter, setActiveDietaryFilter] = useState<'veg' | 'non-veg' | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showOrderSuccess, setShowOrderSuccess] = useState(false);
@@ -270,54 +269,73 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     return cartItem.quantity || 0;
   };
 
-  const isItemAtMaxQuantity = (itemId: string): boolean => getItemQuantity(itemId) >= MAX_ITEM_QUANTITY;
+  // Flatten cart items for order details - convert variants into separate line items
+  const getFlattenedCartItems = () => {
+    const flattenedItems: any[] = [];
 
-  const getRemainingQuantityForItem = (itemId: string): number =>
-    Math.max(0, MAX_ITEM_QUANTITY - getItemQuantity(itemId));
-
-  const showMaxQuantityAlert = () => {
-    showConfirmation({
-      title: 'Quantity limit reached',
-      message: `You can add up to ${MAX_ITEM_QUANTITY} units of each item.`,
-      confirmText: 'OK',
-      cancelText: '',
-      confirmButtonColor: '#00B14F',
-      onConfirm: () => {},
+    Object.values(cart).forEach(cartItem => {
+      if (cartItem.isCustomizable && cartItem.variants) {
+        // For customizable items, add each variant as a separate line item
+        cartItem.variants.forEach(variant => {
+          const item = {
+            id: cartItem.id,  // Original item ID
+            variantId: variant.id,  // Variant ID
+            addOnIds: variant.addOns,  // Array of add-on IDs
+            name: cartItem.name,
+            price: variant.price,
+            quantity: variant.quantity,
+            isVeg: cartItem.isVeg,
+            image: cartItem.image,
+            // Always include customizations text
+            customizations: variant.addOnNames?.length
+              ? variant.addOnNames.join(', ')
+              : '',
+          };
+          flattenedItems.push(item);
+        });
+      } else {
+        // For regular items, add as-is
+        const item = {
+          id: cartItem.id,
+          name: cartItem.name,
+          price: cartItem.price,
+          quantity: cartItem.quantity || 0,
+          isVeg: cartItem.isVeg,
+          image: cartItem.image,
+        };
+        flattenedItems.push(item);
+      }
     });
+
+    return flattenedItems;
   };
 
-  const ensureUnderQuantityLimit = (itemId: string): boolean => {
-    if (isItemAtMaxQuantity(itemId)) {
-      showMaxQuantityAlert();
-      return false;
-    }
-    return true;
-  };
-
-
-  // Add item to cart (for non-customizable items)
   const addToCart = (item: MenuItem) => {
-    if (!ensureUnderQuantityLimit(item.id)) {
+    if (!ensureRestaurantOpen()) {
       return;
     }
-    // Check if there's a restaurant conflict
-    if (checkRestaurantConflict(restaurantId)) {
+    const cartItemCount = Object.keys(cart).length;
+    const hasConflict = cartItemCount > 0 && 
+                       (cartRestaurantId === null || cartRestaurantId !== restaurantId);
+    
+    if (hasConflict) {
       showConfirmation({
         title: 'Replace cart item?',
         message: 'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
         confirmText: 'Replace',
         cancelText: 'Cancel',
         confirmButtonColor: '#FF0000',
-        onConfirm: () => {
-          // Clear cart and add new item
-          clearCart();
+        onConfirm: async () => {
+          await clearCart();
           setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
           addToCartContext({
             id: item.id,
+            itemId: parseInt(item.id, 10),
             name: item.name,
             price: item.price,
             quantity: 1,
             isVeg: item.isVeg,
+            image: item.image,
             isCustomizable: false,
           }, restaurantId);
         },
@@ -325,12 +343,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       return;
     }
 
-    // Always ensure restaurant info is set before adding items
     setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
-
-    // Pass restaurantId directly to avoid race condition
     addToCartContext({
       id: item.id,
+      itemId: parseInt(item.id, 10),
       name: item.name,
       price: item.price,
       quantity: 1,
@@ -342,7 +358,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Increment item quantity
   const incrementItem = (itemId: string) => {
-    if (!ensureUnderQuantityLimit(itemId)) {
+    if (!ensureRestaurantOpen()) {
       return;
     }
     const cartItem = cart[itemId];
@@ -375,23 +391,23 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     updateQuantity(itemId, quantity - 1); // updateQuantity will remove if quantity becomes 0
   };
 
-  // Handle opening customization modal
   const handleCustomizableItemClick = (item: MenuItem) => {
-    if (getRemainingQuantityForItem(item.id) <= 0) {
-      showMaxQuantityAlert();
+    if (!ensureRestaurantOpen()) {
       return;
     }
-    // Check if there's a restaurant conflict
-    if (checkRestaurantConflict(restaurantId)) {
+    const cartItemCount = Object.keys(cart).length;
+    const hasConflict = cartItemCount > 0 && 
+                       (cartRestaurantId === null || cartRestaurantId !== restaurantId);
+    
+    if (hasConflict) {
       showConfirmation({
         title: 'Replace cart item?',
         message: 'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
         confirmText: 'Replace',
         cancelText: 'Cancel',
         confirmButtonColor: '#FF0000',
-        onConfirm: () => {
-          // Clear cart and open customization modal
-          clearCart();
+        onConfirm: async () => {
+          await clearCart();
           setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
           setSelectedCustomizableItem(item);
           setShowCustomizationModal(true);
@@ -400,9 +416,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       return;
     }
 
-    // Always ensure restaurant info is set
     setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
-
     setSelectedCustomizableItem(item);
     setShowCustomizationModal(true);
   };
@@ -456,17 +470,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
 
     const existingItem = cart[itemId];
-    const currentTotalQuantity = getItemQuantity(itemId);
-    const editingVariantQuantity = editingVariantId
-      ? existingItem?.variants?.find(v => v.id === editingVariantId)?.quantity || 0
-      : 0;
-    const remainingQuantity = Math.max(0, MAX_ITEM_QUANTITY - (currentTotalQuantity - editingVariantQuantity));
-    const normalizedQuantity = Math.min(quantity, remainingQuantity);
-
-    if (normalizedQuantity <= 0) {
-      showMaxQuantityAlert();
-      return;
-    }
 
     // Create new variant
     const newVariant: CustomizationVariant = {
@@ -475,7 +478,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       addOnNames: addOnNames,
       customizationGroups: customizationGroups,
       price: totalPrice,
-      quantity: normalizedQuantity,
+      quantity: quantity,
     };
 
     let updatedVariants: CustomizationVariant[];
@@ -544,10 +547,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       return;
     }
     if (!reviewingItemId) return;
-    if (isItemAtMaxQuantity(reviewingItemId)) {
-      showMaxQuantityAlert();
-      return;
-    }
 
     const item = cart[reviewingItemId];
     if (!item?.variants) return;
@@ -594,10 +593,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       return;
     }
     if (!reviewingItemId) return;
-    if (getRemainingQuantityForItem(reviewingItemId) <= 0) {
-      showMaxQuantityAlert();
-      return;
-    }
 
     const item = menuSections
       .flatMap(section => section.items)
@@ -620,19 +615,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     if (!ensureRestaurantOpen()) {
       return;
     }
-    // Check if restaurant is open
-    const isRestaurantOpen = restaurantData?.timings
-      ? homeService.isRestaurantOpen(restaurantData.timings)
-      : true; // Default to open if no timing data
-
-    // Check if item is available based on its own timings
-    const isItemCurrentlyAvailable = isItemAvailable(item.timings);
-
-    // Item is only available if BOTH restaurant is open AND item timing is available
-    const itemAvailable = isRestaurantOpen && isItemCurrentlyAvailable;
-    
     setSelectedDetailItem(item);
-    setSelectedDetailItemAvailable(itemAvailable);
     setShowDetailModal(true);
   };
 
@@ -647,23 +630,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
   };
 
-  // Helper function to check if item is available (considering both restaurant and item timings)
-  const isItemFullyAvailable = (item: MenuItem): boolean => {
-    // Check if restaurant is open
-    const isRestaurantOpen = restaurantData?.timings
-      ? homeService.isRestaurantOpen(restaurantData.timings)
-      : true; // Default to open if no timing data
-
-    // Check if item is available based on its own timings
-    const isItemCurrentlyAvailable = isItemAvailable(item.timings);
-
-    // Item is only available if BOTH restaurant is open AND item timing is available
-    return isRestaurantOpen && isItemCurrentlyAvailable;
-  };
-
   // Get filtered menu sections based on active dietary filter and global veg mode
   const getFilteredMenuSections = (): MenuSection[] => {
-    const processedSections = menuSections
+    return menuSections
       .map(section => {
         // Filter items
         let filteredItems = section.items.filter(item => {
@@ -703,45 +672,24 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           return true;
         });
 
-        // Sort items: enabled items first, disabled items last
-        // This considers both restaurant timings and item timings
-        filteredItems = [...filteredItems].sort((a, b) => {
-          const aAvailable = isItemFullyAvailable(a);
-          const bAvailable = isItemFullyAvailable(b);
-
-          if (aAvailable === bAvailable) {
-            // If both have same availability, apply price sorting if filter is active
-            if (filters.sortBy) {
-              if (filters.sortBy === 'lowToHigh') {
-                return a.price - b.price;
-              } else if (filters.sortBy === 'highToLow') {
-                return b.price - a.price;
-              }
+        // Apply sorting if filter is active
+        if (filters.sortBy) {
+          filteredItems = [...filteredItems].sort((a, b) => {
+            if (filters.sortBy === 'lowToHigh') {
+              return a.price - b.price;
+            } else if (filters.sortBy === 'highToLow') {
+              return b.price - a.price;
             }
             return 0;
-          }
-          return aAvailable ? -1 : 1; // Available items come first
-        });
-
-        // Check if category has any enabled items
-        const hasEnabledItems = filteredItems.some(item => isItemFullyAvailable(item));
+          });
+        }
 
         return {
           ...section,
           items: filteredItems,
-          hasEnabledItems, // Add flag to track if category has enabled items
         };
       })
       .filter(section => section.items.length > 0); // Remove empty sections
-
-    // Sort categories: categories with enabled items first, categories with only disabled items last
-    const sortedSections = [...processedSections].sort((a, b) => {
-      if (a.hasEnabledItems === b.hasEnabledItems) return 0;
-      return a.hasEnabledItems ? -1 : 1; // Categories with enabled items come first
-    });
-
-    // Remove the hasEnabledItems flag before returning (it was just for sorting)
-    return sortedSections.map(({ hasEnabledItems, ...section }) => section);
   };
 
   const filteredMenuSections = getFilteredMenuSections();
@@ -749,19 +697,36 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const hasNoItemsAtAll = !isLoading && menuSections.length === 0;
   const hasNoVegItems = vegMode === 'all' && filteredMenuSections.length === 0 && menuSections.length > 0;
 
+  // Show max quantity alert function
+  const showMaxQuantityAlert = useCallback(() => {
+    showConfirmation({
+      title: 'Quantity limit reached',
+      message: `You can add up to ${MAX_ITEM_QUANTITY} units of each item.`,
+      confirmText: 'OK',
+      cancelText: '',
+      confirmButtonColor: '#00B14F',
+      onConfirm: () => {},
+    });
+  }, [showConfirmation]);
+
   // Handle adding item from detail modal
+  // This function combines both "Incoming" and "Current" flows:
+  // - Incoming flow: Uses useCallback, prevents concurrent updates, checks MAX_ITEM_QUANTITY
+  // - Current flow: Checks ensureRestaurantOpen, handles restaurant conflicts with itemId field
   const handleAddFromDetail = useCallback((itemId: string, quantity: number) => {
-    // Prevent concurrent updates for the same item
+    // Current flow: Check if restaurant is open first
+    if (!ensureRestaurantOpen()) {
+      return;
+    }
+
+    // Incoming flow: Prevent concurrent updates for the same item
     if (updatingItemsRef.current.has(itemId)) {
       return;
     }
 
+    // Incoming flow: Check quantity limit
     if (quantity > MAX_ITEM_QUANTITY) {
       showMaxQuantityAlert();
-      return;
-    }
-    const safeQuantity = Math.min(quantity, MAX_ITEM_QUANTITY);
-    if (safeQuantity <= 0) {
       return;
     }
 
@@ -769,87 +734,99 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       .flatMap(section => section.items)
       .find(i => i.id === itemId);
 
-    if (item) {
-      // Check if item already exists in cart
-      const existingCartItem = cart[itemId];
-      
-      if (existingCartItem) {
-        // Mark item as being updated
-        updatingItemsRef.current.add(itemId);
-        
-        // Get current quantity and calculate new quantity
-        const currentQuantity = existingCartItem.quantity || 0;
-        const newQuantity = Math.min(currentQuantity + safeQuantity, MAX_ITEM_QUANTITY);
-        
-        // Only update if the new quantity is different and valid
-        if (newQuantity > currentQuantity && newQuantity <= MAX_ITEM_QUANTITY) {
-          updateQuantity(itemId, newQuantity).finally(() => {
-            // Remove from updating set after update completes
-            updatingItemsRef.current.delete(itemId);
-          });
-        } else {
-          // Remove from updating set if no update needed
-          updatingItemsRef.current.delete(itemId);
-        }
-      } else {
-        // Add new item to cart
-        // Check if there's a restaurant conflict
-        if (checkRestaurantConflict(restaurantId)) {
-          showConfirmation({
-            title: 'Replace cart item?',
-            message: 'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
-            confirmText: 'Replace',
-            cancelText: 'Cancel',
-            confirmButtonColor: '#FF0000',
-            onConfirm: () => {
-              // Clear cart and add new item
-              clearCart();
-              setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
-              addToCartContext({
-                id: item.id,
-                name: item.name,
-                price: item.price,
-                quantity: safeQuantity,
-                isVeg: item.isVeg,
-                isCustomizable: false,
-                image: item.image,
-              }, restaurantId);
-            },
-          });
-          return;
-        }
+    if (!item) return;
 
-        // Always ensure restaurant info is set before adding items
-        setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
-
-        // Pass restaurantId directly to avoid race condition
-        addToCartContext({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: safeQuantity,
-          isVeg: item.isVeg,
-          image: item.image,
-          isCustomizable: false,
-        }, restaurantId);
-      }
+    const safeQuantity = Math.min(quantity, MAX_ITEM_QUANTITY);
+    if (safeQuantity <= 0) {
+      return;
     }
-  }, [cart, menuSections, updateQuantity, addToCartContext, checkRestaurantConflict, restaurantId, restaurantData, restaurantName, setRestaurantInfo, clearCart, showConfirmation, showMaxQuantityAlert]);
+    
+    // Check if item already exists in cart
+    const existingCartItem = cart[itemId];
+    
+    if (existingCartItem) {
+      // Incoming flow: Mark item as being updated to prevent concurrent updates
+      updatingItemsRef.current.add(itemId);
+      
+      // Get current quantity and calculate new quantity
+      const currentQuantity = existingCartItem.quantity || 0;
+      const newQuantity = Math.min(currentQuantity + safeQuantity, MAX_ITEM_QUANTITY);
+      
+      // Only update if the new quantity is different and valid
+      if (newQuantity > currentQuantity && newQuantity <= MAX_ITEM_QUANTITY) {
+        updateQuantity(itemId, newQuantity).finally(() => {
+          // Remove from updating set after update completes
+          updatingItemsRef.current.delete(itemId);
+        });
+      } else {
+        // Remove from updating set if no update needed
+        updatingItemsRef.current.delete(itemId);
+      }
+    } else {
+      // Add new item to cart
+      // Current flow: Check if there's a restaurant conflict using checkRestaurantConflict
+      if (checkRestaurantConflict(restaurantId)) {
+        showConfirmation({
+          title: 'Replace cart item?',
+          message: 'Your cart contains dishes from another restaurant. Do you want to discard the selection and add dishes from this restaurant?',
+          confirmText: 'Replace',
+          cancelText: 'Cancel',
+          confirmButtonColor: '#FF0000',
+          onConfirm: async () => {
+            // Clear cart and add new item
+            await clearCart();
+            setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
+            addToCartContext({
+              id: item.id,
+              itemId: parseInt(item.id, 10),
+              name: item.name,
+              price: item.price,
+              quantity: safeQuantity,
+              isVeg: item.isVeg,
+              image: item.image,
+              isCustomizable: false,
+            }, restaurantId);
+          },
+        });
+        return;
+      }
 
-  // Fetch restaurant details from API
+      // Always ensure restaurant info is set before adding items
+      setRestaurantInfo(restaurantId, restaurantData?.name || restaurantName || 'Restaurant', restaurantData?.logo_url);
+
+      // Pass restaurantId directly to avoid race condition
+      // Current flow: Include itemId field for compatibility
+      addToCartContext({
+        id: item.id,
+        itemId: parseInt(item.id, 10),
+        name: item.name,
+        price: item.price,
+        quantity: safeQuantity,
+        isVeg: item.isVeg,
+        image: item.image,
+        isCustomizable: false,
+      }, restaurantId);
+    }
+  }, [cart, menuSections, updateQuantity, addToCartContext, checkRestaurantConflict, restaurantId, restaurantData, restaurantName, setRestaurantInfo, clearCart, showConfirmation, showMaxQuantityAlert, ensureRestaurantOpen]);
+
+  const cartReloadedRef = useRef(false);
+
   useEffect(() => {
     if (visible && restaurantId) {
-      // Reset scroll immediately when becoming visible
       if (scrollViewRef.current) {
         scrollViewRef.current.scrollTo({ y: 0, animated: false });
       }
-      // Set loading state immediately when becoming visible to show loading instead of "No menu available"
-      setIsLoading(true);
+      
+      if (!cartReloadedRef.current) {
+        reloadCart().catch(() => {});
+        cartReloadedRef.current = true;
+      }
+      
       fetchRestaurantDetails();
     } else if (!visible) {
-      // Clear data when screen is not visible to prevent showing old cache
       setRestaurantData(null);
       setMenuSections([]);
+      cartReloadedRef.current = false;
     }
   }, [visible, restaurantId]);
 
@@ -1387,13 +1364,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               </TouchableOpacity>
 
             {section.isExpanded && section.items.map((item) => {
-              const currentItemQuantity = getItemQuantity(item.id);
-              const isAtQuantityLimit = currentItemQuantity >= MAX_ITEM_QUANTITY;
-              // Check if restaurant is open
-              const isRestaurantOpen = restaurantData?.timings
-                ? homeService.isRestaurantOpen(restaurantData.timings)
-                : true; // Default to open if no timing data
-
               // Check if item is available based on its own timings
               const isItemCurrentlyAvailable = isItemAvailable(item.timings);
 
@@ -1476,10 +1446,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     )}
                     <Image
                       source={item.image}
-                      style={[
-                        styles.itemImage,
-                        !itemAvailable && styles.itemImageDisabled
-                      ]}
+                      style={styles.itemImage}
                       resizeMode="cover"
                       onLoad={() => handleImageLoad(item.id)}
                       fadeDuration={0}
@@ -1535,16 +1502,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                           >
                             <Text style={styles.quantityButtonText}>-</Text>
                           </TouchableOpacity>
-                          <Text style={styles.quantityText}>{currentItemQuantity}</Text>
+                          <Text style={styles.quantityText}>{getItemQuantity(item.id)}</Text>
                           <TouchableOpacity
-                            style={[
-                              styles.quantityButton,
-                              isAtQuantityLimit && styles.quantityButtonDisabled,
-                            ]}
+                            style={styles.quantityButton}
                             onPress={() => incrementItem(item.id)}
                             activeOpacity={0.7}
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                            disabled={isAtQuantityLimit}
                           >
                             <Text style={styles.quantityButtonText}>+</Text>
                           </TouchableOpacity>
@@ -1593,7 +1556,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             style={styles.cartButton}
             onPress={() => {
               // Navigate to checkout page
-              if (onNavigateToCheckout) {
+              if (onNavigateToCheckout && cartRestaurantId) {
+                // Use cart's restaurant info (the restaurant whose items are in the cart)
                 // Build restaurant address from available data
                 const restaurantAddress = restaurantData?.locations?.[0]?.address ||
                   restaurantData?.location?.address ||
@@ -1603,7 +1567,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   ].filter(Boolean).join(', ') ||
                   'Restaurant Address';
 
-                onNavigateToCheckout(restaurantId, restaurantData?.name || restaurantName, restaurantAddress, 'restaurant');
+                onNavigateToCheckout(cartRestaurantId, cartRestaurantName || 'Restaurant', restaurantAddress, 'restaurant');
               }
             }}
             activeOpacity={0.8}
@@ -1706,11 +1670,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         item={selectedCustomizableItem}
         preselectedAddOns={preselectedAddOns}
         initialQuantity={editingVariantQuantity}
-        maxQuantity={
-          selectedCustomizableItem
-            ? Math.max(1, getRemainingQuantityForItem(selectedCustomizableItem.id))
-            : MAX_ITEM_QUANTITY
-        }
         onClose={() => {
           // Just close the modal and reset editing state
           setShowCustomizationModal(false);
@@ -1746,7 +1705,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           onEdit={handleEditVariant}
           onAddNewCustomisation={handleAddNewCustomisation}
           onConfirm={handleConfirmCustomisations}
-          maxQuantityReached={isItemAtMaxQuantity(reviewingItemId)}
         />
       )}
 
@@ -1755,12 +1713,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         visible={showDetailModal}
         item={selectedDetailItem}
         initialQuantity={selectedDetailItem ? (cart[selectedDetailItem.id]?.quantity || undefined) : undefined}
-        maxQuantity={MAX_ITEM_QUANTITY}
-        isAvailable={selectedDetailItemAvailable}
         onClose={() => {
           setShowDetailModal(false);
           setSelectedDetailItem(null);
-          setSelectedDetailItemAvailable(true);
         }}
         onAddToCart={handleAddFromDetail}
       />
@@ -2301,9 +2256,6 @@ const styles = StyleSheet.create({
     height: 137,
     borderRadius: 16,
   },
-  itemImageDisabled: {
-    opacity: 0.5,
-  },
   itemGradientOverlayTop: {
     position: 'absolute',
     top: 0,
@@ -2393,9 +2345,6 @@ const styles = StyleSheet.create({
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  quantityButtonDisabled: {
-    opacity: 0.4,
   },
   quantityButtonText: {
     fontFamily: 'Poppins',

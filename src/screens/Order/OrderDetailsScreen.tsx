@@ -41,6 +41,13 @@ interface OrderDetailsScreenProps {
   restaurantAddress?: string;
   deliveryAddress?: string;
   cartItems?: CartItem[];
+  selectedLocation?: {
+    name: string;
+    address: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  visible?: boolean;
   onBack?: () => void;
   onEditCustomization?: (itemId: string, variantId: string, currentAddOnIds: string[], currentQuantity?: number) => void;
   onPlaceOrder?: () => void;
@@ -51,11 +58,13 @@ interface OrderDetailsScreenProps {
 }
 
 export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
-  restaurantName = 'KFC',
+  restaurantName,
   restaurantId,
   restaurantAddress,
-  deliveryAddress = 'Chennai | F1, Jeyalakshmi Appartments...',
+  deliveryAddress,
   cartItems = [],
+  selectedLocation,
+  visible = true,
   onBack,
   onEditCustomization,
   onPlaceOrder,
@@ -64,7 +73,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   showCustomizationModal = false,
   onUpdateCart,
 }) => {
-  const { cart, clearCart, updateQuantity, removeFromCart, setRestaurantInfo, restaurantId: contextRestaurantId } = useCart();
+  const { cart, clearCart, updateQuantity, removeFromCart, setRestaurantInfo, restaurantId: contextRestaurantId, restaurantName: contextRestaurantName } = useCart();
   const { showConfirmation } = useConfirmation();
   const [orderExpanded, setOrderExpanded] = useState(true);
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
@@ -133,10 +142,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
   const [cartSummary, setCartSummary] = useState<CartSummary | null>(null);
   const [isLoadingCartSummary, setIsLoadingCartSummary] = useState(false);
+  const [cartData, setCartData] = useState<any>(null);
   const [isUpdatingTip, setIsUpdatingTip] = useState(false);
-
-  // Constants
-  const MAX_TIP_AMOUNT = 100;
+  const [maxTipAmount, setMaxTipAmount] = useState<number | null>(null);
+  const [tipError, setTipError] = useState('');
 
   const selectedAddress = addresses.find(addr => addr.id.toString() === selectedAddressId);
 
@@ -156,23 +165,51 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const translateYAnim = useRef(new Animated.Value(0)).current;
+  const tipShakeAnim = useRef(new Animated.Value(0)).current;
   const customTipInputRef = useRef<TextInput>(null);
 
-  // Set restaurant info in CartContext when component mounts or props change
-  useEffect(() => {
-    if (restaurantId && restaurantName) {
-      // Only update if different from current context
-      if (contextRestaurantId !== restaurantId) {
-        setRestaurantInfo(restaurantId, restaurantName);
-      }
-    }
-  }, [restaurantId, restaurantName, contextRestaurantId, setRestaurantInfo]);
+  const triggerTipError = (message: string) => {
+    setTipError(message);
+    tipShakeAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(tipShakeAnim, {
+        toValue: 8,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(tipShakeAnim, {
+        toValue: -8,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(tipShakeAnim, {
+        toValue: 8,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(tipShakeAnim, {
+        toValue: 0,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  // Use cart context restaurant info if available, otherwise use props
+  const effectiveRestaurantId = contextRestaurantId || restaurantId;
 
   // Fetch addresses and cart summary from API
   useEffect(() => {
     fetchAddresses();
     fetchCartSummary();
   }, []);
+
+  // Refetch addresses when screen becomes visible (e.g., after account switch)
+  useEffect(() => {
+    if (visible) {
+      fetchAddresses();
+    }
+  }, [visible]);
 
   // Fetch cart summary when cart changes (debounced to avoid too many API calls)
   useEffect(() => {
@@ -188,24 +225,37 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const fetchCartSummary = async () => {
     try {
       setIsLoadingCartSummary(true);
-      const cartData = await cartService.getCart();
+      const cartResponse = await cartService.getCart();
 
-      if (cartData && cartData.summary) {
-        setCartSummary(cartData.summary);
+      if (cartResponse) {
+        setCartData(cartResponse);
+        if (cartResponse.summary) {
+          setCartSummary(cartResponse.summary);
 
-        // tip_amount might be in the response even if not in the type definition
-        const tipAmount = (cartData.summary as any).tip_amount;
-        if (tipAmount !== undefined && tipAmount !== null) {
-          setSelectedTip(tipAmount > 0 ? tipAmount : null);
+          // Extract dynamic tip metadata from backend if available
+          const summaryAny = cartResponse.summary as any;
+          if (typeof summaryAny.max_tip_amount === 'number') {
+            setMaxTipAmount(summaryAny.max_tip_amount);
+          }
+
+          const tipAmount = summaryAny.tip_amount;
+          if (typeof tipAmount === 'number') {
+            setSelectedTip(tipAmount > 0 ? tipAmount : null);
+          }
         }
+      } else {
+        setCartData(null);
       }
     } catch (error: any) {
-      // Silently fail - cart summary is optional
-      console.error('Failed to fetch cart summary:', error);
+      setCartData(null);
     } finally {
       setIsLoadingCartSummary(false);
     }
   };
+
+  // Get restaurant name and address from cart API data
+  const displayRestaurantName = cartData?.restaurant_name || contextRestaurantName || restaurantName || '';
+  const displayRestaurantAddress = cartData?.restaurant_address  || '';
 
   const fetchAddresses = async () => {
     try {
@@ -229,10 +279,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
           if (!isServiceable) {
             showConfirmation({
-              title: 'Error',
+              title: 'Oops!',
               message: 'Service not available at the selected location',
               confirmText: 'OK',
-              cancelText: 'Close',
+              cancelText: '',
               onConfirm: () => {},
             });
           }
@@ -337,7 +387,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   }, [showAddressModal, showLocationSelection, showCustomizationModal]);
 
   const handlePlaceOrder = async () => {
-    if (!restaurantId) {
+    if (!effectiveRestaurantId) {
       showConfirmation({
         title: 'Error',
         message: 'Restaurant information is missing',
@@ -403,10 +453,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
       if (!isServiceable) {
         showConfirmation({
-          title: 'Error',
+          title: 'Oops!',
           message: 'Service not available at the selected location',
           confirmText: 'OK',
-          cancelText: 'Close',
+          cancelText: '',
           onConfirm: () => {},
         });
         return;
@@ -640,18 +690,15 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
   // Handle tip selection and API call
   const handleTipSelection = async (amount: number | null) => {
+    // Clear any previous validation error when changing selection
+    setTipError('');
+
     // If deselecting (amount is null), set tip to 0
     const tipToSend = amount === null ? 0 : amount;
 
-    // Validate tip amount
-    if (tipToSend > MAX_TIP_AMOUNT) {
-      showConfirmation({
-        title: 'Invalid Tip Amount',
-        message: `Maximum tip amount is ₹${MAX_TIP_AMOUNT}. Please enter a lower amount.`,
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+    // Validate against dynamic max tip amount from backend if available
+    if (tipToSend > 0 && maxTipAmount !== null && tipToSend > maxTipAmount) {
+      triggerTipError(`Maximum tip amount is ₹${maxTipAmount}.`);
       return;
     }
 
@@ -666,17 +713,27 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       const response = await cartService.createTip(tipToSend);
 
       if (response.success) {
-        // Update local state        
+        // Update local state
         // Refresh cart summary to get updated bill details
         if (response.cart_summary) {
           setCartSummary(response.cart_summary);
+
+          const summaryAny = response.cart_summary as any;
+
+          // Update dynamic max tip amount from backend if provided
+          if (typeof response.max_tip_amount === 'number') {
+            setMaxTipAmount(response.max_tip_amount);
+          } else if (typeof summaryAny.max_tip_amount === 'number') {
+            setMaxTipAmount(summaryAny.max_tip_amount);
+          }
+
           // Update selectedTip from API response to ensure consistency
-          // Use tip_amount from response, or fallback to what we set optimistically
-          // tip_amount might be in the response even if not in the type definition
-          const tipFromResponse = (response.cart_summary as any).tip_amount;
+          const tipFromResponse =
+            response.tip_amount ?? summaryAny.tip_amount;
           if (tipFromResponse !== undefined && tipFromResponse !== null) {
             const finalTip = tipFromResponse > 0 ? tipFromResponse : null;
             setSelectedTip(finalTip);
+
             // If it's a custom tip (not 10, 20, 30), update customTipAmount to match
             if (finalTip !== null && finalTip !== 10 && finalTip !== 20 && finalTip !== 30) {
               setCustomTipAmount(finalTip.toString());
@@ -689,26 +746,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       } else {
         // Revert optimistic update on error
         setSelectedTip(previousTip);
-        // Show error if API call failed
-        showConfirmation({
-          title: 'Error',
-          message: response.message || 'Failed to update tip amount',
-          confirmText: 'OK',
-          cancelText: 'Close',
-          onConfirm: () => {},
-        });
+        // Surface error inline below the field instead of a popup
+        triggerTipError(response.message || 'Failed to update tip amount. Please try again.');
       }
     } catch (error: any) {
       // Revert optimistic update on error
       setSelectedTip(previousTip);
-      // Show error message
-      showConfirmation({
-        title: 'Error',
-        message: error.message || 'Failed to update tip amount. Please try again.',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      // Show error message inline
+      triggerTipError(error.message || 'Failed to update tip amount. Please try again.');
     } finally {
       setIsUpdatingTip(false);
     }
@@ -763,29 +808,23 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
   // Handle custom tip add button
   const handleAddCustomTip = async () => {
-    const amount = parseFloat(customTipAmount);
-    
-    // Validate input
-    if (isNaN(amount) || amount <= 0) {
-      showConfirmation({
-        title: 'Invalid Amount',
-        message: 'Please enter a valid tip amount greater than 0.',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+    // Disallow decimal values explicitly
+    if (customTipAmount.includes('.')) {
+      triggerTipError('Please enter a whole number tip amount. Decimal values are not allowed.');
       return;
     }
 
-    // Validate max tip amount
-    if (amount > MAX_TIP_AMOUNT) {
-      showConfirmation({
-        title: 'Invalid Tip Amount',
-        message: `Maximum tip amount is ₹${MAX_TIP_AMOUNT}. Please enter a lower amount.`,
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+    const amount = parseInt(customTipAmount, 10);
+    
+    // Validate input
+    if (isNaN(amount) || amount <= 0) {
+      triggerTipError('Please enter a valid tip amount greater than 0.');
+      return;
+    }
+
+    // Validate max tip amount using backend-provided limit when available
+    if (maxTipAmount !== null && amount > maxTipAmount) {
+      triggerTipError(`Maximum tip amount is ₹${maxTipAmount}. Please enter a lower amount.`);
       return;
     }
 
@@ -842,15 +881,19 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.7}>
               <MaterialIcons name="chevron-left" size={24} color="#000000" />
             </TouchableOpacity>
-            <View style={styles.headerTextContainer}>
-              <Text style={styles.restaurantName}>{restaurantName}</Text>
-              <View style={styles.addressContainer}>
-                <MaterialIcons name="location-on" size={14} color="#FFFFFF" />
-                <Text style={styles.addressText} numberOfLines={1}>
-                  {restaurantAddress || deliveryAddress}
-                </Text>
-              </View>
-            </View>
+             <View style={styles.headerTextContainer}>
+               {displayRestaurantName ? (
+                 <Text style={styles.restaurantName}>{displayRestaurantName}</Text>
+               ) : null}
+               {displayRestaurantAddress ? (
+                 <View style={styles.addressContainer}>
+                   <MaterialIcons name="location-on" size={14} color="#FFFFFF" />
+                   <Text style={styles.addressText} numberOfLines={1}>
+                     {displayRestaurantAddress}
+                   </Text>
+                 </View>
+               ) : null}
+             </View>
           </View>
         </SafeAreaView>
       </View>
@@ -962,7 +1005,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   <Text style={styles.notesLabel}>Notes</Text>
                   <TextInput
                     style={styles.notesInput}
-                    placeholder="I need more spicy and tasty"
+                    placeholder="Add special instructions for your order (optional)"
                     placeholderTextColor="rgba(0, 0, 0, 0.4)"
                     value={notes}
                     onChangeText={setNotes}
@@ -1175,7 +1218,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   <View style={styles.customTipContainer}>
                     <Text style={styles.customTipLabel}>Enter custom tip amount</Text>
                     <View style={styles.customTipInputRow}>
-                      <View style={styles.customTipInputContainer}>
+                      <Animated.View
+                        style={[
+                          styles.customTipInputContainer,
+                          { transform: [{ translateX: tipShakeAnim }] },
+                        ]}
+                      >
                         <Text style={styles.rupeeSymbol}>₹</Text>
                         <TextInput
                           ref={customTipInputRef}
@@ -1184,18 +1232,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                           placeholderTextColor="rgba(0, 0, 0, 0.4)"
                           value={customTipAmount}
                           onChangeText={(text) => {
-                            // Only allow numbers and decimal point
-                            const numericValue = text.replace(/[^0-9.]/g, '');
-                            // Prevent multiple decimal points
-                            const parts = numericValue.split('.');
-                            const formattedValue = parts.length > 2 
-                              ? parts[0] + '.' + parts.slice(1).join('')
-                              : numericValue;
-                            setCustomTipAmount(formattedValue);
+                            // Allow only digits, no decimals, and limit to 3 digits (max 999)
+                            const numericValue = text.replace(/[^0-9]/g, '');
+                            const limitedValue = numericValue.slice(0, 3);
+                            setCustomTipAmount(limitedValue);
                           }}
                           keyboardType="number-pad"
                         />
-                      </View>
+                      </Animated.View>
                       <TouchableOpacity
                         style={[styles.addTipButton, isUpdatingTip && styles.addTipButtonDisabled]}
                         onPress={handleAddCustomTip}
@@ -1209,6 +1253,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                         )}
                       </TouchableOpacity>
                     </View>
+                    {tipError ? (
+                      <Text style={styles.tipErrorText}>{tipError}</Text>
+                    ) : null}
                   </View>
                 )}
 
@@ -1388,10 +1435,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
             if (!isServiceable) {
               showConfirmation({
-                title: 'Error',
+                title: 'Oops!',
                 message: 'Service not available at the selected location',
                 confirmText: 'OK',
-                cancelText: 'Close',
+                cancelText: '',
                 onConfirm: () => {},
               });
               setShowAddressModal(false);
@@ -1399,8 +1446,27 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             }
           }
 
+          // Set the selected address as default if it's not already the default
+          const selectedAddress = addresses.find(addr => addr.id.toString() === addressId);
+          if (selectedAddress && !selectedAddress.is_default) {
+            try {
+              const updateResponse = await addressService.updateAddress(addressId, {
+                is_default: true,
+              });
+
+              if (updateResponse.success) {
+                // Refresh addresses to get updated list with new default
+                await fetchAddresses();
+              }
+            } catch (error: any) {
+              // If setting default fails, still proceed with address selection
+              console.error('Failed to set default address:', error);
+            }
+          }
+
           setSelectedAddressId(addressId);
           setShowAddressModal(false);
+          await fetchCartSummary();
         }}
         onAddNewAddress={() => {
           setShowAddressModal(false);
@@ -1903,9 +1969,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins',
     fontWeight: '400',
     fontSize: 16,
-    lineHeight: 24,
+    // lineHeight: 24,
     color: '#000000',
     padding: 0,
+  },
+  tipErrorText: {
+    marginTop: 6,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#DC2626',
   },
   promoCodeContainer: {
     flexDirection: 'row',

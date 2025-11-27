@@ -16,7 +16,6 @@ import { CategoryModal } from '@/components/CategoryModal';
 import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
-import { storageService } from '@/services/storage.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BANNER_WIDTH = SCREEN_WIDTH - 40; // Fixed banner width with 20px padding on each side
@@ -29,7 +28,6 @@ interface HomeScreenProps {
   onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
   onNavigateToCheckout?: (restaurantId: number, restaurantName: string, restaurantAddress?: string, from?: 'home' | 'restaurant') => void;
   onNavigateToSearch?: () => void;
-  onNavigateToLocationSelection?: () => void;
   selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
   onCategoriesLoaded?: (categories: CategoryItem[]) => void;
   isFocused?: boolean;
@@ -67,6 +65,20 @@ const fallbackCarouselData: CarouselItem[] = [
     buttonText: 'Order Now!',
   },
 ];
+
+// Utility to normalize veg food types returned by API (handles values like "pure-veg")
+const isVegFoodType = (foodType?: string, isVegFlag?: boolean): boolean => {
+  if (isVegFlag) {
+    return true;
+  }
+
+  if (!foodType) {
+    return false;
+  }
+
+  const normalized = foodType.trim().toLowerCase();
+  return normalized === 'veg' || normalized === 'pure-veg' || normalized === 'pure veg' || normalized === 'pureveg';
+};
 
 // Default location coordinates (Madurai)
 const DEFAULT_LOCATION = {
@@ -170,7 +182,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToRestaurant,
   onNavigateToCheckout,
   onNavigateToSearch,
-  onNavigateToLocationSelection,
   selectedLocation: externalSelectedLocation,
   onCategoriesLoaded,
   isFocused = true,
@@ -183,7 +194,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
   const [hasShownLocationModal, setHasShownLocationModal] = React.useState(false);
   const [showVegModePopup, setShowVegModePopup] = React.useState(false);
-  const [rememberVegChoice, setRememberVegChoice] = React.useState(false);
   const vegModalSlideAnim = React.useRef(new Animated.Value(500)).current;
   const vegModalOpacityAnim = React.useRef(new Animated.Value(1)).current;
   const [currentSlide, setCurrentSlide] = React.useState(0);
@@ -211,6 +221,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [tempVegSelection, setTempVegSelection] = React.useState<'pure' | 'all'>('pure');
   const [selectedLocation, setSelectedLocation] = React.useState(externalSelectedLocation || { name: DEFAULT_LOCATION.name, address: DEFAULT_LOCATION.address });
 
+  // Debug: Log whenever selectedLocation changes
+  React.useEffect(() => {
+    // selectedLocation tracking
+  }, [selectedLocation]);
   const [isCategorySectionSticky, setIsCategorySectionSticky] = React.useState(false);
   const [showCategoryModal, setShowCategoryModal] = React.useState(false);
   const flatListRef = React.useRef<FlatList>(null);
@@ -219,11 +233,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
   const [hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
   const isInitialVegModeLoad = React.useRef(true);
-  const hasCheckedAddressRedirect = React.useRef(false);
-  const isInitialMount = React.useRef(true);
-  const prevCoordsRef = React.useRef<{ latitude: number; longitude: number } | null>(null);
-  const fetchHomeDataRef = React.useRef<((latitude?: number, longitude?: number) => Promise<void>) | null>(null);
-  const prevServiceabilityRef = React.useRef<boolean | null>(null);
 
   // Pagination states
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -235,40 +244,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Location serviceability state
   const [isLocationServiceable, setIsLocationServiceable] = React.useState(true);
-  
-  // User name for avatar
-  const [userName, setUserName] = React.useState('U');
-
-  // Fetch user name for avatar
-  React.useEffect(() => {
-    const fetchUserName = async () => {
-      try {
-        // Try to get from API first
-        const response = await authService.getProfile();
-        if (response.success && response.data?.user) {
-          const name = response.data.user.name || 'User';
-          setUserName(name.charAt(0).toUpperCase());
-        } else {
-          // Fallback to storage
-          const userData = await storageService.getUser();
-          if (userData?.name) {
-            setUserName(userData.name.charAt(0).toUpperCase());
-          }
-        }
-      } catch (error) {
-        // Try storage as fallback
-        try {
-          const userData = await storageService.getUser();
-          if (userData?.name) {
-            setUserName(userData.name.charAt(0).toUpperCase());
-          }
-        } catch (storageError) {
-          // Keep default 'U'
-        }
-      }
-    };
-    fetchUserName();
-  }, []);
 
   // Dismiss keyboard when component mounts (only once)
   React.useEffect(() => {
@@ -296,193 +271,84 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       setSelectedLocation(externalSelectedLocation);
       // User selected a different address, fetch restaurants for the new location
       if (externalSelectedLocation.latitude && externalSelectedLocation.longitude) {
-        // Clear existing restaurant data immediately to prevent showing old distances
-        setRestaurantData([]);
-        setCarouselData([]);
-        setCategoryData([]);
-        setNoRestaurantsFound(false);
-        setHasNetworkError(false);
-        
-        // Update coordinates ref to track the change
-        const newCoords = {
-          latitude: externalSelectedLocation.latitude,
-          longitude: externalSelectedLocation.longitude,
-        };
-        prevCoordsRef.current = newCoords;
-        
-        // Fetch fresh data with new coordinates
         fetchHomeData(externalSelectedLocation.latitude, externalSelectedLocation.longitude);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalSelectedLocation]);
 
-  // Fetch and update address data (reusable function)
-  const fetchDefaultAddress = React.useCallback(async () => {
-    try {
-      const response = await addressService.getAddresses();
+  // Fetch default address on component mount (ONLY ONCE)
+  React.useEffect(() => {
+    const fetchDefaultAddress = async () => {
+      try {
+        const response = await addressService.getAddresses();
 
-      if (response.success && response.data) {
-        // Check if user has no addresses at all
-        if (response.data.length === 0 && !hasCheckedAddressRedirect.current && onNavigateToLocationSelection) {
-          // User has no addresses - redirect to location selection (non-mandatory)
-          hasCheckedAddressRedirect.current = true;
-          // Use setTimeout to ensure this happens after the component is fully mounted
-          setTimeout(() => {
-            onNavigateToLocationSelection();
-          }, 500);
-          return;
-        }
+        if (response.success && response.data) {
+          // Find the default address
+          const defaultAddress = response.data.find(addr => addr.is_default);
 
-        // Find the default address
-        const defaultAddress = response.data.find(addr => addr.is_default);
+          if (defaultAddress) {
+            // User has a default address saved
+            setHasDefaultAddress(true);
+            setDefaultAddressCoords({
+              latitude: defaultAddress.latitude,
+              longitude: defaultAddress.longitude,
+            });
 
-        if (defaultAddress) {
-          // User has a default address saved
-          const newCoords = {
-            latitude: defaultAddress.latitude,
-            longitude: defaultAddress.longitude,
-          };
+            // Format address type (home -> Home, work -> Work, other -> Other)
+            const formattedType = defaultAddress.type.charAt(0).toUpperCase() + defaultAddress.type.slice(1);
 
-          // Check if coordinates changed using ref to avoid stale closure issues
-          const prevCoords = prevCoordsRef.current;
-          const coordinatesChanged = 
-            !prevCoords ||
-            prevCoords.latitude !== newCoords.latitude ||
-            prevCoords.longitude !== newCoords.longitude;
+            // Update selected location display (only if no external location is set)
+            if (!externalSelectedLocation) {
+              const newLocation = {
+                name: formattedType,
+                address: `${defaultAddress.address1}${defaultAddress.address2 ? ', ' + defaultAddress.address2 : ''}${defaultAddress.address3 ? ', ' + defaultAddress.address3 : ''}, ${defaultAddress.city}`,
+              };
+              setSelectedLocation(newLocation);
+            }
 
-          // Check if serviceability status changed (important when switching addresses)
-          const isServiceable = homeService.isLocationServiceable(newCoords.latitude, newCoords.longitude);
-          const prevServiceable = prevServiceabilityRef.current;
-          const serviceabilityChanged = prevServiceable !== null && prevServiceable !== isServiceable;
-          
-          // Update serviceability ref
-          prevServiceabilityRef.current = isServiceable;
+            // Fetch home data with default address coordinates
+            await fetchHomeData(parseFloat(defaultAddress.latitude), parseFloat(defaultAddress.longitude));
+          } else {
+            // No default address, use fallback location
+            setHasDefaultAddress(false);
+            setSelectedLocation({
+              name: DEFAULT_LOCATION.name,
+              address: DEFAULT_LOCATION.address,
+            });
 
-          setHasDefaultAddress(true);
-          setDefaultAddressCoords(newCoords);
-          prevCoordsRef.current = newCoords;
-
-          // Format address type (home -> Home, work -> Work, other -> Other)
-          const formattedType = defaultAddress.type.charAt(0).toUpperCase() + defaultAddress.type.slice(1);
-
-          // Update selected location display (only if no external location is set)
-          if (!externalSelectedLocation) {
-            const newLocation = {
-              name: formattedType,
-              address: `${defaultAddress.address1}${defaultAddress.address2 ? ', ' + defaultAddress.address2 : ''}${defaultAddress.address3 ? ', ' + defaultAddress.address3 : ''}, ${defaultAddress.city}`,
-            };
-            setSelectedLocation(newLocation);
-          }
-
-          // Fetch home data if coordinates changed OR serviceability status changed
-          // This ensures proper refresh when switching from non-serviceable to serviceable address
-          if ((coordinatesChanged || serviceabilityChanged) && fetchHomeDataRef.current) {
-            await fetchHomeDataRef.current(defaultAddress.latitude, defaultAddress.longitude);
+            // Fetch home data with default Madurai coordinates
+            await fetchHomeData();
           }
         } else {
-          // No default address, but user has addresses - use fallback location
-          const prevCoords = prevCoordsRef.current;
-          const shouldUseFallback = !prevCoords || 
-            prevCoords.latitude !== DEFAULT_LOCATION.latitude ||
-            prevCoords.longitude !== DEFAULT_LOCATION.longitude;
-
-          // Check if serviceability status changed for fallback location
-          const isServiceable = homeService.isLocationServiceable(DEFAULT_LOCATION.latitude, DEFAULT_LOCATION.longitude);
-          const prevServiceable = prevServiceabilityRef.current;
-          const serviceabilityChanged = prevServiceable !== null && prevServiceable !== isServiceable;
-          prevServiceabilityRef.current = isServiceable;
-
+          // API failed, use fallback location
           setHasDefaultAddress(false);
-          setDefaultAddressCoords(null);
-          prevCoordsRef.current = null;
           setSelectedLocation({
             name: DEFAULT_LOCATION.name,
             address: DEFAULT_LOCATION.address,
           });
 
-          // Fetch home data if we're switching to fallback location OR serviceability changed
-          if ((shouldUseFallback || serviceabilityChanged) && fetchHomeDataRef.current) {
-            await fetchHomeDataRef.current();
-          }
+          // Fetch home data with default Madurai coordinates
+          await fetchHomeData();
         }
-      } else {
-        // API failed, use fallback location
-        const prevCoords = prevCoordsRef.current;
-        const shouldUseFallback = !prevCoords || 
-          prevCoords.latitude !== DEFAULT_LOCATION.latitude ||
-          prevCoords.longitude !== DEFAULT_LOCATION.longitude;
-
-        // Check if serviceability status changed for fallback location
-        const isServiceable = homeService.isLocationServiceable(DEFAULT_LOCATION.latitude, DEFAULT_LOCATION.longitude);
-        const prevServiceable = prevServiceabilityRef.current;
-        const serviceabilityChanged = prevServiceable !== null && prevServiceable !== isServiceable;
-        prevServiceabilityRef.current = isServiceable;
-
+      } catch (error) {
+        // Error fetching addresses, use fallback location
         setHasDefaultAddress(false);
-        setDefaultAddressCoords(null);
-        prevCoordsRef.current = null;
         setSelectedLocation({
           name: DEFAULT_LOCATION.name,
           address: DEFAULT_LOCATION.address,
         });
 
-        // Fetch home data if we're switching to fallback location OR serviceability changed
-        if ((shouldUseFallback || serviceabilityChanged) && fetchHomeDataRef.current) {
-          await fetchHomeDataRef.current();
-        }
+        // Fetch home data with default Madurai coordinates
+        await fetchHomeData();
+      } finally {
+        setIsLoadingLocation(false);
       }
-    } catch (error) {
-      // Error fetching addresses, use fallback location
-      const prevCoords = prevCoordsRef.current;
-      const shouldUseFallback = !prevCoords || 
-        prevCoords.latitude !== DEFAULT_LOCATION.latitude ||
-        prevCoords.longitude !== DEFAULT_LOCATION.longitude;
+    };
 
-      // Check if serviceability status changed for fallback location
-      const isServiceable = homeService.isLocationServiceable(DEFAULT_LOCATION.latitude, DEFAULT_LOCATION.longitude);
-      const prevServiceable = prevServiceabilityRef.current;
-      const serviceabilityChanged = prevServiceable !== null && prevServiceable !== isServiceable;
-      prevServiceabilityRef.current = isServiceable;
-
-      setHasDefaultAddress(false);
-      setDefaultAddressCoords(null);
-      prevCoordsRef.current = null;
-      setSelectedLocation({
-        name: DEFAULT_LOCATION.name,
-        address: DEFAULT_LOCATION.address,
-      });
-
-      // Fetch home data if we're switching to fallback location OR serviceability changed
-      if ((shouldUseFallback || serviceabilityChanged) && fetchHomeDataRef.current) {
-        await fetchHomeDataRef.current();
-      }
-    } finally {
-      setIsLoadingLocation(false);
-    }
-  }, [externalSelectedLocation, onNavigateToLocationSelection]);
-
-  // Fetch default address on component mount (ONLY ONCE)
-  React.useEffect(() => {
     fetchDefaultAddress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
-
-  // Refresh address data when screen becomes focused (after returning from other screens)
-  React.useEffect(() => {
-    // Skip initial mount - only refresh when returning to the screen
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-
-    if (isFocused) {
-      // Refresh address data to get latest state (e.g., after deletion in profile)
-      // This ensures deleted addresses are removed from the display
-      fetchDefaultAddress();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, fetchDefaultAddress]);
 
   // Reload home data when screen becomes focused (but don't reset address)
   // DISABLED: Not needed since auto-refresh on focus is disabled
@@ -715,10 +581,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const handleApplyVegMode = () => {
-    setVegMode(tempVegSelection, rememberVegChoice);
+    // Always persist veg mode when enabled (similar to major food delivery apps)
+    setVegMode(tempVegSelection, true);
     handleCloseVegModal();
-    // Reset remember choice for next time
-    setRememberVegChoice(false);
   };
 
   // Mark local (bundled) images as loaded immediately
@@ -771,38 +636,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       // Check if location is serviceable
       const serviceable = homeService.isLocationServiceable(lat, lng);
-      const prevServiceable = prevServiceabilityRef.current;
-      const wasServiceable = prevServiceable !== null ? prevServiceable : true; // Default to true for first load
-      
-      // Track serviceability transition
-      const transitioningToNonServiceable = wasServiceable && !serviceable;
-      const transitioningToServiceable = !wasServiceable && serviceable;
-      
       setIsLocationServiceable(serviceable);
-      prevServiceabilityRef.current = serviceable;
 
-      // If location is not serviceable, clear data and stop loading
+      // If location is not serviceable, stop loading and don't fetch data
       if (!serviceable) {
-        // Only clear data when transitioning to non-serviceable (not on every fetch)
-        if (transitioningToNonServiceable) {
-          setRestaurantData([]);
-          setCarouselData([]);
-          setCategoryData([]);
-          setNoRestaurantsFound(false);
-          setHasNetworkError(false);
-        }
         setIsLoadingBanners(false);
         setIsLoadingCategories(false);
         setIsLoadingRestaurants(false);
         return;
-      }
-
-      // If transitioning from non-serviceable to serviceable, ensure we fetch fresh data
-      // This handles the case where coordinates might be same but serviceability changed
-      if (transitioningToServiceable) {
-        // Reset flags to ensure fresh fetch
-        setNoRestaurantsFound(false);
-        setHasNetworkError(false);
       }
 
       const response = await homeService.getHomeData(lat, lng, vegMode, 1);
@@ -855,12 +696,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             let filteredCategories = whatsOnYourMind;
 
             if (vegMode === 'pure') {
-              // Show only Veg categories (food_type === 'Veg' or is_veg === true)
-              filteredCategories = whatsOnYourMind.filter((category: CategoryItem) => {
-                const foodType = category.food_type;
-                const isVeg = category.is_veg;
-                return (foodType && foodType.toLowerCase() === 'veg') || isVeg === true;
-              });
+              // Show only Veg categories (handles values like "pure-veg")
+              filteredCategories = whatsOnYourMind.filter((category: CategoryItem) =>
+                isVegFoodType(category.food_type, category.is_veg)
+              );
             } else if (vegMode === 'all') {
               // Show all categories regardless of food_type
               filteredCategories = whatsOnYourMind;
@@ -870,7 +709,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             // If filtered categories is empty, fetch dishes from API based on vegMode
             if (filteredCategories.length === 0 && vegMode !== 'off') {
               const foodTypeParam = vegMode === 'pure' ? 'Veg' : undefined;
-              const dishResponse = await homeService.getDishes(foodTypeParam, 10, 1);
+              const dishResponse = await homeService.getDishes(foodTypeParam, 10, 1, vegMode);
 
               if (dishResponse.success && dishResponse.data?.dishes) {
                 // Transform dishes to category format
@@ -942,11 +781,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             let filteredRestaurants = nearbyRestaurants;
 
             if (vegMode === 'pure') {
-              // Show only Veg restaurants (food_type === 'Veg')
-              filteredRestaurants = nearbyRestaurants.filter((restaurant: any) => {
-                const foodType = restaurant.food_type;
-                return foodType && foodType.toLowerCase() === 'veg';
-              });
+              // Show only Veg restaurants (handles values like "pure-veg")
+              filteredRestaurants = nearbyRestaurants.filter((restaurant: any) =>
+                isVegFoodType(restaurant.food_type, restaurant.is_veg)
+              );
             } else if (vegMode === 'all') {
               // Show all restaurants regardless of food_type
               filteredRestaurants = nearbyRestaurants;
@@ -968,18 +806,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 }
               }
 
-              // Format distance with 2 decimal places
-              let distanceText = '0Kms';
-              if (restaurant.distance !== undefined && restaurant.distance !== null) {
-                // Convert to number if string, then format to 2 decimal places
-                const distanceNum = typeof restaurant.distance === 'string' 
-                  ? parseFloat(restaurant.distance) 
-                  : Number(restaurant.distance);
-                if (!isNaN(distanceNum)) {
-                  distanceText = `${distanceNum.toFixed(2)}Kms`;
-                }
-              }
-
               return {
                 id: restaurant.id,
                 name: restaurant.name,
@@ -988,7 +814,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 reviewCount: restaurant.review_count || restaurant.reviews_count || restaurant.total_reviews || 0,
                 deliveryTime: restaurant.delivery_time || '25-30 mins',
                 location: restaurant.location,
-                distance: distanceText,
+                distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
                 image: restaurant.logo_url || restaurant.image,
                 isFavorite: restaurant.is_favorite || false,
                 isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
@@ -1030,11 +856,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       }
   }, [vegMode]);
 
-  // Update ref when fetchHomeData is created
-  React.useEffect(() => {
-    fetchHomeDataRef.current = fetchHomeData;
-  }, [fetchHomeData]);
-
   // Load more restaurants function for pagination
   const loadMoreRestaurants = React.useCallback(async () => {
     // Don't load if already loading, no more data, or initial load is still in progress
@@ -1060,11 +881,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           let filteredRestaurants = nearbyRestaurants;
 
           if (vegMode === 'pure') {
-            // Show only Veg restaurants (food_type === 'Veg')
-            filteredRestaurants = nearbyRestaurants.filter((restaurant: any) => {
-              const foodType = restaurant.food_type;
-              return foodType && foodType.toLowerCase() === 'veg';
-            });
+            // Show only Veg restaurants (handles values like "pure-veg")
+            filteredRestaurants = nearbyRestaurants.filter((restaurant: any) =>
+              isVegFoodType(restaurant.food_type, restaurant.is_veg)
+            );
           } else if (vegMode === 'all') {
             // Show all restaurants regardless of food_type
             filteredRestaurants = nearbyRestaurants;
@@ -1085,18 +905,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               }
             }
 
-            // Format distance with 2 decimal places
-            let distanceText = '0Kms';
-            if (restaurant.distance !== undefined && restaurant.distance !== null) {
-              // Convert to number if string, then format to 2 decimal places
-              const distanceNum = typeof restaurant.distance === 'string' 
-                ? parseFloat(restaurant.distance) 
-                : Number(restaurant.distance);
-              if (!isNaN(distanceNum)) {
-                distanceText = `${distanceNum.toFixed(2)}Kms`;
-              }
-            }
-
             return {
               id: restaurant.id,
               name: restaurant.name,
@@ -1105,7 +913,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               reviewCount: restaurant.review_count || restaurant.reviews_count || restaurant.total_reviews || 0,
               deliveryTime: restaurant.delivery_time || '25-30 mins',
               location: restaurant.location,
-              distance: distanceText,
+              distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
               image: restaurant.logo_url || restaurant.image,
               isFavorite: restaurant.is_favorite || false,
               isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
@@ -1198,7 +1006,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       case 'url':
         // Open external URL in system browser
-        Linking.openURL(item.promotionLink).catch(() => {
+        Linking.openURL(item.promotionLink).catch((err) => {
+          console.error('Failed to open URL:', err);
           showConfirmation({
             title: 'Error',
             message: 'Failed to open the link. Please try again.',
@@ -1343,8 +1152,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#00B14F" translucent={true} />
-      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView
           ref={scrollViewRef}
           style={styles.container}
@@ -1374,8 +1183,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Header with Background Image */}
       <ImageBackground
         source={require('@/assets/home_app_bar.png')}
-        style={[styles.headerBackground, { paddingTop: insets.top + 20 }]}
-        imageStyle={[styles.headerBackgroundImage, { top: -insets.top + 10, height: 212 + insets.top + 20 }]}
+        style={styles.headerBackground}
+        imageStyle={styles.headerBackgroundImage}
         testID="header-background"
       >
         {/* Location Section */}
@@ -1437,12 +1246,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 styles.profileAvatar,
                 (!isLocationServiceable || hasNetworkError) && styles.profileAvatarDisabled
               ]}>
-                <Text style={[
-                  styles.profileAvatarText,
-                  (!isLocationServiceable || hasNetworkError) && styles.profileAvatarTextDisabled
-                ]}>
-                  {userName}
-                </Text>
+                <MaterialIcons name="person" size={22} color={(isLocationServiceable && !hasNetworkError) ? "#00B14F" : "rgba(0, 177, 79, 0.3)"} />
               </View>
             </TouchableOpacity>
           )}
@@ -1504,12 +1308,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </>
           )}
         </View>
-        {/* Gradient fade at bottom */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0, 177, 79, 0.3)', 'rgba(0, 177, 79, 0.6)']}
-          style={styles.headerGradientFade}
-          pointerEvents="none"
-        />
       </ImageBackground>
 
       {/* Unserviceable Location Error Screen */}
@@ -1917,20 +1715,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </View>
             </TouchableOpacity>
 
-            {/* Remember Choice Checkbox */}
-            <TouchableOpacity
-              style={styles.vegRememberOption}
-              onPress={() => setRememberVegChoice(!rememberVegChoice)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.checkbox, rememberVegChoice && styles.checkboxChecked]}>
-                {rememberVegChoice && (
-                  <MaterialIcons name="check" size={14} color="#FFFFFF" />
-                )}
-              </View>
-              <Text style={styles.vegRememberText}>Remember my choice going forward</Text>
-            </TouchableOpacity>
-
             {/* Show Restaurants Button */}
             <TouchableOpacity
               style={styles.vegApplyButton}
@@ -1947,23 +1731,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </ScrollView>
       </SafeAreaView>
 
-      {/* View Cart Bar - shows when cart has items */}
-      <ViewCartBar
-        onPress={() => {
-          // Navigate directly to checkout page
-          if (restaurantId && onNavigateToCheckout) {
-            onNavigateToCheckout(restaurantId, restaurantName, 'home');
-          }
-        }}
-        onViewMenu={() => {
-          // Navigate to restaurant menu
-          if (restaurantId && onNavigateToRestaurant) {
-            onNavigateToRestaurant(restaurantId, restaurantName);
-          }
-        }}
-        restaurantLogo={restaurantLogo}
-        deliveryLocation={selectedLocation.name}
-      />
+      {/* View Cart Bar - shows when cart has items and location is serviceable */}
+      {isLocationServiceable && (
+        <ViewCartBar
+          onPress={() => {
+            // Navigate directly to checkout page
+            if (restaurantId && onNavigateToCheckout) {
+              onNavigateToCheckout(restaurantId, restaurantName, 'home');
+            }
+          }}
+          onViewMenu={() => {
+            // Navigate to restaurant menu
+            if (restaurantId && onNavigateToRestaurant) {
+              onNavigateToRestaurant(restaurantId, restaurantName);
+            }
+          }}
+          restaurantLogo={restaurantLogo}
+          deliveryLocation={selectedLocation.name}
+        />
+      )}
 
       {/* Category Modal */}
       <CategoryModal
@@ -1984,11 +1770,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#00B14F',
   },
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#00B14F',
   },
   container: {
     flex: 1,
@@ -1997,21 +1783,16 @@ const styles = StyleSheet.create({
   // Header styles
   headerBackground: {
     width: '100%',
+    height: 212,
     paddingHorizontal: 20,
+    paddingTop: 20,
     paddingBottom: 20,
     gap: 18,
   },
   headerBackgroundImage: {
     width: '120%',
-    resizeMode: 'cover',
+    height: 212,
     left: 0,
-  },
-  headerGradientFade: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 40,
   },
   // Location section
   locationSection: {
@@ -2075,22 +1856,11 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     backgroundColor: '#F7F7F7',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileAvatarDisabled: {
     opacity: 0.4,
-  },
-  profileAvatarText: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 18,
-    color: '#00B14F',
-    lineHeight: 22,
-  },
-  profileAvatarTextDisabled: {
-    color: 'rgba(0, 177, 79, 0.3)',
   },
   // Search section
   searchSection: {
@@ -2176,6 +1946,7 @@ const styles = StyleSheet.create({
   },
   // Carousel Container
   carouselContainer: {
+    marginTop: -44,
     marginBottom: 16,
   },
   loadingContainer: {
@@ -2704,35 +2475,6 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: '#00B14F',
-  },
-  vegRememberOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingVertical: 12,
-    gap: 10,
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#CCCCCC',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  checkboxChecked: {
-    backgroundColor: '#00B14F',
-    borderColor: '#00B14F',
-  },
-  vegRememberText: {
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#666666',
-    flex: 1,
   },
   vegApplyButton: {
     flexDirection: 'row',
