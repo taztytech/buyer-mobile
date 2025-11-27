@@ -108,6 +108,12 @@ eas build --platform ios
 npm run build:android
 # or with EAS
 eas build --platform android
+
+# Custom gradle build helpers
+npm run build:android:all:release:dev    # assembleRelease for all ABIs (dev env)
+npm run build:android:all:release:prod   # assembleRelease for all ABIs (prod env)
+npm run build:android:all:bundle:dev     # bundleRelease for all ABIs (dev env)
+npm run build:android:all:bundle:prod    # bundleRelease for all ABIs (prod env)
 ```
 
 ## Development Guidelines
