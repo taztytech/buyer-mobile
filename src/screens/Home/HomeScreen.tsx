@@ -43,6 +43,7 @@ interface CarouselItem {
   sequence?: number;
   promotionType?: 'restaurant_id' | 'category_id' | 'url';
   promotionLink?: string;
+  backgroundColor?: string;
 }
 
 // Fallback carousel data if API fails
@@ -662,7 +663,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           if (promotionalBanner) {
             // Handle if it's a single object or array
             const bannerArray = Array.isArray(promotionalBanner) ? promotionalBanner : [promotionalBanner];
-
             // Transform API data to carousel format
             const transformedBanners: CarouselItem[] = bannerArray.map((banner: BannerItem, index: number) => ({
               id: banner.id || `banner-${index}`,
@@ -673,6 +673,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               sequence: banner.sequence !== undefined ? banner.sequence : index,
               promotionType: banner.promotion_type,
               promotionLink: banner.promotion_link,
+              backgroundColor: banner.background_color,
             }));
 
             // Sort banners by sequence field
@@ -1028,7 +1029,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const renderCarouselItem = React.useCallback(({ item }: { item: CarouselItem }) => {
     return (
       <View style={styles.carouselSlide} testID={`carousel-slide-${item.id}`}>
-        <View style={[styles.adBanner, { width: BANNER_WIDTH }]} testID={`banner-${item.id}`}>
+        <View style={[styles.adBanner, { width: BANNER_WIDTH, backgroundColor: item.backgroundColor }]} testID={`banner-${item.id}`}>
           {/* Blob with masked image */}
           {item.imageUrl ? (
             <View style={styles.blobContainer} testID={`blob-container-${item.id}`}>
@@ -1333,6 +1334,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <View style={styles.carouselContainer}>
         {showBannerShimmer ? (
           <View style={styles.loadingContainer}>
+            
             <Shimmer width="100%" height={149} borderRadius={20} backgroundColor="#00BEC8" />
           </View>
         ) : (
