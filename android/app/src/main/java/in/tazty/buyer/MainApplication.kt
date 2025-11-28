@@ -1,4 +1,4 @@
-package com.valarcom.tazty
+package `in`.tazty.buyer
 
 import android.app.Application
 import android.content.res.Configuration

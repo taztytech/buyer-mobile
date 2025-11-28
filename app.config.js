@@ -14,7 +14,7 @@ module.exports = {
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.valarcom.tazty",
+      bundleIdentifier: "in.tazty.buyer",
       infoPlist: {
         NSLocationWhenInUseUsageDescription: "Tazty needs your location to show nearby restaurants and deliver food to your address.",
         NSLocationAlwaysAndWhenInUseUsageDescription: "Tazty needs your location to show nearby restaurants and deliver food to your address."
@@ -30,7 +30,7 @@ module.exports = {
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
-      package: "com.valarcom.tazty",
+      package: "in.tazty.buyer",
       permissions: [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"

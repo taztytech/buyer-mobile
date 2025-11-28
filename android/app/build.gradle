@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.valarcom.tazty'
+    namespace 'in.tazty.buyer'
     defaultConfig {
-        applicationId 'com.valarcom.tazty'
+        applicationId 'in.tazty.buyer'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
