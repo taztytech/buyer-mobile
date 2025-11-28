@@ -11,4 +11,18 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
+# Firebase / FCM ProGuard Rules
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
+-dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**
+
+# Keep FCM Service classes
+-keep class in.tazty.buyer.FCMService { *; }
+-keep class in.tazty.buyer.FCMHeadlessTaskService { *; }
+
+# Keep React Native Firebase classes
+-keep class io.invertase.firebase.** { *; }
+-dontwarn io.invertase.firebase.**
+
 # Add any project specific keep options here:

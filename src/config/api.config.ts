@@ -3,15 +3,17 @@
  * Centralizes all API-related configuration
  */
 
-// In Expo, environment variables prefixed with EXPO_PUBLIC_ are available
+import { getApiBaseUrl, envConfig } from './environment.config';
+
+// Helper to get environment variable with fallback
 const getEnvVar = (key: string, defaultValue: string = ''): string => {
   // @ts-ignore - process.env is available in Expo
   return process.env[key] || defaultValue;
 };
 
 export const API_CONFIG = {
-  // Base URL for API requests
-  BASE_URL: getEnvVar('EXPO_PUBLIC_API_BASE_URL', 'https://devapi.tazty.in'),
+  // Base URL for API requests (from environment config)
+  BASE_URL: getApiBaseUrl(),
 
   // Request timeout in milliseconds
   TIMEOUT: parseInt(getEnvVar('EXPO_PUBLIC_API_TIMEOUT', '30000'), 10),
@@ -61,10 +63,11 @@ export const API_CONFIG = {
 };
 
 export const APP_CONFIG = {
-  // Environment
-  ENV: getEnvVar('NODE_ENV', 'development'),
-  IS_DEV: getEnvVar('NODE_ENV', 'development') === 'development',
-  IS_PROD: getEnvVar('NODE_ENV', 'development') === 'production',
+  // Environment (from environment config)
+  ENV: envConfig.environment,
+  IS_DEV: envConfig.isDevelopment,
+  IS_PROD: envConfig.isProduction,
+  IS_PREVIEW: envConfig.isPreview,
 
   // App Info
   APP_NAME: 'Tazty',
