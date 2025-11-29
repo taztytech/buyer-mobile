@@ -22,7 +22,7 @@ interface FoodItemDetailModalProps {
     name: string;
     price: number;
     description: string;
-    image: any;
+    image: any | null;
     isVeg: boolean;
     isSpicy: boolean;
     isBestSeller: boolean;
@@ -161,9 +161,15 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            {/* Food Image */}
+            {/* Food Image or No Image Available */}
             <View style={styles.imageContainer}>
-              <Image source={item.image} style={styles.foodImage} resizeMode="cover" />
+              {item.image ? (
+                <Image source={item.image} style={styles.foodImage} resizeMode="cover" />
+              ) : (
+                <View style={styles.noImageContainer}>
+                  <Text style={styles.noImageText}>No Image Available</Text>
+                </View>
+              )}
             </View>
 
             {/* Badges Row */}
@@ -331,6 +337,25 @@ const styles = StyleSheet.create({
   foodImage: {
     width: '100%',
     height: '100%',
+  },
+  noImageContainer: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderStyle: 'solid',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+  noImageText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#9E9E9E',
+    textAlign: 'center',
   },
   badgesRow: {
     flexDirection: 'row',

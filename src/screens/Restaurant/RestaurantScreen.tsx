@@ -83,7 +83,7 @@ interface MenuItem {
   name: string;
   price: number;
   description: string;
-  image: any;
+  image: any | null;
   isVeg: boolean;
   isSpicy: boolean;
   isBestSeller: boolean;
@@ -998,7 +998,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 description: item.long_description || item.full_description || item.detailed_description || item.description || '',
                 image: item.images && item.images.length > 0
                   ? { uri: item.images[0] }
-                  : require('@/assets/noProductAvailable.png'),
+                  : null,
                 isVeg: isVeg,
                 isSpicy: false, // API doesn't provide this info
                 isBestSeller: item.is_recommended || false,
@@ -1499,65 +1499,73 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 </View>
 
                 <View style={styles.itemRight}>
-                  {/* Item Image with Shimmer */}
+                  {/* Item Image with Shimmer or No Image Box */}
                   <TouchableOpacity
                     style={styles.itemImageContainer}
                     onPress={() => handleImageClick(item)}
                     activeOpacity={0.9}
                   >
-                    {!loadedImages.has(item.id) && (
-                      <Shimmer
-                        width={166}
-                        height={137}
-                        borderRadius={16}
-                        backgroundColor="#E8E8E8"
-                        style={styles.imageShimmer}
-                      />
-                    )}
-                    <Image
-                      source={item.image}
-                      style={[
-                        styles.itemImage,
-                        !itemAvailable && styles.itemImageDisabled
-                      ]}
-                      resizeMode="cover"
-                      onLoad={() => handleImageLoad(item.id)}
-                      fadeDuration={0}
-                      progressiveRenderingEnabled={true}
-                    />
-
-                    {/* Top Gradient Overlay */}
-                    <LinearGradient
-                      colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
-                      style={styles.itemGradientOverlayTop}
-                    />
-
-                    {/* Heart Button Overlay */}
-                    <TouchableOpacity
-                      style={styles.itemHeartButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleToggleFavoriteItem(section.id, item.id);
-                      }}
-                      disabled={togglingFavoriteItemId === item.id}
-                      activeOpacity={0.7}
-                    >
-                      {togglingFavoriteItemId === item.id ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <MaterialIcons
-                          name={item.isFavorite ? 'favorite' : 'favorite-border'}
-                          size={24}
-                          color={item.isFavorite ? '#FF0000' : '#FFFFFF'}
+                    {item.image ? (
+                      <>
+                        {!loadedImages.has(item.id) && (
+                          <Shimmer
+                            width={166}
+                            height={137}
+                            borderRadius={16}
+                            backgroundColor="#E8E8E8"
+                            style={styles.imageShimmer}
+                          />
+                        )}
+                        <Image
+                          source={item.image}
+                          style={[
+                            styles.itemImage,
+                            !itemAvailable && styles.itemImageDisabled
+                          ]}
+                          resizeMode="cover"
+                          onLoad={() => handleImageLoad(item.id)}
+                          fadeDuration={0}
+                          progressiveRenderingEnabled={true}
                         />
-                      )}
-                    </TouchableOpacity>
 
-                    {/* Grey Overlay for Unavailable Items */}
-                    {!itemAvailable && (
-                      <View style={styles.unavailableOverlay} />
+                        {/* Top Gradient Overlay */}
+                        <LinearGradient
+                          colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 0, y: 1 }}
+                          style={styles.itemGradientOverlayTop}
+                        />
+
+                        {/* Heart Button Overlay */}
+                        <TouchableOpacity
+                          style={styles.itemHeartButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleToggleFavoriteItem(section.id, item.id);
+                          }}
+                          disabled={togglingFavoriteItemId === item.id}
+                          activeOpacity={0.7}
+                        >
+                          {togglingFavoriteItemId === item.id ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          ) : (
+                            <MaterialIcons
+                              name={item.isFavorite ? 'favorite' : 'favorite-border'}
+                              size={24}
+                              color={item.isFavorite ? '#FF0000' : '#FFFFFF'}
+                            />
+                          )}
+                        </TouchableOpacity>
+
+                        {/* Grey Overlay for Unavailable Items */}
+                        {!itemAvailable && (
+                          <View style={styles.unavailableOverlay} />
+                        )}
+                      </>
+                    ) : (
+                      <View style={styles.noImageContainer}>
+                        <Text style={styles.noImageText}>No Image Available</Text>
+                      </View>
                     )}
 
                     {/* Available Timing Label for Unavailable Items (only when we have API timings) */}
@@ -2404,6 +2412,25 @@ const styles = StyleSheet.create({
   itemImageDisabled: {
     opacity: 0.7,
   },
+  noImageContainer: {
+    width: 155,
+    height: 137,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderStyle: 'solid',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+  noImageText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#9E9E9E',
+    textAlign: 'center',
+  },
   itemGradientOverlayTop: {
     position: 'absolute',
     top: 0,
@@ -2438,7 +2465,7 @@ const styles = StyleSheet.create({
     transform: [{ translateY: -8 }],
     paddingHorizontal: 6,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: 6,
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     alignItems: 'center',
     justifyContent: 'center',
