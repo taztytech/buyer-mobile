@@ -16,6 +16,7 @@ import { CategoryModal } from '@/components/CategoryModal';
 import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { restaurantService } from '@/services/restaurant.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BANNER_WIDTH = SCREEN_WIDTH - 40; // Fixed banner width with 20px padding on each side
@@ -32,6 +33,7 @@ interface HomeScreenProps {
   selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
   onCategoriesLoaded?: (categories: CategoryItem[]) => void;
   isFocused?: boolean;
+  addressRefreshTrigger?: number; // Trigger to refresh addresses when changed
 }
 
 interface CarouselItem {
@@ -183,8 +185,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToRestaurant,
   onNavigateToCheckout,
   onNavigateToSearch,
+  onNavigateToLocationSelection,
   selectedLocation: externalSelectedLocation,
   onCategoriesLoaded,
+  addressRefreshTrigger,
   isFocused = true,
 }) => {
   const { restaurantId, restaurantName, restaurantLogo, getTotalItems } = useCart();
@@ -234,6 +238,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
   const [hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
   const isInitialVegModeLoad = React.useRef(true);
+  const hasRedirectedToLocationMap = React.useRef(false); // Prevent multiple redirects
 
   // Pagination states
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -245,6 +250,61 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Location serviceability state
   const [isLocationServiceable, setIsLocationServiceable] = React.useState(true);
+
+  /**
+   * Ensure the restaurant associated with the current cart is open
+   * before allowing user to navigate to checkout from the Home screen.
+   * Falls back to allowing navigation if the status cannot be determined.
+   */
+  const ensureCartRestaurantOpen = React.useCallback(async (): Promise<boolean> => {
+    // If there is no restaurant in cart, nothing to validate
+    if (!restaurantId) {
+      return true;
+    }
+
+    try {
+      // Use the best available coordinates for restaurant details lookup
+      const lat =
+        externalSelectedLocation?.latitude ||
+        defaultAddressCoords?.latitude ||
+        DEFAULT_LOCATION.latitude;
+      const lng =
+        externalSelectedLocation?.longitude ||
+        defaultAddressCoords?.longitude ||
+        DEFAULT_LOCATION.longitude;
+
+      const response = await restaurantService.getRestaurantDetails(restaurantId, {
+        lat,
+        lng,
+        include_items: false,
+      });
+
+      if (!response.success || !response.data) {
+        // If we can't determine status, don't hard-block the user.
+        return true;
+      }
+
+      const timings = response.data.timings;
+      const isOpen = timings ? homeService.isRestaurantOpen(timings) : true;
+
+      if (!isOpen) {
+        showConfirmation({
+          title: 'Restaurant is currently closed',
+          message: 'This restaurant is closed right now. You can place the order when it reopens.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
+        return false;
+      }
+
+      return true;
+    } catch {
+      // On any unexpected error, allow navigation and rely on backend validation.
+      return true;
+    }
+  }, [restaurantId, externalSelectedLocation, defaultAddressCoords, showConfirmation]);
 
   // Dismiss keyboard when component mounts (only once)
   React.useEffect(() => {
@@ -278,51 +338,60 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalSelectedLocation]);
 
-  // Fetch default address on component mount (ONLY ONCE)
-  React.useEffect(() => {
-    const fetchDefaultAddress = async () => {
-      try {
-        const response = await addressService.getAddresses();
+  // Extract address fetching logic into a reusable function
+  const fetchDefaultAddress = React.useCallback(
+    async (options?: { overrideSelectedLocation?: boolean }) => {
+    try {
+      // Clear cache to ensure we get fresh data
+      addressService.clearCache();
+      const response = await addressService.getAddresses();
 
-        if (response.success && response.data) {
-          // Find the default address
-          const defaultAddress = response.data.find(addr => addr.is_default);
+      if (response.success && response.data) {
+        // Reset redirect flag if user has addresses now (allows redirect again if they delete all addresses later)
+        if (response.data.length > 0) {
+          hasRedirectedToLocationMap.current = false;
+        }
 
-          if (defaultAddress) {
-            // User has a default address saved
-            setHasDefaultAddress(true);
-            setDefaultAddressCoords({
-              latitude: defaultAddress.latitude,
-              longitude: defaultAddress.longitude,
-            });
-
-            // Format address type (home -> Home, work -> Work, other -> Other)
-            const formattedType = defaultAddress.type.charAt(0).toUpperCase() + defaultAddress.type.slice(1);
-
-            // Update selected location display (only if no external location is set)
-            if (!externalSelectedLocation) {
-              const newLocation = {
-                name: formattedType,
-                address: `${defaultAddress.address1}${defaultAddress.address2 ? ', ' + defaultAddress.address2 : ''}${defaultAddress.address3 ? ', ' + defaultAddress.address3 : ''}, ${defaultAddress.city}`,
-              };
-              setSelectedLocation(newLocation);
-            }
-
-            // Fetch home data with default address coordinates
-            await fetchHomeData(parseFloat(defaultAddress.latitude), parseFloat(defaultAddress.longitude));
-          } else {
-            // No default address, use fallback location
-            setHasDefaultAddress(false);
-            setSelectedLocation({
-              name: DEFAULT_LOCATION.name,
-              address: DEFAULT_LOCATION.address,
-            });
-
-            // Fetch home data with default Madurai coordinates
-            await fetchHomeData();
+        // Check if user has no addresses - redirect to location map screen (only on homepage)
+        // Only redirect if we haven't already redirected in this session
+        if (response.data.length === 0 && isFocused && !hasRedirectedToLocationMap.current) {
+          hasRedirectedToLocationMap.current = true;
+          // Redirect to location map screen
+          if (onNavigateToLocationSelection) {
+            onNavigateToLocationSelection();
+            return; // Exit early, don't fetch home data
           }
+        }
+
+        // Find the default address
+        const defaultAddress = response.data.find(addr => addr.is_default);
+
+        if (defaultAddress) {
+          // User has a default address saved
+          setHasDefaultAddress(true);
+          setDefaultAddressCoords({
+            latitude: defaultAddress.latitude,
+            longitude: defaultAddress.longitude,
+          });
+
+          // Format address type (home -> Home, work -> Work, other -> Other)
+          const formattedType = defaultAddress.type.charAt(0).toUpperCase() + defaultAddress.type.slice(1);
+
+          // Update selected location display
+          // - Normally, we respect an explicitly chosen externalSelectedLocation
+          // - But after address changes (delete/edit), we may want to override it
+          if (!externalSelectedLocation || options?.overrideSelectedLocation) {
+            const newLocation = {
+              name: formattedType,
+              address: `${defaultAddress.address1}${defaultAddress.address2 ? ', ' + defaultAddress.address2 : ''}${defaultAddress.address3 ? ', ' + defaultAddress.address3 : ''}, ${defaultAddress.city}`,
+            };
+            setSelectedLocation(newLocation);
+          }
+
+          // Fetch home data with default address coordinates
+          await fetchHomeData(defaultAddress.latitude, defaultAddress.longitude);
         } else {
-          // API failed, use fallback location
+          // No default address, use fallback location
           setHasDefaultAddress(false);
           setSelectedLocation({
             name: DEFAULT_LOCATION.name,
@@ -332,8 +401,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           // Fetch home data with default Madurai coordinates
           await fetchHomeData();
         }
-      } catch (error) {
-        // Error fetching addresses, use fallback location
+      } else {
+        // API failed, use fallback location
         setHasDefaultAddress(false);
         setSelectedLocation({
           name: DEFAULT_LOCATION.name,
@@ -342,14 +411,49 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         // Fetch home data with default Madurai coordinates
         await fetchHomeData();
-      } finally {
-        setIsLoadingLocation(false);
       }
-    };
+    } catch (error) {
+      // Error fetching addresses, use fallback location
+      setHasDefaultAddress(false);
+      setSelectedLocation({
+        name: DEFAULT_LOCATION.name,
+        address: DEFAULT_LOCATION.address,
+      });
 
+      // Fetch home data with default Madurai coordinates
+      await fetchHomeData();
+    } finally {
+      setIsLoadingLocation(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalSelectedLocation, isFocused, onNavigateToLocationSelection]);
+
+  // Fetch default address on component mount (ONLY ONCE)
+  React.useEffect(() => {
     fetchDefaultAddress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
+
+  // Refresh addresses when screen becomes focused (e.g., coming back from profile)
+  React.useEffect(() => {
+    if (isFocused) {
+      // When home gains focus, simply re-check addresses.
+      // Redirect will only happen once per "no-address" session because
+      // hasRedirectedToLocationMap.current stays true until the user adds an address.
+      fetchDefaultAddress();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused]);
+
+  // Refresh addresses when addressRefreshTrigger changes (e.g., address deleted/edited)
+  React.useEffect(() => {
+    if (addressRefreshTrigger && addressRefreshTrigger > 0) {
+      // Force override of selectedLocation so the home top bar reflects the
+      // latest default address after changes in MyAddresses
+      fetchDefaultAddress({ overrideSelectedLocation: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressRefreshTrigger]);
 
   // Reload home data when screen becomes focused (but don't reset address)
   // DISABLED: Not needed since auto-refresh on focus is disabled
@@ -1735,11 +1839,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* View Cart Bar - shows when cart has items and location is serviceable */}
       {isLocationServiceable && (
         <ViewCartBar
-          onPress={() => {
-            // Navigate directly to checkout page
-            if (restaurantId && onNavigateToCheckout) {
-              onNavigateToCheckout(restaurantId, restaurantName, 'home');
+          onPress={async () => {
+            // Navigate directly to checkout page, but only if restaurant is open
+            if (!restaurantId || !onNavigateToCheckout) {
+              return;
             }
+
+            const isOpen = await ensureCartRestaurantOpen();
+            if (!isOpen) {
+              return;
+            }
+
+            onNavigateToCheckout(restaurantId, restaurantName, 'home');
           }}
           onViewMenu={() => {
             // Navigate to restaurant menu

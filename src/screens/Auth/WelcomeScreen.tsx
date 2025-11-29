@@ -56,7 +56,10 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
 
   const handleContinue = async () => {
     // Validation
-    if (!fullName.trim()) {
+    const trimmedFullName = fullName.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedFullName) {
       showConfirmation({
         title: 'Required',
         message: 'Please enter your full name',
@@ -67,20 +70,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
       return;
     }
 
-    if (!email.trim()) {
-      showConfirmation({
-        title: 'Required',
-        message: 'Please enter your email address',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
-      return;
-    }
-
-    // Basic email validation
+    // Basic email validation (only if user has entered an email)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (trimmedEmail && !emailRegex.test(trimmedEmail)) {
       showConfirmation({
         title: 'Invalid Email',
         message: 'Please enter a valid email address',
@@ -112,8 +104,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
 
       // Call the create profile API with the exact format required
       const response = await authService.createProfile({
-        name: fullName,
-        email: email,
+        name: trimmedFullName,
+        email: trimmedEmail || undefined,
         phone_number: parseInt(phoneNumber, 10),
         status: true,
       });
@@ -121,7 +113,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
       if (response.success) {
         // Navigate to home screen
         if (onContinue) {
-          onContinue(fullName, email);
+          onContinue(trimmedFullName, trimmedEmail);
         }
       } else {
         // Show error message

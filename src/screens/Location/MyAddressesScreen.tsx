@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,6 +18,7 @@ interface MyAddressesScreenProps {
   onAddNew?: () => void;
   onEditAddress?: (address: AddressResponse) => void;
   visible?: boolean;
+  onAddressChange?: () => void; // Callback when addresses are modified
 }
 
 export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
@@ -26,6 +26,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
   onAddNew,
   onEditAddress,
   visible = false,
+  onAddressChange,
 }) => {
   const { showConfirmation } = useConfirmation();
   const [addresses, setAddresses] = useState<AddressResponse[]>([]);
@@ -65,44 +66,72 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
   };
 
   const handleDelete = async (addressId: number) => {
-    showConfirmation({
-      title: 'Delete Address',
-      message: 'Are you sure you want to delete this address?',
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
-      confirmButtonColor: '#FF0000',
-      onConfirm: async () => {
-        try {
-          const response = await addressService.deleteAddress(addressId.toString());
-          if (response.success) {
-            await loadAddresses();
-            showConfirmation({
-              title: 'Success',
-              message: 'Address deleted successfully',
-              confirmText: 'OK',
-              cancelText: 'Close',
-              onConfirm: () => {},
-            });
-          } else {
-            showConfirmation({
-              title: 'Error',
-              message: response.error || 'Failed to delete address',
-              confirmText: 'OK',
-              cancelText: 'Close',
-              onConfirm: () => {},
-            });
+    // Find the address being deleted to check if it's the default
+    const addressToDelete = addresses.find(addr => addr.id === addressId);
+    const isDeletingDefault = addressToDelete?.is_default || false;
+
+    try {
+      const response = await addressService.deleteAddress(addressId.toString());
+      if (response.success) {
+        // If we deleted the default address, set the next available address as default
+        if (isDeletingDefault) {
+          // Reload addresses first to get the updated list
+          await loadAddresses();
+          
+          // Find the next available address (first one in the list after deletion)
+          const updatedResponse = await addressService.getAddresses();
+          if (updatedResponse.success && updatedResponse.data && updatedResponse.data.length > 0) {
+            const nextAddress = updatedResponse.data[0];
+            // Set the first remaining address as default
+            try {
+              await addressService.updateAddress(nextAddress.id.toString(), {
+                is_default: true,
+              });
+              // Clear cache to ensure fresh data
+              addressService.clearCache();
+              // Reload addresses again to reflect the new default
+              await loadAddresses();
+            } catch (updateError) {
+              console.error('Failed to set next address as default:', updateError);
+              // Continue even if setting default fails
+            }
           }
-        } catch (error) {
-          showConfirmation({
-            title: 'Error',
-            message: 'Failed to delete address',
-            confirmText: 'OK',
-            cancelText: 'Close',
-            onConfirm: () => {},
-          });
+        } else {
+          // Just reload addresses if not deleting default
+          await loadAddresses();
         }
-      },
-    });
+
+        // Notify parent component that addresses have changed
+        if (onAddressChange) {
+          onAddressChange();
+        }
+
+        // Show success modal
+        showConfirmation({
+          title: 'Success',
+          message: 'Address deleted successfully',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
+      } else {
+        showConfirmation({
+          title: 'Error',
+          message: response.error || 'Failed to delete address',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
+      }
+    } catch (error) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Failed to delete address',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+    }
   };
 
   const formatAddress = (addr: AddressResponse): string => {
