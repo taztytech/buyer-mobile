@@ -1900,10 +1900,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
     gap: 18,
-    minHeight: 212,
+    minHeight: 240,
   },
   headerBackgroundImage: {
     width: '120%',
+    height: '150%',
     resizeMode: 'cover',
     left: 0,
     top: 0,
@@ -2060,7 +2061,7 @@ const styles = StyleSheet.create({
   },
   // Carousel Container
   carouselContainer: {
-    marginTop: 0,
+    marginTop: -35,
     marginBottom: 16,
   },
   loadingContainer: {
