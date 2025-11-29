@@ -83,7 +83,7 @@ interface MenuItem {
   name: string;
   price: number;
   description: string;
-  image: any;
+  image: any | null;
   isVeg: boolean;
   isSpicy: boolean;
   isBestSeller: boolean;
@@ -998,7 +998,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 description: item.long_description || item.full_description || item.detailed_description || item.description || '',
                 image: item.images && item.images.length > 0
                   ? { uri: item.images[0] }
-                  : require('@/assets/noProductAvailable.png'),
+                  : null,
                 isVeg: isVeg,
                 isSpicy: false, // API doesn't provide this info
                 isBestSeller: item.is_recommended || false,
@@ -1136,15 +1136,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     activeOpacity={1}
                     disabled={!onNavigateToDetails}
                   >
-                    <Text style={styles.restaurantName} numberOfLines={2}>
-                      {restaurantData?.name || restaurantName || 'Restaurant'}
+                    <View style={styles.restaurantNameWithIcon}>
+                      <Text style={styles.restaurantName} numberOfLines={2}>
+                        {restaurantData?.name || restaurantName || 'Restaurant'}
+                      </Text>
                       {onNavigateToDetails && (
-                        <Text style={styles.infoIconText}>
-                          {' '}
-                          <MaterialIcons name="info-outline" size={18} color="#00B14F" />
-                        </Text>
+                        <MaterialIcons name="info-outline" size={18} color="#00B14F" style={styles.infoIcon} />
                       )}
-                    </Text>
+                    </View>
                   </TouchableOpacity>
                  {/* Opening Message */}
                  {restaurantOpeningMessage && (
@@ -1160,12 +1159,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     <View style={styles.ratingBadge}>
                       <MaterialIcons name="star" size={14} color="#00B14F" />
                       <Text style={styles.ratingText}>
-                        {(restaurantData?.stats?.average_rating || restaurantData?.rating || 0).toFixed(1)}
+                        {(restaurantData?.stats?.average_rating || restaurantData?.rating || 0).toFixed(1)} ({restaurantData?.stats?.total_reviews || restaurantData?.total_reviews || '0'})
                       </Text>
                     </View>
-                    <Text style={styles.reviewCountText}>
-                      {restaurantData?.stats?.total_reviews || restaurantData?.total_reviews || '0'} reviews
-                    </Text>
                   </View>
                 )}
               </View>
@@ -1499,65 +1495,73 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 </View>
 
                 <View style={styles.itemRight}>
-                  {/* Item Image with Shimmer */}
+                  {/* Item Image with Shimmer or No Image Box */}
                   <TouchableOpacity
                     style={styles.itemImageContainer}
                     onPress={() => handleImageClick(item)}
                     activeOpacity={0.9}
                   >
-                    {!loadedImages.has(item.id) && (
-                      <Shimmer
-                        width={166}
-                        height={137}
-                        borderRadius={16}
-                        backgroundColor="#E8E8E8"
-                        style={styles.imageShimmer}
-                      />
-                    )}
-                    <Image
-                      source={item.image}
-                      style={[
-                        styles.itemImage,
-                        !itemAvailable && styles.itemImageDisabled
-                      ]}
-                      resizeMode="cover"
-                      onLoad={() => handleImageLoad(item.id)}
-                      fadeDuration={0}
-                      progressiveRenderingEnabled={true}
-                    />
-
-                    {/* Top Gradient Overlay */}
-                    <LinearGradient
-                      colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
-                      style={styles.itemGradientOverlayTop}
-                    />
-
-                    {/* Heart Button Overlay */}
-                    <TouchableOpacity
-                      style={styles.itemHeartButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleToggleFavoriteItem(section.id, item.id);
-                      }}
-                      disabled={togglingFavoriteItemId === item.id}
-                      activeOpacity={0.7}
-                    >
-                      {togglingFavoriteItemId === item.id ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <MaterialIcons
-                          name={item.isFavorite ? 'favorite' : 'favorite-border'}
-                          size={24}
-                          color={item.isFavorite ? '#FF0000' : '#FFFFFF'}
+                    {item.image ? (
+                      <>
+                        {!loadedImages.has(item.id) && (
+                          <Shimmer
+                            width={166}
+                            height={137}
+                            borderRadius={16}
+                            backgroundColor="#E8E8E8"
+                            style={styles.imageShimmer}
+                          />
+                        )}
+                        <Image
+                          source={item.image}
+                          style={[
+                            styles.itemImage,
+                            !itemAvailable && styles.itemImageDisabled
+                          ]}
+                          resizeMode="cover"
+                          onLoad={() => handleImageLoad(item.id)}
+                          fadeDuration={0}
+                          progressiveRenderingEnabled={true}
                         />
-                      )}
-                    </TouchableOpacity>
 
-                    {/* Grey Overlay for Unavailable Items */}
-                    {!itemAvailable && (
-                      <View style={styles.unavailableOverlay} />
+                        {/* Top Gradient Overlay */}
+                        <LinearGradient
+                          colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 0, y: 1 }}
+                          style={styles.itemGradientOverlayTop}
+                        />
+
+                        {/* Heart Button Overlay */}
+                        <TouchableOpacity
+                          style={styles.itemHeartButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleToggleFavoriteItem(section.id, item.id);
+                          }}
+                          disabled={togglingFavoriteItemId === item.id}
+                          activeOpacity={0.7}
+                        >
+                          {togglingFavoriteItemId === item.id ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          ) : (
+                            <MaterialIcons
+                              name={item.isFavorite ? 'favorite' : 'favorite-border'}
+                              size={24}
+                              color={item.isFavorite ? '#FF0000' : '#FFFFFF'}
+                            />
+                          )}
+                        </TouchableOpacity>
+
+                        {/* Grey Overlay for Unavailable Items */}
+                        {!itemAvailable && (
+                          <View style={styles.unavailableOverlay} />
+                        )}
+                      </>
+                    ) : (
+                      <View style={styles.noImageContainer}>
+                        <Text style={styles.noImageText}>No Image Available</Text>
+                      </View>
                     )}
 
                     {/* Available Timing Label for Unavailable Items (only when we have API timings) */}
@@ -1589,7 +1593,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   </TouchableOpacity>
 
                   {/* Add Button or Increment/Decrement Controls */}
-                  {loadedImages.has(item.id) && (
+                  {/* Show button when image is loaded, or when item has no image, or when item is disabled (to show disabled state) */}
+                  {(loadedImages.has(item.id) || !item.image || !itemAvailable) && (
                     <>
                       {cart[item.id] ? (
                         // Show increment/decrement controls if item is in cart
@@ -2005,6 +2010,11 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginRight: 8,
   },
+  restaurantNameWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   restaurantName: {
     fontFamily: 'Poppins',
     fontWeight: '600',
@@ -2012,9 +2022,10 @@ const styles = StyleSheet.create({
     lineHeight: 27,
     color: '#000000',
     opacity: 0.85,
+    flexShrink: 1,
   },
-  infoIconText: {
-    lineHeight: 27,
+  infoIcon: {
+    marginTop: 2,
   },
   openingMessageContainer: {
     flexDirection: 'row',
@@ -2238,8 +2249,8 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontFamily: 'Poppins',
     fontWeight: '700',
-    fontSize: 18,
-    lineHeight: 27,
+    fontSize: 16,
+    lineHeight: 24,
     textAlign: 'left',
     color: '#000000',
     opacity: 0.85,
@@ -2327,9 +2338,10 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   itemName: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 18,
-    lineHeight: 27,
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 16,
+    lineHeight: 24,
     textAlign: 'left',
     color: '#000000',
     opacity: 0.85,
@@ -2403,6 +2415,25 @@ const styles = StyleSheet.create({
   itemImageDisabled: {
     opacity: 0.7,
   },
+  noImageContainer: {
+    width: 155,
+    height: 137,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderStyle: 'solid',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+  noImageText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#9E9E9E',
+    textAlign: 'center',
+  },
   itemGradientOverlayTop: {
     position: 'absolute',
     top: 0,
@@ -2437,7 +2468,7 @@ const styles = StyleSheet.create({
     transform: [{ translateY: -8 }],
     paddingHorizontal: 6,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: 6,
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     alignItems: 'center',
     justifyContent: 'center',

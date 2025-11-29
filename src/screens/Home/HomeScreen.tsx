@@ -1,15 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions, Keyboard, TouchableWithoutFeedback, Platform, ActivityIndicator, Animated, RefreshControl, Linking } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ImageBackground, ScrollView, FlatList, Dimensions, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
-import { homeService, BannerItem, CategoryItem, Restaurant, DishItem } from '@/services/home.service';
+import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/home.service';
 import { addressService } from '@/services/address.service';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { Shimmer } from '@/components/Shimmer';
 import * as Location from 'expo-location';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ViewCartBar } from '@/components/ViewCartBar';
 import { CategoryModal } from '@/components/CategoryModal';
@@ -133,7 +132,8 @@ const fallbackCategoryData: CategoryItem[] = [
 ];
 
 // Fallback restaurant data if API fails or returns empty
-const fallbackRestaurantData: Restaurant[] = [
+// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-unused-vars
+const _fallbackRestaurantData: Restaurant[] = [
   {
     id: 1,
     name: 'A2B',
@@ -216,9 +216,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const isRequestingPermission = React.useRef(false);
 
   // Track image loading states
-  const [loadedBannerImages, setLoadedBannerImages] = React.useState<Set<string>>(new Set());
-  const [loadedCategoryImages, setLoadedCategoryImages] = React.useState<Set<string>>(new Set());
-  const [loadedRestaurantImages, setLoadedRestaurantImages] = React.useState<Set<string>>(new Set());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_loadedBannerImages, setLoadedBannerImages] = React.useState<Set<string>>(new Set());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_loadedCategoryImages, setLoadedCategoryImages] = React.useState<Set<string>>(new Set());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_loadedRestaurantImages, setLoadedRestaurantImages] = React.useState<Set<string>>(new Set());
 
   // Combined loading states (API + Images)
   const [showBannerShimmer, setShowBannerShimmer] = React.useState(true);
@@ -237,7 +240,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const scrollViewRef = React.useRef<ScrollView>(null);
   const scrollPositionRef = React.useRef(0);
   const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
-  const [hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
   const isInitialVegModeLoad = React.useRef(true);
   const hasRedirectedToLocationMap = React.useRef(false); // Prevent multiple redirects
 
@@ -247,7 +251,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
 
   // Refresh trigger - increments to force data reload
-  const [refreshTrigger, setRefreshTrigger] = React.useState(0);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_refreshTrigger, _setRefreshTrigger] = React.useState(0);
 
   // Location serviceability state
   const [isLocationServiceable, setIsLocationServiceable] = React.useState(true);
@@ -552,6 +557,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vegMode]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleAllowLocation = async () => {
     // Prevent multiple simultaneous permission requests
     if (isRequestingPermission.current) {
@@ -608,6 +614,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleDenyLocation = () => {
     setShowLocationPopup(false);
     setHasShownLocationModal(true); // Prevent modal from showing again
@@ -756,7 +763,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         if (response.success && response.data) {
           // The API returns data nested as: { data: { data: { promotional_banner: {...} } } }
-          const actualData = response.data.data || response.data;
+          const actualData = (response.data as any).data || response.data;
           const promotionalBanner = actualData.promotional_banner;
           const whatsOnYourMind = actualData.whats_on_your_mind;
           const nearbyRestaurants = actualData.nearby_restaurants;
@@ -978,7 +985,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       const response = await homeService.getHomeData(coords.latitude, coords.longitude, vegMode, nextPage);
 
       if (response.success && response.data) {
-        const actualData = response.data.data || response.data;
+        const actualData = (response.data as any).data || response.data;
         const nearbyRestaurants = actualData.nearby_restaurants;
         const pagination = actualData.pagination;
 
@@ -1051,6 +1058,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [isLoadingMore, hasMoreRestaurants, isLoadingRestaurants, currentPage, defaultAddressCoords, vegMode]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleLogout = async () => {
     showConfirmation({
       title: 'Logout',
@@ -1204,7 +1212,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             onLoad={() => {
               setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
             }}
-            onError={(error) => {
+            onError={() => {
               // Mark as loaded anyway
               setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
             }}
@@ -1258,8 +1266,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <SafeAreaView style={styles.safeArea} edges={[]}>
         <ScrollView
           ref={scrollViewRef}
           style={styles.container}
@@ -1289,7 +1297,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Header with Background Image */}
       <ImageBackground
         source={require('@/assets/home_app_bar.png')}
-        style={styles.headerBackground}
+        style={[styles.headerBackground, { paddingTop: insets.top + 20 }]}
         imageStyle={styles.headerBackgroundImage}
         testID="header-background"
       >
@@ -1343,16 +1351,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           ) : (
             <TouchableOpacity
               style={styles.profileButton}
-              onPress={(isLocationServiceable && !hasNetworkError) ? onNavigateToProfile : undefined}
-              activeOpacity={(isLocationServiceable && !hasNetworkError) ? 0.7 : 1}
-              disabled={!isLocationServiceable || hasNetworkError}
+              onPress={onNavigateToProfile}
+              activeOpacity={0.7}
+              disabled={false}
               testID="profile-button"
             >
-              <View style={[
-                styles.profileAvatar,
-                (!isLocationServiceable || hasNetworkError) && styles.profileAvatarDisabled
-              ]}>
-                <MaterialIcons name="person" size={22} color={(isLocationServiceable && !hasNetworkError) ? "#00B14F" : "rgba(0, 177, 79, 0.3)"} />
+              <View style={styles.profileAvatar}>
+                <MaterialIcons name="person" size={22} color="#00B14F" />
               </View>
             </TouchableOpacity>
           )}
@@ -1374,18 +1379,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <>
               <TouchableOpacity
                 style={{ flex: 1 }}
-                onPress={(isLocationServiceable && !hasNetworkError) ? onNavigateToSearch : undefined}
-                activeOpacity={(isLocationServiceable && !hasNetworkError) ? 0.7 : 1}
-                disabled={!isLocationServiceable || hasNetworkError}
+                onPress={onNavigateToSearch}
+                activeOpacity={0.7}
+                disabled={false}
               >
                 <LinearGradient
                   colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={[styles.searchBar, (!isLocationServiceable || hasNetworkError) && styles.searchBarDisabled]}
+                  style={styles.searchBar}
                 >
-                  <MaterialIcons name="search" size={24} color={(isLocationServiceable && !hasNetworkError) ? "#FFFFFF" : "rgba(255, 255, 255, 0.3)"} />
-                  <Text style={[styles.searchInput, (!isLocationServiceable || hasNetworkError) && styles.searchInputDisabled]} numberOfLines={1}>
+                  <MaterialIcons name="search" size={24} color="#FFFFFF" />
+                  <Text style={styles.searchInput} numberOfLines={1}>
                     Search Restaurants & foods..
                   </Text>
                 </LinearGradient>
@@ -1393,21 +1398,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
               {/* VEG Mode Toggle */}
               <TouchableOpacity
-                style={[styles.vegModeContainer, (!isLocationServiceable || hasNetworkError) && styles.vegModeContainerDisabled]}
-                onPress={(isLocationServiceable && !hasNetworkError) ? handleVegModeToggle : undefined}
-                disabled={!isLocationServiceable || hasNetworkError}
+                style={styles.vegModeContainer}
+                onPress={handleVegModeToggle}
+                disabled={false}
                 testID="veg-mode-toggle"
               >
-                <Text style={[styles.vegModeLabel, (!isLocationServiceable || hasNetworkError) && styles.vegModeLabelDisabled]}>VEG{'\n'}MODE</Text>
+                <Text style={styles.vegModeLabel}>VEG{'\n'}MODE</Text>
                 <View style={[
                   styles.vegToggle,
-                  isVegModeEnabled && styles.vegToggleActive,
-                  (!isLocationServiceable || hasNetworkError) && styles.vegToggleDisabled
+                  isVegModeEnabled && styles.vegToggleActive
                 ]}>
                   <View style={[
                     styles.vegToggleThumb,
-                    isVegModeEnabled && styles.vegToggleThumbActive,
-                    (!isLocationServiceable || hasNetworkError) && styles.vegToggleThumbDisabled
+                    isVegModeEnabled && styles.vegToggleThumbActive
                   ]} />
                 </View>
               </TouchableOpacity>
@@ -1461,7 +1464,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               bounces={false}
               overScrollMode="never"
               scrollEventThrottle={16}
-              getItemLayout={(data, index) => ({
+              getItemLayout={(_data, index) => ({
                 length: SCREEN_WIDTH,
                 offset: SCREEN_WIDTH * index,
                 index,
@@ -1868,7 +1871,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Category Modal */}
       <CategoryModal
         visible={showCategoryModal}
-        categories={categoryData}
+        categories={categoryData.map(cat => ({
+          id: cat.id,
+          name: cat.name,
+          description: cat.description || '',
+          icon: cat.icon || require('@/assets/Group 1272628220.png'),
+        }))}
         onClose={() => setShowCategoryModal(false)}
         onCategorySelect={(categoryName) => {
           if (onNavigateToCategory) {
@@ -1897,16 +1905,17 @@ const styles = StyleSheet.create({
   // Header styles
   headerBackground: {
     width: '100%',
-    height: 212,
     paddingHorizontal: 20,
-    paddingTop: 20,
     paddingBottom: 20,
     gap: 18,
+    minHeight: 240,
   },
   headerBackgroundImage: {
     width: '120%',
-    height: 212,
+    height: '150%',
+    resizeMode: 'cover',
     left: 0,
+    top: 0,
   },
   // Location section
   locationSection: {
@@ -2060,7 +2069,7 @@ const styles = StyleSheet.create({
   },
   // Carousel Container
   carouselContainer: {
-    marginTop: -44,
+    marginTop: -35,
     marginBottom: 16,
   },
   loadingContainer: {
