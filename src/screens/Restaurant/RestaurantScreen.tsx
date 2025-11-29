@@ -1593,7 +1593,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   </TouchableOpacity>
 
                   {/* Add Button or Increment/Decrement Controls */}
-                  {loadedImages.has(item.id) && (
+                  {/* Show button when image is loaded, or when item has no image, or when item is disabled (to show disabled state) */}
+                  {(loadedImages.has(item.id) || !item.image || !itemAvailable) && (
                     <>
                       {cart[item.id] ? (
                         // Show increment/decrement controls if item is in cart
@@ -2248,8 +2249,8 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontFamily: 'Poppins',
     fontWeight: '700',
-    fontSize: 18,
-    lineHeight: 27,
+    fontSize: 16,
+    lineHeight: 24,
     textAlign: 'left',
     color: '#000000',
     opacity: 0.85,
@@ -2339,8 +2340,8 @@ const styles = StyleSheet.create({
   itemName: {
     fontFamily: 'Poppins',
     fontWeight: '700',
-    fontSize: 18,
-    lineHeight: 27,
+    fontSize: 16,
+    lineHeight: 24,
     textAlign: 'left',
     color: '#000000',
     opacity: 0.85,
