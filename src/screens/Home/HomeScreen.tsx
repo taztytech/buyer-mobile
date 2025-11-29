@@ -1258,8 +1258,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <SafeAreaView style={styles.safeArea} edges={[]}>
         <ScrollView
           ref={scrollViewRef}
           style={styles.container}
@@ -1289,7 +1289,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Header with Background Image */}
       <ImageBackground
         source={require('@/assets/home_app_bar.png')}
-        style={styles.headerBackground}
+        style={[styles.headerBackground, { paddingTop: insets.top + 20 }]}
         imageStyle={styles.headerBackgroundImage}
         testID="header-background"
       >
@@ -1897,16 +1897,16 @@ const styles = StyleSheet.create({
   // Header styles
   headerBackground: {
     width: '100%',
-    height: 212,
     paddingHorizontal: 20,
-    paddingTop: 20,
     paddingBottom: 20,
     gap: 18,
+    minHeight: 212,
   },
   headerBackgroundImage: {
     width: '120%',
-    height: 212,
+    resizeMode: 'cover',
     left: 0,
+    top: 0,
   },
   // Location section
   locationSection: {
@@ -2060,7 +2060,7 @@ const styles = StyleSheet.create({
   },
   // Carousel Container
   carouselContainer: {
-    marginTop: -44,
+    marginTop: 0,
     marginBottom: 16,
   },
   loadingContainer: {
