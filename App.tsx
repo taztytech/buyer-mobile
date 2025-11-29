@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text } from 'react-native';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
 import { WelcomeScreen } from '@/screens/Auth/WelcomeScreen';
@@ -89,13 +89,25 @@ function AppContent() {
   const restaurantScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const checkoutScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
-  const [_fontsLoaded] = useFonts({
+  const [fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
     'Poppins_400Regular': Poppins_400Regular,
     'Poppins_500Medium': Poppins_500Medium,
     'Poppins_600SemiBold': Poppins_600SemiBold,
     'Poppins_700Bold': Poppins_700Bold,
   });
+
+  // Set Poppins as default font for all Text components
+  React.useEffect(() => {
+    if (fontsLoaded) {
+      // Set default font family for all Text components
+      // This applies Poppins as the default font across the entire app
+      if (!Text.defaultProps) {
+        Text.defaultProps = {};
+      }
+      Text.defaultProps.style = { fontFamily: 'Poppins' };
+    }
+  }, [fontsLoaded]);
 
   // Check if user is already logged in on app startup
   React.useEffect(() => {
