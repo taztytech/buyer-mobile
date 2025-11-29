@@ -1136,15 +1136,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     activeOpacity={1}
                     disabled={!onNavigateToDetails}
                   >
-                    <Text style={styles.restaurantName} numberOfLines={2}>
-                      {restaurantData?.name || restaurantName || 'Restaurant'}
+                    <View style={styles.restaurantNameWithIcon}>
+                      <Text style={styles.restaurantName} numberOfLines={2}>
+                        {restaurantData?.name || restaurantName || 'Restaurant'}
+                      </Text>
                       {onNavigateToDetails && (
-                        <Text style={styles.infoIconText}>
-                          {' '}
-                          <MaterialIcons name="info-outline" size={18} color="#00B14F" />
-                        </Text>
+                        <MaterialIcons name="info-outline" size={18} color="#00B14F" style={styles.infoIcon} />
                       )}
-                    </Text>
+                    </View>
                   </TouchableOpacity>
                  {/* Opening Message */}
                  {restaurantOpeningMessage && (
@@ -1160,12 +1159,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     <View style={styles.ratingBadge}>
                       <MaterialIcons name="star" size={14} color="#00B14F" />
                       <Text style={styles.ratingText}>
-                        {(restaurantData?.stats?.average_rating || restaurantData?.rating || 0).toFixed(1)}
+                        {(restaurantData?.stats?.average_rating || restaurantData?.rating || 0).toFixed(1)} ({restaurantData?.stats?.total_reviews || restaurantData?.total_reviews || '0'})
                       </Text>
                     </View>
-                    <Text style={styles.reviewCountText}>
-                      {restaurantData?.stats?.total_reviews || restaurantData?.total_reviews || '0'} reviews
-                    </Text>
                   </View>
                 )}
               </View>
@@ -2013,6 +2009,11 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginRight: 8,
   },
+  restaurantNameWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   restaurantName: {
     fontFamily: 'Poppins',
     fontWeight: '600',
@@ -2020,9 +2021,10 @@ const styles = StyleSheet.create({
     lineHeight: 27,
     color: '#000000',
     opacity: 0.85,
+    flexShrink: 1,
   },
-  infoIconText: {
-    lineHeight: 27,
+  infoIcon: {
+    marginTop: 2,
   },
   openingMessageContainer: {
     flexDirection: 'row',
