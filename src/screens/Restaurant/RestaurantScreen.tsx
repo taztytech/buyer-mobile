@@ -31,7 +31,7 @@ import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { favoritesService } from '@/services/favorites.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
-import { ItemTiming as ImportedItemTiming, isItemAvailable } from '@/utils/timing.utils';
+import { ItemTiming as ImportedItemTiming, isItemAvailable, formatItemTiming } from '@/utils/timing.utils';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -759,10 +759,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     });
   }, [showConfirmation]);
 
-  // Handle adding item from detail modal
-  // This function combines both "Incoming" and "Current" flows:
-  // - Incoming flow: Uses useCallback, prevents concurrent updates, checks MAX_ITEM_QUANTITY
-  // - Current flow: Checks ensureRestaurantOpen, handles restaurant conflicts with itemId field
   const handleAddFromDetail = useCallback((itemId: string, quantity: number) => {
     // Current flow: Check if restaurant is open first
     if (!ensureRestaurantOpen()) {
@@ -795,15 +791,15 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     const existingCartItem = cart[itemId];
     
     if (existingCartItem) {
-      // Incoming flow: Mark item as being updated to prevent concurrent updates
+      // Mark item as being updated to prevent concurrent updates
       updatingItemsRef.current.add(itemId);
       
-      // Get current quantity and calculate new quantity
+      // Get current quantity and calculate new total quantity (set, not incremental)
       const currentQuantity = existingCartItem.quantity || 0;
-      const newQuantity = Math.min(currentQuantity + safeQuantity, MAX_ITEM_QUANTITY);
+      const newQuantity = Math.min(safeQuantity, MAX_ITEM_QUANTITY);
       
-      // Only update if the new quantity is different and valid
-      if (newQuantity > currentQuantity && newQuantity <= MAX_ITEM_QUANTITY) {
+      // Only update if the new quantity is different
+      if (newQuantity !== currentQuantity) {
         updateQuantity(itemId, newQuantity).finally(() => {
           // Remove from updating set after update completes
           updatingItemsRef.current.delete(itemId);
@@ -1420,6 +1416,30 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               // Item is only available if BOTH restaurant is open AND item timing is available
               const itemAvailable = !isRestaurantClosed && isItemCurrentlyAvailable;
 
+              // Build separate day + per-slot time labels from API-driven timings
+              let availabilityDay = '';
+              let availabilityTimes: string[] = [];
+              if (item.timings && item.timings.length > 0) {
+                const parsed = item.timings
+                  .map(t => {
+                    const formatted = formatItemTiming(t); // e.g., "Mon-Fri, 6:00 AM - 11:00 AM"
+                    const [dayPart, ...rest] = formatted.split(',');
+                    return {
+                      day: (dayPart || '').trim(),
+                      time: rest.join(',').trim(),
+                    };
+                  })
+                  .filter(p => p.day);
+
+                const uniqueDays = Array.from(new Set(parsed.map(p => p.day))).filter(Boolean);
+                const uniqueTimes = Array.from(
+                  new Set(parsed.map(p => p.time).filter(Boolean))
+                );
+
+                availabilityDay = uniqueDays.join(', ');
+                availabilityTimes = uniqueTimes;
+              }
+
               return (
               <View key={item.id}>
               <View style={styles.menuItem}>
@@ -1539,10 +1559,37 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     {!itemAvailable && (
                       <View style={styles.unavailableOverlay} />
                     )}
+
+                    {/* Available Timing Label for Unavailable Items (only when we have API timings) */}
+                    {!itemAvailable && availabilityDay && availabilityTimes.length > 0 && (
+                      <View style={styles.availabilityBadge}>
+                        <MaterialIcons
+                          name="access-time"
+                          size={14}
+                          color="#FFC529"
+                          style={styles.availabilityIcon}
+                        />
+                        <View style={styles.availabilityTextContainer}>
+                          <Text style={styles.availabilityDay} numberOfLines={1}>
+                            {availabilityDay}
+                          </Text>
+                          {availabilityTimes.map((timeSlot, index) => (
+                            <Text
+                              // eslint-disable-next-line react/no-array-index-key
+                              key={`${item.id}-time-${index}`}
+                              style={styles.availabilityTime}
+                              numberOfLines={1}
+                            >
+                              {timeSlot}
+                            </Text>
+                          ))}
+                        </View>
+                      </View>
+                    )}
                   </TouchableOpacity>
 
                   {/* Add Button or Increment/Decrement Controls */}
-                  {loadedImages.has(item.id) && itemAvailable && (
+                  {loadedImages.has(item.id) && (
                     <>
                       {cart[item.id] ? (
                         // Show increment/decrement controls if item is in cart
@@ -1558,18 +1605,37 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                           <Text style={styles.quantityText}>{getItemQuantity(item.id)}</Text>
                           <TouchableOpacity
                             style={styles.quantityButton}
-                            onPress={() => incrementItem(item.id)}
+                            onPress={() => {
+                              if (!itemAvailable) {
+                                return;
+                              }
+                              incrementItem(item.id);
+                            }}
+                            disabled={!itemAvailable}
                             activeOpacity={0.7}
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                           >
-                            <Text style={styles.quantityButtonText}>+</Text>
+                            <Text
+                              style={[
+                                styles.quantityButtonText,
+                                !itemAvailable && styles.quantityButtonTextDisabled,
+                              ]}
+                            >
+                              +
+                            </Text>
                           </TouchableOpacity>
                         </View>
                       ) : (
                         // Show Add button
                         <TouchableOpacity
-                          style={styles.addButton}
+                          style={[
+                            styles.addButton,
+                            !itemAvailable && styles.addButtonDisabled,
+                          ]}
                           onPress={() => {
+                            if (!itemAvailable) {
+                              return;
+                            }
                             if (item.isCustomizable) {
                               // Open customization modal for customizable items
                               handleCustomizableItemClick(item);
@@ -1578,10 +1644,25 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                               addToCart(item);
                             }
                           }}
+                          disabled={!itemAvailable}
                           activeOpacity={0.7}
                         >
-                          <Text style={styles.addButtonPlus}>+</Text>
-                          <Text style={styles.addButtonText}>Add</Text>
+                          <Text
+                            style={[
+                              styles.addButtonPlus,
+                              !itemAvailable && styles.addButtonDisabledText,
+                            ]}
+                          >
+                            +
+                          </Text>
+                          <Text
+                            style={[
+                              styles.addButtonText,
+                              !itemAvailable && styles.addButtonDisabledText,
+                            ]}
+                          >
+                            Add
+                          </Text>
                         </TouchableOpacity>
                       )}
                     </>
@@ -1608,20 +1689,26 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           <TouchableOpacity
             style={styles.cartButton}
             onPress={() => {
-              // Navigate to checkout page
-              if (onNavigateToCheckout && cartRestaurantId) {
-                // Use cart's restaurant info (the restaurant whose items are in the cart)
-                // Build restaurant address from available data
-                const restaurantAddress = restaurantData?.locations?.[0]?.address ||
-                  restaurantData?.location?.address ||
-                  [
-                    restaurantData?.locations?.[0]?.locality || restaurantData?.location?.locality,
-                    restaurantData?.locations?.[0]?.city || restaurantData?.location?.city,
-                  ].filter(Boolean).join(', ') ||
-                  'Restaurant Address';
-
-                onNavigateToCheckout(cartRestaurantId, cartRestaurantName || 'Restaurant', restaurantAddress, 'restaurant');
+              // Navigate to checkout page only if restaurant is open
+              if (!onNavigateToCheckout || !cartRestaurantId) {
+                return;
               }
+
+              if (!ensureRestaurantOpen()) {
+                return;
+              }
+
+              // Use cart's restaurant info (the restaurant whose items are in the cart)
+              // Build restaurant address from available data
+              const restaurantAddress = restaurantData?.locations?.[0]?.address ||
+                restaurantData?.location?.address ||
+                [
+                  restaurantData?.locations?.[0]?.locality || restaurantData?.location?.locality,
+                  restaurantData?.locations?.[0]?.city || restaurantData?.location?.city,
+                ].filter(Boolean).join(', ') ||
+                'Restaurant Address';
+
+              onNavigateToCheckout(cartRestaurantId, cartRestaurantName || 'Restaurant', restaurantAddress, 'restaurant');
             }}
             activeOpacity={0.8}
           >
@@ -1765,7 +1852,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       <FoodItemDetailModal
         visible={showDetailModal}
         item={selectedDetailItem}
-        initialQuantity={selectedDetailItem ? (cart[selectedDetailItem.id]?.quantity || undefined) : undefined}
+        initialQuantity={selectedDetailItem ? (getItemQuantity(selectedDetailItem.id) || undefined) : undefined}
         maxQuantity={MAX_ITEM_QUANTITY}
         isAvailable={selectedDetailItemAvailable}
         onClose={() => {
@@ -2314,7 +2401,7 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   itemImageDisabled: {
-    opacity: 0.5,
+    opacity: 0.7,
   },
   itemGradientOverlayTop: {
     position: 'absolute',
@@ -2338,9 +2425,41 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(128, 128, 128, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
     borderRadius: 16,
     zIndex: 5,
+  },
+  availabilityBadge: {
+    position: 'absolute',
+    top: '45%',
+    left: 8,
+    right: 8,
+    transform: [{ translateY: -8 }],
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  availabilityIcon: {
+    marginRight: 6,
+  },
+  availabilityTextContainer: {
+    flexShrink: 1,
+  },
+  availabilityDay: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 8,
+    lineHeight: 11,
+    color: '#FFFFFF',
+  },
+  availabilityTime: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 8,
+    lineHeight: 11,
+    color: '#FFFFFF',
   },
   addButton: {
     flexDirection: 'row',
@@ -2359,6 +2478,10 @@ const styles = StyleSheet.create({
     top: 115,
     left: 39.5,
   },
+  addButtonDisabled: {
+    borderColor: 'rgba(0, 177, 79, 0.4)',
+    backgroundColor: '#F5F5F5',
+  },
   addButtonPlus: {
     fontFamily: 'Poppins',
     fontWeight: '400',
@@ -2371,6 +2494,9 @@ const styles = StyleSheet.create({
         marginTop: -3,
       },
     }),
+  },
+  addButtonDisabledText: {
+    color: 'rgba(0, 177, 79, 0.4)',
   },
   addButtonText: {
     fontFamily: 'Poppins',
@@ -2413,6 +2539,9 @@ const styles = StyleSheet.create({
     color: '#00B14F',
     opacity: 0.85,
     marginTop: -2,
+  },
+  quantityButtonTextDisabled: {
+    color: 'rgba(0, 177, 79, 0.4)',
   },
   quantityText: {
     fontFamily: 'Poppins_600SemiBold',

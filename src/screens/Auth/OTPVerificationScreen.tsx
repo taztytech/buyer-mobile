@@ -517,6 +517,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     textAlign: 'center',
     color: 'rgba(0, 30, 31, 0.5)',
+    marginBottom: 30,
   },
   termsLink: {
     fontFamily: 'Poppins_600SemiBold',

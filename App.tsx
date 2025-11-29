@@ -74,6 +74,7 @@ function AppContent() {
   const [isRegistrationFlow, setIsRegistrationFlow] = React.useState(false);
   const [initialLocationCoords, setInitialLocationCoords] = React.useState<{ latitude?: number; longitude?: number } | null>(null);
   const [legalCameFrom, setLegalCameFrom] = React.useState<'profile' | 'login'>('profile');
+  const [addressRefreshTrigger, setAddressRefreshTrigger] = React.useState(0);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -786,6 +787,12 @@ function AppContent() {
     setCurrentScreen('profile');
   };
 
+  // Handle address changes (trigger HomeScreen refresh)
+  const handleAddressChange = () => {
+    // Increment trigger to cause HomeScreen to refresh
+    setAddressRefreshTrigger(prev => prev + 1);
+  };
+
   const handleNavigateToAddressSelectionFromMyAddresses = () => {
     // Set correct navigation source for location selection
     setLocationSelectionCameFrom('myAddresses');
@@ -1428,6 +1435,7 @@ function AppContent() {
               selectedLocation={selectedLocation}
               onCategoriesLoaded={setCategoryData}
               isFocused={currentScreen === 'home'}
+              addressRefreshTrigger={addressRefreshTrigger}
             />
           </Animated.View>
 
@@ -1636,6 +1644,7 @@ function AppContent() {
                 onBack={handleBackFromMyAddresses}
                 onAddNew={handleNavigateToAddressSelectionFromMyAddresses}
                 onEditAddress={handleEditAddressFromMyAddresses}
+                onAddressChange={handleAddressChange}
               />
             </View>
           )}

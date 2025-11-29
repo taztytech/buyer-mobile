@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import { paymentService } from '@/services/payment.service';
 import { authService } from '@/services/auth.service';
 import { homeService } from '@/services/home.service';
 import { cartService, CartSummary } from '@/services/cart.service';
+import { restaurantService } from '@/services/restaurant.service';
 import { useCart } from '@/context/CartContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
@@ -147,6 +148,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [maxTipAmount, setMaxTipAmount] = useState<number | null>(null);
   const [tipError, setTipError] = useState('');
 
+  // Convenience accessors for backend-calculated amounts (no client-side recomputation)
+  const itemTotal = cartSummary?.subtotal ?? 0;
+  const deliveryFee = cartSummary?.delivery_fee ?? 0;
+  const gstAndCharges = cartSummary?.tax_amount ?? 0;
+  const discountAmount = cartSummary?.discount_amount ?? 0;
+  const platformFee = (cartSummary as any)?.platform_fee ?? 0;
+  const includePlatformFee = (cartSummary as any)?.include_platform_fee ?? false;
+  const backendTipAmount = (cartSummary as any)?.tip_amount ?? 0;
+  const totalAmount = cartSummary?.final_amount ?? 0;
+
   const selectedAddress = addresses.find(addr => addr.id.toString() === selectedAddressId);
 
   // Helper function to format address for display
@@ -197,6 +208,48 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
   // Use cart context restaurant info if available, otherwise use props
   const effectiveRestaurantId = contextRestaurantId || restaurantId;
+
+  const ensureRestaurantOpenBeforeOrder = async (): Promise<boolean> => {
+    if (!effectiveRestaurantId) {
+      return true;
+    }
+
+    try {
+      // Prefer selected address coordinates if available, otherwise fall back
+      const lat = selectedAddress?.latitude ?? 9.9252;
+      const lng = selectedAddress?.longitude ?? 78.1198;
+
+      const response = await restaurantService.getRestaurantDetails(effectiveRestaurantId, {
+        lat,
+        lng,
+        include_items: false,
+      });
+
+      if (!response.success || !response.data) {
+        return true;
+      }
+
+      const timings = response.data.timings;
+      const isOpen = timings ? homeService.isRestaurantOpen(timings) : true;
+
+      if (!isOpen) {
+        showConfirmation({
+          title: 'Restaurant is currently closed',
+          message: 'This restaurant is closed right now. You can place the order when it reopens.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
+        return false;
+      }
+
+      return true;
+    } catch {
+      // On any unexpected error, allow and let backend enforce rules
+      return true;
+    }
+  };
 
   // Fetch addresses and cart summary from API
   useEffect(() => {
@@ -474,6 +527,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       return;
     }
 
+    // Final guard: ensure restaurant is open before creating order & starting payment
+    const isOpen = await ensureRestaurantOpenBeforeOrder();
+    if (!isOpen) {
+      return;
+    }
+
     setIsPlacingOrder(true);
 
     try {
@@ -677,18 +736,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   };
 
-  // Calculate tip amount from selected tip or custom tip
-  const calculatedTipAmount = useMemo(() => {
-    if (selectedTip === null) return 0;
-    if (selectedTip === -1) {
-      // Custom tip amount - only use if it's been added (not just entered)
-      // For now, return 0 when "Other" is selected but not yet added
-      return 0;
-    }
-    return selectedTip;
-  }, [selectedTip, customTipAmount]);
-
   // Handle tip selection and API call
+  // When user clicks tip, calls PUT /api/buyer/cart/tip and displays cart_summary from response
   const handleTipSelection = async (amount: number | null) => {
     // Clear any previous validation error when changing selection
     setTipError('');
@@ -709,39 +758,34 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     try {
       setIsUpdatingTip(true);
       
-      // Call API to update tip in cart
+      // Call PUT /api/buyer/cart/tip API
       const response = await cartService.createTip(tipToSend);
 
-      if (response.success) {
-        // Update local state
-        // Refresh cart summary to get updated bill details
-        if (response.cart_summary) {
-          setCartSummary(response.cart_summary);
+      if (response.success && response.cart_summary) {
+        // Always use cart_summary from the tip API response
+        // This cart_summary contains all bill details including final_amount with tip included
+        setCartSummary(response.cart_summary);
 
-          const summaryAny = response.cart_summary as any;
+        const summaryAny = response.cart_summary as any;
 
-          // Update dynamic max tip amount from backend if provided
-          if (typeof response.max_tip_amount === 'number') {
-            setMaxTipAmount(response.max_tip_amount);
-          } else if (typeof summaryAny.max_tip_amount === 'number') {
-            setMaxTipAmount(summaryAny.max_tip_amount);
+        // Update dynamic max tip amount from backend if provided
+        if (typeof response.max_tip_amount === 'number') {
+          setMaxTipAmount(response.max_tip_amount);
+        } else if (typeof summaryAny.max_tip_amount === 'number') {
+          setMaxTipAmount(summaryAny.max_tip_amount);
+        }
+
+        // Update selectedTip from API response to ensure consistency
+        const tipFromResponse =
+          response.tip_amount ?? summaryAny.tip_amount;
+        if (tipFromResponse !== undefined && tipFromResponse !== null) {
+          const finalTip = tipFromResponse > 0 ? tipFromResponse : null;
+          setSelectedTip(finalTip);
+
+          // If it's a custom tip (not 10, 20, 30), update customTipAmount to match
+          if (finalTip !== null && finalTip !== 10 && finalTip !== 20 && finalTip !== 30) {
+            setCustomTipAmount(finalTip.toString());
           }
-
-          // Update selectedTip from API response to ensure consistency
-          const tipFromResponse =
-            response.tip_amount ?? summaryAny.tip_amount;
-          if (tipFromResponse !== undefined && tipFromResponse !== null) {
-            const finalTip = tipFromResponse > 0 ? tipFromResponse : null;
-            setSelectedTip(finalTip);
-
-            // If it's a custom tip (not 10, 20, 30), update customTipAmount to match
-            if (finalTip !== null && finalTip !== 10 && finalTip !== 20 && finalTip !== 30) {
-              setCustomTipAmount(finalTip.toString());
-            }
-          }
-        } else {
-          // If summary not in response, fetch it
-          await fetchCartSummary();
         }
       } else {
         // Revert optimistic update on error
@@ -759,55 +803,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   };
 
-  // Calculate bill values optimistically from localCartItems for instant UI updates
-  // Always use local calculation for item total to ensure instant updates
-  // Use backend cartSummary only for fees/taxes/discounts that we can't calculate locally
-  const billValues = useMemo(() => {
-    // ALWAYS calculate item total from local cart items for instant UI feedback
-    // This ensures the UI updates immediately when quantity changes
-    const calculatedItemTotal = localCartItems.reduce((sum, item) => {
-      return sum + (item.price * item.quantity);
-    }, 0);
-
-    // Use backend values for fees/taxes/discounts (these don't change with quantity)
-    // These come from backend and are relatively static
-    const deliveryFee = cartSummary?.delivery_fee ?? 0;
-    const gstAndCharges = cartSummary?.tax_amount ?? 0;
-    const discountAmount = cartSummary?.discount_amount ?? 0;
-    
-    // Calculate tax proportionally if we have backend data
-    // This allows us to apply tax to the calculated item total for instant updates
-    let taxAmount = gstAndCharges;
-    if (cartSummary?.subtotal && cartSummary?.tax_amount && cartSummary.subtotal > 0 && calculatedItemTotal > 0) {
-      // Calculate tax rate from backend data and apply to current item total
-      const taxRate = cartSummary.tax_amount / cartSummary.subtotal;
-      taxAmount = calculatedItemTotal * taxRate;
-    } else if (calculatedItemTotal === 0) {
-      // If cart is empty, tax should be 0
-      taxAmount = 0;
-    }
-    
-    // Calculate tip amount - use calculatedTipAmount which handles the logic
-    const tip = calculatedTipAmount;
-    
-    // Fixed platform fee (hidden in UI but included in calculation)
-    const PLATFORM_FEE = 10;
-
-    // Calculate total: calculatedItemTotal + deliveryFee + taxAmount + tip - discountAmount + platform fee
-    // Always use calculated item total for instant updates
-    const totalAmount = calculatedItemTotal + deliveryFee + taxAmount + tip - discountAmount + PLATFORM_FEE;
-    
-    return {
-      itemTotal: calculatedItemTotal, // Always use calculated value for instant updates
-      deliveryFee,
-      gstAndCharges: taxAmount,
-      discountAmount,
-      tipAmount: tip,
-      totalAmount,
-    };
-  }, [localCartItems, cartSummary, calculatedTipAmount]);
-
-  const { itemTotal, gstAndCharges, deliveryFee, discountAmount, tipAmount, totalAmount } = billValues;
+  // All bill-related amounts are now taken directly from the backend-provided cartSummary.
 
   // Handle custom tip add button
   const handleAddCustomTip = async () => {
@@ -1334,24 +1330,27 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 <View style={styles.billRow}>
                   <Text style={styles.billLabel}>Platform Fee</Text>
                   <View style={styles.platformFeeValueContainer}>
-                    <Text style={styles.billValueStrikethrough}>₹10.00</Text>
-                    <Text style={styles.billValue}>₹0.00</Text>
+                    <Text style={includePlatformFee ? styles.billValue : styles.billValueStrikethrough}>
+                      ₹{platformFee.toFixed(2)}
+                    </Text>
                   </View>
                 </View>
-                {tipAmount > 0 && (
+                {backendTipAmount > 0 && (
                   <View style={styles.billRow}>
                     <Text style={styles.billLabel}>Delivery Partner tip</Text>
-                    <Text style={styles.billValue}>₹{tipAmount.toFixed(2)}</Text>
+                    <Text style={styles.billValue}>₹{backendTipAmount.toFixed(2)}</Text>
                   </View>
                 )}
                 <View style={styles.billRow}>
                   <Text style={styles.billLabel}>Taxes and Charges</Text>
-                  <Text style={styles.billValue}>₹{gstAndCharges.toFixed(2)}</Text>
+                  <Text style={styles.billValue}>₹{gstAndCharges?.toFixed(2) ?? '0.00'}</Text>
                 </View>
                 {discountAmount > 0 && (
                   <View style={styles.billRow}>
                     <Text style={styles.billLabel}>Discount</Text>
-                    <Text style={[styles.billValue, { color: '#00B14F' }]}>-₹{discountAmount.toFixed(2)}</Text>
+                    <Text style={[styles.billValue, { color: '#00B14F' }]}>
+                      -₹{discountAmount.toFixed(2)}
+                    </Text>
                   </View>
                 )}
                 <View style={styles.billDivider} />
@@ -2047,7 +2046,6 @@ const styles = StyleSheet.create({
   platformFeeValueContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
   },
   billValueStrikethrough: {
     fontFamily: 'Poppins',
