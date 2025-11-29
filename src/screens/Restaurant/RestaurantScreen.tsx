@@ -2327,7 +2327,8 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   itemName: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins',
+    fontWeight: '700',
     fontSize: 18,
     lineHeight: 27,
     textAlign: 'left',
