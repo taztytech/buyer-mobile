@@ -96,6 +96,12 @@ export interface GetCartResponse {
   data: CartResponse;
 }
 
+export interface ApplyCouponResponse {
+  success: boolean;
+  message?: string;
+  cart_summary?: CartSummary;
+}
+
 class CartService {
   /**
    * Add item to cart
@@ -346,6 +352,55 @@ class CartService {
       };
     } catch (error) {
       throw error;
+    }
+  }
+
+  /**
+   * Apply coupon code to cart
+   * POST /api/buyer/cart/apply-coupon
+   */
+  async applyCoupon(
+    couponCode: string
+  ): Promise<ApplyCouponResponse> {
+    try {
+      const response = await apiService.post(
+        API_CONFIG.ENDPOINTS.BUYER.CART_APPLY_COUPON,
+        {
+          coupon_code: couponCode,
+        }
+      );
+
+      // Handle possible nested response structures
+      // 1. { success: true, data: { cart_summary: {...} } }
+      // 2. { success: true, cart_summary: {...} }
+      // 3. { cart_summary: {...} } (direct)
+      let responseData: any = response.data || response;
+
+      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+        responseData = responseData.data;
+      }
+
+      let cartSummary: CartSummary | undefined;
+      if (responseData) {
+        if (responseData.cart_summary && typeof responseData.cart_summary === 'object') {
+          cartSummary = responseData.cart_summary as CartSummary;
+        } else if ('final_amount' in responseData && 'subtotal' in responseData) {
+          cartSummary = responseData as CartSummary;
+        }
+      }
+
+      return {
+        success: response.success,
+        message: responseData?.message || response.message,
+        cart_summary: cartSummary,
+      };
+    } catch (error: any) {
+      // Surface a standardized error shape to callers
+      return {
+        success: false,
+        message: error?.message || 'Failed to apply coupon',
+        cart_summary: undefined,
+      };
     }
   }
 }

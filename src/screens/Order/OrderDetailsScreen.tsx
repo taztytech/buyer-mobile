@@ -147,6 +147,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [isUpdatingTip, setIsUpdatingTip] = useState(false);
   const [maxTipAmount, setMaxTipAmount] = useState<number | null>(null);
   const [tipError, setTipError] = useState('');
+  const [promoError, setPromoError] = useState('');
+  const [isApplyingPromo, setIsApplyingPromo] = useState(false);
 
   // Convenience accessors for backend-calculated amounts (no client-side recomputation)
   const itemTotal = cartSummary?.subtotal ?? 0;
@@ -835,9 +837,44 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   };
 
   // Handle promo code apply
-  const handleApplyPromoCode = () => {
-    console.log('Promo code entered:', promoCode);
-    // TODO: Add promo code validation and application logic
+  const handleApplyPromoCode = async () => {
+    // Clear previous error
+    setPromoError('');
+
+    const trimmedCode = promoCode.trim();
+
+    if (!trimmedCode) {
+      setPromoError('Please enter a promo code.');
+      return;
+    }
+
+    // Enforce uppercase-only input (letters are uppercased; digits remain as-is)
+    const normalizedCode = trimmedCode.toUpperCase();
+    if (normalizedCode !== promoCode) {
+      // Sync state to normalized value for UI consistency
+      setPromoCode(normalizedCode);
+    }
+
+    try {
+      setIsApplyingPromo(true);
+
+      const response = await cartService.applyCoupon(normalizedCode);
+
+      if (response.success && response.cart_summary) {
+        // Use updated cart summary from backend
+        setCartSummary(response.cart_summary);
+
+        // Clear any existing error on success
+        setPromoError('');
+      } else {
+        // Show error message from API at the bottom of the screen
+        setPromoError(response.message || 'Failed to apply promo code.');
+      }
+    } catch (error: any) {
+      setPromoError(error?.message || 'Failed to apply promo code.');
+    } finally {
+      setIsApplyingPromo(false);
+    }
   };
 
   // If location selection is shown, render it as an overlay
@@ -1288,14 +1325,30 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                     placeholder="Enter promo code"
                     placeholderTextColor="rgba(0, 0, 0, 0.4)"
                     value={promoCode}
-                    onChangeText={setPromoCode}
+                    onChangeText={(text) => {
+                      // Force uppercase characters while user types
+                      setPromoCode(text.toUpperCase());
+                      // Clear promo error when user edits the code
+                      if (promoError) {
+                        setPromoError('');
+                      }
+                    }}
+                    autoCapitalize="characters"
                   />
                   <TouchableOpacity
-                    style={styles.applyButton}
+                    style={[
+                      styles.applyButton,
+                      (isApplyingPromo || !promoCode.trim()) && styles.applyButtonDisabled,
+                    ]}
                     onPress={handleApplyPromoCode}
                     activeOpacity={0.8}
+                    disabled={isApplyingPromo || !promoCode.trim()}
                   >
-                    <Text style={styles.applyButtonText}>Apply</Text>
+                    {isApplyingPromo ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.applyButtonText}>Apply</Text>
+                    )}
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1424,6 +1477,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           </View>
         </SafeAreaView>
       </View>
+      {/* Promo error bar at the bottom of the screen */}
+      {promoError ? (
+        <View style={styles.promoErrorBar}>
+          <Text style={styles.promoErrorBarText} numberOfLines={2}>
+            {promoError}
+          </Text>
+        </View>
+      ) : null}
       </Animated.View>
 
       {/* Address Selection Modal */}
@@ -2024,6 +2085,9 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: '#FFFFFF',
   },
+  applyButtonDisabled: {
+    opacity: 0.6,
+  },
   billRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2149,5 +2213,28 @@ const styles = StyleSheet.create({
   },
   placeOrderButtonDisabled: {
     opacity: 0.6,
+  },
+  promoErrorBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 80,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#DC2626',
+    borderRadius: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 6,
+  },
+  promoErrorBarText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
 });
