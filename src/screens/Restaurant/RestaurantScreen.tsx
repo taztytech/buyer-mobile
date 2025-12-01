@@ -1110,7 +1110,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         scrollEventThrottle={16}
         bounces={false}
         overScrollMode="never"
-        removeClippedSubviews={true}
+        removeClippedSubviews={false}
         decelerationRate="normal"
       >
         {/* Header Image with Overlay */}
@@ -1232,9 +1232,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         )}
 
         {/* Filter Buttons with Search - STICKY */}
-        <SafeAreaView edges={['top']} style={styles.filterSafeArea}>
-          <View style={styles.filterSectionContainer}>
-            <View style={styles.filterSection}>
+        <SafeAreaView edges={['top']} style={styles.filterSafeArea} collapsable={false}>
+          <View style={styles.filterSectionContainer} collapsable={false}>
+            <View style={styles.filterSection} collapsable={false}>
             <View style={styles.filterButtonsGroup}>
               {/* <TouchableOpacity
                 style={styles.filterButton}
@@ -1252,6 +1252,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 ]}
                 onPress={() => toggleDietaryFilter('veg')}
                 activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 {activeDietaryFilter === 'veg' ? (
                   <MaterialIcons name="close" size={14} color="#000000" />
@@ -1275,6 +1276,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 ]}
                 onPress={() => toggleDietaryFilter('non-veg')}
                 activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 {activeDietaryFilter === 'non-veg' ? (
                   <MaterialIcons name="close" size={14} color="#000000" />
@@ -1298,6 +1300,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 style={styles.searchButton}
                 onPress={() => setShowSearch(true)}
                 activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <MaterialIcons name="search" size={24} color="#00B14F" />
               </TouchableOpacity>
@@ -2094,6 +2097,12 @@ const styles = StyleSheet.create({
   },
   filterSafeArea: {
     backgroundColor: '#FFFFFF', // Add background for sticky effect
+    zIndex: 10,
+    elevation: 10, // For Android
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   filterSectionContainer: {
     paddingHorizontal: 20,

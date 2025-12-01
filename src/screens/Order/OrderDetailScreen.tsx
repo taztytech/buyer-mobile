@@ -160,6 +160,9 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         tax_amount: 0,
         delivery_fee: 0,
         discount_amount: 0,
+        tip_amount: 0,
+        platform_fee: 0,
+        include_platform_fee: false,
         total_amount: 0,
       };
     }
@@ -175,17 +178,23 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     const tax_amount = summary.tax_amount || summary.tax || 0;
     const delivery_fee = summary.delivery_fee || 0;
     const discount_amount = summary.discount_amount || summary.discount || 0;
+    const tip_amount = summary.tip_amount || 0;
+    const platform_fee = summary.platform_fee || 0;
+    const include_platform_fee = summary.include_platform_fee || false;
     const summarySubtotal = summary.subtotal || summary.item_total || 0;
-    const summaryTotal = summary.total_amount || summary.total || 0;
+    // Use final_amount from API, fallback to total_amount or total if not available
+    const finalTotal = summary.final_amount || summary.total_amount || summary.total || 0;
     
     const finalSubtotal = summarySubtotal || subtotal;
-    const finalTotal = summaryTotal || (finalSubtotal + tax_amount + delivery_fee - discount_amount);
 
     const bill = {
       subtotal: finalSubtotal,
       tax_amount,
       delivery_fee,
       discount_amount,
+      tip_amount,
+      platform_fee,
+      include_platform_fee,
       total_amount: finalTotal,
     };
 
@@ -531,12 +540,26 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       <Text style={styles.billValue}>₹{bill.subtotal.toFixed(2)}</Text>
                     </View>
                     <View style={styles.billRow}>
-                      <Text style={styles.billLabel}>GST and Charges</Text>
-                      <Text style={styles.billValue}>₹{bill.tax_amount.toFixed(2)}</Text>
-                    </View>
-                    <View style={styles.billRow}>
                       <Text style={styles.billLabel}>Delivery Fee</Text>
                       <Text style={styles.billValue}>₹{bill.delivery_fee.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.billRow}>
+                      <Text style={styles.billLabel}>Platform Fee</Text>
+                      <Text style={
+                        (bill.include_platform_fee || bill.platform_fee === 0) 
+                          ? styles.billValue 
+                          : styles.billValueStrikethrough
+                      }>
+                        ₹{bill.platform_fee.toFixed(2)}
+                      </Text>
+                    </View>
+                    <View style={styles.billRow}>
+                      <Text style={styles.billLabel}>Delivery Partner tip</Text>
+                      <Text style={styles.billValue}>₹{bill.tip_amount.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.billRow}>
+                      <Text style={styles.billLabel}>GST and Charges</Text>
+                      <Text style={styles.billValue}>₹{bill.tax_amount.toFixed(2)}</Text>
                     </View>
                     {bill.discount_amount > 0 && (
                       <View style={styles.billRow}>
@@ -914,6 +937,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(0, 30, 31, 0.6)',
     lineHeight: 21,
+  },
+  billValueStrikethrough: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: 'rgba(0, 30, 31, 0.5)',
+    lineHeight: 21,
+    textDecorationLine: 'line-through',
   },
   totalRow: {
     flexDirection: 'row',
