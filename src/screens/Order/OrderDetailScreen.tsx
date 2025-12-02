@@ -223,7 +223,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
     const statusMap: { [key: string]: { title: string; color: string } } = {
       'delivered': { title: 'Your order was delivered!', color: '#00B14F' },
-      'confirmed': { title: 'Order confirmed!', color: '#00B14F' },
+      'confirmed': { title: 'Restaurant  Accepted & Started Preparing!', color: '#00B14F' },
       'preparing': { title: 'Order is being prepared', color: '#F59E0B' },
       'out_for_delivery': { title: 'Order is on the way!', color: '#F59E0B' },
       'pending_payment': { title: 'Payment pending', color: '#DC2626' },
@@ -285,59 +285,89 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-          {/* Delivery Status Card */}
-          <View style={styles.card}>
-            <View style={styles.statusHeader}>
-              <MaterialIcons
-                name={orderData.status === 'delivered' ? 'check-circle' :
-                      (getStatusDisplay(orderData.status, orderData).title === 'Payment Failed') ? 'payment' :
-                      orderData.status === 'cancelled' ? 'cancel' :
-                      'access-time'}
-                size={24}
-                color={getStatusDisplay(orderData.status, orderData).color}
+          {/* Delivery Status Card - Illustration + Banner */}fv
+          <View style={[styles.card, styles.statusCard]}>
+            <View style={styles.statusIllustrationContainer}>
+              <Image
+                source={require('../../../assets/delivery_man.png')}
+                style={styles.statusIllustration}
+                resizeMode="contain"
               />
-              <View style={styles.statusTextContainer}>
-                <Text style={styles.statusTitle}>{getStatusDisplay(orderData.status, orderData).title}</Text>
-                <Text style={styles.orderNumberText}>Order #{orderData.order_number}</Text>
+            </View>
+
+            <View style={styles.statusBanner}>
+              {/* <MaterialIcons
+                name={
+                  orderData.status === 'delivered'
+                    ? 'check-circle'
+                    : getStatusDisplay(orderData.status, orderData).title === 'Payment Failed'
+                    ? 'payment'
+                    : orderData.status === 'cancelled'
+                    ? 'cancel'
+                    : 'access-time'
+                }
+                size={22}
+                color="#111827"
+              /> */}
+              <View style={styles.statusBannerTextContainer}>
+                <View style={styles.statusBannerTitleRow}>
+                  <Text style={styles.statusBannerTitle}>
+                    {getStatusDisplay(orderData.status, orderData).title}
+                  </Text>
+                </View>
+                <Text style={styles.statusBannerSubtitle}>
+                  Order id #{orderData.order_number}
+                </Text>
               </View>
             </View>
 
             {/* Driver Info - only show if tracking data available */}
-            {orderData.tracking && orderData.tracking.length > 0 && orderData.tracking[0].agent_name && (
-              <>
-                <View style={styles.driverSection}>
-                  {orderData.tracking[0].agent_photo_url ? (
-                    <Image
-                      source={{ uri: orderData.tracking[0].agent_photo_url }}
-                      style={styles.driverAvatar}
-                    />
-                  ) : (
-                    <View style={[styles.driverAvatar, styles.driverAvatarPlaceholder]}>
-                      <MaterialIcons name="person" size={32} color="#999" />
-                    </View>
-                  )}
-                  <View style={styles.driverInfo}>
-                    <Text style={styles.driverName}>{orderData.tracking[0].agent_name}</Text>
-                    <Text style={styles.driverLabel}>Your delivery driver</Text>
-                    {orderData.tracking[0].agent_phone && (
-                      <Text style={styles.driverPhone}>{orderData.tracking[0].agent_phone}</Text>
+            {orderData.tracking &&
+              orderData.tracking.length > 0 &&
+              orderData.tracking[0].agent_name && (
+                <>
+                  <View style={styles.driverSection}>
+                    {orderData.tracking[0].agent_photo_url ? (
+                      <Image
+                        source={{ uri: orderData.tracking[0].agent_photo_url }}
+                        style={styles.driverAvatar}
+                      />
+                    ) : (
+                      <View
+                        style={[
+                          styles.driverAvatar,
+                          styles.driverAvatarPlaceholder,
+                        ]}
+                      >
+                        <MaterialIcons name="person" size={32} color="#999" />
+                      </View>
                     )}
+                    <View style={styles.driverInfo}>
+                      <Text style={styles.driverName}>
+                        {orderData.tracking[0].agent_name}
+                      </Text>
+                      <Text style={styles.driverLabel}>Your delivery driver</Text>
+                      {orderData.tracking[0].agent_phone && (
+                        <Text style={styles.driverPhone}>
+                          {orderData.tracking[0].agent_phone}
+                        </Text>
+                      )}
+                    </View>
                   </View>
-                </View>
 
-                {/* Thank Driver Button - only show for delivered orders */}
-                {orderData.status === 'delivered' && (
-                  <TouchableOpacity
-                    style={styles.thankButton}
-                    onPress={onThankDriver}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialIcons name="thumb-up" size={20} color="#FFFFFF" />
-                    <Text style={styles.thankButtonText}>Thank Driver</Text>
-                  </TouchableOpacity>
-                )}
-              </>
-            )}
+                  {/* Thank Driver Button - only show for delivered orders */}
+                  {orderData.status === 'delivered' && (
+                    <TouchableOpacity
+                      style={styles.thankButton}
+                      onPress={onThankDriver}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons name="thumb-up" size={20} color="#FFFFFF" />
+                      <Text style={styles.thankButtonText}>Thank Driver</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
           </View>
 
           {/* Restaurant Info Card */}
@@ -595,7 +625,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               </View>
               <Text style={styles.paymentText}>
                 {orderData.payment_method === 'cod' ? 'Cash on Delivery' :
-                 orderData.payment_method === 'online' ? 'Paid Online' :
+                 orderData.payment_method === 'online' ? 'Online' :
                  orderData.payment_method === 'upi' ? 'Paid by UPI' :
                  orderData.payment_method.toUpperCase()}
                 {orderData.payment_status && ` (${orderData.payment_status})`}
@@ -1121,5 +1151,53 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
     marginVertical: 8,
+  },
+  statusCard: {
+    alignItems: 'center',
+  },
+  statusIllustrationContainer: {
+    alignItems: 'center',
+    // marginBottom: 6,
+  },
+  statusIllustration: {
+    width: 180,
+    height: 100,
+  },
+  statusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FACC15',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  statusBannerTextContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statusBannerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    columnGap: 6,
+    rowGap: 2,
+  },
+  statusBannerTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    textAlign: 'center',
+    flexShrink: 1,
+    color: '#111827',
+    lineHeight: 22,
+  },
+  statusBannerSubtitle: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 13,
+    textAlign: 'center',
+    color: '#111827',
+    lineHeight: 18,
+    marginTop: 2,
   },
 });

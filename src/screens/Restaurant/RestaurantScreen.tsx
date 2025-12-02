@@ -2108,12 +2108,7 @@ const styles = StyleSheet.create({
   },
   filterSafeArea: {
     backgroundColor: '#FFFFFF', // Add background for sticky effect
-    zIndex: 10,
-    elevation: 10, // For Android
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    zIndex: 10
   },
   filterSectionContainer: {
     paddingHorizontal: 20,
