@@ -26,6 +26,7 @@ export interface Restaurant {
   isVeg?: boolean;
   timings?: RestaurantTiming[];
   isOpen?: boolean;
+  price?: number; // Price for two people
 }
 
 interface RestaurantCardProps {
@@ -110,12 +111,12 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
       activeOpacity={0.7}
       testID={`restaurant-card-${restaurant.id}`}
     >
-      {/* Left Side - Image with Heart Button */}
+      {/* Top - Image Container */}
       <View style={styles.imageContainer}>
         {/* Shimmer shown while image loads */}
         {!imageLoaded && (
           <View style={styles.imageShimmerContainer}>
-            <Shimmer width={130} height={160} borderRadius={16} backgroundColor="#E8E8E8" />
+            <Shimmer width="100%" height={200} borderRadius={10} backgroundColor="#E8E8E8" />
           </View>
         )}
 
@@ -180,7 +181,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           </View>
         )}
 
-        {/* Heart Button Overlay */}
+        {/* Heart Button Overlay - Right Side of Image */}
         <TouchableOpacity
           style={styles.heartButton}
           onPress={handleFavoriteToggle}
@@ -199,55 +200,48 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
         </TouchableOpacity>
       </View>
 
-      {/* Right Side - Details (Vertically Centered) */}
+      {/* Bottom - Details Below Image */}
       <View style={[
         styles.detailsContainer,
         restaurant.isOpen === false && styles.detailsContainerClosed
       ]}>
-        {/* Pure Veg Badge */}
-        {restaurant.isVeg && (
-          <View style={styles.pureVegBadge}>
-            <MaterialIcons name="eco" size={14} color="#00B14F" />
-            <Text style={styles.pureVegText}>Pure Veg</Text>
-          </View>
-        )}
-
-        {/* Restaurant Name */}
-        <Text style={styles.restaurantName} numberOfLines={2} ellipsizeMode="tail">
-          {restaurant.name}
-        </Text>
-
-        {/* Rating and Delivery Time */}
-        <View style={styles.ratingDeliveryRow}>
-          {(restaurant.reviewCount && restaurant.reviewCount > 0) && (
-            <>
-              <View style={styles.ratingContainer}>
-                <MaterialIcons name="star" size={16} color="#00B14F" />
-                <Text style={styles.ratingText}>
-                  {restaurant.rating.toFixed(1)} ({restaurant.reviewCount >= 1000
-                    ? `${(restaurant.reviewCount / 1000).toFixed(1)}K+`
-                    : restaurant.reviewCount})
-                </Text>
-              </View>
-              <Text style={styles.deliveryDot}>•</Text>
-            </>
+        {/* Store Name Row with Rating on Right */}
+        <View style={styles.nameRatingRow}>
+          <Text style={styles.restaurantName} numberOfLines={2} ellipsizeMode="tail">
+            {restaurant.name}
+          </Text>
+          {restaurant.rating > 0 && (
+            <View style={styles.ratingBadge}>
+              <MaterialIcons name="star" size={14} color="#FFFFFF" />
+              <Text style={styles.ratingBadgeText}>
+                {restaurant.rating.toFixed(1)}
+              </Text>
+            </View>
           )}
-          <Text style={styles.deliveryText}>{restaurant.deliveryTime}</Text>
         </View>
 
-        {/* Cuisine */}
+        {/* Store Description/Cuisine */}
         <Text style={styles.cuisineText} numberOfLines={2} ellipsizeMode="tail">
           {restaurant.cuisine}
         </Text>
 
-        {/* Location and Distance */}
-        <View style={styles.locationRow}>
-          <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
-            {locationText}
-          </Text>
-          <Text style={styles.distanceDot}>•</Text>
-          <Text style={styles.distanceText}>{restaurant.distance}</Text>
+        {/* Delivery Time with Clock Icon and Distance */}
+        <View style={styles.deliveryRow}>
+          <MaterialIcons name="access-time" size={16} color="#00B14F" />
+          <Text style={styles.deliveryText}>{restaurant.deliveryTime}</Text>
+          {restaurant.distance && (
+            <>
+              <Text style={styles.distanceSeparator}>•</Text>
+              <MaterialIcons name="two-wheeler" size={16} color="#00B14F" />
+              <Text style={styles.distanceText}>{restaurant.distance}</Text>
+            </>
+          )}
         </View>
+
+        {/* Price */}
+        {restaurant.price !== undefined && (
+          <Text style={styles.priceText}>₹{restaurant.price.toFixed(1)} for two</Text>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -264,38 +258,51 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
+    flexDirection: 'column',
     width: '100%',
-    height: 160,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   cardClosed: {
     opacity: 0.6,
   },
-  // Left Side - Image
+  // Top - Image Container
   imageContainer: {
-    width: 130,
-    height: 160,
+    width: '100%',
+    height: 200,
     position: 'relative',
     backgroundColor: '#F5F5F5',
-    borderRadius: 16,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
   imageShimmerContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
-    width: 130,
-    height: 160,
+    width: '100%',
+    height: 200,
     zIndex: 1,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
   },
   image: {
-    width: 130,
-    height: 160,
-    borderRadius: 16,
+    width: '100%',
+    height: 200,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
   imageClosed: {
     opacity: 0.5,
@@ -310,8 +317,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
   closedText: {
     fontFamily: 'Poppins_600SemiBold',
@@ -326,8 +333,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 60,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
   },
   gradientOverlayBottom: {
     position: 'absolute',
@@ -335,8 +342,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 60,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
   heartButton: {
     position: 'absolute',
@@ -345,97 +352,96 @@ const styles = StyleSheet.create({
     padding: 4,
     zIndex: 10,
   },
-  // Right Side - Details Container (Vertically Centered)
+  // Bottom - Details Container
   detailsContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 12,
-    gap: 4,
+    gap: 6,
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
+    backgroundColor: '#FFFFFF',
   },
   detailsContainerClosed: {
     opacity: 0.5,
   },
-  // Pure Veg Badge
-  pureVegBadge: {
+  // Store Name Row with Rating
+  nameRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+    gap: 8,
+  },
+  // Restaurant Name
+  restaurantName: {
+    flex: 1,
+    fontFamily: 'Poppins_700Bold',
+    fontWeight: '500',
+    fontSize: 18,
+    lineHeight: 24,
+    color: '#000000',
+  },
+  // Rating Badge
+  ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 2,
+    backgroundColor: '#00B14F',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    flexShrink: 0,
   },
-  pureVegText: {
-    fontFamily: 'Poppins_600SemiBold',
+  ratingBadgeText: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#FFFFFF',
+  },
+  // Cuisine
+  cuisineText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 18,
+    color: '#666666',
+    marginBottom: 6,
+  },
+  // Delivery Row
+  deliveryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  deliveryText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
     fontSize: 12,
     lineHeight: 18,
     color: '#00B14F',
   },
-  // Restaurant Name
-  restaurantName: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 18,
-    lineHeight: 24,
-    color: '#000000',
-    marginBottom: 2,
-  },
-  // Rating and Delivery Row
-  ratingDeliveryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  ratingText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#000000',
-  },
-  deliveryDot: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 14,
-    color: '#000000',
-  },
-  deliveryText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#000000',
-  },
-  // Cuisine
-  cuisineText: {
-    fontFamily: 'Poppins_400Regular',
+  distanceSeparator: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
     fontSize: 12,
-    lineHeight: 18,
-    color: '#666666',
-    marginBottom: 2,
-  },
-  // Location Row
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  locationText: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#666666',
-    flex: 1,
-  },
-  distanceDot: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 11,
-    color: '#666666',
+    color: '#00B14F',
+    marginHorizontal: 4,
   },
   distanceText: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#666666',
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#00B14F',
+  },
+  // Price
+  priceText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#000000',
   },
 });

@@ -66,6 +66,7 @@ export interface Restaurant {
   isVeg?: boolean;
   timings?: RestaurantTiming[];
   isOpen?: boolean;
+  price?: number; // Price for two people
 }
 
 export interface PaginationMetadata {

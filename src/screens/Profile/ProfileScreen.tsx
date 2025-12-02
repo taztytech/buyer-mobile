@@ -253,6 +253,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               label="Terms & Conditions"
               icon="description"
               onPress={onTermsConditions}
+              showArrow={false}
               showDivider={false}
             />
           </View>

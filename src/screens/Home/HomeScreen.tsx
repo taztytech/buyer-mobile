@@ -244,7 +244,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [_hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
   const isInitialVegModeLoad = React.useRef(true);
   const hasRedirectedToLocationMap = React.useRef(false); // Prevent multiple redirects
-  const lastFetchedCoords = React.useRef<{ latitude: number; longitude: number } | null>(null);
 
   // Pagination states
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -338,11 +337,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     if (externalSelectedLocation) {
       setSelectedLocation(externalSelectedLocation);
       // User selected a different address, fetch restaurants for the new location
-      // Clear data first to prevent showing stale cached data
       if (externalSelectedLocation.latitude && externalSelectedLocation.longitude) {
-        setRestaurantData([]);
-        setCarouselData([]);
-        setCategoryData([]);
         fetchHomeData(externalSelectedLocation.latitude, externalSelectedLocation.longitude);
       }
     }
@@ -400,10 +395,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           }
 
           // Fetch home data with default address coordinates
-          // Clear data first to prevent showing stale cached data
-          setRestaurantData([]);
-          setCarouselData([]);
-          setCategoryData([]);
           await fetchHomeData(defaultAddress.latitude, defaultAddress.longitude);
         } else {
           // No default address, use fallback location
@@ -414,10 +405,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           });
 
           // Fetch home data with default Madurai coordinates
-          setRestaurantData([]);
-          setCarouselData([]);
-          setCategoryData([]);
-          await fetchHomeData(undefined, undefined);
+          await fetchHomeData();
         }
       } else {
         // API failed, use fallback location
@@ -428,10 +416,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         });
 
         // Fetch home data with default Madurai coordinates
-        setRestaurantData([]);
-        setCarouselData([]);
-        setCategoryData([]);
-        await fetchHomeData(undefined, undefined);
+        await fetchHomeData();
       }
     } catch (error) {
       // Error fetching addresses, use fallback location
@@ -442,10 +427,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       });
 
       // Fetch home data with default Madurai coordinates
-      setRestaurantData([]);
-      setCarouselData([]);
-      setCategoryData([]);
-      await fetchHomeData(undefined, undefined);
+      await fetchHomeData();
     } finally {
       setIsLoadingLocation(false);
     }
@@ -457,6 +439,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     fetchDefaultAddress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
+
+  // Refresh addresses when screen becomes focused (e.g., coming back from profile)
+  React.useEffect(() => {
+    if (isFocused) {
+      // When home gains focus, simply re-check addresses.
+      // Redirect will only happen once per "no-address" session because
+      // hasRedirectedToLocationMap.current stays true until the user adds an address.
+      fetchDefaultAddress();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused]);
 
   // Refresh addresses when addressRefreshTrigger changes (e.g., address deleted/edited)
   React.useEffect(() => {
@@ -560,9 +553,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
     // Reload data with current coordinates when veg mode changes
     const coords = defaultAddressCoords || { latitude: DEFAULT_LOCATION.latitude, longitude: DEFAULT_LOCATION.longitude };
-    setRestaurantData([]);
-    setCarouselData([]);
-    setCategoryData([]);
     fetchHomeData(coords.latitude, coords.longitude);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vegMode]);
@@ -600,9 +590,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setIsLoadingLocation(false);
 
         // Reload home page data with user's actual location
-        setRestaurantData([]);
-        setCarouselData([]);
-        setCategoryData([]);
         await fetchHomeData(userLatitude, userLongitude);
       } else {
         setHasShownLocationModal(true); // Mark as shown to prevent repeated popups
@@ -748,10 +735,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     try {
       setHasNetworkError(false);
       setNoRestaurantsFound(false);
-      // Reset shimmers whenever a new fetch starts so UI never shows a blank state
-      setShowBannerShimmer(true);
-      setShowCategoryShimmer(true);
-      setShowRestaurantShimmer(true);
       setIsLoadingBanners(true);
       setIsLoadingCategories(true);
       setIsLoadingRestaurants(true);
@@ -763,19 +746,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       // Use provided coordinates or default Madurai location
       const lat = latitude ?? DEFAULT_LOCATION.latitude;
       const lng = longitude ?? DEFAULT_LOCATION.longitude;
-
-      // Check if coordinates have actually changed (using small threshold for floating point comparison)
-      const coordsChanged = !lastFetchedCoords.current || 
-        Math.abs(lastFetchedCoords.current.latitude - lat) > 0.0001 || 
-        Math.abs(lastFetchedCoords.current.longitude - lng) > 0.0001;
-
-      // If coordinates changed, clear existing data immediately to prevent showing stale cached data
-      if (coordsChanged) {
-        setRestaurantData([]);
-        setCarouselData([]);
-        setCategoryData([]);
-        lastFetchedCoords.current = { latitude: lat, longitude: lng };
-      }
 
       // Check if location is serviceable
       const serviceable = homeService.isLocationServiceable(lat, lng);
@@ -963,6 +933,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
                 timings: timings,
                 isOpen: isOpen,
+                price: restaurant.price_for_two || restaurant.average_cost || restaurant.price || undefined,
               };
             });
 
@@ -1062,6 +1033,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
               timings: timings,
               isOpen: isOpen,
+              price: restaurant.price_for_two || restaurant.average_cost || restaurant.price || undefined,
             };
           });
 
@@ -1265,10 +1237,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const lat = externalSelectedLocation?.latitude || defaultAddressCoords?.latitude || DEFAULT_LOCATION.latitude;
     const lng = externalSelectedLocation?.longitude || defaultAddressCoords?.longitude || DEFAULT_LOCATION.longitude;
 
-    // Reload home data - clear cached data first
-    setRestaurantData([]);
-    setCarouselData([]);
-    setCategoryData([]);
+    // Reload home data
     await fetchHomeData(lat, lng);
 
     setIsRefreshing(false);

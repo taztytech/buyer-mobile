@@ -168,49 +168,19 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
     return `${loc.locality}, ${loc.city}`;
   };
 
-  // Get unique images from categories (handle both string URLs and image objects)
+  // Get unique images from categories
   const getRestaurantPhotos = () => {
     if (!restaurantData?.categories) return [];
-
-    const seen = new Set<string>();
     const photos: string[] = [];
-
     restaurantData.categories.forEach(category => {
       category.items?.forEach((item: any) => {
-        const images = item.images;
-        if (!images) {
-          return;
-        }
-
-        // Always consider only the first image from the images collection
-        const firstImage = Array.isArray(images) ? images[0] : images;
-
-        let url: string | undefined;
-
-        if (typeof firstImage === 'string') {
-          url = firstImage.trim();
-        } else if (firstImage) {
-          // Support common image field names
-          const raw =
-            firstImage.url ||
-            firstImage.image_url ||
-            firstImage.image ||
-            firstImage.src;
-
-          if (typeof raw === 'string') {
-            url = raw.trim();
-          }
-        }
-
-        if (url && !seen.has(url)) {
-          seen.add(url);
-          photos.push(url);
+        if (item.images && Array.isArray(item.images)) {
+          photos.push(...item.images);
         }
       });
     });
-
     // Return first 10 unique photos
-    return photos.slice(0, 10);
+    return [...new Set(photos)].slice(0, 10);
   };
 
   return (
