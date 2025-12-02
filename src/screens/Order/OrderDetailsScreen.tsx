@@ -135,6 +135,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [selfPickup, setSelfPickup] = useState(false);
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
+  const [promoValidationError, setPromoValidationError] = useState('');
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string | undefined>(undefined);
   const [showLocationSelection, setShowLocationSelection] = useState(false);
@@ -843,6 +844,18 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
     const trimmedCode = promoCode.trim();
 
+    // Client-side Yup-like validation: max length 15
+    if (trimmedCode.length > 15) {
+      const message = 'Promo code cannot be longer than 15 characters.';
+      setPromoValidationError(message);
+      return;
+    }
+
+    // Also guard against applying when current validation error exists
+    if (promoValidationError) {
+      return;
+    }
+
     if (!trimmedCode) {
       setPromoError('Please enter a promo code.');
       return;
@@ -910,6 +923,15 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           },
         ]}
       >
+        {/* Promo validation error (shown near top) */}
+        {promoValidationError ? (
+          <View style={styles.promoValidationBar}>
+            <Text style={styles.promoValidationBarText} numberOfLines={2}>
+              {promoValidationError}
+            </Text>
+          </View>
+        ) : null}
+
         {/* Header */}
         <View style={styles.header}>
         <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
@@ -1326,9 +1348,18 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                     placeholderTextColor="rgba(0, 0, 0, 0.4)"
                     value={promoCode}
                     onChangeText={(text) => {
-                      // Force uppercase characters while user types
-                      setPromoCode(text.toUpperCase());
-                      // Clear promo error when user edits the code
+                      const uppercased = text.toUpperCase();
+
+                      // Enforce max length (Yup-like) and keep error state in sync
+                      if (uppercased.trim().length > 15) {
+                        setPromoValidationError('Promo code cannot be longer than 15 characters.');
+                      } else if (promoValidationError) {
+                        setPromoValidationError('');
+                      }
+
+                      setPromoCode(uppercased);
+
+                      // Clear backend promo error when user edits the code
                       if (promoError) {
                         setPromoError('');
                       }
@@ -1338,11 +1369,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   <TouchableOpacity
                     style={[
                       styles.applyButton,
-                      (isApplyingPromo || !promoCode.trim()) && styles.applyButtonDisabled,
+                      (isApplyingPromo ||
+                        !promoCode.trim() ||
+                        !!promoValidationError) && styles.applyButtonDisabled,
                     ]}
                     onPress={handleApplyPromoCode}
                     activeOpacity={0.8}
-                    disabled={isApplyingPromo || !promoCode.trim()}
+                    disabled={
+                      isApplyingPromo ||
+                      !promoCode.trim() ||
+                      !!promoValidationError
+                    }
                   >
                     {isApplyingPromo ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
@@ -2214,11 +2251,27 @@ const styles = StyleSheet.create({
   placeOrderButtonDisabled: {
     opacity: 0.6,
   },
+  promoValidationBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#F59E0B',
+    borderRadius: 8,
+    marginHorizontal: 16,
+    marginTop: 8,
+  },
+  promoValidationBarText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
   promoErrorBar: {
     position: 'absolute',
     left: 16,
     right: 16,
-    bottom: 80,
+    top: 115,
     paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: '#DC2626',
