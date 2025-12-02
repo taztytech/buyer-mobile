@@ -137,7 +137,6 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [selfPickup, setSelfPickup] = useState(false);
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
-  const [promoValidationError, setPromoValidationError] = useState('');
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string | undefined>(undefined);
   const [showLocationSelection, setShowLocationSelection] = useState(false);
@@ -162,6 +161,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const includePlatformFee = (cartSummary as any)?.include_platform_fee ?? false;
   const backendTipAmount = (cartSummary as any)?.tip_amount ?? 0;
   const totalAmount = cartSummary?.final_amount ?? 0;
+
+  // Determine if a coupon is currently applied based on discount amount
+  const isCouponApplied = !!cartSummary && (cartSummary.discount_amount ?? 0) > 0;
 
   const selectedAddress = addresses.find(addr => addr.id.toString() === selectedAddressId);
 
@@ -846,18 +848,6 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
     const trimmedCode = promoCode.trim();
 
-    // Client-side Yup-like validation: max length 15
-    if (trimmedCode.length > 15) {
-      const message = 'Promo code cannot be longer than 15 characters.';
-      setPromoValidationError(message);
-      return;
-    }
-
-    // Also guard against applying when current validation error exists
-    if (promoValidationError) {
-      return;
-    }
-
     if (!trimmedCode) {
       setPromoError('Please enter a promo code.');
       return;
@@ -887,6 +877,34 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       }
     } catch (error: any) {
       setPromoError(error?.message || 'Failed to apply promo code.');
+    } finally {
+      setIsApplyingPromo(false);
+    }
+  };
+
+  // Handle promo code removal
+  const handleRemovePromoCode = async () => {
+    // Clear previous error
+    setPromoError('');
+
+    try {
+      setIsApplyingPromo(true);
+
+      const response = await cartService.removeCoupon();
+
+      if (response.success && response.cart_summary) {
+        // Use updated cart summary from backend (without discount)
+        setCartSummary(response.cart_summary);
+
+        // Clear promo code input and any errors on success
+        setPromoCode('');
+        setPromoError('');
+      } else {
+        // Show error message from API at the bottom of the screen
+        setPromoError(response.message || 'Failed to remove promo code.');
+      }
+    } catch (error: any) {
+      setPromoError(error?.message || 'Failed to remove promo code.');
     } finally {
       setIsApplyingPromo(false);
     }
@@ -925,14 +943,6 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           },
         ]}
       >
-        {/* Promo validation error (shown near top) */}
-        {promoValidationError ? (
-          <View style={styles.promoValidationBar}>
-            <Text style={styles.promoValidationBarText} numberOfLines={2}>
-              {promoValidationError}
-            </Text>
-          </View>
-        ) : null}
 
         {/* Header */}
         <View style={styles.header}>
@@ -1350,16 +1360,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                     placeholderTextColor="rgba(0, 0, 0, 0.4)"
                     value={promoCode}
                     onChangeText={(text) => {
+                      // Normalize to uppercase and hard-limit to 15 characters
                       const uppercased = text.toUpperCase();
+                      const limited = uppercased.slice(0, 15);
 
-                      // Enforce max length (Yup-like) and keep error state in sync
-                      if (uppercased.trim().length > 15) {
-                        setPromoValidationError('Promo code cannot be longer than 15 characters.');
-                      } else if (promoValidationError) {
-                        setPromoValidationError('');
-                      }
-
-                      setPromoCode(uppercased);
+                      setPromoCode(limited);
 
                       // Clear backend promo error when user edits the code
                       if (promoError) {
@@ -1372,21 +1377,21 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                     style={[
                       styles.applyButton,
                       (isApplyingPromo ||
-                        !promoCode.trim() ||
-                        !!promoValidationError) && styles.applyButtonDisabled,
+                        (!isCouponApplied && !promoCode.trim())) && styles.applyButtonDisabled,
                     ]}
-                    onPress={handleApplyPromoCode}
+                    onPress={isCouponApplied ? handleRemovePromoCode : handleApplyPromoCode}
                     activeOpacity={0.8}
                     disabled={
                       isApplyingPromo ||
-                      !promoCode.trim() ||
-                      !!promoValidationError
+                      (!isCouponApplied && !promoCode.trim())
                     }
                   >
                     {isApplyingPromo ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.applyButtonText}>Apply</Text>
+                      <Text style={styles.applyButtonText}>
+                        {isCouponApplied ? 'Remove' : 'Apply'}
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -2269,22 +2274,6 @@ const styles = StyleSheet.create({
   },
   placeOrderButtonDisabled: {
     opacity: 0.6,
-  },
-  promoValidationBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#F59E0B',
-    borderRadius: 8,
-    marginHorizontal: 16,
-    marginTop: 8,
-  },
-  promoValidationBarText: {
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#FFFFFF',
-    textAlign: 'center',
   },
   promoErrorBar: {
     position: 'absolute',
