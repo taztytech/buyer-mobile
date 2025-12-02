@@ -548,7 +548,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           <View style={styles.card}>
             <View style={styles.billHeader}>
               <Text style={styles.sectionTitle}>Bill Summary</Text>
-              {orderData.invoice?.available && (
+              {/* {orderData.invoice?.available && (
                 <TouchableOpacity
                   style={styles.invoiceButton}
                   onPress={onDownloadInvoice}
@@ -557,7 +557,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <MaterialIcons name="download" size={18} color="#00B14F" />
                   <Text style={styles.invoiceButtonText}>Invoice</Text>
                 </TouchableOpacity>
-              )}
+              )} */}
             </View>
 
             {(() => {
