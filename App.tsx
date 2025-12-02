@@ -73,7 +73,7 @@ function AppContent() {
   const [helpOrderData, setHelpOrderData] = React.useState<OrderListItem | null>(null);
   const [isRegistrationFlow, setIsRegistrationFlow] = React.useState(false);
   const [initialLocationCoords, setInitialLocationCoords] = React.useState<{ latitude?: number; longitude?: number } | null>(null);
-  const [legalCameFrom, setLegalCameFrom] = React.useState<'profile' | 'login'>('profile');
+  const [legalCameFrom, setLegalCameFrom] = React.useState<'profile' | 'login' | 'otp'>('profile');
   const [addressRefreshTrigger, setAddressRefreshTrigger] = React.useState(0);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
@@ -495,6 +495,9 @@ function AppContent() {
       longitude: location.longitude || location.lng || 78.1304040,
     });
 
+    // Trigger homepage refresh when address changes
+    handleAddressChange();
+
     // Check if we're editing an address (from myAddresses) or check navigation source
     const isEditingFromMyAddresses = editingAddress && locationSelectionCameFrom === 'myAddresses';
     
@@ -844,7 +847,7 @@ function AppContent() {
   };
 
   // Privacy Policy Navigation
-  const handleNavigateToPrivacyPolicy = (from: 'profile' | 'login' = 'profile') => {
+  const handleNavigateToPrivacyPolicy = (from: 'profile' | 'login' | 'otp' = 'profile') => {
     setLegalCameFrom(from);
     setCurrentScreen('privacyPolicy');
 
@@ -862,7 +865,7 @@ function AppContent() {
         }),
       ]).start();
     } else {
-      // Coming from login: only animate the privacy policy screen
+      // Coming from login or otp: only animate the privacy policy screen
       privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
       Animated.timing(privacyPolicyScreenSlide, {
         toValue: 0,
@@ -880,6 +883,15 @@ function AppContent() {
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('login');
+        setLegalCameFrom('profile');
+      });
+    } else if (legalCameFrom === 'otp') {
+      Animated.timing(privacyPolicyScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }).start(() => {
+        setCurrentScreen('otp');
         setLegalCameFrom('profile');
       });
     } else {
@@ -901,7 +913,7 @@ function AppContent() {
   };
 
   // Terms & Conditions Navigation
-  const handleNavigateToTermsConditions = (from: 'profile' | 'login' = 'profile') => {
+  const handleNavigateToTermsConditions = (from: 'profile' | 'login' | 'otp' = 'profile') => {
     setLegalCameFrom(from);
     setCurrentScreen('termsConditions');
 
@@ -919,7 +931,7 @@ function AppContent() {
         }),
       ]).start();
     } else {
-      // Coming from login: only animate the terms & conditions screen
+      // Coming from login or otp: only animate the terms & conditions screen
       termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
       Animated.timing(termsConditionsScreenSlide, {
         toValue: 0,
@@ -937,6 +949,15 @@ function AppContent() {
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('login');
+        setLegalCameFrom('profile');
+      });
+    } else if (legalCameFrom === 'otp') {
+      Animated.timing(termsConditionsScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }).start(() => {
+        setCurrentScreen('otp');
         setLegalCameFrom('profile');
       });
     } else {
@@ -1421,6 +1442,8 @@ function AppContent() {
           phoneNumber={phoneNumber}
           onBack={handleBackToLogin}
           onSuccess={handleOtpSuccess}
+          onOpenTerms={() => handleNavigateToTermsConditions('otp')}
+          onOpenPrivacy={() => handleNavigateToPrivacyPolicy('otp')}
         />
       ) : !isCheckingAuth && currentScreen === 'welcome' ? (
         <WelcomeScreen onContinue={handleWelcomeComplete} />
@@ -1500,6 +1523,8 @@ function AppContent() {
                   latitude: address.latitude || 9.9352300,
                   longitude: address.longitude || 78.1304040,
                 });
+                // Trigger homepage refresh when address changes
+                handleAddressChange();
                 handleBackFromAddressSelection();
               }}
             />
@@ -1879,6 +1904,7 @@ function AppContent() {
                 onPlaceOrder={handlePlaceOrderFromCheckout}
                 onOrderSuccess={handleOrderSuccessFromCheckout}
                 onOrderCancel={handleOrderCancelFromCheckout}
+                onAddressChange={handleAddressChange}
               />
             </Animated.View>
           )}

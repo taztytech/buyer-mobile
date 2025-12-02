@@ -56,6 +56,7 @@ interface OrderDetailsScreenProps {
   onOrderCancel?: () => void;
   showCustomizationModal?: boolean;
   onUpdateCart?: (itemId: string, variantId: string | undefined, newQuantity: number) => void;
+  onAddressChange?: () => void;
 }
 
 export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
@@ -73,6 +74,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   onOrderCancel,
   showCustomizationModal = false,
   onUpdateCart,
+  onAddressChange,
 }) => {
   const { cart, clearCart, updateQuantity, removeFromCart, setRestaurantInfo, restaurantId: contextRestaurantId, restaurantName: contextRestaurantName } = useCart();
   const { showConfirmation } = useConfirmation();
@@ -1330,7 +1332,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 <View style={styles.billRow}>
                   <Text style={styles.billLabel}>Platform Fee</Text>
                   <View style={styles.platformFeeValueContainer}>
-                    <Text style={includePlatformFee ? styles.billValue : styles.billValueStrikethrough}>
+                    <Text style={
+                      (includePlatformFee || platformFee === 0) 
+                        ? styles.billValue 
+                        : styles.billValueStrikethrough
+                    }>
                       ₹{platformFee.toFixed(2)}
                     </Text>
                   </View>
@@ -1466,10 +1472,19 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               if (updateResponse.success) {
                 // Refresh addresses to get updated list with new default
                 await fetchAddresses();
+                // Trigger homepage refresh when address changes
+                if (onAddressChange) {
+                  onAddressChange();
+                }
               }
             } catch (error: any) {
               // If setting default fails, still proceed with address selection
               console.error('Failed to set default address:', error);
+            }
+          } else {
+            // Even if address is already default, trigger refresh to update distances
+            if (onAddressChange) {
+              onAddressChange();
             }
           }
 
@@ -1490,6 +1505,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             if (updateResponse.success) {
               // Refresh addresses to get updated list
               await fetchAddresses();
+              // Trigger homepage refresh when address changes
+              if (onAddressChange) {
+                onAddressChange();
+              }
               // Also select this address if not already selected
               if (selectedAddressId !== addressId) {
                 setSelectedAddressId(addressId);
