@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text } from 'react-native';
+import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
 import { WelcomeScreen } from '@/screens/Auth/WelcomeScreen';
@@ -25,7 +26,7 @@ import { HelpScreen } from '@/screens/Help/HelpScreen';
 import { ContactUsScreen } from '@/screens/Help/ContactUsScreen';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
 import { storageService } from '@/services/storage.service';
@@ -75,6 +76,10 @@ function AppContent() {
   const [initialLocationCoords, setInitialLocationCoords] = React.useState<{ latitude?: number; longitude?: number } | null>(null);
   const [legalCameFrom, setLegalCameFrom] = React.useState<'profile' | 'login' | 'otp'>('profile');
   const [addressRefreshTrigger, setAddressRefreshTrigger] = React.useState(0);
+  const [showNetworkBanner, setShowNetworkBanner] = React.useState(false);
+  const [networkBannerType, setNetworkBannerType] = React.useState<'offline' | 'online'>('offline');
+  const lastConnectionStatusRef = React.useRef<boolean | null>(null);
+  const networkBannerTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -108,6 +113,71 @@ function AppContent() {
       Text.defaultProps.style = { fontFamily: 'Poppins' };
     }
   }, [fontsLoaded]);
+
+  // Network connectivity listener - runs while app is open
+  React.useEffect(() => {
+    const showOfflineBanner = () => {
+      if (networkBannerTimeoutRef.current) {
+        clearTimeout(networkBannerTimeoutRef.current);
+        networkBannerTimeoutRef.current = null;
+      }
+      setNetworkBannerType('offline');
+      setShowNetworkBanner(true);
+    };
+
+    const showOnlineBannerWithTimeout = () => {
+      if (networkBannerTimeoutRef.current) {
+        clearTimeout(networkBannerTimeoutRef.current);
+      }
+      setNetworkBannerType('online');
+      setShowNetworkBanner(true);
+
+      networkBannerTimeoutRef.current = setTimeout(() => {
+        setShowNetworkBanner(false);
+        networkBannerTimeoutRef.current = null;
+      }, 3000);
+    };
+
+    let isFirstUpdate = true;
+
+    const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
+      const connected = (state.isInternetReachable ?? state.isConnected) ?? false;
+      const previous = lastConnectionStatusRef.current;
+
+      lastConnectionStatusRef.current = connected;
+
+      if (isFirstUpdate) {
+        isFirstUpdate = false;
+
+        // On app open: show status once based on current connectivity
+        if (connected) {
+          showOnlineBannerWithTimeout();
+        } else {
+          showOfflineBanner();
+        }
+        return;
+      }
+
+      // When connection drops while app is open
+      if (!connected && previous !== false) {
+        showOfflineBanner();
+        return;
+      }
+
+      // When connection comes back after being offline
+      if (connected && previous === false) {
+        showOnlineBannerWithTimeout();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      if (networkBannerTimeoutRef.current) {
+        clearTimeout(networkBannerTimeoutRef.current);
+        networkBannerTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Check if user is already logged in on app startup
   React.useEffect(() => {
@@ -1431,6 +1501,23 @@ function AppContent() {
   return (
     <>
       <SafeAreaProvider>
+        {showNetworkBanner && (
+          <SafeAreaView
+            style={[
+              styles.networkStatusBanner,
+              networkBannerType === 'offline'
+                ? styles.networkStatusBannerOffline
+                : styles.networkStatusBannerOnline,
+            ]}
+            edges={['top']}
+          >
+            <View style={styles.networkStatusBannerContent}>
+              <Text style={styles.networkStatusBannerText}>
+                {networkBannerType === 'offline' ? 'Could not connect to internet' : 'We are back'}
+              </Text>
+            </View>
+          </SafeAreaView>
+        )}
         {!isCheckingAuth && currentScreen === 'login' ? (
         <LoginScreen
           onLoginSuccess={handleLoginSuccess}
@@ -2141,5 +2228,32 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     zIndex: 9,
     backgroundColor: '#FFFFFF',
+  },
+  networkStatusBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    elevation: 4,
+    paddingVertical: 16,
+  },
+  networkStatusBannerContent: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+  },
+  networkStatusBannerOffline: {
+    backgroundColor: '#DC2626',
+    fontSize: 16,
+  },
+  networkStatusBannerOnline: {
+    backgroundColor: '#16A34A',
+    fontSize: 16,
+  },
+  networkStatusBannerText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
