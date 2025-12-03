@@ -33,6 +33,8 @@ export interface NotificationPayload {
   body?: string;
   data?: NotificationData;
   notificationId?: string;
+  timestamp?: string;
+  receivedAt?: number;
 }
 
 // Background message handler type
@@ -45,6 +47,8 @@ class FCMNotificationService {
   private messageListener: (() => void) | null = null;
   private notificationOpenedListener: (() => void) | null = null;
   private backgroundMessageHandler: BackgroundMessageHandler | null = null;
+  private recentMessages: NotificationPayload[] = [];
+  private readonly MAX_RECENT_MESSAGES = 50;
 
   /**
    * Initialize FCM service
@@ -189,25 +193,35 @@ class FCMNotificationService {
    */
   private async sendTokenToBackend(token: string): Promise<boolean> {
     try {
+      const payload = {
+        device_token: token,
+        platform: Platform.OS, // 'ios' or 'android'
+      };
+
+      console.log('📤 FCM: Sending token to backend:', API_CONFIG.ENDPOINTS.BUYER.PUSH_TOKENS);
+      console.log('   Payload:', JSON.stringify(payload, null, 2));
+
       const response = await apiService.post(
         API_CONFIG.ENDPOINTS.BUYER.PUSH_TOKENS,
-        {
-          device_token: token,
-          platform: Platform.OS, // 'ios' or 'android'
-          provider: 'fcm', // Firebase Cloud Messaging
-        }
+        payload
       );
 
       if (response.success) {
         console.log('✅ FCM: Token sent to backend successfully');
+        console.log('   Response:', JSON.stringify(response, null, 2));
         return true;
       } else {
         console.warn('⚠️  FCM: Backend returned success=false');
         console.warn('   Error:', response.error);
+        console.warn('   Full response:', JSON.stringify(response, null, 2));
         return false;
       }
     } catch (error) {
       console.error('❌ FCM: Failed to send token to backend:', error);
+      if (error instanceof Error) {
+        console.error('   Error message:', error.message);
+        console.error('   Error stack:', error.stack);
+      }
       return false;
     }
   }
@@ -231,6 +245,10 @@ class FCMNotificationService {
     // Foreground message listener
     this.messageListener = messaging().onMessage(async (remoteMessage: any) => {
       console.log('📨 FCM: Foreground message received:', remoteMessage.messageId);
+      console.log('   Title:', remoteMessage.notification?.title || 'N/A');
+      console.log('   Body:', remoteMessage.notification?.body || 'N/A');
+      console.log('   Data:', JSON.stringify(remoteMessage.data || {}, null, 2));
+      console.log('   Full message:', JSON.stringify(remoteMessage, null, 2));
       
       const payload: NotificationPayload = {
         title: remoteMessage.notification?.title,
@@ -238,6 +256,9 @@ class FCMNotificationService {
         data: remoteMessage.data as NotificationData,
         notificationId: remoteMessage.messageId,
       };
+
+      // Store recent message
+      this.addRecentMessage(payload);
 
       // Emit event for app to handle
       this.onForegroundMessage(payload);
@@ -328,10 +349,44 @@ class FCMNotificationService {
    */
   private onForegroundMessage(payload: NotificationPayload): void {
     // This can be overridden or you can listen to events
-    console.log('📨 FCM: Foreground message:', payload);
+    console.log('📨 FCM: Foreground message handler called');
+    console.log('   Payload:', JSON.stringify(payload, null, 2));
     
     // Emit custom event if needed
     // You can use EventEmitter or any state management solution
+  }
+
+  /**
+   * Add message to recent messages list
+   */
+  private addRecentMessage(payload: NotificationPayload): void {
+    const messageWithTimestamp = {
+      ...payload,
+      timestamp: new Date().toISOString(),
+      receivedAt: Date.now(),
+    };
+    
+    this.recentMessages.unshift(messageWithTimestamp);
+    
+    // Keep only the most recent messages
+    if (this.recentMessages.length > this.MAX_RECENT_MESSAGES) {
+      this.recentMessages = this.recentMessages.slice(0, this.MAX_RECENT_MESSAGES);
+    }
+  }
+
+  /**
+   * Get recent foreground messages
+   */
+  getRecentMessages(): NotificationPayload[] {
+    return [...this.recentMessages];
+  }
+
+  /**
+   * Clear recent messages
+   */
+  clearRecentMessages(): void {
+    this.recentMessages = [];
+    console.log('🧹 FCM: Recent messages cleared');
   }
 
   /**
@@ -373,34 +428,53 @@ class FCMNotificationService {
       const token = this.fcmToken || await AsyncStorage.getItem(PUSH_TOKEN_KEY);
 
       if (!token) {
+        console.log('ℹ️  FCM: No token to unregister');
         return true; // Nothing to unregister
       }
+
+      // URL encode the token for the path parameter
+      const encodedToken = encodeURIComponent(token);
+      const deleteEndpoint = API_CONFIG.ENDPOINTS.BUYER.DELETE_PUSH_TOKEN(encodedToken);
+      const fullUrl = `${API_CONFIG.BASE_URL}${deleteEndpoint}`;
+
+      console.log('🗑️  FCM: Deleting token from backend');
+      console.log('   Endpoint:', deleteEndpoint);
+      console.log('   Full URL:', fullUrl);
+      console.log('   Token (first 50 chars):', token.substring(0, 50) + '...');
 
       // Delete token from Firebase (optional)
       if (messaging) {
         try {
           await messaging().deleteToken();
+          console.log('✅ FCM: Token deleted from Firebase');
         } catch (error) {
           console.warn('⚠️  FCM: Failed to delete token from Firebase:', error);
         }
       }
 
       // Delete from backend
-      const response = await apiService.delete(
-        API_CONFIG.ENDPOINTS.BUYER.DELETE_PUSH_TOKEN(encodeURIComponent(token))
-      );
+      const response = await apiService.delete(deleteEndpoint);
+
+      console.log('📥 FCM: Delete token response:', JSON.stringify(response, null, 2));
 
       // Clear local storage
       this.fcmToken = null;
       await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
 
-      if (!response.success) {
+      if (response.success) {
+        console.log('✅ FCM: Token deleted from backend successfully');
+        return true;
+      } else {
         console.warn('⚠️  FCM: Backend returned success=false for token unregistration');
+        console.warn('   Error:', response.error);
+        return false;
       }
-
-      return response.success;
     } catch (error) {
       console.error('❌ FCM: Failed to unregister token:', error);
+      if (error instanceof Error) {
+        console.error('   Error message:', error.message);
+        console.error('   Error stack:', error.stack);
+      }
       
       // Still clear local storage even if API fails
       this.fcmToken = null;

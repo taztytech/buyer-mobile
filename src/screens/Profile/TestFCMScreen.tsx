@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { fcmNotificationService } from '@/services/fcmNotification.service';
+import { fcmNotificationService, NotificationPayload } from '@/services/fcmNotification.service';
 import { Platform } from 'react-native';
 
 interface TestFCMScreenProps {
@@ -28,10 +28,30 @@ export const TestFCMScreen: React.FC<TestFCMScreenProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<boolean | null>(null);
   const [testMessage, setTestMessage] = useState('Test notification message');
+  const [recentMessages, setRecentMessages] = useState<NotificationPayload[]>([]);
+  const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (visible) {
       loadFCMStatus();
+      loadRecentMessages();
+      
+      // Refresh recent messages every 2 seconds when screen is visible
+      const interval = setInterval(() => {
+        loadRecentMessages();
+      }, 2000);
+      setRefreshInterval(interval);
+      
+      return () => {
+        if (interval) {
+          clearInterval(interval);
+        }
+      };
+    } else {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+        setRefreshInterval(null);
+      }
     }
   }, [visible]);
 
@@ -58,6 +78,21 @@ export const TestFCMScreen: React.FC<TestFCMScreenProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const loadRecentMessages = () => {
+    try {
+      const messages = fcmNotificationService.getRecentMessages();
+      setRecentMessages(messages);
+    } catch (error) {
+      console.error('Error loading recent messages:', error);
+    }
+  };
+
+  const handleClearMessages = () => {
+    fcmNotificationService.clearRecentMessages();
+    setRecentMessages([]);
+    Alert.alert('Success', 'Recent messages cleared');
   };
 
   const handleGetToken = async () => {
@@ -373,6 +408,64 @@ export const TestFCMScreen: React.FC<TestFCMScreenProps> = ({
             />
           </View>
 
+          {/* Recent Foreground Messages */}
+          <View style={styles.messagesSection}>
+            <View style={styles.messagesHeader}>
+              <Text style={styles.sectionTitle}>Recent Foreground Messages</Text>
+              {recentMessages.length > 0 && (
+                <TouchableOpacity
+                  onPress={handleClearMessages}
+                  style={styles.clearButton}
+                >
+                  <MaterialIcons name="clear-all" size={18} color="#DC2626" />
+                  <Text style={styles.clearButtonText}>Clear</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            {recentMessages.length === 0 ? (
+              <View style={styles.emptyMessagesContainer}>
+                <MaterialIcons name="inbox" size={32} color="#999999" />
+                <Text style={styles.emptyMessagesText}>
+                  No foreground messages received yet
+                </Text>
+                <Text style={styles.emptyMessagesSubtext}>
+                  Send a test notification from Firebase Console while the app is in foreground
+                </Text>
+              </View>
+            ) : (
+              recentMessages.map((message, index) => (
+                <View key={index} style={styles.messageCard}>
+                  <View style={styles.messageHeader}>
+                    <MaterialIcons name="notifications" size={16} color="#00B14F" />
+                    <Text style={styles.messageId}>
+                      ID: {message.notificationId || 'N/A'}
+                    </Text>
+                    {message.timestamp && (
+                      <Text style={styles.messageTime}>
+                        {new Date(message.timestamp).toLocaleTimeString()}
+                      </Text>
+                    )}
+                  </View>
+                  {message.title && (
+                    <Text style={styles.messageTitle}>{message.title}</Text>
+                  )}
+                  {message.body && (
+                    <Text style={styles.messageBody}>{message.body}</Text>
+                  )}
+                  {message.data && Object.keys(message.data).length > 0 && (
+                    <View style={styles.messageDataContainer}>
+                      <Text style={styles.messageDataLabel}>Data:</Text>
+                      <Text style={styles.messageDataText}>
+                        {JSON.stringify(message.data, null, 2)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
+          </View>
+
           {/* Instructions */}
           <View style={styles.instructionsSection}>
             <Text style={styles.sectionTitle}>Testing Instructions</Text>
@@ -584,6 +677,108 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666666',
     lineHeight: 20,
+  },
+  messagesSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+  },
+  messagesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  clearButtonText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    color: '#DC2626',
+  },
+  emptyMessagesContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyMessagesText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    color: '#666666',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  emptyMessagesSubtext: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    color: '#999999',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  messageCard: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#00B14F',
+  },
+  messageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  messageId: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 11,
+    color: '#666666',
+    flex: 1,
+  },
+  messageTime: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 11,
+    color: '#999999',
+  },
+  messageTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#000000',
+    marginBottom: 4,
+  },
+  messageBody: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 13,
+    color: '#333333',
+    marginBottom: 8,
+  },
+  messageDataContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 6,
+    padding: 8,
+    marginTop: 8,
+  },
+  messageDataLabel: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 11,
+    color: '#666666',
+    marginBottom: 4,
+  },
+  messageDataText: {
+    fontFamily: 'monospace',
+    fontWeight: '400',
+    fontSize: 10,
+    color: '#555555',
   },
 });
 
