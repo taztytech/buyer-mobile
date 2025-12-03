@@ -15,6 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import { authService } from '@/services/auth.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { useToast } from '@/context/ToastContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -30,6 +31,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   onOpenPrivacy,
 }) => {
   const { showConfirmation } = useConfirmation();
+  const { showError, showSuccess } = useToast();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -84,7 +86,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       const response = await authService.sendOtp(phoneNumber);
 
       if (response.success) {
-        // OTP sent successfully, navigate to OTP screen
+        // OTP sent successfully, show success toast and navigate to OTP screen
+        showSuccess('OTP sent successfully');
         if (onLoginSuccess) {
           onLoginSuccess(phoneNumber);
         }
@@ -95,22 +98,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           ? 'Please try again after a minute.'
           : errorMessage;
 
-        showConfirmation({
-          title: 'Error',
-          message: detailedMessage,
-          confirmText: 'OK',
-          cancelText: 'Close',
-          onConfirm: () => {},
-        });
+        showError(detailedMessage);
       }
     } catch (error: any) {
-      showConfirmation({
-        title: 'Error',
-        message: 'An unexpected error occurred. Please try again.',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      showError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }

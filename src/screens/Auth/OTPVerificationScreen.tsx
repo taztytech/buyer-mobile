@@ -14,6 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import { authService } from '@/services/auth.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { useToast } from '@/context/ToastContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -33,6 +34,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   onOpenPrivacy,
 }) => {
   const { showConfirmation } = useConfirmation();
+  const { showError, showSuccess } = useToast();
   const [otp, setOtp] = useState(['', '', '', '']);
   const [timer, setTimer] = useState(61);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -150,7 +152,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
 
       if (response.success && response.data) {
         // OTP verified successfully
-
+        showSuccess('OTP verified successfully');
         // Navigate based on existing_user status
         if (onSuccess) {
           onSuccess(response.data.existing_user);
@@ -166,25 +168,13 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
           ? 'Code expired. Please click on Resend OTP.'
           : 'Incorrect OTP. Please enter the 4-digit code.';
 
-        showConfirmation({
-          title: '',
-          message: detailedMessage,
-          confirmText: 'OK',
-          cancelText: 'Close',
-          onConfirm: () => {},
-        });
+        showError(detailedMessage);
         // Clear OTP inputs on error
         setOtp(['', '', '', '']);
         inputRefs[0].current?.focus();
       }
     } catch (error: any) {
-      showConfirmation({
-        title: 'Error',
-        message: 'An unexpected error occurred. Please try again.',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      showError('An unexpected error occurred. Please try again.');
     } finally {
       setIsVerifying(false);
     }
@@ -205,13 +195,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
         setOtp(['', '', '', '']);
         inputRefs[0].current?.focus();
 
-        showConfirmation({
-          title: 'Success',
-          message: 'OTP has been resent to your phone number.',
-          confirmText: 'OK',
-          cancelText: 'Close',
-          onConfirm: () => {},
-        });
+        showSuccess('OTP has been resent to your phone number.');
       } else {
         // Show error message with better context
         const errorMessage = response.error || 'Failed to resend OTP';
@@ -219,22 +203,10 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
           ? 'Please wait a bit longer before requesting a new OTP. Try again in a minute.'
           : errorMessage;
 
-        showConfirmation({
-          title: 'Error',
-          message: detailedMessage,
-          confirmText: 'OK',
-          cancelText: 'Close',
-          onConfirm: () => {},
-        });
+        showError(detailedMessage);
       }
     } catch (error: any) {
-      showConfirmation({
-        title: 'Error',
-        message: 'An unexpected error occurred. Please try again.',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      showError('An unexpected error occurred. Please try again.');
     } finally {
       setIsResending(false);
     }

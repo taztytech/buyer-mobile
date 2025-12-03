@@ -23,6 +23,7 @@ import { cartService, CartSummary } from '@/services/cart.service';
 import { restaurantService } from '@/services/restaurant.service';
 import { useCart } from '@/context/CartContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { useToast } from '@/context/ToastContext';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 interface CartItem {
@@ -76,6 +77,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 }) => {
   const { cart, clearCart, updateQuantity, removeFromCart, setRestaurantInfo, restaurantId: contextRestaurantId, restaurantName: contextRestaurantName } = useCart();
   const { showConfirmation } = useConfirmation();
+  const { showError, showSuccess } = useToast();
   const [orderExpanded, setOrderExpanded] = useState(true);
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
   const [tipExpanded, setTipExpanded] = useState(true);
@@ -620,36 +622,18 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount
 
-          showConfirmation({
-            title: 'Payment Failed',
-            message: 'Payment could not be processed. Your order has been marked as Payment Failed and can be viewed in My Orders.',
-            confirmText: 'OK',
-            cancelText: '', // Remove Close button
-            confirmButtonColor: '#DC2626',
-            onConfirm: () => {
-              if (onOrderCancel) {
-                onOrderCancel();
-              }
-            },
-          });
+          showError('Payment could not be processed. Your order has been marked as Payment Failed and can be viewed in My Orders.');
+          if (onOrderCancel) {
+            setTimeout(() => {
+              onOrderCancel();
+            }, 3000);
+          }
         }
       } else {
-        showConfirmation({
-          title: 'Error',
-          message: orderResponse.error || 'Failed to place order',
-          confirmText: 'OK',
-          cancelText: 'Close',
-          onConfirm: () => {},
-        });
+        showError(orderResponse.error || 'Failed to place order');
       }
     } catch (error: any) {
-      showConfirmation({
-        title: 'Error',
-        message: error.message || 'Failed to place order',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      showError(error.message || 'Failed to place order');
     } finally{
       setIsPlacingOrder(false);
     }

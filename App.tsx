@@ -33,6 +33,7 @@ import { homeService } from '@/services/home.service';
 import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
 import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
+import { ToastProvider } from '@/context/ToastContext';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import CustomSplashScreen from '@/components/CustomSplashScreen';
 
@@ -1918,7 +1919,9 @@ export default function App() {
       <VegModeProvider>
         <CartProvider>
           <ConfirmationProvider>
-            <AppContent />
+            <ToastProvider>
+              <AppContent />
+            </ToastProvider>
           </ConfirmationProvider>
         </CartProvider>
       </VegModeProvider>

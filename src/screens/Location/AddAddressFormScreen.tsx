@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { addressService, AddAddressRequest, MAX_ADDRESSES } from '@/services/address.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { useToast } from '@/context/ToastContext';
 import * as Location from 'expo-location';
 
 interface AddAddressFormScreenProps {
@@ -62,6 +63,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   initialData,
 }) => {
   const { showConfirmation } = useConfirmation();
+  const { showError, showSuccess } = useToast();
   const [houseNo, setHouseNo] = useState('');
   const [building, setBuilding] = useState('');
   const [locality, setLocality] = useState('');
@@ -353,6 +355,8 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
       }
 
       if (response.success) {
+        // Show success toast
+        showSuccess(editMode ? 'Address updated successfully' : 'Address added successfully');
         // Close the form modal immediately (without animation) before navigation
         if (onClose) {
           onClose();
@@ -366,22 +370,10 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           }
         }, 50);
       } else {
-        showConfirmation({
-          title: 'Error',
-          message: response.error || (editMode ? 'Failed to update address' : 'Failed to add address'),
-          confirmText: 'OK',
-          cancelText: 'Close',
-          onConfirm: () => {},
-        });
+        showError(response.error || (editMode ? 'Failed to update address' : 'Failed to add address'));
       }
     } catch (error) {
-      showConfirmation({
-        title: 'Error',
-        message: 'An unexpected error occurred. Please try again.',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      showError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
