@@ -102,6 +102,12 @@ export interface ApplyCouponResponse {
   cart_summary?: CartSummary;
 }
 
+export interface RemoveCouponResponse {
+  success: boolean;
+  message?: string;
+  cart_summary?: CartSummary;
+}
+
 class CartService {
   /**
    * Add item to cart
@@ -399,6 +405,46 @@ class CartService {
       return {
         success: false,
         message: error?.message || 'Failed to apply coupon',
+        cart_summary: undefined,
+      };
+    }
+  }
+
+  /**
+   * Remove applied coupon from cart
+   * POST /api/buyer/cart/remove-coupon
+   */
+  async removeCoupon(): Promise<RemoveCouponResponse> {
+    try {
+      const response = await apiService.delete(
+        API_CONFIG.ENDPOINTS.BUYER.CART_REMOVE_COUPON
+      );
+
+      // Handle possible nested response structures
+      let responseData: any = response.data || response;
+
+      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+        responseData = responseData.data;
+      }
+
+      let cartSummary: CartSummary | undefined;
+      if (responseData) {
+        if (responseData.cart_summary && typeof responseData.cart_summary === 'object') {
+          cartSummary = responseData.cart_summary as CartSummary;
+        } else if ('final_amount' in responseData && 'subtotal' in responseData) {
+          cartSummary = responseData as CartSummary;
+        }
+      }
+
+      return {
+        success: response.success,
+        message: responseData?.message || response.message,
+        cart_summary: cartSummary,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error?.message || 'Failed to remove coupon',
         cart_summary: undefined,
       };
     }

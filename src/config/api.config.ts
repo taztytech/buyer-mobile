@@ -48,6 +48,7 @@ export const API_CONFIG = {
       CART_CLEAR: '/api/buyer/cart/clear',
       CART_TIP: '/api/buyer/cart/tip',
       CART_APPLY_COUPON: '/api/buyer/cart/apply-coupon',
+      CART_REMOVE_COUPON: '/api/buyer/cart/remove-coupon',
       // Dish endpoint
       DISH: '/dish',
     },
