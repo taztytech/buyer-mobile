@@ -161,6 +161,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const includePlatformFee = (cartSummary as any)?.include_platform_fee ?? false;
   const backendTipAmount = (cartSummary as any)?.tip_amount ?? 0;
   const totalAmount = cartSummary?.final_amount ?? 0;
+  const estimatedDeliveryTime = (cartSummary as any)?.estimated_delivery_time ?? null;
 
   // Determine if a coupon is currently applied based on discount amount
   const isCouponApplied = !!cartSummary && (cartSummary.discount_amount ?? 0) > 0;
@@ -920,6 +921,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             setShowLocationSelection(false);
             // Refresh addresses after adding new one
             await fetchAddresses();
+            await fetchCartSummary();
+            if (onAddressChange) {
+              onAddressChange();
+            }
           }}
         />
       </View>
@@ -1075,7 +1080,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   <Text style={styles.notesLabel}>Notes</Text>
                   <TextInput
                     style={styles.notesInput}
-                    placeholder="Add special instructions for your order (optional)"
+                    placeholder="Add special instructions for your order"
                     placeholderTextColor="rgba(0, 0, 0, 0.4)"
                     value={notes}
                     onChangeText={setNotes}
@@ -1144,16 +1149,21 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                       </TouchableOpacity>
                     </View>
 
-                    {/* Delivery Duration */}
-                    <View style={styles.subsection}>
-                      <Text style={styles.subsectionTitle}>Delivery Duration</Text>
-                      <View style={styles.deliveryTimeBox}>
-                        <MaterialIcons name="access-time" size={20} color="#00B14F" />
-                        <Text style={styles.deliveryTimeText}>
-                          Delivery in <Text style={styles.deliveryTimeBold}>15 - 20 mins</Text>
-                        </Text>
+                    {/* Delivery Duration - show only when we have an estimated time from API */}
+                    {estimatedDeliveryTime ? (
+                      <View style={styles.subsection}>
+                        <Text style={styles.subsectionTitle}>Estimated Delivery Time</Text>
+                        <View style={styles.deliveryTimeBox}>
+                          <MaterialIcons name="access-time" size={20} color="#00B14F" />
+                          <Text style={styles.deliveryTimeText}>
+                            Delivery in{' '}
+                            <Text style={styles.deliveryTimeBold}>
+                              {estimatedDeliveryTime}
+                            </Text>
+                          </Text>
+                        </View>
                       </View>
-                    </View>
+                    ) : null}
                   </View>
                 )}
               </>

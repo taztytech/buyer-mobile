@@ -76,6 +76,7 @@ function AppContent() {
   const [initialLocationCoords, setInitialLocationCoords] = React.useState<{ latitude?: number; longitude?: number } | null>(null);
   const [legalCameFrom, setLegalCameFrom] = React.useState<'profile' | 'login' | 'otp'>('profile');
   const [addressRefreshTrigger, setAddressRefreshTrigger] = React.useState(0);
+  const [pendingHomeRefresh, setPendingHomeRefresh] = React.useState(false);
   const [showNetworkBanner, setShowNetworkBanner] = React.useState(false);
   const [networkBannerType, setNetworkBannerType] = React.useState<'offline' | 'online'>('offline');
   const lastConnectionStatusRef = React.useRef<boolean | null>(null);
@@ -874,9 +875,20 @@ function AppContent() {
 
   // Handle address changes (trigger HomeScreen refresh)
   const handleAddressChange = () => {
-    // Increment trigger to cause HomeScreen to refresh
-    setAddressRefreshTrigger(prev => prev + 1);
+    if (currentScreen === 'home') {
+      setAddressRefreshTrigger(prev => prev + 1);
+      return;
+    }
+
+    setPendingHomeRefresh(true);
   };
+
+  React.useEffect(() => {
+    if (currentScreen === 'home' && pendingHomeRefresh) {
+      setAddressRefreshTrigger(prev => prev + 1);
+      setPendingHomeRefresh(false);
+    }
+  }, [currentScreen, pendingHomeRefresh]);
 
   const handleNavigateToAddressSelectionFromMyAddresses = () => {
     // Set correct navigation source for location selection

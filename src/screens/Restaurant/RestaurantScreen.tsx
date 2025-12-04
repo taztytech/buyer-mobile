@@ -112,6 +112,7 @@ interface CustomizationVariant {
   price: number;
   quantity: number;
 }
+const SHOW_DESCRIPTION_MORE_BUTTON = false;
 
 export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   visible,
@@ -1484,7 +1485,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     >
                       {item.description}
                     </Text>
-                    {item.description && item.description.length > 80 && (
+                    {SHOW_DESCRIPTION_MORE_BUTTON && item.description && item.description.length > 80 && (
                       <TouchableOpacity
                         onPress={() => toggleDescription(item.id)}
                         activeOpacity={0.7}
@@ -2381,8 +2382,8 @@ const styles = StyleSheet.create({
   },
   itemDescription: {
     fontFamily: 'Poppins_400Regular',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 16,
     color: 'rgba(0, 0, 0, 0.6)',
     opacity: 0.85,
   },

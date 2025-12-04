@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Image,
   ActivityIndicator,
   Linking,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -62,6 +64,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  
+  // Refs to prevent API overload
+  const isRequestInProgress = useRef(false);
+  const lastRequestedPage = useRef(0);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Fetch fresh data whenever screen becomes visible
@@ -72,9 +79,23 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   }, [visible]);
 
   const fetchOrders = async (page: number = 1, reset: boolean = false) => {
+    // Prevent duplicate requests for the same page
+    if (!reset && lastRequestedPage.current === page) {
+      return;
+    }
+
+    // Prevent concurrent requests
+    if (isRequestInProgress.current) {
+      return;
+    }
+
     try {
+      isRequestInProgress.current = true;
+      lastRequestedPage.current = page;
+
       if (reset) {
         setIsLoading(true);
+        lastRequestedPage.current = 0; // Reset when fetching first page
       } else {
         setIsLoadingMore(true);
       }
@@ -121,13 +142,56 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
+      isRequestInProgress.current = false;
     }
   };
 
-  const handleViewMore = () => {
+  const handleViewMore = useCallback(() => {
+    // Prevent if already loading or no more orders
+    if (isRequestInProgress.current || isLoadingMore || orders.length >= totalOrders) {
+      return;
+    }
     const nextPage = currentPage + 1;
     fetchOrders(nextPage, false);
-  };
+  }, [currentPage, orders.length, totalOrders, isLoadingMore]);
+
+  // Debounced scroll handler to prevent API overload
+  const handleScroll = useCallback(({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
+    // Clear any pending timeout
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
+    // Capture scroll position values immediately
+    const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+    const paddingToBottom = 200;
+    const isNearBottom =
+      layoutMeasurement.height + contentOffset.y >=
+      contentSize.height - paddingToBottom;
+
+    // Debounce: wait 300ms after scrolling stops before checking if we need to load more
+    scrollTimeoutRef.current = setTimeout(() => {
+      if (
+        !isLoading &&
+        !isLoadingMore &&
+        !isRequestInProgress.current &&
+        orders.length > 0 &&
+        orders.length < totalOrders &&
+        isNearBottom
+      ) {
+        handleViewMore();
+      }
+    }, 300);
+  }, [isLoading, isLoadingMore, orders.length, totalOrders, handleViewMore]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Format date to match the design
   const formatDate = (dateString: string) => {
@@ -377,15 +441,19 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             </View>
           </View>
           <View style={styles.orderMeta}>
-            <Text style={styles.orderDate}>{formatDate(order.created_at || '')}</Text>
             <Text style={styles.orderAmount}>₹{totalAmount}</Text>
           </View>
         </View>
 
-        {/* Status Badge */}
-        <View style={[styles.statusBadge, { backgroundColor: status.bgColor }]}>
-          <MaterialIcons name={status.icon as any} size={16} color={status.color} />
-          <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+        {/* Status + Meta Row */}
+        <View style={styles.statusRow}>
+          <View style={[styles.statusBadge, { backgroundColor: status.bgColor }]}>
+            <MaterialIcons name={status.icon as any} size={16} color={status.color} />
+            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+          </View>
+          <View style={styles.orderMeta}>
+            <Text style={styles.orderDate}>{formatDate(order.created_at || '')}</Text>
+          </View>
         </View>
 
         {/* Divider */}
@@ -542,6 +610,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         showsVerticalScrollIndicator={false}
         bounces={false}
         overScrollMode="never"
+        scrollEventThrottle={100}
+        onScroll={handleScroll}
       >
         {isLoading ? (
           // Loading shimmer
@@ -723,8 +793,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   restaurantName: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 18,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
     color: '#001E1F',
     lineHeight: 27,
   },
@@ -744,8 +814,8 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   orderAmount: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 18,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
     color: '#001E1F',
     lineHeight: 27,
   },
@@ -757,6 +827,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 100,
     gap: 4,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
   },
   statusText: {
     fontFamily: 'Poppins_500Medium',
