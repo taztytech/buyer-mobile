@@ -1699,7 +1699,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             style={styles.cartButton}
             onPress={() => {
               // Navigate to checkout page only if restaurant is open
-              if (!onNavigateToCheckout || !cartRestaurantId) {
+              if (!onNavigateToCheckout) {
                 return;
               }
 
@@ -1707,17 +1707,22 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 return;
               }
 
-              // Use cart's restaurant info (the restaurant whose items are in the cart)
-              // Build restaurant address from available data
-              const restaurantAddress = restaurantData?.locations?.[0]?.address ||
+              // Build restaurant address from current restaurant data
+              const restaurantAddress =
+                restaurantData?.locations?.[0]?.address ||
                 restaurantData?.location?.address ||
                 [
                   restaurantData?.locations?.[0]?.locality || restaurantData?.location?.locality,
                   restaurantData?.locations?.[0]?.city || restaurantData?.location?.city,
-                ].filter(Boolean).join(', ') ||
+                ]
+                  .filter(Boolean)
+                  .join(', ') ||
                 'Restaurant Address';
 
-              onNavigateToCheckout(cartRestaurantId, cartRestaurantName || 'Restaurant', restaurantAddress, 'restaurant');
+              // Use the current restaurant screen context so that back navigation
+              // from checkout returns to this restaurant, even if the cart belongs
+              // to a different restaurant.
+              onNavigateToCheckout(restaurantId, restaurantName, restaurantAddress, 'restaurant');
             }}
             activeOpacity={0.8}
           >

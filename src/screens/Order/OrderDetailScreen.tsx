@@ -251,7 +251,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           activeOpacity={0.7}
         >
           <MaterialIcons name="phone" size={20} color="#FFFFFF" />
-          <Text style={styles.chatButtonText}>Call For Support</Text>
+          <Text style={styles.chatButtonText}>Support</Text>
         </TouchableOpacity>
       </View>
 
@@ -418,7 +418,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <Text style={styles.rateButtonText}>Rate Order</Text>
                 </TouchableOpacity>
               ) : null}
-              {orderData.status === 'delivered' || orderData.status === 'cancelled' ? (
+              {/* {orderData.status === 'delivered' || orderData.status === 'cancelled' ? (
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={onReorder}
@@ -427,7 +427,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
                   <Text style={styles.reorderButtonText}>Reorder</Text>
                 </TouchableOpacity>
-              ) : (
+              ) : ( */}
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={onTrackOrder}
@@ -436,7 +436,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
                   <Text style={styles.reorderButtonText}>Track Order</Text>
                 </TouchableOpacity>
-              )}
+              {/* )} */}
             </View>
           </View>
 

@@ -15,7 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { AddressSelectionModal } from '@/components/AddressSelectionModal';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { ordersService } from '@/services/orders.service';
-import { addressService, AddressResponse } from '@/services/address.service';
+import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
 import { paymentService } from '@/services/payment.service';
 import { authService } from '@/services/auth.service';
 import { homeService } from '@/services/home.service';
@@ -1606,6 +1606,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           await fetchCartSummary();
         }}
         onAddNewAddress={() => {
+          if (addresses.length >= MAX_ADDRESSES) {
+            showConfirmation({
+              title: 'Address limit reached',
+              message: `You can save up to ${MAX_ADDRESSES} delivery addresses. Please delete one before adding a new address.`,
+              confirmText: 'OK',
+              cancelText: '',
+              onConfirm: () => {},
+            });
+            return;
+          }
           setShowAddressModal(false);
           setShowLocationSelection(true);
         }}

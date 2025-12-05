@@ -1,36 +1,24 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  StatusBar,
-  Image,
-  Dimensions,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import { authService } from '@/services/auth.service';
-import { useConfirmation } from '@/context/ConfirmationContext';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface LoginScreenProps {
   onLoginSuccess?: (phoneNumber: string) => void;
   onOpenTerms?: () => void;
   onOpenPrivacy?: () => void;
+  initialPhoneNumber?: string;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
   onLoginSuccess,
   onOpenTerms,
   onOpenPrivacy,
+  initialPhoneNumber,
 }) => {
-  const { showConfirmation } = useConfirmation();
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState(initialPhoneNumber || '');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -45,35 +33,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     const cleaned = text.replace(/\D/g, '');
     setPhoneNumber(cleaned);
 
-    if (cleaned.length > 0 && cleaned.length < 10) {
-      setError('Phone number must be 10 digits');
-    } else if (cleaned.length === 10 && !validatePhoneNumber(cleaned)) {
-      setError('Invalid phone number');
-    } else {
+    if (error) {
       setError('');
     }
   };
 
   const handleLogin = async () => {
     if (!phoneNumber) {
-      showConfirmation({
-        title: 'Error',
-        message: 'Please enter your phone number',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      setError('Please enter your phone number');
       return;
     }
 
     if (!validatePhoneNumber(phoneNumber)) {
-      showConfirmation({
-        title: 'Error',
-        message: 'Please enter a valid 10-digit Indian phone number',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      setError('Please enter a valid 10-digit Indian phone number');
       return;
     }
 
@@ -88,6 +60,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         if (onLoginSuccess) {
           onLoginSuccess(phoneNumber);
         }
+
+        // Clear any previous error on successful login attempt
+        setError('');
       } else {
         // Show error message with better context for rate limiting
         const errorMessage = response.error || 'Failed to send OTP. Please try again.';
@@ -95,29 +70,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           ? 'Please try again after a minute.'
           : errorMessage;
 
-        showConfirmation({
-          title: 'Error',
-          message: detailedMessage,
-          confirmText: 'OK',
-          cancelText: 'Close',
-          onConfirm: () => {},
-        });
+        setError(detailedMessage);
       }
     } catch (error: any) {
-      showConfirmation({
-        title: 'Error',
-        message: 'An unexpected error occurred. Please try again.',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleGoogleLogin = () => {
-    // TODO: Implement Google login
   };
 
   return (
@@ -166,6 +125,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 onChangeText={handlePhoneChange}
               />
             </View>
+
+            {/* Inline Error Message */}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
             {/* LOG IN Button */}
             <TouchableOpacity
@@ -349,6 +311,15 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: '#001E1F',
     textAlignVertical: 'center',
+  },
+  errorText: {
+    width: '100%',
+    marginTop: 4,
+    marginBottom: 4,
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#D32F2F',
   },
   loginButton: {
     flexDirection: 'row',

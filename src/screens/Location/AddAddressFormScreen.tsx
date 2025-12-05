@@ -17,8 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { addressService, AddAddressRequest, MAX_ADDRESSES } from '@/services/address.service';
-import { useConfirmation } from '@/context/ConfirmationContext';
+import { addressService, AddAddressRequest } from '@/services/address.service';
 import * as Location from 'expo-location';
 
 interface AddAddressFormScreenProps {
@@ -61,7 +60,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   addressId,
   initialData,
 }) => {
-  const { showConfirmation } = useConfirmation();
   const [houseNo, setHouseNo] = useState('');
   const [building, setBuilding] = useState('');
   const [locality, setLocality] = useState('');
@@ -74,6 +72,12 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [houseNoError, setHouseNoError] = useState('');
+  const [buildingError, setBuildingError] = useState('');
+  const [localityError, setLocalityError] = useState('');
+  const [pincodeError, setPincodeError] = useState('');
+  const [alternateMobileError, setAlternateMobileError] = useState('');
+  const [formError, setFormError] = useState('');
   const slideAnim = useRef(new Animated.Value(1000)).current;
   const hasInitializedRef = useRef(false);
   const previousVisibleRef = useRef(visible);
@@ -88,6 +92,14 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     if (isOpening) {
       // Reset initialization flag when modal opens
       hasInitializedRef.current = false;
+
+      // Clear any previous validation and form errors when the popup is opened
+      setHouseNoError('');
+      setBuildingError('');
+      setLocalityError('');
+      setPincodeError('');
+      setAlternateMobileError('');
+      setFormError('');
     }
 
     if (visible && !hasInitializedRef.current) {
@@ -236,97 +248,51 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   };
 
   const handleContinue = async () => {
-    // Validation
+    // Clear any previous errors before running validation
+    setHouseNoError('');
+    setBuildingError('');
+    setLocalityError('');
+    setPincodeError('');
+    setAlternateMobileError('');
+    setFormError('');
+
+    // Validation - collect all field errors at once
+    let hasFieldError = false;
+
     if (!houseNo.trim()) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Please enter house/flat number',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
-      return;
+      setHouseNoError('Please enter house/flat number');
+      hasFieldError = true;
     }
     if (!building.trim()) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Please enter building/street name',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
-      return;
+      setBuildingError('Please enter building/street name');
+      hasFieldError = true;
     }
     if (!locality.trim()) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Please enter area / locality',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
-      return;
+      setLocalityError('Please enter area / locality');
+      hasFieldError = true;
     }
     if (!pincode.trim()) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Please enter pincode',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
-      return;
+      setPincodeError('Please enter pincode');
+      hasFieldError = true;
+    } else if (!/^\d{6}$/.test(pincode.trim())) {
+      // Validate pincode format (must be exactly 6 digits)
+      setPincodeError('Pincode must be exactly 6 digits');
+      hasFieldError = true;
     }
-    // Validate pincode format (must be exactly 6 digits)
-    if (!/^\d{6}$/.test(pincode.trim())) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Pincode must be exactly 6 digits',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
-      return;
-    }
+
     // Validate alternate mobile if provided (must be exactly 10 digits)
     if (alternateMobile.trim() && !/^\d{10}$/.test(alternateMobile.trim())) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Alternate mobile number must be exactly 10 digits',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      setAlternateMobileError('Alternate mobile number must be exactly 10 digits');
+      hasFieldError = true;
+    }
+
+    if (hasFieldError) {
       return;
     }
 
     setLoading(true);
 
     try {
-      // For new addresses, enforce a maximum of saved addresses from a single source of truth
-      if (!editMode) {
-        try {
-          // Ensure we read a fresh list from the API, not stale cache
-          addressService.clearCache();
-          const existingResponse = await addressService.getAddresses();
-
-          if (existingResponse.success && existingResponse.data && existingResponse.data.length >= MAX_ADDRESSES) {
-            setLoading(false);
-            showConfirmation({
-              title: 'Address Limit Reached',
-              message:
-                `You can save up to ${MAX_ADDRESSES} delivery addresses.`,
-              confirmText: 'OK',
-              cancelText: 'Close',
-              onConfirm: () => {},
-            });
-            return;
-          }
-        } catch {
-          // If the pre-check fails, continue gracefully and let the API enforce any additional limits
-        }
-      }
-
       // Prepare address data for API
       const addressData: AddAddressRequest = {
         address1: houseNo,
@@ -366,22 +332,10 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           }
         }, 50);
       } else {
-        showConfirmation({
-          title: 'Error',
-          message: response.error || (editMode ? 'Failed to update address' : 'Failed to add address'),
-          confirmText: 'OK',
-          cancelText: 'Close',
-          onConfirm: () => {},
-        });
+        setFormError(response.error || (editMode ? 'Failed to update address' : 'Failed to add address'));
       }
     } catch (error) {
-      showConfirmation({
-        title: 'Error',
-        message: 'An unexpected error occurred. Please try again.',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      setFormError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -461,7 +415,12 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               <TextInput
                 style={styles.input}
                 value={houseNo}
-                onChangeText={setHouseNo}
+                onChangeText={(text) => {
+                  setHouseNo(text);
+                  if (houseNoError) {
+                    setHouseNoError('');
+                  }
+                }}
                 placeholder="House / flat / floor number"
                 placeholderTextColor="#999"
                 maxLength={50}
@@ -471,6 +430,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   }, 100);
                 }}
               />
+              {houseNoError ? <Text style={styles.errorText}>{houseNoError}</Text> : null}
             </View>
 
             {/* House/Building/Street Name - Full width */}
@@ -478,7 +438,12 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               <TextInput
                 style={styles.input}
                 value={building}
-                onChangeText={setBuilding}
+                onChangeText={(text) => {
+                  setBuilding(text);
+                  if (buildingError) {
+                    setBuildingError('');
+                  }
+                }}
                 placeholder="House / Building / Street Name"
                 placeholderTextColor="#999"
                 maxLength={100}
@@ -488,6 +453,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   }, 100);
                 }}
               />
+              {buildingError ? <Text style={styles.errorText}>{buildingError}</Text> : null}
             </View>
 
             {/* Area / locality - Full width */}
@@ -495,7 +461,12 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               <TextInput
                 style={styles.input}
                 value={locality}
-                onChangeText={setLocality}
+                onChangeText={(text) => {
+                  setLocality(text);
+                  if (localityError) {
+                    setLocalityError('');
+                  }
+                }}
                 placeholder="Area / locality"
                 placeholderTextColor="#999"
                 maxLength={100}
@@ -505,6 +476,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   }, 100);
                 }}
               />
+              {localityError ? <Text style={styles.errorText}>{localityError}</Text> : null}
             </View>
 
             {/* Pincode */}
@@ -516,6 +488,9 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   // Only allow numeric input
                   const numericText = text.replace(/[^0-9]/g, '');
                   setPincode(numericText);
+                  if (pincodeError) {
+                    setPincodeError('');
+                  }
                 }}
                 placeholder="Pincode"
                 placeholderTextColor="#999"
@@ -527,6 +502,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   }, 100);
                 }}
               />
+              {pincodeError ? <Text style={styles.errorText}>{pincodeError}</Text> : null}
             </View>
 
             {/* Alternate Mobile Number */}
@@ -538,6 +514,9 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   // Only allow numeric input
                   const numericText = text.replace(/[^0-9]/g, '');
                   setAlternateMobile(numericText);
+                  if (alternateMobileError) {
+                    setAlternateMobileError('');
+                  }
                 }}
                 placeholder="Alternate Mobile number (Optional)"
                 placeholderTextColor="#999"
@@ -549,6 +528,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   }, 100);
                 }}
               />
+              {alternateMobileError ? <Text style={styles.errorText}>{alternateMobileError}</Text> : null}
             </View>
 
             {/* Address Tags */}
@@ -627,6 +607,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
 
         {/* Continue Button */}
         <View style={styles.footer}>
+          {formError ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{formError}</Text>
+            </View>
+          ) : null}
           <TouchableOpacity
             style={[styles.continueButton, loading && styles.continueButtonDisabled]}
             onPress={handleContinue}
@@ -864,5 +849,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  errorContainer: {
+    marginBottom: 8,
+  },
+  errorText: {
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#D32F2F',
   },
 });

@@ -153,8 +153,11 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
 
   const getCurrentDayTiming = () => {
     if (!restaurantData?.timings || restaurantData.timings.length === 0) return null;
-    const today = new Date().getDay();
-    return restaurantData.timings.find(t => t.day === today);
+    // JS getDay(): 0 (Sunday) - 6 (Saturday)
+    // API day mapping: 1 (Sunday) - 7 (Saturday)
+    const jsDay = new Date().getDay();
+    const apiDay = jsDay === 0 ? 1 : jsDay + 1;
+    return restaurantData.timings.find(t => t.day === apiDay);
   };
 
   const getDayName = (day: number) => {
@@ -408,7 +411,10 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                   {/* Show all 7 days in order (Sunday=0 to Saturday=6) */}
                   {[1, 2, 3, 4, 5, 6, 7].map((dayNum) => {
                     const timing = restaurantData.timings.find(t => t.day === dayNum);
-                    const isToday = dayNum === new Date().getDay();
+                    // JS getDay(): 0-6, API day: 1-7 (Sunday=1)
+                    const jsToday = new Date().getDay();
+                    const apiToday = jsToday === 0 ? 1 : jsToday + 1;
+                    const isToday = dayNum === apiToday;
 
                     return (
                       <View key={dayNum} style={styles.timingRow}>

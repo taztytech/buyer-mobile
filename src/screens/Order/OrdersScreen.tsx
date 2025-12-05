@@ -519,7 +519,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   activeOpacity={0.7}
                 >
                   <MaterialIcons name="phone" size={18} color="#001E1F" />
-                  <Text style={styles.rateButtonText}>Call For Support</Text>
+                  <Text style={styles.rateButtonText}>Support</Text>
                 </TouchableOpacity>
               ) : order.overall_rating && order.overall_rating > 0 ? (
                 // For delivered orders with rating, show rating display
