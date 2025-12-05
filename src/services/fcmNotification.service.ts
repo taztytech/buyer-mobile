@@ -8,6 +8,7 @@ import { Platform, AppState, NativeEventEmitter, NativeModules } from 'react-nat
 import { apiService } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
 // Conditionally import Firebase to avoid errors if native modules aren't linked
 let messaging: any = null;
@@ -22,6 +23,7 @@ try {
 }
 
 const PUSH_TOKEN_KEY = '@tazty_fcm_token';
+const DEVICE_ID_KEY = '@tazty_device_id';
 
 // Notification data interface
 export interface NotificationData {
@@ -189,13 +191,56 @@ class FCMNotificationService {
   }
 
   /**
-   * Send FCM token to backend
+   * Get or create a unique device ID
    */
-  private async sendTokenToBackend(token: string): Promise<boolean> {
+  private async getDeviceId(): Promise<string> {
     try {
+      // Try to get existing device ID from storage
+      let deviceId = await AsyncStorage.getItem(DEVICE_ID_KEY);
+      
+      if (!deviceId) {
+        // Generate a new device ID (UUID format)
+        // Using a simple UUID v4-like generator
+        deviceId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = Math.random() * 16 | 0;
+          const v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16).toUpperCase();
+        });
+        
+        // Store it for future use
+        await AsyncStorage.setItem(DEVICE_ID_KEY, deviceId);
+        console.log('📱 FCM: Generated new device ID:', deviceId);
+      }
+      
+      return deviceId;
+    } catch (error) {
+      console.error('❌ FCM: Failed to get device ID:', error);
+      // Fallback to a temporary ID if storage fails
+      return `TEMP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    }
+  }
+
+  /**
+   * Get app version
+   */
+  private getAppVersion(): string {
+    return Constants.expoConfig?.version || '1.0.0';
+  }
+
+  /**
+   * Send FCM token to backend
+   * Now public so it can be called from test screen
+   */
+  async sendTokenToBackend(token: string): Promise<boolean> {
+    try {
+      const deviceId = await this.getDeviceId();
+      const appVersion = this.getAppVersion();
+      
       const payload = {
         device_token: token,
         platform: Platform.OS, // 'ios' or 'android'
+        device_id: deviceId,
+        app_version: appVersion,
       };
 
       console.log('📤 FCM: Sending token to backend:', API_CONFIG.ENDPOINTS.BUYER.PUSH_TOKENS);

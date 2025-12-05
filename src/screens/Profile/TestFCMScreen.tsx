@@ -150,14 +150,22 @@ export const TestFCMScreen: React.FC<TestFCMScreenProps> = ({
 
     setIsLoading(true);
     try {
-      // The service automatically sends token, but we can trigger it manually
+      // Get the current token (refresh if needed)
       const token = await fcmNotificationService.getToken();
       if (token) {
         console.log('📤 Sending FCM Token to Backend:', token);
-        Alert.alert('Success', 'Token sent to backend successfully!');
+        
+        // Call the sendTokenToBackend method directly
+        const success = await fcmNotificationService.sendTokenToBackend(token);
+        
+        if (success) {
+          Alert.alert('Success', 'Token sent to backend successfully!');
+        } else {
+          Alert.alert('Error', 'Failed to send token to backend. Check console for details.');
+        }
       } else {
         console.log('⚠️  No token available to send');
-        Alert.alert('Error', 'Failed to send token to backend');
+        Alert.alert('Error', 'Failed to get FCM token. Please try getting the token first.');
       }
     } catch (error: any) {
       console.error('❌ Error sending token to backend:', error);
