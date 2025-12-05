@@ -30,6 +30,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const scrollViewRef = React.useRef<ScrollView>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
@@ -55,31 +56,24 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
   }, []);
 
   const handleContinue = async () => {
+    // Clear any existing inline error before validation
+    if (error) {
+      setError('');
+    }
+
     // Validation
     const trimmedFullName = fullName.trim();
     const trimmedEmail = email.trim();
 
     if (!trimmedFullName) {
-      showConfirmation({
-        title: 'Required',
-        message: 'Please enter your full name',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      setError('Please enter your full name');
       return;
     }
 
     // Basic email validation (only if user has entered an email)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (trimmedEmail && !emailRegex.test(trimmedEmail)) {
-      showConfirmation({
-        title: 'Invalid Email',
-        message: 'Please enter a valid email address',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      setError('Please enter a valid email address');
       return;
     }
 
@@ -188,7 +182,12 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
                   placeholder="Enter your full name"
                   placeholderTextColor="rgba(0, 30, 31, 0.3)"
                   value={fullName}
-                  onChangeText={setFullName}
+                  onChangeText={(text) => {
+                    setFullName(text);
+                    if (error) {
+                      setError('');
+                    }
+                  }}
                   autoCapitalize="words"
                   onFocus={() => {
                     // Scroll to make name input visible when focused
@@ -207,7 +206,12 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
                   placeholder="Enter your email"
                   placeholderTextColor="rgba(0, 30, 31, 0.3)"
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (error) {
+                      setError('');
+                    }
+                  }}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   onFocus={() => {
@@ -218,6 +222,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
                   }}
                 />
               </View>
+
+              {/* Inline Error Message */}
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
               {/* Continue Button */}
               <TouchableOpacity

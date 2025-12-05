@@ -38,6 +38,7 @@ import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationCon
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import CustomSplashScreen from '@/components/CustomSplashScreen';
 import { fcmNotificationService } from '@/services/fcmNotification.service';
+import { NetworkStatusScreen } from '@/components/NetworkStatusScreen';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -46,7 +47,15 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Inner component with cart and confirmation context access
 function AppContent() {
-  const { addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName } = useCart();
+  const {
+    addToCart,
+    setRestaurantInfo,
+    checkRestaurantConflict,
+    clearCart,
+    reloadCart,
+    restaurantId: cartRestaurantId,
+    restaurantName: cartRestaurantName,
+  } = useCart();
   const { showConfirmation } = useConfirmation();
 
   const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'testFCM'>('login');
@@ -78,10 +87,9 @@ function AppContent() {
   const [initialLocationCoords, setInitialLocationCoords] = React.useState<{ latitude?: number; longitude?: number } | null>(null);
   const [legalCameFrom, setLegalCameFrom] = React.useState<'profile' | 'login' | 'otp'>('profile');
   const [addressRefreshTrigger, setAddressRefreshTrigger] = React.useState(0);
-  const [showNetworkBanner, setShowNetworkBanner] = React.useState(false);
-  const [networkBannerType, setNetworkBannerType] = React.useState<'offline' | 'online'>('offline');
+  const [pendingHomeRefresh, setPendingHomeRefresh] = React.useState(false);
+  const [isNetworkOnline, setIsNetworkOnline] = React.useState(true);
   const lastConnectionStatusRef = React.useRef<boolean | null>(null);
-  const networkBannerTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -118,67 +126,33 @@ function AppContent() {
   }, [fontsLoaded]);
 
   // Network connectivity listener - runs while app is open
+  // Optimized: Only updates state when connection status actually changes
   React.useEffect(() => {
-    const showOfflineBanner = () => {
-      if (networkBannerTimeoutRef.current) {
-        clearTimeout(networkBannerTimeoutRef.current);
-        networkBannerTimeoutRef.current = null;
-      }
-      setNetworkBannerType('offline');
-      setShowNetworkBanner(true);
-    };
-
-    const showOnlineBannerWithTimeout = () => {
-      if (networkBannerTimeoutRef.current) {
-        clearTimeout(networkBannerTimeoutRef.current);
-      }
-      setNetworkBannerType('online');
-      setShowNetworkBanner(true);
-
-      networkBannerTimeoutRef.current = setTimeout(() => {
-        setShowNetworkBanner(false);
-        networkBannerTimeoutRef.current = null;
-      }, 3000);
-    };
-
     let isFirstUpdate = true;
 
     const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
       const connected = (state.isInternetReachable ?? state.isConnected) ?? false;
       const previous = lastConnectionStatusRef.current;
 
+      // Skip update if status hasn't changed (prevents unnecessary re-renders)
+      if (previous === connected && !isFirstUpdate) {
+        return;
+      }
+
       lastConnectionStatusRef.current = connected;
 
       if (isFirstUpdate) {
         isFirstUpdate = false;
-
-        // On app open: show status once based on current connectivity
-        if (connected) {
-          showOnlineBannerWithTimeout();
-        } else {
-          showOfflineBanner();
-        }
+        setIsNetworkOnline(connected);
         return;
       }
 
-      // When connection drops while app is open
-      if (!connected && previous !== false) {
-        showOfflineBanner();
-        return;
-      }
-
-      // When connection comes back after being offline
-      if (connected && previous === false) {
-        showOnlineBannerWithTimeout();
-      }
+      // Only update state when connection status actually changes
+      setIsNetworkOnline(connected);
     });
 
     return () => {
       unsubscribe();
-      if (networkBannerTimeoutRef.current) {
-        clearTimeout(networkBannerTimeoutRef.current);
-        networkBannerTimeoutRef.current = null;
-      }
     };
   }, []);
 
@@ -321,11 +295,13 @@ function AppContent() {
       // Existing user - go directly to home (skip address selection)
       setCurrentScreen('home');
       setIsRegistrationFlow(false);
+      reloadCart().catch(() => {});
     } else {
       // New user - show welcome screen for profile completion
       setCurrentScreen('welcome');
       setIsRegistrationFlow(true);
     }
+    setPhoneNumber('');
   };
 
   const handleWelcomeComplete = async (name: string, email: string) => {
@@ -349,6 +325,9 @@ function AppContent() {
     // HomeScreen will check for addresses and redirect if needed
     setCurrentScreen('home');
     setIsRegistrationFlow(false);
+
+    // Ensure cart (if any) is synced for this user
+    reloadCart().catch(() => {});
   };
 
   const handleLogout = async () => {
@@ -890,9 +869,20 @@ function AppContent() {
 
   // Handle address changes (trigger HomeScreen refresh)
   const handleAddressChange = () => {
-    // Increment trigger to cause HomeScreen to refresh
-    setAddressRefreshTrigger(prev => prev + 1);
+    if (currentScreen === 'home') {
+      setAddressRefreshTrigger(prev => prev + 1);
+      return;
+    }
+
+    setPendingHomeRefresh(true);
   };
+
+  React.useEffect(() => {
+    if (currentScreen === 'home' && pendingHomeRefresh) {
+      setAddressRefreshTrigger(prev => prev + 1);
+      setPendingHomeRefresh(false);
+    }
+  }, [currentScreen, pendingHomeRefresh]);
 
   const handleNavigateToAddressSelectionFromMyAddresses = () => {
     // Set correct navigation source for location selection
@@ -1552,25 +1542,12 @@ function AppContent() {
   return (
     <>
       <SafeAreaProvider>
-        {showNetworkBanner && (
-          <SafeAreaView
-            style={[
-              styles.networkStatusBanner,
-              networkBannerType === 'offline'
-                ? styles.networkStatusBannerOffline
-                : styles.networkStatusBannerOnline,
-            ]}
-            edges={['top']}
-          >
-            <View style={styles.networkStatusBannerContent}>
-              <Text style={styles.networkStatusBannerText}>
-                {networkBannerType === 'offline' ? 'Could not connect to internet' : 'We are back'}
-              </Text>
-            </View>
-          </SafeAreaView>
-        )}
-        {!isCheckingAuth && currentScreen === 'login' ? (
+        {/* Show Network Status Screen when offline on any screen */}
+        {!isCheckingAuth && !isNetworkOnline ? (
+          <NetworkStatusScreen selectedLocation={selectedLocation} />
+        ) : !isCheckingAuth && currentScreen === 'login' ? (
         <LoginScreen
+          initialPhoneNumber={phoneNumber}
           onLoginSuccess={handleLoginSuccess}
           onOpenTerms={() => handleNavigateToTermsConditions('login')}
           onOpenPrivacy={() => handleNavigateToPrivacyPolicy('login')}
@@ -2305,32 +2282,5 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 8,
     backgroundColor: '#F5F5F5',
-  },
-  networkStatusBanner: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1000,
-    elevation: 4,
-    paddingVertical: 16,
-  },
-  networkStatusBannerContent: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-  },
-  networkStatusBannerOffline: {
-    backgroundColor: '#DC2626',
-    fontSize: 16,
-  },
-  networkStatusBannerOnline: {
-    backgroundColor: '#16A34A',
-    fontSize: 16,
-  },
-  networkStatusBannerText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
   },
 });

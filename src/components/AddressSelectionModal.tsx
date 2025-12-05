@@ -9,7 +9,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { AddressResponse } from '@/services/address.service';
+import { AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface Address {
   id: string;
@@ -39,6 +40,7 @@ export const AddressSelectionModal: React.FC<AddressSelectionModalProps> = ({
 }) => {
   const slideAnim = useRef(new Animated.Value(1000)).current;
   const [selectedId, setSelectedId] = useState(selectedAddressId);
+  const { showConfirmation } = useConfirmation();
 
   useEffect(() => {
     if (visible) {
@@ -183,7 +185,19 @@ export const AddressSelectionModal: React.FC<AddressSelectionModalProps> = ({
                 {/* Add New Address Button */}
                 <TouchableOpacity
                   style={styles.addNewButton}
-                  onPress={onAddNewAddress}
+                  onPress={() => {
+                    if (addresses.length >= MAX_ADDRESSES) {
+                      showConfirmation({
+                        title: 'Address limit reached',
+                        message: `You can save up to ${MAX_ADDRESSES} delivery addresses. Please delete one before adding a new address.`,
+                        confirmText: 'OK',
+                        cancelText: '',
+                        onConfirm: () => {},
+                      });
+                      return;
+                    }
+                    onAddNewAddress();
+                  }}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.addNewText}>+ Add New Address</Text>

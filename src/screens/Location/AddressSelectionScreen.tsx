@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { addressService, AddressResponse } from '@/services/address.service';
+import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface SavedAddress {
@@ -267,6 +267,21 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
     );
   };
 
+  const handleAddAddressPress = () => {
+    if (savedAddresses.length >= MAX_ADDRESSES) {
+      showConfirmation({
+        title: 'Address limit reached',
+        message: `You can save up to ${MAX_ADDRESSES} delivery addresses. Please delete one before adding a new address.`,
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    handleUseCurrentLocation();
+  };
+
   return (
     <View style={styles.wrapper}>
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
@@ -306,7 +321,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
             {/* Add Address */}
             <TouchableOpacity
               style={styles.optionItem}
-              onPress={handleUseCurrentLocation}
+              onPress={handleAddAddressPress}
               activeOpacity={0.7}
             >
               <View style={styles.optionLeft}>

@@ -251,7 +251,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           activeOpacity={0.7}
         >
           <MaterialIcons name="phone" size={20} color="#FFFFFF" />
-          <Text style={styles.chatButtonText}>Call For Support</Text>
+          <Text style={styles.chatButtonText}>Support</Text>
         </TouchableOpacity>
       </View>
 
@@ -372,26 +372,32 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
           {/* Restaurant Info Card */}
           <View style={styles.card}>
-            <View style={styles.orderHeader}>
-              <View style={styles.restaurantInfo}>
-                <Image
-                  source={{ uri: orderData.restaurant.logo_url }}
-                  style={styles.restaurantLogo}
-                  defaultSource={require('@/assets/dummy-restaurent.png')}
-                />
-                <View style={styles.restaurantDetails}>
+            <View style={styles.orderHeaderContainer}>
+              {/* Restaurant Logo */}
+              <Image
+                source={{ uri: orderData.restaurant.logo_url }}
+                style={styles.restaurantLogo}
+                defaultSource={require('@/assets/dummy-restaurent.png')}
+              />
+              
+              {/* Text Content */}
+              <View style={styles.orderHeaderContent}>
+                {/* First Row: Restaurant Name + Price */}
+                <View style={styles.orderHeaderRow}>
                   <Text style={styles.restaurantName}>{orderData.restaurant.name}</Text>
+                  <Text style={styles.orderAmount}>₹{(() => {
+                    const bill = calculateBillFromItems(orderData);
+                    return bill.total_amount.toFixed(2);
+                  })()}</Text>
+                </View>
+
+                {/* Second Row: Location + Date */}
+                <View style={styles.orderHeaderRow}>
                   <Text style={styles.restaurantLocation}>
                     {orderData.delivery_address?.city || 'Location'}
                   </Text>
+                  <Text style={styles.orderDate}>{formatDate(orderData.created_at)}</Text>
                 </View>
-              </View>
-              <View style={styles.orderMeta}>
-                <Text style={styles.orderDate}>{formatDate(orderData.created_at)}</Text>
-                <Text style={styles.orderAmount}>₹{(() => {
-                  const bill = calculateBillFromItems(orderData);
-                  return bill.total_amount.toFixed(2);
-                })()}</Text>
               </View>
             </View>
 
@@ -412,7 +418,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <Text style={styles.rateButtonText}>Rate Order</Text>
                 </TouchableOpacity>
               ) : null}
-              {orderData.status === 'delivered' || orderData.status === 'cancelled' ? (
+              {/* {orderData.status === 'delivered' || orderData.status === 'cancelled' ? (
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={onReorder}
@@ -421,7 +427,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
                   <Text style={styles.reorderButtonText}>Reorder</Text>
                 </TouchableOpacity>
-              ) : (
+              ) : ( */}
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={onTrackOrder}
@@ -430,7 +436,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
                   <Text style={styles.reorderButtonText}>Track Order</Text>
                 </TouchableOpacity>
-              )}
+              {/* )} */}
             </View>
           </View>
 
@@ -773,16 +779,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     lineHeight: 24,
   },
-  orderHeader: {
+  orderHeaderContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 16,
-  },
-  restaurantInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    flex: 1,
   },
   restaurantLogo: {
     width: 48,
@@ -790,21 +790,28 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 12,
   },
-  restaurantDetails: {
+  orderHeaderContent: {
     flex: 1,
   },
+  orderHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   restaurantName: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 18,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
     color: '#001E1F',
     lineHeight: 27,
+    flex: 1,
   },
   restaurantLocation: {
     fontFamily: 'Poppins',
     fontSize: 14,
     color: 'rgba(0, 30, 31, 0.6)',
     lineHeight: 21,
-    marginBottom: 4,
+    flex: 1,
   },
   itemRow: {
     flexDirection: 'row',
@@ -818,20 +825,19 @@ const styles = StyleSheet.create({
     color: '#001E1F',
     lineHeight: 21,
   },
-  orderMeta: {
-    alignItems: 'flex-end',
-  },
   orderDate: {
     fontFamily: 'Poppins',
-    fontSize: 12,
+    fontSize: 14,
     color: 'rgba(0, 30, 31, 0.6)',
-    lineHeight: 18,
+    lineHeight: 21,
+    textAlign: 'right',
   },
   orderAmount: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 18,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
     color: '#001E1F',
     lineHeight: 27,
+    textAlign: 'right',
   },
   actionButtons: {
     flexDirection: 'row',
@@ -894,7 +900,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 18,
+    fontSize: 16,
     color: '#001E1F',
     lineHeight: 27,
     marginBottom: 12,

@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,6 +35,8 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
   const [email, setEmail] = useState(initialEmail);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   // Fetch profile data on mount
   useEffect(() => {
@@ -81,15 +82,21 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
   }, []);
 
   const handleUpdate = async () => {
+    // Clear any existing inline messages before validation
+    if (error) setError('');
+    if (success) setSuccess('');
+
     // Validate required fields
     if (!name.trim()) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Name is required',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      setError('Name is required');
+      return;
+    }
+
+    // Basic email validation (only if user has entered an email)
+    const trimmedEmail = email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (trimmedEmail && !emailRegex.test(trimmedEmail)) {
+      setError('Please enter a valid email address');
       return;
     }
 
@@ -97,24 +104,20 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
     try {
       const response = await authService.updateProfile({
         name: name.trim(),
-        email: email.trim() || undefined,
+        email: trimmedEmail || undefined,
       });
 
       if (response.success) {
-        showConfirmation({
-          title: 'Success',
-          message: 'Profile updated successfully',
-          confirmText: 'OK',
-          cancelText: 'Close',
-          onConfirm: () => {
-            if (onSave) {
-              onSave({ name, phone, email });
-            }
-            if (onBack) {
-              onBack();
-            }
-          },
-        });
+        // Show inline success message and propagate changes
+        setSuccess('Profile updated successfully');
+        setError('');
+
+        if (onSave) {
+          onSave({ name, phone, email });
+        }
+        if (onBack) {
+          onBack();
+        }
       } else {
         showConfirmation({
           title: 'Error',
@@ -192,7 +195,15 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
                 <TextInput
                   style={styles.textInput}
                   value={name}
-                  onChangeText={setName}
+                  onChangeText={(text) => {
+                    setName(text);
+                    if (error) {
+                      setError('');
+                    }
+                    if (success) {
+                      setSuccess('');
+                    }
+                  }}
                   placeholder="Enter your name"
                   placeholderTextColor="rgba(0, 0, 0, 0.3)"
                 />
@@ -204,13 +215,25 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
                 <TextInput
                   style={styles.textInput}
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (error) {
+                      setError('');
+                    }
+                    if (success) {
+                      setSuccess('');
+                    }
+                  }}
                   placeholder="Enter your email"
                   placeholderTextColor="rgba(0, 0, 0, 0.3)"
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
               </View>
+
+              {/* Inline Error Message */}
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+              {success ? <Text style={styles.successText}>{success}</Text> : null}
             </ScrollView>
 
             {/* Update Button - Fixed at bottom */}
@@ -343,6 +366,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 23,
     color: '#000000',
+  },
+  errorText: {
+    width: '100%',
+    marginTop: 4,
+    marginBottom: 4,
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#D32F2F',
+  },
+  successText: {
+    width: '100%',
+    marginTop: 4,
+    marginBottom: 4,
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#00B14F',
   },
   bottomButtonContainer: {
     paddingHorizontal: 20,
