@@ -19,10 +19,10 @@
     "type-check": "tsc --noEmit",
     "build:ios": "eas build --platform ios",
     "build:android": "eas build --platform android",
-    "build:android:all:release:dev": "node scripts/build-android.js dev apk all",
-    "build:android:all:release:prod": "node scripts/build-android.js prod apk all",
-    "build:android:all:bundle:dev": "node scripts/build-android.js dev bundle all",
-    "build:android:all:bundle:prod": "node scripts/build-android.js prod bundle all"
+    "build:android:all:release:dev": "cross-env ENV_FILE=.env.dev node scripts/build-android.js dev apk all",
+    "build:android:all:release:prod": "cross-env ENV_FILE=.env.prod node scripts/build-android.js prod apk all",
+    "build:android:all:bundle:dev": "cross-env ENV_FILE=.env.dev node scripts/build-android.js dev bundle all",
+    "build:android:all:bundle:prod": "cross-env ENV_FILE=.env.prod node scripts/build-android.js prod bundle all"
   },
   "dependencies": {
     "@expo-google-fonts/poppins": "^0.4.1",
