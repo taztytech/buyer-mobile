@@ -112,6 +112,7 @@ interface CustomizationVariant {
   price: number;
   quantity: number;
 }
+const SHOW_DESCRIPTION_MORE_BUTTON = false;
 
 export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   visible,
@@ -1484,7 +1485,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     >
                       {item.description}
                     </Text>
-                    {item.description && item.description.length > 80 && (
+                    {SHOW_DESCRIPTION_MORE_BUTTON && item.description && item.description.length > 80 && (
                       <TouchableOpacity
                         onPress={() => toggleDescription(item.id)}
                         activeOpacity={0.7}
@@ -1698,7 +1699,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             style={styles.cartButton}
             onPress={() => {
               // Navigate to checkout page only if restaurant is open
-              if (!onNavigateToCheckout || !cartRestaurantId) {
+              if (!onNavigateToCheckout) {
                 return;
               }
 
@@ -1706,17 +1707,22 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 return;
               }
 
-              // Use cart's restaurant info (the restaurant whose items are in the cart)
-              // Build restaurant address from available data
-              const restaurantAddress = restaurantData?.locations?.[0]?.address ||
+              // Build restaurant address from current restaurant data
+              const restaurantAddress =
+                restaurantData?.locations?.[0]?.address ||
                 restaurantData?.location?.address ||
                 [
                   restaurantData?.locations?.[0]?.locality || restaurantData?.location?.locality,
                   restaurantData?.locations?.[0]?.city || restaurantData?.location?.city,
-                ].filter(Boolean).join(', ') ||
+                ]
+                  .filter(Boolean)
+                  .join(', ') ||
                 'Restaurant Address';
 
-              onNavigateToCheckout(cartRestaurantId, cartRestaurantName || 'Restaurant', restaurantAddress, 'restaurant');
+              // Use the current restaurant screen context so that back navigation
+              // from checkout returns to this restaurant, even if the cart belongs
+              // to a different restaurant.
+              onNavigateToCheckout(restaurantId, restaurantName, restaurantAddress, 'restaurant');
             }}
             activeOpacity={0.8}
           >
@@ -2381,8 +2387,8 @@ const styles = StyleSheet.create({
   },
   itemDescription: {
     fontFamily: 'Poppins_400Regular',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 16,
     color: 'rgba(0, 0, 0, 0.6)',
     opacity: 0.85,
   },

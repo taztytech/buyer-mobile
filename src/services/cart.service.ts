@@ -61,6 +61,7 @@ export interface CartSummary {
   max_tip_amount?: number;
   platform_fee?: number;
   include_platform_fee?: boolean;
+  estimated_delivery_time?: string | null;
   final_amount: number;
   applied_offer?: {
     id: number;

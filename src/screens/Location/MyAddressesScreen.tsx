@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { addressService, AddressResponse } from '@/services/address.service';
+import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface MyAddressesScreenProps {
@@ -54,8 +54,8 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
       }
     } catch (error) {
       showConfirmation({
-        title: 'Error',
-        message: 'Failed to load addresses',
+        title: 'Unable to load addresses',
+        message: 'We couldn’t load your saved addresses. Please check your internet connection and try again.',
         confirmText: 'OK',
         cancelText: 'Close',
         onConfirm: () => {},
@@ -108,16 +108,16 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
 
         // Show success modal
         showConfirmation({
-          title: 'Success',
+          title: '',
           message: 'Address deleted successfully',
           confirmText: 'OK',
-          cancelText: 'Close',
+          cancelText: '',
           onConfirm: () => {},
         });
       } else {
         showConfirmation({
-          title: 'Error',
-          message: response.error || 'Failed to delete address',
+          title: 'Couldn’t delete address',
+          message: response.error || 'We couldn’t delete this address right now. Please try again in a moment.',
           confirmText: 'OK',
           cancelText: 'Close',
           onConfirm: () => {},
@@ -125,8 +125,8 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
       }
     } catch (error) {
       showConfirmation({
-        title: 'Error',
-        message: 'Failed to delete address',
+        title: 'Couldn’t delete address',
+        message: 'Something went wrong while deleting this address. Please check your connection and try again.',
         confirmText: 'OK',
         cancelText: 'Close',
         onConfirm: () => {},
@@ -155,6 +155,23 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
 
   const formatType = (type: string): string => {
     return type.charAt(0).toUpperCase() + type.slice(1);
+  };
+
+  const handleAddNewPress = () => {
+    if (addresses.length >= MAX_ADDRESSES) {
+      showConfirmation({
+        title: 'Address limit reached',
+        message: `You can save up to ${MAX_ADDRESSES} delivery addresses. Please delete one before adding a new address.`,
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    if (onAddNew) {
+      onAddNew();
+    }
   };
 
   return (
@@ -248,9 +265,9 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.addButton}
-            onPress={onAddNew}
+          onPress={handleAddNewPress}
           >
-            <Text style={styles.addButtonText}>Add New</Text>
+            <Text style={styles.addButtonText}>Add Address</Text>
             <MaterialIcons name="add" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
