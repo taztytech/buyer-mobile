@@ -57,6 +57,10 @@ export interface CartSummary {
   delivery_fee: number;
   tax_amount: number;
   discount_amount: number;
+  tip_amount?: number;
+  max_tip_amount?: number;
+  platform_fee?: number;
+  include_platform_fee?: boolean;
   final_amount: number;
   applied_offer?: {
     id: number;
@@ -90,6 +94,18 @@ export interface GetCartResponse {
   success: boolean;
   message: string;
   data: CartResponse;
+}
+
+export interface ApplyCouponResponse {
+  success: boolean;
+  message?: string;
+  cart_summary?: CartSummary;
+}
+
+export interface RemoveCouponResponse {
+  success: boolean;
+  message?: string;
+  cart_summary?: CartSummary;
 }
 
 class CartService {
@@ -135,16 +151,62 @@ class CartService {
         API_CONFIG.ENDPOINTS.BUYER.CART_GET
       );
 
-      // Handle double-nested response structure
-      // Backend returns: { success: true, data: { success: true, data: { actual cart } } }
-      let cartData = response.data;
-      // Check if data is double-nested
-      if (cartData && typeof cartData === 'object' && 'data' in cartData) {
-        cartData = (cartData as any).data;
+      if (!response.success) {
+        return null;
       }
-      console.log('cartData', cartData);
-      return response.success && cartData ? cartData.data : null;
+
+      // Handle nested response structure
+      // Backend may return: { success: true, data: { success: true, data: { actual cart } } }
+      // Or: { success: true, data: { actual cart } }
+      let cartData = response.data;
+
+      // Type guard to check if data is a CartResponse
+      const isCartResponse = (data: any): data is CartResponse => {
+        return (
+          data &&
+          typeof data === 'object' &&
+          'items' in data &&
+          Array.isArray(data.items) &&
+          'restaurant_id' in data
+        );
+      };
+
+      // Unwrap nested data structures
+      let unwrapCount = 0;
+      const maxUnwraps = 5; // Prevent infinite loops
+
+      while (cartData && typeof cartData === 'object' && unwrapCount < maxUnwraps) {
+        // Check if it's already a CartResponse
+        if (isCartResponse(cartData)) {
+          return cartData;
+        }
+
+        // Check if it's a wrapper with 'data' property
+        if ('data' in cartData && cartData.data) {
+          cartData = (cartData as any).data;
+          unwrapCount++;
+          continue;
+        }
+
+        // Check if it's a wrapper with 'success' property (another nested layer)
+        if ('success' in cartData && cartData.success && 'data' in cartData) {
+          cartData = (cartData as any).data;
+          unwrapCount++;
+          continue;
+        }
+
+        // No more unwrapping possible
+        break;
+      }
+
+      // Final check: if cartData is a valid CartResponse
+      if (isCartResponse(cartData)) {
+        return cartData;
+      }
+
+      return null;
     } catch (error) {
+      console.error('[CartService] Error getting cart:', error);
       // Return null if cart doesn't exist or error occurs
       return null;
     }
@@ -244,6 +306,7 @@ class CartService {
   /**
    * Update tip amount in cart
    * Returns updated cart summary along with tip metadata from backend.
+   * PUT /api/buyer/cart/tip
    */
   async createTip(
     tipAmount: number
@@ -262,21 +325,128 @@ class CartService {
         }
       );
 
-      // Handle potential double-nested response structure
+      // Handle different response structures:
+      // 1. { success: true, data: { cart_summary: {...} } }
+      // 2. { success: true, cart_summary: {...} }
+      // 3. { cart_summary: {...} } (direct)
       let responseData: any = response.data || response;
+      
+      // Unwrap nested data structure if needed
       if (responseData && typeof responseData === 'object' && 'data' in responseData) {
         responseData = responseData.data;
       }
 
+      // Extract cart_summary - it might be directly in responseData or nested
+      let cartSummary: CartSummary | undefined;
+      if (responseData) {
+        // Check if cart_summary exists directly
+        if (responseData.cart_summary && typeof responseData.cart_summary === 'object') {
+          cartSummary = responseData.cart_summary as CartSummary;
+        }
+        // Check if responseData itself is the cart_summary (has final_amount, subtotal, etc.)
+        else if ('final_amount' in responseData && 'subtotal' in responseData) {
+          cartSummary = responseData as CartSummary;
+        }
+      }
+
       return {
         success: response.success,
-        cart_summary: responseData.cart_summary,
-        message: responseData.message || response.message,
-        tip_amount: responseData.tip_amount,
-        max_tip_amount: responseData.max_tip_amount,
+        cart_summary: cartSummary,
+        message: responseData?.message || response.message,
+        tip_amount: responseData?.tip_amount ?? cartSummary?.tip_amount,
+        max_tip_amount: responseData?.max_tip_amount ?? cartSummary?.max_tip_amount,
       };
     } catch (error) {
       throw error;
+    }
+  }
+
+  /**
+   * Apply coupon code to cart
+   * POST /api/buyer/cart/apply-coupon
+   */
+  async applyCoupon(
+    couponCode: string
+  ): Promise<ApplyCouponResponse> {
+    try {
+      const response = await apiService.post(
+        API_CONFIG.ENDPOINTS.BUYER.CART_APPLY_COUPON,
+        {
+          coupon_code: couponCode,
+        }
+      );
+
+      // Handle possible nested response structures
+      // 1. { success: true, data: { cart_summary: {...} } }
+      // 2. { success: true, cart_summary: {...} }
+      // 3. { cart_summary: {...} } (direct)
+      let responseData: any = response.data || response;
+
+      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+        responseData = responseData.data;
+      }
+
+      let cartSummary: CartSummary | undefined;
+      if (responseData) {
+        if (responseData.cart_summary && typeof responseData.cart_summary === 'object') {
+          cartSummary = responseData.cart_summary as CartSummary;
+        } else if ('final_amount' in responseData && 'subtotal' in responseData) {
+          cartSummary = responseData as CartSummary;
+        }
+      }
+
+      return {
+        success: response.success,
+        message: responseData?.message || response.message,
+        cart_summary: cartSummary,
+      };
+    } catch (error: any) {
+      // Surface a standardized error shape to callers
+      return {
+        success: false,
+        message: error?.message || 'Failed to apply coupon',
+        cart_summary: undefined,
+      };
+    }
+  }
+
+  /**
+   * Remove applied coupon from cart
+   * POST /api/buyer/cart/remove-coupon
+   */
+  async removeCoupon(): Promise<RemoveCouponResponse> {
+    try {
+      const response = await apiService.delete(
+        API_CONFIG.ENDPOINTS.BUYER.CART_REMOVE_COUPON
+      );
+
+      // Handle possible nested response structures
+      let responseData: any = response.data || response;
+
+      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+        responseData = responseData.data;
+      }
+
+      let cartSummary: CartSummary | undefined;
+      if (responseData) {
+        if (responseData.cart_summary && typeof responseData.cart_summary === 'object') {
+          cartSummary = responseData.cart_summary as CartSummary;
+        } else if ('final_amount' in responseData && 'subtotal' in responseData) {
+          cartSummary = responseData as CartSummary;
+        }
+      }
+
+      return {
+        success: response.success,
+        message: responseData?.message || response.message,
+        cart_summary: cartSummary,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error?.message || 'Failed to remove coupon',
+        cart_summary: undefined,
+      };
     }
   }
 }

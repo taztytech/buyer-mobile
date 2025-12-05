@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text } from 'react-native';
+import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
 import { WelcomeScreen } from '@/screens/Auth/WelcomeScreen';
@@ -26,7 +27,7 @@ import { HelpScreen } from '@/screens/Help/HelpScreen';
 import { ContactUsScreen } from '@/screens/Help/ContactUsScreen';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
 import { storageService } from '@/services/storage.service';
@@ -75,7 +76,12 @@ function AppContent() {
   const [helpOrderData, setHelpOrderData] = React.useState<OrderListItem | null>(null);
   const [isRegistrationFlow, setIsRegistrationFlow] = React.useState(false);
   const [initialLocationCoords, setInitialLocationCoords] = React.useState<{ latitude?: number; longitude?: number } | null>(null);
-  const [legalCameFrom, setLegalCameFrom] = React.useState<'profile' | 'login'>('profile');
+  const [legalCameFrom, setLegalCameFrom] = React.useState<'profile' | 'login' | 'otp'>('profile');
+  const [addressRefreshTrigger, setAddressRefreshTrigger] = React.useState(0);
+  const [showNetworkBanner, setShowNetworkBanner] = React.useState(false);
+  const [networkBannerType, setNetworkBannerType] = React.useState<'offline' | 'online'>('offline');
+  const lastConnectionStatusRef = React.useRef<boolean | null>(null);
+  const networkBannerTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -91,13 +97,90 @@ function AppContent() {
   const checkoutScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const testFCMScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
-  const [_fontsLoaded] = useFonts({
+  const [fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
     'Poppins_400Regular': Poppins_400Regular,
     'Poppins_500Medium': Poppins_500Medium,
     'Poppins_600SemiBold': Poppins_600SemiBold,
     'Poppins_700Bold': Poppins_700Bold,
   });
+
+  // Set Poppins as default font for all Text components
+  React.useEffect(() => {
+    if (fontsLoaded) {
+      // Set default font family for all Text components
+      // This applies Poppins as the default font across the entire app
+      if (!Text.defaultProps) {
+        Text.defaultProps = {};
+      }
+      Text.defaultProps.style = { fontFamily: 'Poppins' };
+    }
+  }, [fontsLoaded]);
+
+  // Network connectivity listener - runs while app is open
+  React.useEffect(() => {
+    const showOfflineBanner = () => {
+      if (networkBannerTimeoutRef.current) {
+        clearTimeout(networkBannerTimeoutRef.current);
+        networkBannerTimeoutRef.current = null;
+      }
+      setNetworkBannerType('offline');
+      setShowNetworkBanner(true);
+    };
+
+    const showOnlineBannerWithTimeout = () => {
+      if (networkBannerTimeoutRef.current) {
+        clearTimeout(networkBannerTimeoutRef.current);
+      }
+      setNetworkBannerType('online');
+      setShowNetworkBanner(true);
+
+      networkBannerTimeoutRef.current = setTimeout(() => {
+        setShowNetworkBanner(false);
+        networkBannerTimeoutRef.current = null;
+      }, 3000);
+    };
+
+    let isFirstUpdate = true;
+
+    const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
+      const connected = (state.isInternetReachable ?? state.isConnected) ?? false;
+      const previous = lastConnectionStatusRef.current;
+
+      lastConnectionStatusRef.current = connected;
+
+      if (isFirstUpdate) {
+        isFirstUpdate = false;
+
+        // On app open: show status once based on current connectivity
+        if (connected) {
+          showOnlineBannerWithTimeout();
+        } else {
+          showOfflineBanner();
+        }
+        return;
+      }
+
+      // When connection drops while app is open
+      if (!connected && previous !== false) {
+        showOfflineBanner();
+        return;
+      }
+
+      // When connection comes back after being offline
+      if (connected && previous === false) {
+        showOnlineBannerWithTimeout();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      if (networkBannerTimeoutRef.current) {
+        clearTimeout(networkBannerTimeoutRef.current);
+        networkBannerTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Check if user is already logged in on app startup
   React.useEffect(() => {
@@ -498,6 +581,9 @@ function AppContent() {
       longitude: location.longitude || location.lng || 78.1304040,
     });
 
+    // Trigger homepage refresh when address changes
+    handleAddressChange();
+
     // Check if we're editing an address (from myAddresses) or check navigation source
     const isEditingFromMyAddresses = editingAddress && locationSelectionCameFrom === 'myAddresses';
     
@@ -802,6 +888,12 @@ function AppContent() {
     setCurrentScreen('profile');
   };
 
+  // Handle address changes (trigger HomeScreen refresh)
+  const handleAddressChange = () => {
+    // Increment trigger to cause HomeScreen to refresh
+    setAddressRefreshTrigger(prev => prev + 1);
+  };
+
   const handleNavigateToAddressSelectionFromMyAddresses = () => {
     // Set correct navigation source for location selection
     setLocationSelectionCameFrom('myAddresses');
@@ -841,7 +933,7 @@ function AppContent() {
   };
 
   // Privacy Policy Navigation
-  const handleNavigateToPrivacyPolicy = (from: 'profile' | 'login' = 'profile') => {
+  const handleNavigateToPrivacyPolicy = (from: 'profile' | 'login' | 'otp' = 'profile') => {
     setLegalCameFrom(from);
     setCurrentScreen('privacyPolicy');
 
@@ -859,7 +951,7 @@ function AppContent() {
         }),
       ]).start();
     } else {
-      // Coming from login: only animate the privacy policy screen
+      // Coming from login or otp: only animate the privacy policy screen
       privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
       Animated.timing(privacyPolicyScreenSlide, {
         toValue: 0,
@@ -877,6 +969,15 @@ function AppContent() {
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('login');
+        setLegalCameFrom('profile');
+      });
+    } else if (legalCameFrom === 'otp') {
+      Animated.timing(privacyPolicyScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }).start(() => {
+        setCurrentScreen('otp');
         setLegalCameFrom('profile');
       });
     } else {
@@ -898,7 +999,7 @@ function AppContent() {
   };
 
   // Terms & Conditions Navigation
-  const handleNavigateToTermsConditions = (from: 'profile' | 'login' = 'profile') => {
+  const handleNavigateToTermsConditions = (from: 'profile' | 'login' | 'otp' = 'profile') => {
     setLegalCameFrom(from);
     setCurrentScreen('termsConditions');
 
@@ -916,7 +1017,7 @@ function AppContent() {
         }),
       ]).start();
     } else {
-      // Coming from login: only animate the terms & conditions screen
+      // Coming from login or otp: only animate the terms & conditions screen
       termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
       Animated.timing(termsConditionsScreenSlide, {
         toValue: 0,
@@ -934,6 +1035,15 @@ function AppContent() {
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('login');
+        setLegalCameFrom('profile');
+      });
+    } else if (legalCameFrom === 'otp') {
+      Animated.timing(termsConditionsScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }).start(() => {
+        setCurrentScreen('otp');
         setLegalCameFrom('profile');
       });
     } else {
@@ -1442,6 +1552,23 @@ function AppContent() {
   return (
     <>
       <SafeAreaProvider>
+        {showNetworkBanner && (
+          <SafeAreaView
+            style={[
+              styles.networkStatusBanner,
+              networkBannerType === 'offline'
+                ? styles.networkStatusBannerOffline
+                : styles.networkStatusBannerOnline,
+            ]}
+            edges={['top']}
+          >
+            <View style={styles.networkStatusBannerContent}>
+              <Text style={styles.networkStatusBannerText}>
+                {networkBannerType === 'offline' ? 'Could not connect to internet' : 'We are back'}
+              </Text>
+            </View>
+          </SafeAreaView>
+        )}
         {!isCheckingAuth && currentScreen === 'login' ? (
         <LoginScreen
           onLoginSuccess={handleLoginSuccess}
@@ -1453,6 +1580,8 @@ function AppContent() {
           phoneNumber={phoneNumber}
           onBack={handleBackToLogin}
           onSuccess={handleOtpSuccess}
+          onOpenTerms={() => handleNavigateToTermsConditions('otp')}
+          onOpenPrivacy={() => handleNavigateToPrivacyPolicy('otp')}
         />
       ) : !isCheckingAuth && currentScreen === 'welcome' ? (
         <WelcomeScreen onContinue={handleWelcomeComplete} />
@@ -1479,6 +1608,7 @@ function AppContent() {
               selectedLocation={selectedLocation}
               onCategoriesLoaded={setCategoryData}
               isFocused={currentScreen === 'home'}
+              addressRefreshTrigger={addressRefreshTrigger}
             />
           </Animated.View>
 
@@ -1532,6 +1662,8 @@ function AppContent() {
                   latitude: address.latitude || 9.9352300,
                   longitude: address.longitude || 78.1304040,
                 });
+                // Trigger homepage refresh when address changes
+                handleAddressChange();
                 handleBackFromAddressSelection();
               }}
             />
@@ -1688,6 +1820,7 @@ function AppContent() {
                 onBack={handleBackFromMyAddresses}
                 onAddNew={handleNavigateToAddressSelectionFromMyAddresses}
                 onEditAddress={handleEditAddressFromMyAddresses}
+                onAddressChange={handleAddressChange}
               />
             </View>
           )}
@@ -1926,6 +2059,7 @@ function AppContent() {
                 onPlaceOrder={handlePlaceOrderFromCheckout}
                 onOrderSuccess={handleOrderSuccessFromCheckout}
                 onOrderCancel={handleOrderCancelFromCheckout}
+                onAddressChange={handleAddressChange}
               />
             </Animated.View>
           )}
@@ -2171,5 +2305,32 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 8,
     backgroundColor: '#F5F5F5',
+  },
+  networkStatusBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    elevation: 4,
+    paddingVertical: 16,
+  },
+  networkStatusBannerContent: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+  },
+  networkStatusBannerOffline: {
+    backgroundColor: '#DC2626',
+    fontSize: 16,
+  },
+  networkStatusBannerOnline: {
+    backgroundColor: '#16A34A',
+    fontSize: 16,
+  },
+  networkStatusBannerText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

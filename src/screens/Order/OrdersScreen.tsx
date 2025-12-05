@@ -8,6 +8,7 @@ import {
   StatusBar,
   Image,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -271,6 +272,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
+  const handleCallSupportFromCancelled = () => {
+    const supportNumber = '8098777720';
+    if (!supportNumber) return;
+    const telUrl = `tel:${supportNumber.replace(/\s+/g, '')}`;
+    Linking.openURL(telUrl).catch(() => {});
+  };
+
   const handleOrderPress = (orderId: string) => {
     if (onOrderDetails) {
       onOrderDetails(orderId);
@@ -421,6 +429,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 <MaterialIcons name="location-on" size={18} color="#FFFFFF" />
                 <Text style={styles.reorderButtonText}>Track Order</Text>
               </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.reorderButton}
+                  onPress={() => handleOrderPress(order.id.toString())}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="visibility" size={18} color="#FFFFFF" />
+                  <Text style={styles.reorderButtonText}>View Order</Text>
+                </TouchableOpacity>
             </>
           ) : (
             <>
@@ -428,14 +444,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 // For payment failed orders, don't show any buttons
                 null
               ) : actualStatus === 'cancelled' ? (
-                // For cancelled orders, show Help button
+                // For cancelled orders, show Call Support button instead of Help
                 <TouchableOpacity
                   style={styles.rateButton}
-                  onPress={() => handleHelp(order)}
+                  onPress={handleCallSupportFromCancelled}
                   activeOpacity={0.7}
                 >
-                  <MaterialIcons name="help-outline" size={18} color="#001E1F" />
-                  <Text style={styles.rateButtonText}>Help</Text>
+                  <MaterialIcons name="phone" size={18} color="#001E1F" />
+                  <Text style={styles.rateButtonText}>Call For Support</Text>
                 </TouchableOpacity>
               ) : order.overall_rating && order.overall_rating > 0 ? (
                 // For delivered orders with rating, show rating display
@@ -455,14 +471,24 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 </TouchableOpacity>
               )}
               {/* Reorder button - shown for all non-ongoing orders except payment_failed */}
-              {actualStatus !== 'payment_failed' && (
+              {/* {actualStatus !== 'payment_failed' && (
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={() => handleReorder(order.id.toString())}
                   activeOpacity={0.8}
                 >
-                  <MaterialIcons name="refresh" size={18} color="#FFFFFF" />
+                  <MaterialIcons name="visibility" size={18} color="#FFFFFF" />
                   <Text style={styles.reorderButtonText}>Reorder</Text>
+                </TouchableOpacity>
+              )} */}
+               {actualStatus !== 'payment_failed' && (
+                <TouchableOpacity
+                  style={styles.reorderButton}
+                  onPress={() => handleOrderPress(order.id.toString())}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="visibility" size={18} color="#FFFFFF" />
+                  <Text style={styles.reorderButtonText}>View Order</Text>
                 </TouchableOpacity>
               )}
             </>

@@ -8,7 +8,6 @@ import {
   StatusBar,
   Image,
   Dimensions,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -22,12 +21,16 @@ interface OTPVerificationScreenProps {
   phoneNumber?: string;
   onBack?: () => void;
   onSuccess?: (isExistingUser: boolean) => void;
+  onOpenTerms?: () => void;
+  onOpenPrivacy?: () => void;
 }
 
 export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   phoneNumber = '',
   onBack,
-  onSuccess
+  onSuccess,
+  onOpenTerms,
+  onOpenPrivacy,
 }) => {
   const { showConfirmation } = useConfirmation();
   const [otp, setOtp] = useState(['', '', '', '']);
@@ -237,10 +240,6 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
     }
   };
 
-  const handleLinkPress = (url: string) => {
-    Linking.openURL(url).catch(err => {});
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
@@ -332,14 +331,14 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
             By Clicking, You agree our{' '}
             <Text
               style={styles.termsLink}
-              onPress={() => handleLinkPress('https://tazty.in/terms')}
+              onPress={onOpenTerms}
             >
               T&C
             </Text>
             {' and '}
             <Text
               style={styles.termsLink}
-              onPress={() => handleLinkPress('https://tazty.in/privacy')}
+              onPress={onOpenPrivacy}
             >
               Privacy Policy
             </Text>
@@ -517,6 +516,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     textAlign: 'center',
     color: 'rgba(0, 30, 31, 0.5)',
+    marginBottom: 30,
   },
   termsLink: {
     fontFamily: 'Poppins_600SemiBold',

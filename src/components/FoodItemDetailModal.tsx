@@ -22,7 +22,7 @@ interface FoodItemDetailModalProps {
     name: string;
     price: number;
     description: string;
-    image: any;
+    image: any | null;
     isVeg: boolean;
     isSpicy: boolean;
     isBestSeller: boolean;
@@ -60,25 +60,47 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
         friction: 11,
       }).start();
 
-      // Initialize quantity to 1 (representing "add 1 more" if item exists, or "add 1" if new)
-      // The quantity selector allows user to add more if needed
-      setQuantity(1);
+      // Initialize quantity from initialQuantity (e.g. current cart quantity)
+      // Fallback to 1 when there is no existing quantity
+      if (typeof initialQuantity === 'number' && initialQuantity > 0) {
+        setQuantity(Math.min(initialQuantity, resolvedMaxQuantity));
+      } else {
+        setQuantity(1);
+      }
       setIsAdding(false);
     } else {
       slideAnim.setValue(1000);
       setIsAdding(false);
     }
-  }, [visible, slideAnim]);
+  }, [visible, slideAnim, initialQuantity, resolvedMaxQuantity]);
 
   if (!item) return null;
 
   const handleIncrement = () => {
-    setQuantity(prev => Math.min(prev + 1, resolvedMaxQuantity));
+    setQuantity(prev => {
+      const next = Math.min(prev + 1, resolvedMaxQuantity);
+
+      // Sync quantity with cart / backend on every increment
+      if (next !== prev) {
+        onAddToCart(item.id, next);
+      }
+
+      return next;
+    });
   };
 
   const handleDecrement = () => {
     if (quantity > 1) {
-      setQuantity(prev => prev - 1);
+      setQuantity(prev => {
+        const next = prev - 1;
+
+        // Sync quantity with cart / backend on every decrement
+        if (next > 0 && next !== prev) {
+          onAddToCart(item.id, next);
+        }
+
+        return next;
+      });
     }
   };
 
@@ -87,17 +109,10 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
     if (isAdding) return;
     
     setIsAdding(true);
-    
-    // Always add exactly 1 item when clicking "Add Item" button
-    // This ensures consistent behavior regardless of quantity selector value
-    onAddToCart(item.id, 1);
-    
-    // Reset quantity and close modal
-    setQuantity(1);
-    
-    // Close modal immediately
+
+    // Quantity is already synced via + / - handlers; just close the modal
     onClose();
-    
+
     // Reset adding state after a short delay to allow modal to close
     setTimeout(() => {
       setIsAdding(false);
@@ -146,9 +161,15 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            {/* Food Image */}
+            {/* Food Image or No Image Available */}
             <View style={styles.imageContainer}>
-              <Image source={item.image} style={styles.foodImage} resizeMode="cover" />
+              {item.image ? (
+                <Image source={item.image} style={styles.foodImage} resizeMode="cover" />
+              ) : (
+                <View style={styles.noImageContainer}>
+                  <Text style={styles.noImageText}>No Image Available</Text>
+                </View>
+              )}
             </View>
 
             {/* Badges Row */}
@@ -316,6 +337,25 @@ const styles = StyleSheet.create({
   foodImage: {
     width: '100%',
     height: '100%',
+  },
+  noImageContainer: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderStyle: 'solid',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+  noImageText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#9E9E9E',
+    textAlign: 'center',
   },
   badgesRow: {
     flexDirection: 'row',

@@ -90,6 +90,48 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [syncWithBackend, setSyncWithBackend] = useState<boolean>(false);
   const [isCartLoaded, setIsCartLoaded] = useState<boolean>(false);
 
+  /**
+   * Save cart to local storage
+   */
+  const saveCartToStorage = async (cartToSave: { [key: string]: CartItem }, restaurantIdToSave: number | null, restaurantNameToSave: string, restaurantLogoToSave: any) => {
+    try {
+      await storageService.saveCartData({
+        cart: cartToSave,
+        restaurantId: restaurantIdToSave,
+        restaurantName: restaurantNameToSave,
+        restaurantLogo: restaurantLogoToSave,
+      });
+    } catch (error) {
+      console.error('[CartContext] Error saving cart to storage:', error);
+    }
+  };
+
+  /**
+   * Load cart from local storage
+   */
+  const loadCartFromStorage = async (): Promise<{
+    cart: { [key: string]: CartItem };
+    restaurantId: number | null;
+    restaurantName: string;
+    restaurantLogo: any;
+  } | null> => {
+    try {
+      const storedData = await storageService.getCartData();
+      if (storedData && storedData.cart && Object.keys(storedData.cart).length > 0) {
+        return {
+          cart: storedData.cart as { [key: string]: CartItem },
+          restaurantId: storedData.restaurantId,
+          restaurantName: storedData.restaurantName,
+          restaurantLogo: storedData.restaurantLogo,
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('[CartContext] Error loading cart from storage:', error);
+      return null;
+    }
+  };
+
   const loadCartFromBackend = async () => {
     try {
       const token = await storageService.getAccessToken();
@@ -100,53 +142,100 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const backendCart = await cartService.getCart();
 
-      if (backendCart && backendCart.items && Array.isArray(backendCart.items) && backendCart.items.length > 0) {
-        setRestaurantId(backendCart.restaurant_id);
-        setRestaurantName(backendCart.restaurant_name);
-        setRestaurantLogo(backendCart.restaurant_logo);
+      // Log for debugging
+      console.log('[CartContext] Backend cart response:', {
+        hasCart: !!backendCart,
+        hasItems: !!(backendCart?.items),
+        itemsCount: backendCart?.items?.length || 0,
+        itemsType: Array.isArray(backendCart?.items) ? 'array' : typeof backendCart?.items,
+        restaurantId: backendCart?.restaurant_id,
+      });
 
-        const localCart: { [key: string]: CartItem } = {};
+      // Check if we have a valid cart with items
+      if (backendCart && backendCart.items && Array.isArray(backendCart.items)) {
+        // Set restaurant info even if cart is empty
+        if (backendCart.restaurant_id) {
+          setRestaurantId(backendCart.restaurant_id);
+          setRestaurantName(backendCart.restaurant_name || '');
+          setRestaurantLogo(backendCart.restaurant_logo || null);
+        }
 
-        backendCart.items.forEach((item) => {
-          const isVeg = item.dietary_preference === 'veg' ||
-                        item.dietary_preference === 'vegetarian';
+        // Only process items if we have any
+        if (backendCart.items.length > 0) {
+          const localCart: { [key: string]: CartItem } = {};
 
-          const cartItem: CartItem = {
-            id: item.item_id.toString(),
-            itemId: item.item_id,
-            cartItemId: item.id,
-            name: item.item_name,
-            price: item.unit_price,
-            quantity: item.quantity,
-            isVeg: isVeg,
-            image: item.item_images?.[0],
-            specialInstructions: item.special_instructions || undefined,
-            isCustomizable: item.has_customizations || (item.customizations && item.customizations.length > 0),
-          };
+          backendCart.items.forEach((item) => {
+            // Validate required fields
+            if (!item.item_id || !item.item_name) {
+              console.warn('[CartContext] Skipping invalid cart item:', item);
+              return;
+            }
 
-          if (item.customizations && item.customizations.length > 0) {
-            cartItem.variants = item.customizations.map((customization) => ({
-              id: `${item.item_id}-${customization.customization_group_id}`,
-              variantId: customization.customization_group_id.toString(),
-              variantName: customization.customization_group_name,
-              addOns: customization.selected_options.map((opt) => opt.id.toString()),
-              addOnNames: customization.selected_options.map((opt) => opt.name || ''),
-              quantity: item.quantity,
-              price: item.unit_price,
-            }));
-          }
+            const isVeg = item.dietary_preference === 'veg' ||
+                          item.dietary_preference === 'vegetarian';
 
-          localCart[item.item_id.toString()] = cartItem;
-        });
+            const cartItem: CartItem = {
+              id: item.item_id.toString(),
+              itemId: item.item_id,
+              cartItemId: item.id,
+              name: item.item_name,
+              price: item.unit_price || 0,
+              quantity: item.quantity || 1,
+              isVeg: isVeg,
+              image: item.item_images?.[0],
+              specialInstructions: item.special_instructions || undefined,
+              isCustomizable: item.has_customizations || (item.customizations && item.customizations.length > 0),
+            };
 
-        setCart(localCart);
+            if (item.customizations && item.customizations.length > 0) {
+              cartItem.variants = item.customizations.map((customization) => ({
+                id: `${item.item_id}-${customization.customization_group_id}`,
+                variantId: customization.customization_group_id.toString(),
+                variantName: customization.customization_group_name,
+                addOns: customization.selected_options.map((opt) => opt.id.toString()),
+                addOnNames: customization.selected_options.map((opt) => opt.name || ''),
+                quantity: item.quantity || 1,
+                price: item.unit_price || 0,
+              }));
+            }
+
+            localCart[item.item_id.toString()] = cartItem;
+          });
+
+          setCart(localCart);
+          // Save to storage after loading from backend
+          await saveCartToStorage(localCart, backendCart.restaurant_id, backendCart.restaurant_name || '', backendCart.restaurant_logo);
+          console.log('[CartContext] Cart loaded successfully:', {
+            itemsCount: Object.keys(localCart).length,
+            restaurantId: backendCart.restaurant_id,
+          });
+        } else {
+          // Cart exists but is empty
+          setCart({});
+          await saveCartToStorage({}, null, '', null);
+          console.log('[CartContext] Cart is empty');
+        }
       } else {
-        setCart({});
-        setRestaurantId(null);
-        setRestaurantName('');
-        setRestaurantLogo(null);
+        // No valid cart response - try loading from storage as fallback
+        const storedCart = await loadCartFromStorage();
+        if (storedCart) {
+          setCart(storedCart.cart);
+          setRestaurantId(storedCart.restaurantId);
+          setRestaurantName(storedCart.restaurantName);
+          setRestaurantLogo(storedCart.restaurantLogo);
+          console.log('[CartContext] Loaded cart from storage as fallback');
+        } else {
+          // No cart data anywhere
+          setCart({});
+          setRestaurantId(null);
+          setRestaurantName('');
+          setRestaurantLogo(null);
+          console.log('[CartContext] No cart data received');
+        }
       }
     } catch (error) {
+      console.error('[CartContext] Error loading cart from backend:', error);
+      // Don't clear cart on error - keep existing state
     } finally {
       setIsCartLoaded(true);
     }
@@ -157,11 +246,37 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   /**
-   * Load cart from backend on app startup
+   * Load cart on app startup
+   * First try storage (fast), then sync with backend if authenticated
    */
   useEffect(() => {
-    loadCartFromBackend();
+    const initializeCart = async () => {
+      // First, try to load from storage for immediate UI
+      const storedCart = await loadCartFromStorage();
+      if (storedCart) {
+        setCart(storedCart.cart);
+        setRestaurantId(storedCart.restaurantId);
+        setRestaurantName(storedCart.restaurantName);
+        setRestaurantLogo(storedCart.restaurantLogo);
+        console.log('[CartContext] Loaded cart from storage on startup');
+      }
+
+      // Then, sync with backend if authenticated
+      await loadCartFromBackend();
+    };
+
+    initializeCart();
   }, []); // Only run once on mount
+
+  /**
+   * Save cart to storage whenever it changes (after initial load)
+   */
+  useEffect(() => {
+    if (isCartLoaded) {
+      saveCartToStorage(cart, restaurantId, restaurantName, restaurantLogo);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, restaurantId, restaurantName, restaurantLogo, isCartLoaded]);
 
   /**
    * Add item to cart (local + backend sync)
@@ -169,7 +284,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addToCart = async (item: CartItem, overrideRestaurantId?: number) => {
     const normalizedItem = normalizeCartItemQuantities(item);
 
-    // Update local cart immediately for responsive UI
+      // Update local cart immediately for responsive UI
     setCart(prev => ({
       ...prev,
       [normalizedItem.id]: normalizedItem,
@@ -213,13 +328,18 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (response.success) {
         // Update local cart with backend cart_item_id
-        setCart(prev => ({
-          ...prev,
-          [normalizedItem.id]: {
-            ...prev[normalizedItem.id],
-            cartItemId: response.cart_item_id,
-          },
-        }));
+        setCart(prev => {
+          const updatedCart = {
+            ...prev,
+            [normalizedItem.id]: {
+              ...prev[normalizedItem.id],
+              cartItemId: response.cart_item_id,
+            },
+          };
+          // Save to storage after backend sync
+          saveCartToStorage(updatedCart, overrideRestaurantId || restaurantId, restaurantName, restaurantLogo);
+          return updatedCart;
+        });
       }
     } catch (error) {
       // Item remains in local cart even if backend sync fails
@@ -250,7 +370,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       setSyncWithBackend(true);
 
-      const response = await cartService.removeCartItem(item.cartItemId);
+      await cartService.removeCartItem(item.cartItemId);
     } catch (error) {
       // Item already removed from local cart
     } finally {
@@ -325,13 +445,18 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         if (addResponse.success && addResponse.cart_item_id) {
           // Update local cart with backend cart_item_id
-          setCart(prev => ({
-            ...prev,
-            [item.id]: {
-              ...prev[item.id],
-              cartItemId: addResponse.cart_item_id,
-            },
-          }));
+          setCart(prev => {
+            const updatedCart = {
+              ...prev,
+              [item.id]: {
+                ...prev[item.id],
+                cartItemId: addResponse.cart_item_id,
+              },
+            };
+            // Save to storage after backend sync
+            saveCartToStorage(updatedCart, restaurantId, restaurantName, restaurantLogo);
+            return updatedCart;
+          });
           return; // Quantity already set during add
         } else {
           return;
@@ -340,7 +465,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       setSyncWithBackend(true);
 
-      const response = await cartService.updateCartItem(item.cartItemId, {
+      await cartService.updateCartItem(item.cartItemId, {
         restaurant_id: restaurantId,
         quantity: safeQuantity,
       });
@@ -357,10 +482,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const clearCart = async () => {
     // Update local cart immediately
     setCart({});
-    const prevRestaurantId = restaurantId;
     setRestaurantId(null);
     setRestaurantName('');
     setRestaurantLogo(null);
+    // Clear from storage
+    await storageService.clearCartData();
 
     // Sync with backend
     try {
@@ -371,7 +497,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       setSyncWithBackend(true);
 
-      const response = await cartService.clearCart();
+      await cartService.clearCart();
     } catch (error) {
       // Cart already cleared locally
     } finally {
