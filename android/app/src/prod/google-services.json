@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "299963819024",
+    "project_id": "tazty-buyer",
+    "storage_bucket": "tazty-buyer.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:299963819024:android:69cd7ac1ac015388cf1695",
+        "android_client_info": {
+          "package_name": "in.tazty.buyer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDvFX-ifkuE0BUmoqcNQ0pO_W2IQsVHdhQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
