@@ -18,6 +18,13 @@ import { ordersService, OrderListItem } from '@/services/orders.service';
 import { Shimmer } from '@/components/Shimmer';
 import { authService } from '@/services/auth.service';
 
+// Module-level state to persist across component remounts
+let persistedOrders: OrderListItem[] = [];
+let persistedCurrentPage: number = 1;
+let persistedTotalOrders: number = 0;
+let persistedScrollPosition: number = 0;
+let hasPersistedData: boolean = false;
+
 // Unused interface - kept for reference
 // interface OrderItem {
 //   id: string;
@@ -53,39 +60,65 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   visible = false,
   onBack,
   onOrderDetails,
-  onReorder,
+  onReorder: _onReorder, // Unused but kept for API compatibility
   onRateOrder,
   onTrackOrder,
-  onHelp,
+  onHelp: _onHelp, // Unused but kept for API compatibility
   onViewMore: _onViewMore, // Unused but kept for API compatibility
 }) => {
-  const [orders, setOrders] = useState<OrderListItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Initialize state from persisted data if available
+  const [orders, setOrders] = useState<OrderListItem[]>(() => {
+    if (hasPersistedData && persistedOrders.length > 0) {
+      return persistedOrders;
+    }
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState(() => !hasPersistedData);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalOrders, setTotalOrders] = useState(0);
+  const [currentPage, setCurrentPage] = useState(() => persistedCurrentPage);
+  const [totalOrders, setTotalOrders] = useState(() => persistedTotalOrders);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [supportNumber, setSupportNumber] = useState<string>('');
   
   // Refs to prevent API overload
   const isRequestInProgress = useRef(false);
   const lastRequestedPage = useRef(0);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Refs for scroll position preservation
+  const scrollViewRef = useRef<ScrollView>(null);
+  const isInitialMount = useRef(!hasPersistedData);
+  const hasRestoredScroll = useRef(false);
 
   useEffect(() => {
-    // Fetch fresh data whenever screen becomes visible
-    if (visible) {
+    // Only fetch fresh data on initial mount if no persisted data exists
+    if (visible && isInitialMount.current && !hasPersistedData) {
+      isInitialMount.current = false;
       setCurrentPage(1);
       fetchOrders(1, true);
-      fetchSupportDetails();
+    } else if (visible && hasPersistedData) {
+      // Reset the restore flag when screen becomes visible
+      hasRestoredScroll.current = false;
     }
   }, [visible]);
 
-  // Fetch support number from cache first, only call API if not cached
-  const fetchSupportDetails = async () => {
-    const supportDetails = await authService.getSupportDetails(false);
-    setSupportNumber(supportDetails.support_number);
-  };
+  // Separate effect to restore scroll position after orders are rendered
+  useEffect(() => {
+    if (visible && hasPersistedData && !hasRestoredScroll.current && orders.length > 0 && persistedScrollPosition > 0) {
+      // Wait for ScrollView to be fully rendered before restoring scroll
+      const restoreTimer = setTimeout(() => {
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({
+            y: persistedScrollPosition,
+            animated: false,
+          });
+          hasRestoredScroll.current = true; // Mark as restored
+        }
+      }, 200);
+      
+      return () => clearTimeout(restoreTimer);
+    }
+    return undefined;
+  }, [visible, orders.length]);
 
   const fetchOrders = async (page: number = 1, reset: boolean = false) => {
     // Prevent duplicate requests for the same page
@@ -105,6 +138,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       if (reset) {
         setIsLoading(true);
         lastRequestedPage.current = 0; // Reset when fetching first page
+        // Clear persisted scroll position when resetting
+        persistedScrollPosition = 0;
+        hasRestoredScroll.current = false;
       } else {
         setIsLoadingMore(true);
       }
@@ -133,16 +169,22 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
         if (reset) {
           setOrders(ordersArray);
+          persistedOrders = ordersArray;
         } else {
           // Append new orders to existing ones, filtering out duplicates
           setOrders(prev => {
             const existingIds = new Set(prev.map(o => o.id));
             const newOrders = ordersArray.filter((order: any) => !existingIds.has(order.id));
-            return [...prev, ...newOrders];
+            const updatedOrders = [...prev, ...newOrders];
+            persistedOrders = updatedOrders;
+            return updatedOrders;
           });
         }
         setTotalOrders(total);
+        persistedTotalOrders = total;
         setCurrentPage(page);
+        persistedCurrentPage = page;
+        hasPersistedData = true;
       } else {
         setError(response.error || 'Failed to load orders');
       }
@@ -166,6 +208,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   // Debounced scroll handler to prevent API overload
   const handleScroll = useCallback(({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
+    // Save scroll position to module-level variable for restoration across remounts
+    persistedScrollPosition = nativeEvent.contentOffset.y;
+
     // Clear any pending timeout
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
@@ -219,9 +264,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   };
 
   // Map API status to UI status
-  const mapStatus = (status: string | null | undefined): 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' => {
+  const mapStatus = (status: string | null | undefined): 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' | 'order_placed' => {
     if (!status) return 'ongoing';
-    const statusMap: { [key: string]: 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' } = {
+    const statusMap: { [key: string]: 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' | 'order_placed' } = {
       'delivered': 'delivered',
       'completed': 'delivered',
       'payment_failed': 'payment_failed',
@@ -319,12 +364,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   ];
   */
 
-  const handleReorder = (orderId: string) => {
-    if (onReorder) {
-      onReorder(orderId);
-    }
-  };
-
   const handleRateOrder = (orderId: string) => {
     if (onRateOrder) {
       // Find the order from the orders array
@@ -336,12 +375,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const handleTrackOrder = (orderId: string) => {
     if (onTrackOrder) {
       onTrackOrder(orderId);
-    }
-  };
-
-  const handleHelp = (order: OrderListItem) => {
-    if (onHelp) {
-      onHelp(order);
     }
   };
 
@@ -362,7 +395,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   };
 
   const renderOrderCard = (order: OrderListItem) => {
-    const statusConfig = {
+    const statusConfig: Record<'delivered' | 'cancelled' | 'payment_failed' | 'order_placed' | 'ongoing', {
+      label: string;
+      color: string;
+      bgColor: string;
+      icon: string;
+    }> = {
       delivered: {
         label: 'Delivered',
         color: '#00B14F',
@@ -477,7 +515,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           <View style={styles.multipleItems}>
             {(order.items || []).slice(0, 2).map((item: any, index: number) => (
               <View key={`${order.id}-item-${item.id || index}-${index}`} style={styles.itemRow}>
-                <Text style={styles.itemName}>{item.quantity || 1}x {item.item_name || 'Item'}</Text>
+                <Text style={styles.itemName}>{item.quantity || 1}x {item.item_name || item.name || 'Item'}</Text>
               </View>
             ))}
             {/* Show +X more items if there are more than 2 */}
@@ -617,6 +655,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
       {/* Orders List */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
