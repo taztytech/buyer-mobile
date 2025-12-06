@@ -42,6 +42,9 @@ export interface NotificationPayload {
 // Background message handler type
 type BackgroundMessageHandler = (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => Promise<void>;
 
+// Navigation callback type for handling notification taps
+export type NotificationNavigationCallback = (orderId: string) => void;
+
 class FCMNotificationService {
   private fcmToken: string | null = null;
   private notificationListeners: Array<() => void> = [];
@@ -51,6 +54,15 @@ class FCMNotificationService {
   private backgroundMessageHandler: BackgroundMessageHandler | null = null;
   private recentMessages: NotificationPayload[] = [];
   private readonly MAX_RECENT_MESSAGES = 50;
+  private navigationCallback: NotificationNavigationCallback | null = null;
+
+  /**
+   * Set navigation callback for handling notification taps
+   * This callback will be called when a notification is tapped
+   */
+  setNavigationCallback(callback: NotificationNavigationCallback | null): void {
+    this.navigationCallback = callback;
+  }
 
   /**
    * Initialize FCM service
@@ -228,6 +240,31 @@ class FCMNotificationService {
   }
 
   /**
+   * Register FCM token after login
+   * Call this after successful authentication
+   */
+  async registerTokenAfterLogin(): Promise<boolean> {
+    try {
+      // Get or request token
+      const token = await this.getToken();
+      if (!token) {
+        console.warn('⚠️  FCM: No token available to register after login');
+        return false;
+      }
+      
+      // Send token to backend
+      const success = await this.sendTokenToBackend(token);
+      if (success) {
+        console.log('✅ FCM: Token registered successfully after login');
+      }
+      return success;
+    } catch (error) {
+      console.error('❌ FCM: Failed to register token after login:', error);
+      return false;
+    }
+  }
+
+  /**
    * Send FCM token to backend
    * Now public so it can be called from test screen
    */
@@ -288,12 +325,14 @@ class FCMNotificationService {
     });
 
     // Foreground message listener
+    // In foreground, FCM doesn't automatically show notifications
+    // The native FCMService.kt will handle showing system notifications
+    // We just need to handle the data for navigation
     this.messageListener = messaging().onMessage(async (remoteMessage: any) => {
       console.log('📨 FCM: Foreground message received:', remoteMessage.messageId);
       console.log('   Title:', remoteMessage.notification?.title || 'N/A');
       console.log('   Body:', remoteMessage.notification?.body || 'N/A');
       console.log('   Data:', JSON.stringify(remoteMessage.data || {}, null, 2));
-      console.log('   Full message:', JSON.stringify(remoteMessage, null, 2));
       
       const payload: NotificationPayload = {
         title: remoteMessage.notification?.title,
@@ -305,8 +344,9 @@ class FCMNotificationService {
       // Store recent message
       this.addRecentMessage(payload);
 
-      // Emit event for app to handle
-      this.onForegroundMessage(payload);
+      // Note: System notification is shown by native FCMService.kt
+      // We handle navigation when user taps the notification
+      // No need to manually show notification here - native layer handles it
     });
 
     // Notification opened listener (when user taps notification)
@@ -345,13 +385,16 @@ class FCMNotificationService {
 
   /**
    * Check if app was opened from a notification
+   * This handles both FCM getInitialNotification and Android intent extras
+   * Call this when app becomes active
    */
-  private async checkInitialNotification(): Promise<void> {
+  async checkInitialNotification(): Promise<void> {
     try {
       if (!messaging) {
         return;
       }
 
+      // Check FCM initial notification (works for both iOS and Android)
       const remoteMessage = await messaging().getInitialNotification();
       
       if (remoteMessage) {
@@ -364,13 +407,45 @@ class FCMNotificationService {
           notificationId: remoteMessage.messageId,
         };
 
-        // Wait a bit for app to initialize
+        // Wait a bit for app to initialize, then handle navigation
         setTimeout(() => {
           this.onNotificationOpened(payload);
-        }, 1000);
+        }, 1500);
+        return;
       }
+
+      // For Android: Also check if app was opened from notification via intent
+      // This is handled by the native layer and will be caught by onNotificationOpened
+      // when the app becomes active
     } catch (error) {
       console.error('❌ FCM: Error checking initial notification:', error);
+    }
+  }
+
+  /**
+   * Handle notification data from Android intent extras
+   * Call this when app becomes active to check for notification data
+   */
+  handleNotificationFromIntent(data: { [key: string]: string } | null): void {
+    if (!data) {
+      return;
+    }
+
+    // Extract orderId from various possible field names
+    const orderId = data.orderId || data.order_id || data.orderID || data['order-id'];
+    
+    if (orderId) {
+      console.log('📱 FCM: App opened from notification (intent), orderId:', orderId);
+      
+      const payload: NotificationPayload = {
+        title: data.title,
+        body: data.body,
+        data: data as NotificationData,
+        notificationId: data.messageId || Date.now().toString(),
+      };
+
+      // Handle navigation
+      this.onNotificationOpened(payload);
     }
   }
 
@@ -449,19 +524,24 @@ class FCMNotificationService {
 
   /**
    * Handle navigation based on notification data
+   * Centralized navigation - all notifications redirect to Order Tracking if orderId is present
    */
   private handleNotificationNavigation(data: NotificationData): void {
-    // Example navigation handling
-    // You can integrate with your navigation library here
+    // Extract orderId from notification data
+    // Support multiple possible field names: orderId, order_id, orderId, etc.
+    const orderId = data.orderId || data.order_id || data.orderID || data['order-id'];
     
-    if (data.screen) {
-      console.log('🧭 FCM: Navigate to screen:', data.screen);
-      // Example: navigation.navigate(data.screen, data.params ? JSON.parse(data.params) : {});
-    }
-    
-    if (data.orderId) {
-      console.log('🧭 FCM: Navigate to order:', data.orderId);
-      // Example: navigation.navigate('OrderDetails', { orderId: data.orderId });
+    if (orderId) {
+      console.log('🧭 FCM: Navigating to Order Tracking for order:', orderId);
+      
+      // Call navigation callback if set
+      if (this.navigationCallback) {
+        this.navigationCallback(orderId);
+      } else {
+        console.warn('⚠️  FCM: Navigation callback not set. Cannot navigate to Order Tracking.');
+      }
+    } else {
+      console.log('ℹ️  FCM: No orderId found in notification data. Skipping navigation.');
     }
   }
 

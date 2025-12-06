@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState, Linking } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
@@ -153,6 +153,42 @@ function AppContent() {
 
     return () => {
       unsubscribe();
+    };
+  }, []);
+
+  // Set up FCM navigation callback for notification taps
+  React.useEffect(() => {
+    // Set navigation callback to handle notification taps
+    // All notifications will redirect to Order Tracking page
+    fcmNotificationService.setNavigationCallback((orderId: string) => {
+      console.log('📱 FCM: Notification tapped, navigating to Order Tracking:', orderId);
+      handleNavigateToOrderTracking(orderId, 'orders');
+    });
+
+    // Cleanup callback on unmount
+    return () => {
+      fcmNotificationService.setNavigationCallback(null);
+    };
+  }, []);
+
+  // Handle app state changes to check for notifications when app becomes active
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        // Check if app was opened from notification when it becomes active
+        fcmNotificationService.checkInitialNotification().catch((error) => {
+          console.warn('⚠️  Failed to check initial notification:', error);
+        });
+      }
+    });
+
+    // Also check immediately when component mounts
+    fcmNotificationService.checkInitialNotification().catch((error) => {
+      console.warn('⚠️  Failed to check initial notification on mount:', error);
+    });
+
+    return () => {
+      subscription.remove();
     };
   }, []);
 

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 ENVIRONMENT=${1:-dev}
@@ -34,6 +34,9 @@ cd "$ANDROID_DIR"
 export APP_ENV="$ENVIRONMENT"
 export BUILD_ARTIFACT="$ARTIFACT"
 export BUILD_TARGET="$TARGET"
+# Set BABEL_ENV=production for release builds to remove console.log via Babel
+# Using BABEL_ENV instead of NODE_ENV to avoid interfering with Expo bundling
+export BABEL_ENV="production"
 
 GRADLE_CMD="./gradlew"
 if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == CYGWIN* ]]; then

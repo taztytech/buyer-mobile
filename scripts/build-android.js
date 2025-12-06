@@ -1,4 +1,4 @@
-﻿const { spawnSync } = require('child_process');
+const { spawnSync } = require('child_process');
 const path = require('path');
 
 const [env = 'dev', artifact = 'apk', target = 'all'] = process.argv.slice(2);
@@ -26,6 +26,9 @@ const result = spawnSync(command, isWindows ? args : args, {
     APP_ENV: env,
     BUILD_ARTIFACT: artifact,
     BUILD_TARGET: target,
+    // Set BABEL_ENV=production for release builds to remove console.log via Babel
+    // Using BABEL_ENV instead of NODE_ENV to avoid interfering with Expo bundling
+    BABEL_ENV: 'production',
   },
 });
 

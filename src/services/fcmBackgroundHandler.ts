@@ -17,6 +17,9 @@ try {
    * Background message handler
    * This function runs when the app is in the background or quit state
    * It must be registered before the app component loads
+   * 
+   * Note: System notifications are automatically shown by native FCMService.kt
+   * This handler is for processing data-only messages or updating local storage
    */
   if (messaging) {
     messaging().setBackgroundMessageHandler(
@@ -26,17 +29,17 @@ try {
         console.log('   Body:', remoteMessage.notification?.body);
         console.log('   Data:', remoteMessage.data);
 
-        // Handle background message here
-        // You can update local storage, show local notification, etc.
+        // System notification is automatically shown by native FCMService.kt
+        // This handler can be used for:
+        // - Processing data-only messages
+        // - Updating local storage
+        // - Syncing data in background
         
-        // Example: Store notification data
         if (remoteMessage.data) {
-          // You can save to AsyncStorage or process the data
+          // Process notification data if needed
+          // Navigation will be handled when user taps the notification
           console.log('📦 FCM: Processing background message data');
         }
-
-        // Note: You cannot show UI or navigate in background handler
-        // Use local notifications if you need to show something to the user
       }
     );
     console.log('✅ FCM: Background message handler registered');

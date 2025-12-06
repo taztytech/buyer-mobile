@@ -1,6 +1,6 @@
 {
   "name": "tazty",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -17,12 +17,21 @@
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "type-check": "tsc --noEmit",
+    "version:bump": "node scripts/bump-version.js patch",
+    "version:bump:patch": "node scripts/bump-version.js patch",
+    "version:bump:minor": "node scripts/bump-version.js minor",
+    "version:bump:major": "node scripts/bump-version.js major",
+    "version:bump:android": "node scripts/bump-android-version.js patch",
+    "version:bump:ios": "node scripts/bump-ios-version.js patch",
+    "verify:release": "node scripts/verify-release-readiness.js",
     "build:ios": "eas build --platform ios",
     "build:android": "eas build --platform android",
     "build:android:all:release:dev": "cross-env ENV_FILE=.env.dev node scripts/build-android.js dev apk all",
     "build:android:all:release:prod": "cross-env ENV_FILE=.env.prod node scripts/build-android.js prod apk all",
     "build:android:all:bundle:dev": "cross-env ENV_FILE=.env.dev node scripts/build-android.js dev bundle all",
-    "build:android:all:bundle:prod": "cross-env ENV_FILE=.env.prod node scripts/build-android.js prod bundle all"
+    "build:android:all:bundle:prod": "cross-env ENV_FILE=.env.prod node scripts/build-android.js prod bundle all",
+    "release:android": "npm run version:bump:patch && npm run build:android:all:bundle:prod",
+    "release:ios": "npm run version:bump:patch && npm run build:ios"
   },
   "dependencies": {
     "@expo-google-fonts/poppins": "^0.4.1",
@@ -55,6 +64,7 @@
     "@types/react": "~19.1.0",
     "@types/react-native-razorpay": "^2.2.6",
     "babel-plugin-module-resolver": "^5.0.2",
+    "babel-plugin-transform-remove-console": "^6.9.4",
     "babel-preset-expo": "^54.0.4",
     "cross-env": "^7.0.3",
     "eslint-config-prettier": "^10.1.8",
