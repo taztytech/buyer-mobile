@@ -28,6 +28,8 @@ export interface UserData {
   phoneNumber: string;
   name?: string;
   email?: string;
+  support_email?: string;
+  support_number?: string;
   // Add other user fields as needed
 }
 
