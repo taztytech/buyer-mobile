@@ -765,9 +765,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // Refetch cart summary to update bill details
     await fetchCartSummary();
 
-    // If a promo code exists in state, re-apply it to recalculate discount based on new cart total
+    // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
     // This ensures discount is recalculated correctly when cart items change
-    if (promoCode && promoCode.trim() !== '') {
+    if (isCouponApplied && promoCode && promoCode.trim() !== '') {
       try {
         const normalizedCode = promoCode.trim().toUpperCase();
         const response = await cartService.applyCoupon(normalizedCode);
@@ -810,9 +810,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       // Refetch cart summary to update bill details
       await fetchCartSummary();
 
-      // If a promo code exists in state, re-apply it to recalculate discount based on new cart total
+      // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
       // This ensures discount is recalculated correctly when cart items change
-      if (promoCode && promoCode.trim() !== '') {
+      if (isCouponApplied && promoCode && promoCode.trim() !== '') {
         try {
           const normalizedCode = promoCode.trim().toUpperCase();
           const response = await cartService.applyCoupon(normalizedCode);
@@ -851,9 +851,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       // Refetch cart summary to update bill details
       await fetchCartSummary();
 
-      // If a promo code exists in state, re-apply it to recalculate discount based on new cart total
+      // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
       // This ensures discount is recalculated correctly when cart items change
-      if (promoCode && promoCode.trim() !== '') {
+      if (isCouponApplied && promoCode && promoCode.trim() !== '') {
         try {
           const normalizedCode = promoCode.trim().toUpperCase();
           const response = await cartService.applyCoupon(normalizedCode);
@@ -995,10 +995,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     
     // Validate minimum order amount before applying promo
     // The backend will also validate this, but we check here for better UX
-    if (baseTotal < MINIMUM_ORDER_AMOUNT) {
-      setPromoError(`Minimum order value of ₹${MINIMUM_ORDER_AMOUNT} required to apply promo codes.`);
-      return;
-    }
+    // if (baseTotal < MINIMUM_ORDER_AMOUNT) {
+    //   setPromoError(`Minimum order value of ₹${MINIMUM_ORDER_AMOUNT} required to apply promo codes.`);
+    //   return;
+    // }
 
     // Enforce uppercase-only input (letters are uppercased; digits remain as-is)
     const normalizedCode = trimmedCode.toUpperCase();
