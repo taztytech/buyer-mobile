@@ -367,6 +367,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           if (typeof tipAmount === 'number') {
             setSelectedTip(tipAmount > 0 ? tipAmount : null);
           }
+
+          // Only restore promo code from backend if field is empty (preserve user input)
+          // This prevents overwriting what the user has typed
+          if (promoCode.trim() === '') {
+            if (cartResponse.summary.applied_offer?.offer_code) {
+              setPromoCode(cartResponse.summary.applied_offer.offer_code);
+            }
+          }
+          // Note: We don't clear promo code if user has entered something, even if backend has no offer
+          // This allows user to keep typing/editing without interruption
         }
       } else {
         setCartData(null);
@@ -755,6 +765,26 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // Refetch cart summary to update bill details
     await fetchCartSummary();
 
+    // If a promo code exists in state, re-apply it to recalculate discount based on new cart total
+    // This ensures discount is recalculated correctly when cart items change
+    if (promoCode && promoCode.trim() !== '') {
+      try {
+        const normalizedCode = promoCode.trim().toUpperCase();
+        const response = await cartService.applyCoupon(normalizedCode);
+        if (response.success && response.cart_summary) {
+          setCartSummary(response.cart_summary);
+          setPromoError('');
+        } else {
+          // If promo becomes invalid, clear it from state
+          setPromoCode('');
+          setPromoError(response.message || 'Promo code is no longer valid.');
+        }
+      } catch (error) {
+        // Silent fail - discount will be updated via fetchCartSummary
+        // If promo becomes invalid, it will be handled by auto-remove logic
+      }
+    }
+
     // Also call parent callback if provided (for backward compatibility)
     if (onUpdateCart) {
       onUpdateCart(itemId, variantId, newQuantity);
@@ -780,6 +810,26 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       // Refetch cart summary to update bill details
       await fetchCartSummary();
 
+      // If a promo code exists in state, re-apply it to recalculate discount based on new cart total
+      // This ensures discount is recalculated correctly when cart items change
+      if (promoCode && promoCode.trim() !== '') {
+        try {
+          const normalizedCode = promoCode.trim().toUpperCase();
+          const response = await cartService.applyCoupon(normalizedCode);
+          if (response.success && response.cart_summary) {
+            setCartSummary(response.cart_summary);
+            setPromoError('');
+          } else {
+            // If promo becomes invalid, clear it from state
+            setPromoCode('');
+            setPromoError(response.message || 'Promo code is no longer valid.');
+          }
+        } catch (error) {
+          // Silent fail - discount will be updated via fetchCartSummary
+          // If promo becomes invalid, it will be handled by auto-remove logic
+        }
+      }
+
       // Also call parent callback if provided (for backward compatibility)
       if (onUpdateCart) {
         onUpdateCart(itemId, variantId, 0);
@@ -800,6 +850,26 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
       // Refetch cart summary to update bill details
       await fetchCartSummary();
+
+      // If a promo code exists in state, re-apply it to recalculate discount based on new cart total
+      // This ensures discount is recalculated correctly when cart items change
+      if (promoCode && promoCode.trim() !== '') {
+        try {
+          const normalizedCode = promoCode.trim().toUpperCase();
+          const response = await cartService.applyCoupon(normalizedCode);
+          if (response.success && response.cart_summary) {
+            setCartSummary(response.cart_summary);
+            setPromoError('');
+          } else {
+            // If promo becomes invalid, clear it from state
+            setPromoCode('');
+            setPromoError(response.message || 'Promo code is no longer valid.');
+          }
+        } catch (error) {
+          // Silent fail - discount will be updated via fetchCartSummary
+          // If promo becomes invalid, it will be handled by auto-remove logic
+        }
+      }
 
       // Also call parent callback if provided (for backward compatibility)
       if (onUpdateCart) {
