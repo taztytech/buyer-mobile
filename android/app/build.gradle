@@ -94,7 +94,6 @@ android {
     productFlavors {
         dev {
             dimension "environment"
-            applicationIdSuffix ".dev"
             versionNameSuffix "-dev"
             resValue "string", "app_name", "Tazty Dev"
         }
