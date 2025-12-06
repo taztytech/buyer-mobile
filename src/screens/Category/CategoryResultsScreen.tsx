@@ -136,6 +136,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
   const [hasSearched, setHasSearched] = useState(false);
   const [scrollOffset, setScrollOffset] = useState(0);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const categoryScrollViewRef = useRef<ScrollView>(null);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -295,6 +296,31 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory]);
 
+  // Auto-scroll to selected category when component mounts or categoryName changes
+  useEffect(() => {
+    if (categoryName && displayCategories.length > 0) {
+      const selectedIndex = displayCategories.indexOf(categoryName);
+      if (selectedIndex !== -1 && categoryScrollViewRef.current) {
+        // Calculate scroll position
+        // Category width: 74, marginRight: 4, total: 78
+        // Padding left: 20
+        const categoryWidth = 74 + 4; // 78
+        const paddingLeft = 20;
+        const scrollX = selectedIndex * categoryWidth;
+        
+        // Wait for the ScrollView to be rendered
+        setTimeout(() => {
+          if (categoryScrollViewRef.current) {
+            categoryScrollViewRef.current.scrollTo({
+              x: scrollX,
+              animated: true,
+            });
+          }
+        }, 100);
+      }
+    }
+  }, [categoryName, displayCategories]);
+
   // Handle search with debounce
   useEffect(() => {
     // Clear previous timeout
@@ -368,6 +394,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         {/* Categories Section with Images */}
         <View style={styles.categorySection}>
           <ScrollView
+            ref={categoryScrollViewRef}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoryScroll}
