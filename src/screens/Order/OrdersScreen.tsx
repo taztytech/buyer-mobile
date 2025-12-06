@@ -17,6 +17,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import { Shimmer } from '@/components/Shimmer';
 
+// Module-level state to persist across component remounts
+let persistedOrders: OrderListItem[] = [];
+let persistedCurrentPage: number = 1;
+let persistedTotalOrders: number = 0;
+let persistedScrollPosition: number = 0;
+let hasPersistedData: boolean = false;
+
 // Unused interface - kept for reference
 // interface OrderItem {
 //   id: string;
@@ -58,25 +65,58 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   onHelp,
   onViewMore: _onViewMore, // Unused but kept for API compatibility
 }) => {
-  const [orders, setOrders] = useState<OrderListItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Initialize state from persisted data if available
+  const [orders, setOrders] = useState<OrderListItem[]>(() => {
+    if (hasPersistedData && persistedOrders.length > 0) {
+      return persistedOrders;
+    }
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState(() => !hasPersistedData);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalOrders, setTotalOrders] = useState(0);
+  const [currentPage, setCurrentPage] = useState(() => persistedCurrentPage);
+  const [totalOrders, setTotalOrders] = useState(() => persistedTotalOrders);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   // Refs to prevent API overload
   const isRequestInProgress = useRef(false);
   const lastRequestedPage = useRef(0);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Refs for scroll position preservation
+  const scrollViewRef = useRef<ScrollView>(null);
+  const isInitialMount = useRef(!hasPersistedData);
+  const hasRestoredScroll = useRef(false);
 
   useEffect(() => {
-    // Fetch fresh data whenever screen becomes visible
-    if (visible) {
+    // Only fetch fresh data on initial mount if no persisted data exists
+    if (visible && isInitialMount.current && !hasPersistedData) {
+      isInitialMount.current = false;
       setCurrentPage(1);
       fetchOrders(1, true);
+    } else if (visible && hasPersistedData) {
+      // Reset the restore flag when screen becomes visible
+      hasRestoredScroll.current = false;
     }
   }, [visible]);
+
+  // Separate effect to restore scroll position after orders are rendered
+  useEffect(() => {
+    if (visible && hasPersistedData && !hasRestoredScroll.current && orders.length > 0 && persistedScrollPosition > 0) {
+      // Wait for ScrollView to be fully rendered before restoring scroll
+      const restoreTimer = setTimeout(() => {
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({
+            y: persistedScrollPosition,
+            animated: false,
+          });
+          hasRestoredScroll.current = true; // Mark as restored
+        }
+      }, 200);
+      
+      return () => clearTimeout(restoreTimer);
+    }
+  }, [visible, orders.length]);
 
   const fetchOrders = async (page: number = 1, reset: boolean = false) => {
     // Prevent duplicate requests for the same page
@@ -96,6 +136,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       if (reset) {
         setIsLoading(true);
         lastRequestedPage.current = 0; // Reset when fetching first page
+        // Clear persisted scroll position when resetting
+        persistedScrollPosition = 0;
+        hasRestoredScroll.current = false;
       } else {
         setIsLoadingMore(true);
       }
@@ -124,16 +167,22 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
         if (reset) {
           setOrders(ordersArray);
+          persistedOrders = ordersArray;
         } else {
           // Append new orders to existing ones, filtering out duplicates
           setOrders(prev => {
             const existingIds = new Set(prev.map(o => o.id));
             const newOrders = ordersArray.filter((order: any) => !existingIds.has(order.id));
-            return [...prev, ...newOrders];
+            const updatedOrders = [...prev, ...newOrders];
+            persistedOrders = updatedOrders;
+            return updatedOrders;
           });
         }
         setTotalOrders(total);
+        persistedTotalOrders = total;
         setCurrentPage(page);
+        persistedCurrentPage = page;
+        hasPersistedData = true;
       } else {
         setError(response.error || 'Failed to load orders');
       }
@@ -157,6 +206,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   // Debounced scroll handler to prevent API overload
   const handleScroll = useCallback(({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
+    // Save scroll position to module-level variable for restoration across remounts
+    persistedScrollPosition = nativeEvent.contentOffset.y;
+
     // Clear any pending timeout
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
@@ -605,6 +657,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
       {/* Orders List */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
