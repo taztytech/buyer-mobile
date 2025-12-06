@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import { Shimmer } from '@/components/Shimmer';
+import { authService } from '@/services/auth.service';
 
 // Unused interface - kept for reference
 // interface OrderItem {
@@ -64,6 +65,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [supportNumber, setSupportNumber] = useState<string>('');
   
   // Refs to prevent API overload
   const isRequestInProgress = useRef(false);
@@ -75,8 +77,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     if (visible) {
       setCurrentPage(1);
       fetchOrders(1, true);
+      fetchSupportDetails();
     }
   }, [visible]);
+
+  // Fetch support number from cache first, only call API if not cached
+  const fetchSupportDetails = async () => {
+    const supportDetails = await authService.getSupportDetails(false);
+    setSupportNumber(supportDetails.support_number);
+  };
 
   const fetchOrders = async (page: number = 1, reset: boolean = false) => {
     // Prevent duplicate requests for the same page
@@ -336,10 +345,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  const handleCallSupportFromCancelled = () => {
-    const supportNumber = '8098777720';
-    if (!supportNumber) return;
-    const telUrl = `tel:${supportNumber.replace(/\s+/g, '')}`;
+  const handleCallSupportFromCancelled = async () => {
+    // Get support number from cache first, only call API if not found
+    const supportDetails = await authService.getSupportDetails(false);
+    const numberToCall = supportDetails.support_number;
+    
+    if (!numberToCall) return;
+    const telUrl = `tel:${numberToCall.replace(/\s+/g, '')}`;
     Linking.openURL(telUrl).catch(() => {});
   };
 
