@@ -21,6 +21,7 @@ import { RestaurantCard } from '@/components/RestaurantCard';
 import { SearchBar } from '@/components/SearchBar';
 import { homeService } from '@/services/home.service';
 import { useVegMode } from '@/context/VegModeContext';
+import { addressService } from '@/services/address.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -36,6 +37,7 @@ interface CategoryResultsScreenProps {
   categories?: CategoryItem[];
   onBack?: () => void;
   onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
+  selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
 }
 
 interface TopRatedItem {
@@ -119,11 +121,18 @@ const ShimmerTopRatedCard = () => (
 );
 
 
+// Default location coordinates (Madurai) - fallback if no location provided
+const DEFAULT_LOCATION = {
+  latitude: 9.9252,
+  longitude: 78.1198,
+};
+
 export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
   categoryName,
   categories,
   onBack,
   onNavigateToRestaurant,
+  selectedLocation,
 }) => {
   const { vegMode } = useVegMode();
   const [searchQuery, setSearchQuery] = useState('');
@@ -136,6 +145,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
   const [hasSearched, setHasSearched] = useState(false);
   const [scrollOffset, setScrollOffset] = useState(0);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [defaultAddressCoords, setDefaultAddressCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const categoryScrollViewRef = useRef<ScrollView>(null);
 
   // Animation values
@@ -147,13 +157,48 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
     ? categories.filter(cat => cat.name !== 'View All').map(cat => cat.name)
     : FALLBACK_CATEGORIES;
 
+  // Track if we've attempted to fetch default address
+  const [hasFetchedDefaultAddress, setHasFetchedDefaultAddress] = useState(false);
+
+  // Fetch default address coordinates
+  useEffect(() => {
+    const fetchDefaultAddress = async () => {
+      try {
+        const response = await addressService.getAddresses();
+        if (response.success && response.data) {
+          // Find the default address (is_default: true)
+          const defaultAddress = response.data.find(addr => addr.is_default);
+          if (defaultAddress) {
+            setDefaultAddressCoords({
+              latitude: defaultAddress.latitude,
+              longitude: defaultAddress.longitude,
+            });
+          } else {
+            // No default address found, mark as fetched but set to null
+            setDefaultAddressCoords(null);
+          }
+        } else {
+          // API failed, mark as fetched but set to null
+          setDefaultAddressCoords(null);
+        }
+      } catch (error) {
+        // Error fetching, mark as fetched but set to null
+        setDefaultAddressCoords(null);
+      } finally {
+        setHasFetchedDefaultAddress(true);
+      }
+    };
+
+    fetchDefaultAddress();
+  }, []);
+
   const fetchRestaurants = async () => {
     try {
       setIsLoading(true);
 
-      // Default location - you can make this dynamic later
-      const lat = 9.93550394286794;
-      const lng = 78.13114931086115;
+      // Use default address coordinates, then selectedLocation, then fallback to default
+      const lat = defaultAddressCoords?.latitude || selectedLocation?.latitude || DEFAULT_LOCATION.latitude;
+      const lng = defaultAddressCoords?.longitude || selectedLocation?.longitude || DEFAULT_LOCATION.longitude;
       const radius = 10;
 
       const query = selectedCategory.toLowerCase();
@@ -179,14 +224,24 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
             ? homeService.isRestaurantOpen(timings)
             : (restaurant.is_open !== undefined ? restaurant.is_open : true);
 
+          // Format cuisine_tags: if array, join with " • ", otherwise use as string
+          let cuisineText = 'Restaurant';
+          if (restaurant.cuisine_tags) {
+            if (Array.isArray(restaurant.cuisine_tags)) {
+              cuisineText = restaurant.cuisine_tags.join(' • ');
+            } else if (typeof restaurant.cuisine_tags === 'string' && restaurant.cuisine_tags.trim()) {
+              cuisineText = restaurant.cuisine_tags;
+            }
+          }
+
           return {
             id: restaurant.id,
             name: restaurant.name,
-            cuisine: restaurant.description || 'Restaurant',
+            cuisine: cuisineText,
             rating: restaurant.rating || 0,
             deliveryTime: restaurant.delivery_time || '25-30 mins',
             location: restaurant.location,
-            distance: restaurant.distance ? `${restaurant.distance.toFixed(1)}Kms` : '0Kms',
+            distance: restaurant.distance ? `${(Math.floor(restaurant.distance * 100) / 100).toFixed(2)}Kms` : '0Kms',
             image: restaurant.logo_url || restaurant.image,
             isFavorite: restaurant.is_favorite || false,
             isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
@@ -226,9 +281,9 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
     try {
       setIsSearching(true);
 
-      // Default location - you can make this dynamic later
-      const lat = 9.93550394286794;
-      const lng = 78.13114931086115;
+      // Use default address coordinates, then selectedLocation, then fallback to default
+      const lat = defaultAddressCoords?.latitude || selectedLocation?.latitude || DEFAULT_LOCATION.latitude;
+      const lng = defaultAddressCoords?.longitude || selectedLocation?.longitude || DEFAULT_LOCATION.longitude;
       const radius = 10;
 
       let apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`;
@@ -249,14 +304,24 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
             ? homeService.isRestaurantOpen(timings)
             : (restaurant.is_open !== undefined ? restaurant.is_open : true);
 
+          // Format cuisine_tags: if array, join with " • ", otherwise use as string
+          let cuisineText = 'Restaurant';
+          if (restaurant.cuisine_tags) {
+            if (Array.isArray(restaurant.cuisine_tags)) {
+              cuisineText = restaurant.cuisine_tags.join(' • ');
+            } else if (typeof restaurant.cuisine_tags === 'string' && restaurant.cuisine_tags.trim()) {
+              cuisineText = restaurant.cuisine_tags;
+            }
+          }
+
           return {
             id: restaurant.id,
             name: restaurant.name,
-            cuisine: restaurant.description || 'Restaurant',
+            cuisine: cuisineText,
             rating: restaurant.rating || 0,
             deliveryTime: restaurant.delivery_time || '25-30 mins',
             location: restaurant.location,
-            distance: restaurant.distance ? `${restaurant.distance.toFixed(1)}Kms` : '0Kms',
+            distance: restaurant.distance ? `${(Math.floor(restaurant.distance * 100) / 100).toFixed(2)}Kms` : '0Kms',
             image: restaurant.logo_url || restaurant.image,
             isFavorite: restaurant.is_favorite || false,
             isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
@@ -292,9 +357,12 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
 
   // Fetch restaurants data from API
   useEffect(() => {
-    fetchRestaurants();
+    // Wait for default address fetch to complete before fetching restaurants
+    if (hasFetchedDefaultAddress) {
+      fetchRestaurants();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory]);
+  }, [selectedCategory, defaultAddressCoords, hasFetchedDefaultAddress]);
 
   // Auto-scroll to selected category when component mounts or categoryName changes
   useEffect(() => {

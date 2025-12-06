@@ -1952,6 +1952,7 @@ function AppContent() {
                 categories={categoryData}
                 onBack={handleBackFromCategoryResults}
                 onNavigateToRestaurant={handleNavigateToRestaurantFromCategory}
+                selectedLocation={selectedLocation}
               />
             </View>
           )}

@@ -88,13 +88,24 @@ export interface OrderListItem {
     image?: string;
     quantity: number;
     is_veg: boolean;
+    item_name?: string; // Alternative name field
   }[];
   total_amount: number;
   status: string;
-  payment_status: string;
+  payment_status?: string;
+  payment_method?: string;
+  cancellation_reason?: string;
   created_at: string;
   updated_at: string;
   overall_rating?: number;
+  delivery_address?: {
+    city?: string;
+    [key: string]: any;
+  };
+  summary?: {
+    total_amount?: number;
+    [key: string]: any;
+  };
 }
 
 class OrdersService {

@@ -45,7 +45,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
 
     if (!validatePhoneNumber(phoneNumber)) {
-      setError('Please enter a valid 10-digit Indian phone number');
+      setError('Please enter a valid 10-digit phone number');
       return;
     }
 

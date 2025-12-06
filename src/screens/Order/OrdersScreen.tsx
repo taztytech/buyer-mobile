@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import { Shimmer } from '@/components/Shimmer';
+import { authService } from '@/services/auth.service';
 
 // Module-level state to persist across component remounts
 let persistedOrders: OrderListItem[] = [];
@@ -59,10 +60,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   visible = false,
   onBack,
   onOrderDetails,
-  onReorder,
+  onReorder: _onReorder, // Unused but kept for API compatibility
   onRateOrder,
   onTrackOrder,
-  onHelp,
+  onHelp: _onHelp, // Unused but kept for API compatibility
   onViewMore: _onViewMore, // Unused but kept for API compatibility
 }) => {
   // Initialize state from persisted data if available
@@ -116,6 +117,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       
       return () => clearTimeout(restoreTimer);
     }
+    return undefined;
   }, [visible, orders.length]);
 
   const fetchOrders = async (page: number = 1, reset: boolean = false) => {
@@ -262,9 +264,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   };
 
   // Map API status to UI status
-  const mapStatus = (status: string | null | undefined): 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' => {
+  const mapStatus = (status: string | null | undefined): 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' | 'order_placed' => {
     if (!status) return 'ongoing';
-    const statusMap: { [key: string]: 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' } = {
+    const statusMap: { [key: string]: 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' | 'order_placed' } = {
       'delivered': 'delivered',
       'completed': 'delivered',
       'payment_failed': 'payment_failed',
@@ -362,12 +364,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   ];
   */
 
-  const handleReorder = (orderId: string) => {
-    if (onReorder) {
-      onReorder(orderId);
-    }
-  };
-
   const handleRateOrder = (orderId: string) => {
     if (onRateOrder) {
       // Find the order from the orders array
@@ -382,16 +378,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  const handleHelp = (order: OrderListItem) => {
-    if (onHelp) {
-      onHelp(order);
-    }
-  };
-
-  const handleCallSupportFromCancelled = () => {
-    const supportNumber = '8098777720';
-    if (!supportNumber) return;
-    const telUrl = `tel:${supportNumber.replace(/\s+/g, '')}`;
+  const handleCallSupportFromCancelled = async () => {
+    // Get support number from cache first, only call API if not found
+    const supportDetails = await authService.getSupportDetails(false);
+    const numberToCall = supportDetails.support_number;
+    
+    if (!numberToCall) return;
+    const telUrl = `tel:${numberToCall.replace(/\s+/g, '')}`;
     Linking.openURL(telUrl).catch(() => {});
   };
 
@@ -402,7 +395,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   };
 
   const renderOrderCard = (order: OrderListItem) => {
-    const statusConfig = {
+    const statusConfig: Record<'delivered' | 'cancelled' | 'payment_failed' | 'order_placed' | 'ongoing', {
+      label: string;
+      color: string;
+      bgColor: string;
+      icon: string;
+    }> = {
       delivered: {
         label: 'Delivered',
         color: '#00B14F',
@@ -517,7 +515,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           <View style={styles.multipleItems}>
             {(order.items || []).slice(0, 2).map((item: any, index: number) => (
               <View key={`${order.id}-item-${item.id || index}-${index}`} style={styles.itemRow}>
-                <Text style={styles.itemName}>{item.quantity || 1}x {item.item_name || 'Item'}</Text>
+                <Text style={styles.itemName}>{item.quantity || 1}x {item.item_name || item.name || 'Item'}</Text>
               </View>
             ))}
             {/* Show +X more items if there are more than 2 */}

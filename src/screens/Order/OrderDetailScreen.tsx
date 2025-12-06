@@ -14,7 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
-import { storageService } from '@/services/storage.service';
 
 interface OrderDetailScreenProps {
   orderId?: string;
@@ -98,45 +97,27 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     fetchUserPhone();
   }, []);
 
-  // Fetch support number (same logic as ContactUsScreen)
+  // Fetch support number from cache first, only call API if not cached
   useEffect(() => {
     if (!visible) {
       return;
     }
 
     const fetchSupportDetails = async () => {
-      try {
-        // Try API first
-        const response = await authService.getProfile();
-
-        if (response.success && response.data?.user) {
-          const user = response.data.user as any;
-          setSupportNumber(user.support_number || '');
-        } else {
-          // Fallback to stored user
-          const storedUser = await storageService.getUser();
-          if (storedUser) {
-            setSupportNumber((storedUser as any).support_number || '');
-          }
-        }
-      } catch {
-        try {
-          const storedUser = await storageService.getUser();
-          if (storedUser) {
-            setSupportNumber((storedUser as any).support_number || '');
-          }
-        } catch {
-          // Silent fail – leave default
-        }
-      }
+      const supportDetails = await authService.getSupportDetails(false);
+      setSupportNumber(supportDetails.support_number);
     };
 
     fetchSupportDetails();
   }, [visible]);
 
-  const handleCallSupport = () => {
-    if (!supportNumber) return;
-    const telUrl = `tel:${supportNumber.replace(/\s+/g, '')}`;
+  const handleCallSupport = async () => {
+    // Get support number from cache first, only call API if not found
+    const supportDetails = await authService.getSupportDetails(false);
+    const numberToCall = supportDetails.support_number;
+    
+    if (!numberToCall) return;
+    const telUrl = `tel:${numberToCall.replace(/\s+/g, '')}`;
     Linking.openURL(telUrl).catch(() => {});
   };
 
@@ -418,25 +399,42 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <Text style={styles.rateButtonText}>Rate Order</Text>
                 </TouchableOpacity>
               ) : null}
-              {/* {orderData.status === 'delivered' || orderData.status === 'cancelled' ? (
-                <TouchableOpacity
-                  style={styles.reorderButton}
-                  onPress={onReorder}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
-                  <Text style={styles.reorderButtonText}>Reorder</Text>
-                </TouchableOpacity>
-              ) : ( */}
-                <TouchableOpacity
-                  style={styles.reorderButton}
-                  onPress={onTrackOrder}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
-                  <Text style={styles.reorderButtonText}>Track Order</Text>
-                </TouchableOpacity>
-              {/* )} */}
+              
+              {/* Show Support button for cancelled or payment_failed orders */}
+              {(() => {
+                const normalizedStatus = getStatusDisplay(orderData.status, orderData).title.toLowerCase();
+                const isCancelled = orderData.status === 'cancelled' || normalizedStatus.includes('cancelled');
+                const isPaymentFailed = orderData.status === 'payment_failed' || 
+                                       orderData.payment_status?.toLowerCase() === 'failed' ||
+                                       orderData.payment_status?.toLowerCase() === 'payment_failed' ||
+                                       normalizedStatus.includes('payment failed');
+                const isDelivered = orderData.status === 'delivered' || normalizedStatus.includes('delivered');
+                
+                if (isCancelled || isPaymentFailed) {
+                  return (
+                    <TouchableOpacity
+                      style={styles.reorderButton}
+                      onPress={handleCallSupport}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons name="phone" size={20} color="#FFFFFF" />
+                      <Text style={styles.reorderButtonText}>Support</Text>
+                    </TouchableOpacity>
+                  );
+                } else if (!isDelivered && !isCancelled) {
+                  return (
+                    <TouchableOpacity
+                      style={styles.reorderButton}
+                      onPress={onTrackOrder}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
+                      <Text style={styles.reorderButtonText}>Track Order</Text>
+                    </TouchableOpacity>
+                  );
+                }
+                return null;
+              })()}
             </View>
           </View>
 

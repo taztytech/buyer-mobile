@@ -1386,11 +1386,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               style={styles.profileButton}
               onPress={onNavigateToProfile}
               activeOpacity={0.7}
-              disabled={false}
+              disabled={!isLocationServiceable}
               testID="profile-button"
             >
-              <View style={styles.profileAvatar}>
-                <MaterialIcons name="person" size={22} color="#00B14F" />
+              <View style={[
+                styles.profileAvatar,
+                !isLocationServiceable && styles.profileAvatarDisabled
+              ]}>
+                <MaterialIcons 
+                  name="person" 
+                  size={22} 
+                  color={isLocationServiceable ? "#00B14F" : "rgba(0, 177, 79, 0.4)"} 
+                />
               </View>
             </TouchableOpacity>
           )}
@@ -1414,16 +1421,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 style={{ flex: 1 }}
                 onPress={onNavigateToSearch}
                 activeOpacity={0.7}
-                disabled={false}
+                disabled={!isLocationServiceable}
               >
                 <LinearGradient
                   colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={styles.searchBar}
+                  style={[
+                    styles.searchBar,
+                    !isLocationServiceable && styles.searchBarDisabled
+                  ]}
                 >
-                  <MaterialIcons name="search" size={24} color="#FFFFFF" />
-                  <Text style={styles.searchInput} numberOfLines={1}>
+                  <MaterialIcons 
+                    name="search" 
+                    size={24} 
+                    color={isLocationServiceable ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)"} 
+                  />
+                  <Text 
+                    style={[
+                      styles.searchInput,
+                      !isLocationServiceable && styles.searchInputDisabled
+                    ]} 
+                    numberOfLines={1}
+                  >
                     Search Restaurants & foods..
                   </Text>
                 </LinearGradient>
@@ -1431,19 +1451,31 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
               {/* VEG Mode Toggle */}
               <TouchableOpacity
-                style={styles.vegModeContainer}
+                style={[
+                  styles.vegModeContainer,
+                  !isLocationServiceable && styles.vegModeContainerDisabled
+                ]}
                 onPress={handleVegModeToggle}
-                disabled={false}
+                disabled={!isLocationServiceable}
                 testID="veg-mode-toggle"
               >
-                <Text style={styles.vegModeLabel}>VEG{'\n'}MODE</Text>
+                <Text 
+                  style={[
+                    styles.vegModeLabel,
+                    !isLocationServiceable && styles.vegModeLabelDisabled
+                  ]}
+                >
+                  VEG{'\n'}MODE
+                </Text>
                 <View style={[
                   styles.vegToggle,
-                  isVegModeEnabled && styles.vegToggleActive
+                  isVegModeEnabled && styles.vegToggleActive,
+                  !isLocationServiceable && styles.vegToggleDisabled
                 ]}>
                   <View style={[
                     styles.vegToggleThumb,
-                    isVegModeEnabled && styles.vegToggleThumbActive
+                    isVegModeEnabled && styles.vegToggleThumbActive,
+                    !isLocationServiceable && styles.vegToggleThumbDisabled
                   ]} />
                 </View>
               </TouchableOpacity>
