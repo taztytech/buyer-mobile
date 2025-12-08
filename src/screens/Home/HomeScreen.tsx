@@ -133,6 +133,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const flatListRef = React.useRef<FlatList>(null);
   const scrollViewRef = React.useRef<ScrollView>(null);
   const scrollPositionRef = React.useRef(0);
+  const autoSlideTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
@@ -1016,6 +1017,76 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const viewConfigRef = React.useRef({ viewAreaCoveragePercentThreshold: 50 });
 
+  // Auto-slide carousel every 3 seconds
+  React.useEffect(() => {
+    if (carouselData.length <= 1) {
+      // Clear timer if only one banner
+      if (autoSlideTimerRef.current) {
+        clearInterval(autoSlideTimerRef.current);
+        autoSlideTimerRef.current = null;
+      }
+      return;
+    }
+
+    // Clear existing timer
+    if (autoSlideTimerRef.current) {
+      clearInterval(autoSlideTimerRef.current);
+    }
+
+    // Set up auto-slide
+    autoSlideTimerRef.current = setInterval(() => {
+      if (flatListRef.current) {
+        const nextIndex = (currentSlide + 1) % carouselData.length;
+        flatListRef.current.scrollToIndex({
+          index: nextIndex,
+          animated: true,
+        });
+        setCurrentSlide(nextIndex);
+      }
+    }, 3000);
+
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (autoSlideTimerRef.current) {
+        clearInterval(autoSlideTimerRef.current);
+        autoSlideTimerRef.current = null;
+      }
+    };
+  }, [carouselData.length, currentSlide]);
+
+  // Handle manual navigation
+  const handleCarouselNavigation = React.useCallback((direction: 'prev' | 'next') => {
+    if (!flatListRef.current || carouselData.length <= 1) return;
+
+    let newIndex: number;
+    if (direction === 'next') {
+      newIndex = (currentSlide + 1) % carouselData.length;
+    } else {
+      newIndex = (currentSlide - 1 + carouselData.length) % carouselData.length;
+    }
+
+    flatListRef.current.scrollToIndex({
+      index: newIndex,
+      animated: true,
+    });
+    setCurrentSlide(newIndex);
+
+    // Reset auto-slide timer after manual navigation
+    if (autoSlideTimerRef.current) {
+      clearInterval(autoSlideTimerRef.current);
+    }
+    autoSlideTimerRef.current = setInterval(() => {
+      if (flatListRef.current) {
+        const nextIndex = (newIndex + 1) % carouselData.length;
+        flatListRef.current.scrollToIndex({
+          index: nextIndex,
+          animated: true,
+        });
+        setCurrentSlide(nextIndex);
+      }
+    }, 3000);
+  }, [currentSlide, carouselData.length]);
+
   // Handle banner CTA click based on promotion type
   const handleBannerCTAClick = React.useCallback((item: CarouselItem) => {
     if (!item.promotionType || !item.promotionLink) {
@@ -1064,41 +1135,38 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const renderCarouselItem = React.useCallback(({ item }: { item: CarouselItem }) => {
     return (
       <View style={styles.carouselSlide} testID={`carousel-slide-${item.id}`}>
-        <View style={[styles.adBanner, { width: BANNER_WIDTH, backgroundColor: item.backgroundColor }]} testID={`banner-${item.id}`}>
-          {/* Blob with masked image */}
-          {item.imageUrl ? (
-            <View style={styles.blobContainer} testID={`blob-container-${item.id}`}>
-              {/* Blob background with image masked inside */}
-              <View style={styles.adImageBlob}>
-                <Image
-                  source={{ uri: item.imageUrl }}
-                  style={styles.adImageMasked}
-                  resizeMode="cover"
-                  testID={`banner-image-${item.id}`}
-                  onLoad={() => {
-                    setLoadedBannerImages(prev => new Set(prev).add(item.id));
-                  }}
-                  onError={() => {
-                    // Mark as loaded even on error
-                    setLoadedBannerImages(prev => new Set(prev).add(item.id));
-                  }}
-                  fadeDuration={300}
-                  progressiveRenderingEnabled={true}
-                />
-              </View>
-            </View>
-          ) : null}
-
+        <View style={[styles.adBanner, { width: BANNER_WIDTH, backgroundColor: item.backgroundColor || '#00BEC8' }]} testID={`banner-${item.id}`}>
+          {/* Background Image - fills entire rectangle */}
+          {item.imageUrl && (
+            <Image
+              source={{ uri: item.imageUrl }}
+              style={styles.adBannerImage}
+              resizeMode="cover"
+            />
+          )}
+          
+          {/* Black overlay for text readability */}
+          <View style={styles.adOverlay} />
+          
+          {/* Content with background color visible behind buttons */}
           <View style={styles.adContent} testID={`banner-content-${item.id}`}>
             <Text style={styles.adTitle} numberOfLines={1} ellipsizeMode="tail" testID={`banner-title-${item.id}`}>{item.title}</Text>
             <Text style={styles.adDescription} testID={`banner-description-${item.id}`}>{item.description}</Text>
             <TouchableOpacity
-              style={styles.adButton}
+              style={[
+                styles.adButton,
+                { backgroundColor: item.backgroundColor || '#FFFFFF' }
+              ]}
               testID={`banner-button-${item.id}`}
               onPress={() => handleBannerCTAClick(item)}
               activeOpacity={0.8}
             >
-              <Text style={styles.adButtonText}>{item.buttonText}</Text>
+              <Text style={[
+                styles.adButtonText,
+                { color: item.backgroundColor ? '#FFFFFF' : '#000000' }
+              ]}>
+                {item.buttonText}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1396,16 +1464,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Ad Banner Carousel */}
       {isLocationServiceable && (
       <>
-      {/* Only show banner section if there's data or still loading */}
-      {(showBannerShimmer || carouselData.length > 0) && (
-        <View style={styles.carouselContainer}>
-          {showBannerShimmer ? (
-            <View style={styles.loadingContainer}>
-              
-              <Shimmer width="100%" height={149} borderRadius={20} backgroundColor="#00BEC8" />
-            </View>
-          ) : (
-            <>
+      <View style={styles.carouselContainer}>
+        {showBannerShimmer ? (
+          <View style={styles.loadingContainer}>
+            
+            <Shimmer width="100%" height={149} borderRadius={20} backgroundColor="#00BEC8" />
+          </View>
+        ) : (
+          <>
+            <View style={styles.carouselWrapper}>
               <FlatList
                 ref={flatListRef}
                 data={carouselData}
@@ -1429,26 +1496,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   offset: SCREEN_WIDTH * index,
                   index,
                 })}
+                onScrollToIndexFailed={(info) => {
+                  // Handle scroll to index failure
+                  const wait = new Promise(resolve => setTimeout(resolve, 500));
+                  wait.then(() => {
+                    flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
+                  });
+                }}
               />
 
-              {/* Pagination Indicators - only show if more than 1 banner */}
-              {carouselData.length > 1 && (
-                <View style={styles.paginationContainer}>
-                  {carouselData.map((_, index) => (
-                    <View
-                      key={index}
-                      style={[
-                        styles.paginationDot,
-                        currentSlide === index && styles.paginationDotActive,
-                      ]}
-                    />
-                  ))}
-                </View>
-              )}
-            </>
-          )}
-        </View>
-      )}
+              {/* Navigation Buttons - removed but functionality preserved (manual sliding and auto-slide still work) */}
+            </View>
+          </>
+        )}
+      </View>
 
       {/* What's On Your Mind Section - Only show if there's data or still loading */}
       {(showCategoryShimmer || categoryData.length > 0) && (
@@ -2055,17 +2116,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
   },
+  carouselWrapper: {
+    position: 'relative',
+    width: '100%',
+  },
   // Ad Banner
   adBanner: {
     flexDirection: 'column',
     alignItems: 'flex-start',
     justifyContent: 'flex-start',
-    padding: 14,
+    padding: 0,
     height: 149,
     backgroundColor: '#00BEC8',
     borderRadius: 20,
     overflow: 'hidden',
     position: 'relative',
+    width: BANNER_WIDTH,
+    minHeight: 149,
+  },
+  adBannerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: BANNER_WIDTH,
+    height: 149,
+    borderRadius: 20,
+  },
+  adOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.15)', // 25% opacity black overlay (reduced from 40%)
+    zIndex: 1,
   },
   adContent: {
     flexDirection: 'column',
@@ -2075,36 +2159,8 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 2,
     flex: 1,
-  },
-  blobContainer: {
-    position: 'absolute',
-    right: -15,
-    bottom: -35,
-    width: 180,
-    height: 160,
-  },
-  adImageBlob: {
     width: '100%',
-    height: '100%',
-    backgroundColor: '#FF6B6B',
-    borderTopLeftRadius: 120,
-    borderTopRightRadius: 55,
-    borderBottomLeftRadius: 75,
-    borderBottomRightRadius: 95,
-    transform: [
-      { rotate: '-18deg' },
-      { scaleX: 1.2 },
-      { scaleY: 0.88 },
-      { skewX: '5deg' },
-    ],
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  adImageMasked: {
-    width: '120%',
-    height: '120%',
-    transform: [{ rotate: '18deg' }],
+    padding: 14,
   },
   adTitle: {
     maxWidth: '90%',
@@ -2134,6 +2190,7 @@ const styles = StyleSheet.create({
     height: 28,
     backgroundColor: '#FFFFFF',
     borderRadius: 13,
+    opacity: 0.95, // Slight transparency to show background color through
   },
   adButtonText: {
     fontFamily: 'Poppins',
@@ -2163,6 +2220,26 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#00B14F',
+  },
+  // Carousel Navigation Buttons
+  carouselNavigation: {
+    position: 'absolute',
+    right: 20,
+    top: '50%',
+    marginTop: -40, // Half of total button height (40px * 2 + 8px gap) / 2
+    flexDirection: 'column',
+    gap: 8,
+    zIndex: 10,
+  },
+  navButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   // Section Title
   sectionTitleContainer: {

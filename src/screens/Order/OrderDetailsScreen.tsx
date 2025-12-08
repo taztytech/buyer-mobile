@@ -50,6 +50,7 @@ interface OrderDetailsScreenProps {
   };
   visible?: boolean;
   onBack?: () => void;
+  onAddMoreItems?: () => void;
   onEditCustomization?: (itemId: string, variantId: string, currentAddOnIds: string[], currentQuantity?: number) => void;
   onPlaceOrder?: () => void;
   onOrderSuccess?: (orderId: number) => void;
@@ -68,6 +69,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   selectedLocation,
   visible = true,
   onBack,
+  onAddMoreItems,
   onEditCustomization,
   onPlaceOrder,
   onOrderSuccess,
@@ -1217,7 +1219,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 })}
 
                 {/* Add More Items Button */}
-                <TouchableOpacity style={styles.addMoreButton} activeOpacity={0.7} onPress={onBack}>
+                <TouchableOpacity 
+                  style={styles.addMoreButton} 
+                  activeOpacity={0.7} 
+                  onPress={() => {
+                    if (onAddMoreItems) {
+                      onAddMoreItems();
+                    } else if (onBack) {
+                      onBack();
+                    }
+                  }}
+                >
                   <Text style={styles.addMoreButtonText}>+ Add More Items</Text>
                 </TouchableOpacity>
 

@@ -1290,13 +1290,13 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                    </View>
                  )}
                 </View>
-                {/* Only show rating and reviews if there's at least one review */}
-                {(restaurantData?.stats?.total_reviews > 0 || restaurantData?.total_reviews > 0) && (
+                {/* Only show rating if available */}
+                {((restaurantData?.stats?.average_rating && restaurantData?.stats?.average_rating > 0) || (restaurantData?.rating && restaurantData?.rating > 0)) && (
                   <View style={styles.ratingContainer}>
                     <View style={styles.ratingBadge}>
                       <MaterialIcons name="star" size={14} color="#00B14F" />
                       <Text style={styles.ratingText}>
-                        {(restaurantData?.stats?.average_rating || restaurantData?.rating || 0).toFixed(1)} ({restaurantData?.stats?.total_reviews || restaurantData?.total_reviews || '0'})
+                        {(restaurantData?.stats?.average_rating || restaurantData?.rating || 0).toFixed(1)}
                       </Text>
                     </View>
                   </View>
@@ -1680,6 +1680,27 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     ) : (
                       <View style={styles.noImageContainer}>
                         <Text style={styles.noImageText}>No Image Available</Text>
+                        
+                        {/* Heart Button Overlay - Same as when image exists */}
+                        <TouchableOpacity
+                          style={styles.itemHeartButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleToggleFavoriteItem(section.id, item.id);
+                          }}
+                          disabled={togglingFavoriteItemId === item.id}
+                          activeOpacity={0.7}
+                        >
+                          {togglingFavoriteItemId === item.id ? (
+                            <ActivityIndicator size="small" color="#000000" />
+                          ) : (
+                            <MaterialIcons
+                              name={item.isFavorite ? 'favorite' : 'favorite-border'}
+                              size={24}
+                              color={item.isFavorite ? '#FF0000' : '#9E9E9E'}
+                            />
+                          )}
+                        </TouchableOpacity>
                       </View>
                     )}
 
@@ -1866,7 +1887,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           style={[
             styles.floatingMenuButton,
             totalCartItems > 0 && styles.floatingMenuButtonWithCart,
-            { bottom: totalCartItems > 0 ? 130 : 30 }
+            { bottom: totalCartItems > 0 ? 145 : 45 }
           ]}
           onPress={() => setShowQuickMenu(true)}
         >
@@ -1889,7 +1910,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           style={[
             styles.closeMenuButton,
             totalCartItems > 0 && styles.closeMenuButtonWithCart,
-            { bottom: totalCartItems > 0 ? 110 : 30 }
+            { bottom: totalCartItems > 0 ? 125 : 45 }
           ]}
           onPress={() => setShowQuickMenu(false)}
           activeOpacity={0.8}
@@ -2558,6 +2579,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
+    position: 'relative',
   },
   noImageText: {
     fontFamily: 'Poppins',
@@ -2844,7 +2866,7 @@ const styles = StyleSheet.create({
   floatingMenuButton: {
     position: 'absolute',
     right: 20,
-    bottom: 30,
+    bottom: 45,
     width: 50,
     height: 50,
     borderRadius: 10,
@@ -2858,7 +2880,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   floatingMenuButtonWithCart: {
-    bottom: 110,
+    bottom: 125,
   },
   arrowIcon: {
     transform: [{ rotate: '0deg' }],
@@ -2889,6 +2911,7 @@ const styles = StyleSheet.create({
   closeMenuButton: {
     position: 'absolute',
     right: 20,
+    bottom: 45,
     bottom: 30,
     width: 122,
     height: 50,
@@ -2908,7 +2931,7 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   closeMenuButtonWithCart: {
-    bottom: 110,
+    bottom: 125,
   },
   closeMenuText: {
     fontFamily: 'Poppins_500Medium',

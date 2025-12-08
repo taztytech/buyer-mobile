@@ -110,7 +110,18 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
     
     setIsAdding(true);
 
-    // Quantity is already synced via + / - handlers; just close the modal
+    // If item is not in cart (initialQuantity is 0 or undefined), call onAddToCart to trigger replace confirmation
+    // This ensures the replace confirmation appears when adding from a different store
+    // If item is already in cart, quantity is already synced via + / - handlers, but we still need to ensure it's added
+    if (!initialQuantity || initialQuantity === 0) {
+      // This will trigger the replace confirmation if needed (when cart has items from different restaurant)
+      onAddToCart(item.id, quantity);
+    } else if (quantity !== initialQuantity) {
+      // If quantity changed, ensure it's synced (though increment/decrement should have already handled this)
+      onAddToCart(item.id, quantity);
+    }
+
+    // Close the modal
     onClose();
 
     // Reset adding state after a short delay to allow modal to close
