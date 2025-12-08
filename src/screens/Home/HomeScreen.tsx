@@ -47,27 +47,6 @@ interface CarouselItem {
   backgroundColor?: string;
 }
 
-// Fallback carousel data if API fails
-const fallbackCarouselData: CarouselItem[] = [
-  {
-    id: '1',
-    title: 'Craving Something Delicious?',
-    description: 'Get your favorite meals delivered hot & fast—right to your doorstep.',
-    buttonText: 'Order Now!',
-  },
-  {
-    id: '2',
-    title: 'Special Offers Today!',
-    description: 'Get up to 50% off on selected restaurants near you.',
-    buttonText: 'View Offers',
-  },
-  {
-    id: '3',
-    title: 'Fast & Fresh Delivery',
-    description: 'Your food delivered in 30 minutes or less, guaranteed fresh.',
-    buttonText: 'Order Now!',
-  },
-];
 
 // Utility to normalize veg food types returned by API (handles values like "pure-veg")
 const isVegFoodType = (foodType?: string, isVegFlag?: boolean): boolean => {
@@ -91,92 +70,7 @@ const DEFAULT_LOCATION = {
   longitude: 78.1198,
 };
 
-// Fallback category data if API fails or returns empty
-const fallbackCategoryData: CategoryItem[] = [
-  {
-    id: 1,
-    name: 'Biryani',
-    description: 'Aromatic rice dish with spices',
-    icon: require('@/assets/biriyani.png'),
-  },
-  {
-    id: 2,
-    name: 'South Indian',
-    description: 'Traditional South Indian dishes',
-    icon: require('@/assets/idlies.png'),
-  },
-  {
-    id: 3,
-    name: 'Pizza',
-    description: 'Italian style pizzas',
-    icon: require('@/assets/pizza.png'),
-  },
-  {
-    id: 4,
-    name: 'Burger',
-    description: 'Delicious burgers',
-    icon: require('@/assets/burger.png'),
-  },
-  {
-    id: 5,
-    name: 'Cakes',
-    description: 'Sweet desserts',
-    icon: require('@/assets/cake.png'),
-  },
-  {
-    id: 'view-all',
-    name: 'View All',
-    description: 'See all categories',
-    icon: require('@/assets/Group 1272628220.png'),
-  },
-];
 
-// Fallback restaurant data if API fails or returns empty
-// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-unused-vars
-const _fallbackRestaurantData: Restaurant[] = [
-  {
-    id: 1,
-    name: 'A2B',
-    cuisine: 'South Indian, Traditional, Meals.',
-    rating: 4.5,
-    reviewCount: 120,
-    deliveryTime: '10 - 15 mins',
-    location: 'Keelkattalai',
-    distance: '0.5Kms',
-    image: require('@/assets/biriyani.png'),
-    isFavorite: false,
-    isVeg: true,
-    isOpen: true,
-  },
-  {
-    id: 2,
-    name: 'Dinidigul Thalapakatti',
-    cuisine: 'Burgers, Pizza, Chicken Wings Rolls & Wrap',
-    rating: 4.5,
-    reviewCount: 85,
-    deliveryTime: '10 - 15 mins',
-    location: 'Pallavaram',
-    distance: '1.2Kms',
-    image: require('@/assets/burger.png'),
-    isFavorite: false,
-    isVeg: false,
-    isOpen: true,
-  },
-  {
-    id: 3,
-    name: 'Pizza Hut',
-    cuisine: 'Italian, Pizza, Fast Food',
-    rating: 4.2,
-    reviewCount: 200,
-    deliveryTime: '15 - 20 mins',
-    location: 'Chrompet',
-    distance: '2.5Kms',
-    image: require('@/assets/pizza.png'),
-    isFavorite: false,
-    isVeg: false,
-    isOpen: true,
-  },
-];
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onLogout,
@@ -827,10 +721,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             if (sortedBanners.length > 0) {
               setCarouselData(sortedBanners);
             } else {
-              setCarouselData(fallbackCarouselData);
+              setCarouselData([]);
             }
           } else {
-            setCarouselData(fallbackCarouselData);
+            setCarouselData([]);
           }
 
           // Handle categories - use fallback if empty or undefined
@@ -887,9 +781,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 setCategoryData(categoriesWithViewAll);
                 onCategoriesLoaded?.(categoriesWithViewAll);
               } else {
-                // If dish API also fails, use fallback
-                setCategoryData(fallbackCategoryData);
-                onCategoriesLoaded?.(fallbackCategoryData);
+                setCategoryData([]);
+                onCategoriesLoaded?.([]);
               }
             } else {
               // Sort filtered categories by sequence field
@@ -914,8 +807,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               onCategoriesLoaded?.(categoriesWithViewAll);
             }
           } else {
-            setCategoryData(fallbackCategoryData);
-            onCategoriesLoaded?.(fallbackCategoryData);
+            setCategoryData([]);
+            onCategoriesLoaded?.([]);
           }
 
           // Handle restaurants - show error if empty or undefined
@@ -980,16 +873,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           }
         } else {
           // API call failed - show network error
-          setCarouselData(fallbackCarouselData);
-          setCategoryData(fallbackCategoryData);
-          onCategoriesLoaded?.(fallbackCategoryData);
+          setCarouselData([]);
+          setCategoryData([]);
+          onCategoriesLoaded?.([]);
           setHasNetworkError(true);
           setRestaurantData([]);
         }
       } catch (error) {
-        setCarouselData(fallbackCarouselData);
-        setCategoryData(fallbackCategoryData);
-        onCategoriesLoaded?.(fallbackCategoryData);
+        setCarouselData([]);
+        setCategoryData([]);
+        onCategoriesLoaded?.([]);
         setHasNetworkError(true);
         setRestaurantData([]);
       } finally {
@@ -1503,129 +1396,138 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Ad Banner Carousel */}
       {isLocationServiceable && (
       <>
-      <View style={styles.carouselContainer}>
-        {showBannerShimmer ? (
-          <View style={styles.loadingContainer}>
-            
-            <Shimmer width="100%" height={149} borderRadius={20} backgroundColor="#00BEC8" />
-          </View>
-        ) : (
-          <>
-            <FlatList
-              ref={flatListRef}
-              data={carouselData}
-              renderItem={renderCarouselItem}
-              keyExtractor={(item) => item.id}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onViewableItemsChanged={onViewRef.current}
-              viewabilityConfig={viewConfigRef.current}
-              decelerationRate="fast"
-              snapToAlignment="start"
-              snapToInterval={SCREEN_WIDTH}
-              disableIntervalMomentum={true}
-              removeClippedSubviews={false}
-              bounces={false}
-              overScrollMode="never"
-              scrollEventThrottle={16}
-              getItemLayout={(_data, index) => ({
-                length: SCREEN_WIDTH,
-                offset: SCREEN_WIDTH * index,
-                index,
-              })}
-            />
+      {/* Only show banner section if there's data or still loading */}
+      {(showBannerShimmer || carouselData.length > 0) && (
+        <View style={styles.carouselContainer}>
+          {showBannerShimmer ? (
+            <View style={styles.loadingContainer}>
+              
+              <Shimmer width="100%" height={149} borderRadius={20} backgroundColor="#00BEC8" />
+            </View>
+          ) : (
+            <>
+              <FlatList
+                ref={flatListRef}
+                data={carouselData}
+                renderItem={renderCarouselItem}
+                keyExtractor={(item) => item.id}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onViewableItemsChanged={onViewRef.current}
+                viewabilityConfig={viewConfigRef.current}
+                decelerationRate="fast"
+                snapToAlignment="start"
+                snapToInterval={SCREEN_WIDTH}
+                disableIntervalMomentum={true}
+                removeClippedSubviews={false}
+                bounces={false}
+                overScrollMode="never"
+                scrollEventThrottle={16}
+                getItemLayout={(_data, index) => ({
+                  length: SCREEN_WIDTH,
+                  offset: SCREEN_WIDTH * index,
+                  index,
+                })}
+              />
 
-            {/* Pagination Indicators - only show if more than 1 banner */}
-            {carouselData.length > 1 && (
-              <View style={styles.paginationContainer}>
-                {carouselData.map((_, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.paginationDot,
-                      currentSlide === index && styles.paginationDotActive,
-                    ]}
-                  />
-                ))}
-              </View>
-            )}
-          </>
-        )}
-      </View>
-
-      {/* What's On Your Mind Section */}
-      <View style={[
-        styles.sectionTitleContainer,
-        carouselData.length <= 1 && styles.sectionTitleContainerCompact
-      ]}>
-        <LinearGradient
-          colors={['rgba(0, 0, 0, 0)', '#000000']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.sectionTitleLine}
-        />
-        <Text style={styles.sectionTitle}>What's On Your Mind?</Text>
-        <LinearGradient
-          colors={['#000000', 'rgba(0, 0, 0, 0)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.sectionTitleLine}
-        />
-      </View>
-
-      {/* Category List */}
-      <View style={[
-        styles.categoryListContainer,
-        isCategorySectionSticky && styles.categoryListContainerSticky
-      ]}>
-        {showCategoryShimmer ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryListContent}
-          >
-            {/* Render 6 shimmer category items */}
-            {[1, 2, 3, 4, 5, 6].map((item) => (
-              <View key={item} style={styles.categoryItem}>
-                {/* Image Shimmer */}
-                <View style={styles.categoryImageContainer}>
-                  <Shimmer width={50} height={50} borderRadius={25} backgroundColor="#E8E8E8" />
+              {/* Pagination Indicators - only show if more than 1 banner */}
+              {carouselData.length > 1 && (
+                <View style={styles.paginationContainer}>
+                  {carouselData.map((_, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.paginationDot,
+                        currentSlide === index && styles.paginationDotActive,
+                      ]}
+                    />
+                  ))}
                 </View>
-                {/* Text Shimmer */}
-                <Shimmer width={50} height={10} borderRadius={5} backgroundColor="#E8E8E8" />
-              </View>
-            ))}
-          </ScrollView>
-        ) : (
-          <FlatList
-            data={categoryData}
-            renderItem={renderCategoryItem}
-            keyExtractor={(item) => item.id.toString()}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryListContent}
-            testID="category-list"
-          />
-        )}
-      </View>
+              )}
+            </>
+          )}
+        </View>
+      )}
 
-      {/* Restaurants Near You Section */}
-      <View style={styles.restaurantsSectionTitleContainer}>
-        <LinearGradient
-          colors={['rgba(0, 0, 0, 0)', '#000000']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.restaurantsTitleLine}
-        />
-        <Text style={styles.restaurantsTitle}>Restaurants Near You</Text>
-        <LinearGradient
-          colors={['#000000', 'rgba(0, 0, 0, 0)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.restaurantsTitleLine}
-        />
-      </View>
+      {/* What's On Your Mind Section - Only show if there's data or still loading */}
+      {(showCategoryShimmer || categoryData.length > 0) && (
+        <>
+          <View style={[
+            styles.sectionTitleContainer,
+            carouselData.length <= 1 && styles.sectionTitleContainerCompact
+          ]}>
+            <LinearGradient
+              colors={['rgba(0, 0, 0, 0)', '#000000']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.sectionTitleLine}
+            />
+            <Text style={styles.sectionTitle}>What's On Your Mind?</Text>
+            <LinearGradient
+              colors={['#000000', 'rgba(0, 0, 0, 0)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.sectionTitleLine}
+            />
+          </View>
+
+          {/* Category List */}
+          <View style={[
+            styles.categoryListContainer,
+            isCategorySectionSticky && styles.categoryListContainerSticky
+          ]}>
+            {showCategoryShimmer ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryListContent}
+              >
+                {/* Render 6 shimmer category items */}
+                {[1, 2, 3, 4, 5, 6].map((item) => (
+                  <View key={item} style={styles.categoryItem}>
+                    {/* Image Shimmer */}
+                    <View style={styles.categoryImageContainer}>
+                      <Shimmer width={50} height={50} borderRadius={25} backgroundColor="#E8E8E8" />
+                    </View>
+                    {/* Text Shimmer */}
+                    <Shimmer width={50} height={10} borderRadius={5} backgroundColor="#E8E8E8" />
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <FlatList
+                data={categoryData}
+                renderItem={renderCategoryItem}
+                keyExtractor={(item) => item.id.toString()}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryListContent}
+                testID="category-list"
+              />
+            )}
+          </View>
+        </>
+      )}
+
+      {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
+      {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
+        <View style={styles.restaurantsSectionTitleContainer}>
+          <LinearGradient
+            colors={['rgba(0, 0, 0, 0)', '#000000']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.restaurantsTitleLine}
+          />
+          <Text style={styles.restaurantsTitle}>Restaurants Near You</Text>
+          <LinearGradient
+            colors={['#000000', 'rgba(0, 0, 0, 0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.restaurantsTitleLine}
+          />
+        </View>
+      )}
 
       {/* Filter Buttons - Hidden */}
       {/* <View style={styles.filterContainer}>
@@ -1671,112 +1573,114 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         )}
       </View> */}
 
-      {/* Restaurant List */}
-      <View style={[
-        styles.restaurantListContainer,
-        totalCartItems > 0 && {
-          paddingBottom: 160 + Math.max(insets.bottom, 0)
-        }
-      ]}>
-        {showRestaurantShimmer ? (
-          <>
-            {/* Shimmer for 2 restaurant cards */}
-            {[1, 2].map((item) => (
-              <View key={item} style={styles.restaurantCardWrapper}>
-                <View style={styles.restaurantCardShimmer}>
-                  {/* Left Side - Image Shimmer */}
-                  <Shimmer width={130} height={160} borderRadius={16} backgroundColor="#E8E8E8" style={styles.restaurantImageShimmer} />
+      {/* Restaurant List - Only show if there's data, still loading, or error states */}
+      {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
+        <View style={[
+          styles.restaurantListContainer,
+          totalCartItems > 0 && {
+            paddingBottom: 160 + Math.max(insets.bottom, 0)
+          }
+        ]}>
+          {showRestaurantShimmer ? (
+            <>
+              {/* Shimmer for 2 restaurant cards */}
+              {[1, 2].map((item) => (
+                <View key={item} style={styles.restaurantCardWrapper}>
+                  <View style={styles.restaurantCardShimmer}>
+                    {/* Left Side - Image Shimmer */}
+                    <Shimmer width={130} height={160} borderRadius={16} backgroundColor="#E8E8E8" style={styles.restaurantImageShimmer} />
 
-                  {/* Right Side - Details Shimmer */}
-                  <View style={styles.restaurantDetailsShimmer}>
-                    {/* Pure Veg Badge */}
-                    <Shimmer width={80} height={18} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                    {/* Right Side - Details Shimmer */}
+                    <View style={styles.restaurantDetailsShimmer}>
+                      {/* Pure Veg Badge */}
+                      <Shimmer width={80} height={18} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
-                    {/* Restaurant Name */}
-                    <Shimmer width="90%" height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                      {/* Restaurant Name */}
+                      <Shimmer width="90%" height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
-                    {/* Rating and Delivery Time */}
-                    <Shimmer width="70%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                      {/* Rating and Delivery Time */}
+                      <Shimmer width="70%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
-                    {/* Cuisine */}
-                    <Shimmer width="85%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                      {/* Cuisine */}
+                      <Shimmer width="85%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
-                    {/* Location and Distance */}
-                    <Shimmer width="60%" height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+                      {/* Location and Distance */}
+                      <Shimmer width="60%" height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+                    </View>
                   </View>
                 </View>
-              </View>
-            ))}
-          </>
-        ) : noRestaurantsFound ? (
-          <View style={styles.noRestaurantsContainer}>
-            <MaterialIcons name="store" size={64} color="rgba(0, 0, 0, 0.2)" />
-            <Text style={styles.noRestaurantsTitle}>No Restaurants Nearby</Text>
-            <Text style={styles.noRestaurantsMessage}>
-              We couldn't find any restaurants within 10km of your location. Try changing your delivery address or check back later.
-            </Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={handleRefresh}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : hasNetworkError ? (
-          <View style={styles.networkErrorContainer}>
-            <MaterialIcons name="cloud-off" size={64} color="rgba(0, 0, 0, 0.2)" />
-            <Text style={styles.networkErrorTitle}>Network Error</Text>
-            <Text style={styles.networkErrorMessage}>
-              Unable to load restaurants. Please check your connection and try again.
-            </Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={handleRefresh}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <FlatList
-            data={restaurantData}
-            renderItem={({ item: restaurant }) => (
-              <View style={styles.restaurantCardWrapper}>
-                <RestaurantCard
-                  restaurant={restaurant}
-                  onPress={() => {
-                    if (onNavigateToRestaurant) {
-                      const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
-                      onNavigateToRestaurant(restaurantId, restaurant.name);
-                    }
-                  }}
-                  onImageLoad={() => {
-                    setLoadedRestaurantImages(prev => new Set(prev).add(restaurant.id.toString()));
-                  }}
-                />
-              </View>
-            )}
-            keyExtractor={(restaurant) => restaurant.id.toString()}
-            scrollEnabled={false}
-            removeClippedSubviews={true}
-            maxToRenderPerBatch={5}
-            windowSize={5}
-            initialNumToRender={3}
-            updateCellsBatchingPeriod={50}
-          />
-        )}
+              ))}
+            </>
+          ) : noRestaurantsFound ? (
+            <View style={styles.noRestaurantsContainer}>
+              <MaterialIcons name="store" size={64} color="rgba(0, 0, 0, 0.2)" />
+              <Text style={styles.noRestaurantsTitle}>No Restaurants Nearby</Text>
+              <Text style={styles.noRestaurantsMessage}>
+                We couldn't find any restaurants within 10km of your location. Try changing your delivery address or check back later.
+              </Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={handleRefresh}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : hasNetworkError ? (
+            <View style={styles.networkErrorContainer}>
+              <MaterialIcons name="cloud-off" size={64} color="rgba(0, 0, 0, 0.2)" />
+              <Text style={styles.networkErrorTitle}>Network Error</Text>
+              <Text style={styles.networkErrorMessage}>
+                Unable to load restaurants. Please check your connection and try again.
+              </Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={handleRefresh}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              data={restaurantData}
+              renderItem={({ item: restaurant }) => (
+                <View style={styles.restaurantCardWrapper}>
+                  <RestaurantCard
+                    restaurant={restaurant}
+                    onPress={() => {
+                      if (onNavigateToRestaurant) {
+                        const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
+                        onNavigateToRestaurant(restaurantId, restaurant.name);
+                      }
+                    }}
+                    onImageLoad={() => {
+                      setLoadedRestaurantImages(prev => new Set(prev).add(restaurant.id.toString()));
+                    }}
+                  />
+                </View>
+              )}
+              keyExtractor={(restaurant) => restaurant.id.toString()}
+              scrollEnabled={false}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={5}
+              windowSize={5}
+              initialNumToRender={3}
+              updateCellsBatchingPeriod={50}
+            />
+          )}
 
-        {/* Loading More Indicator */}
-        {isLoadingMore && (
-          <View style={styles.loadingMoreContainer}>
-            <ActivityIndicator size="large" color="#00B14F" />
-            <Text style={styles.loadingMoreText}>Loading more restaurants...</Text>
-          </View>
-        )}
-      </View>
+          {/* Loading More Indicator */}
+          {isLoadingMore && (
+            <View style={styles.loadingMoreContainer}>
+              <ActivityIndicator size="large" color="#00B14F" />
+              <Text style={styles.loadingMoreText}>Loading more restaurants...</Text>
+            </View>
+          )}
+        </View>
+      )}
       </>
       )}
 

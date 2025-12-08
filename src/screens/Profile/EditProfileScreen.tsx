@@ -92,10 +92,15 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
       return;
     }
 
-    // Basic email validation (only if user has entered an email)
     const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError('Email is required');
+      return;
+    }
+
+    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (trimmedEmail && !emailRegex.test(trimmedEmail)) {
+    if (!emailRegex.test(trimmedEmail)) {
       setError('Please enter a valid email address');
       return;
     }
@@ -104,7 +109,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
     try {
       const response = await authService.updateProfile({
         name: name.trim(),
-        email: trimmedEmail || undefined,
+        email: trimmedEmail,
       });
 
       if (response.success) {
@@ -209,9 +214,9 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
                 />
               </View>
 
-              {/* Email (Optional) */}
+              {/* Email */}
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Email (optional)</Text>
+                <Text style={styles.label}>Email</Text>
                 <TextInput
                   style={styles.textInput}
                   value={email}
