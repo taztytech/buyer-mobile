@@ -577,7 +577,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         </View> */}
 
         {/* Top Rated Section - Only show when not loading, has data, and not showing search results */}
-        {!hasSearched && !isLoading && topRatedRestaurants.length > 0 ? (
+        {/* {!hasSearched && !isLoading && topRatedRestaurants.length > 0 ? (
           <>
             <View style={styles.sectionTitleContainer}>
               <LinearGradient
@@ -646,7 +646,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
               </Animated.View>
             </ScrollView>
           </>
-        ) : null}
+        ) : null} */}
 
         {/* Restaurants Near You Section - Only show title if loading or has data */}
         {(hasSearched ? (isSearching || searchResults.length > 0) : (isLoading || restaurants.length > 0)) && (
