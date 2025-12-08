@@ -17,8 +17,9 @@ import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { restaurantService } from '@/services/restaurant.service';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BANNER_WIDTH = SCREEN_WIDTH - 40; // Fixed banner width with 20px padding on each side
+const SNOWFALL_HEIGHT = SCREEN_HEIGHT / 2; // Snowfall only in top half of screen
 
 interface HomeScreenProps {
   onLogout?: () => void;
@@ -1297,10 +1298,105 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [hasMoreRestaurants, isLoadingMore, isLoadingRestaurants, loadMoreRestaurants]);
 
+  // Snowfall Effect Component
+  const Snowflake: React.FC<{ delay: number; startX: number; duration: number; size: number }> = ({ delay, startX, duration, size }) => {
+    const translateY = React.useRef(new Animated.Value(-20)).current;
+    const translateX = React.useRef(new Animated.Value(startX)).current;
+    const opacity = React.useRef(new Animated.Value(0)).current;
+
+    const animateSnowflake = React.useCallback(() => {
+      // Reset position
+      translateY.setValue(-20);
+      translateX.setValue(startX);
+      opacity.setValue(0);
+
+      // Create animation sequence
+      Animated.sequence([
+        // Fade in
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        // Delay before falling
+        Animated.delay(delay),
+        // Fall down with slight drift
+        Animated.parallel([
+          Animated.timing(translateY, {
+            toValue: SNOWFALL_HEIGHT + 20, // Fall to half screen height
+            duration: duration,
+            useNativeDriver: true,
+          }),
+          Animated.timing(translateX, {
+            toValue: startX + (Math.random() * 40 - 20), // Slight horizontal drift
+            duration: duration,
+            useNativeDriver: true,
+          }),
+        ]),
+        // Fade out at the end
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        // Loop the animation
+        animateSnowflake();
+      });
+    }, [delay, startX, duration]);
+
+    React.useEffect(() => {
+      animateSnowflake();
+    }, [animateSnowflake]);
+
+    return (
+      <Animated.View
+        style={[
+          styles.snowflake,
+          {
+            width: size,
+            height: size,
+            opacity,
+            transform: [
+              { translateX },
+              { translateY },
+            ],
+          },
+        ]}
+      >
+        <View style={[styles.snowflakeInner, { width: size, height: size }]} />
+      </Animated.View>
+    );
+  };
+
+  // Generate snowflakes
+  const snowflakes = React.useMemo(() => {
+    const count = 30; // Number of snowflakes
+    return Array.from({ length: count }, (_, i) => ({
+      id: i,
+      delay: Math.random() * 2000,
+      startX: Math.random() * SCREEN_WIDTH,
+      duration: 3000 + Math.random() * 4000, // 3-7 seconds
+      size: 4 + Math.random() * 4, // 4-8px
+    }));
+  }, []);
+
   return (
     <View style={styles.outerContainer}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <SafeAreaView style={styles.safeArea} edges={[]}>
+        {/* Snowfall Effect - Only in top half */}
+        <View style={styles.snowfallContainer} pointerEvents="none">
+          {snowflakes.map((flake) => (
+            <Snowflake
+              key={flake.id}
+              delay={flake.delay}
+              startX={flake.startX}
+              duration={flake.duration}
+              size={flake.size}
+            />
+          ))}
+        </View>
         <ScrollView
           ref={scrollViewRef}
           style={styles.container}
@@ -1329,11 +1425,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* Header with Background Image */}
       <ImageBackground
-        source={require('@/assets/home_app_bar.png')}
+        source={require('../../../assets/33462662_6107959.jpg')}
         style={[styles.headerBackground, { paddingTop: insets.top + 20 }]}
         imageStyle={styles.headerBackgroundImage}
         testID="header-background"
       >
+        {/* White gradient at bottom for smooth blending with screen */}
+        <LinearGradient
+          colors={['transparent', 'rgba(255, 255, 255, 0.6)', 'rgba(255, 255, 255, 0.9)', '#FFFFFF']}
+          locations={[0.5, 0.75, 0.9, 1]}
+          style={styles.headerGradient}
+        />
         {/* Location Section */}
         <View style={styles.locationSection} testID="location-section">
           <TouchableOpacity
@@ -1345,10 +1447,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <>
                 {/* City Name with Icon - Shimmer */}
                 <View style={styles.cityRow}>
-                  <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
+                  <MaterialIcons name="location-on" size={20} color="#000000" />
                   <Shimmer width={120} height={18} borderRadius={8} />
                   <View style={styles.arrowIconWrapper}>
-                    <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                    <MaterialIcons name="keyboard-arrow-down" size={16} color="#000000" />
                   </View>
                 </View>
                 {/* Address - Shimmer */}
@@ -1358,10 +1460,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <>
                 {/* City Name with Icon */}
                 <View style={styles.cityRow}>
-                  <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
+                  <MaterialIcons name="location-on" size={20} color="#000000" />
                   <Text style={styles.cityName}>{selectedLocation.name}</Text>
                   <View style={styles.arrowIconWrapper}>
-                    <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                    <MaterialIcons name="keyboard-arrow-down" size={16} color="#000000" />
                   </View>
                 </View>
                 {/* Address */}
@@ -1435,7 +1537,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <MaterialIcons 
                     name="search" 
                     size={24} 
-                    color={isLocationServiceable ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)"} 
+                    color={isLocationServiceable ? "#000000" : "rgba(0, 0, 0, 0.4)"} 
                   />
                   <Text 
                     style={[
@@ -1963,6 +2065,24 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#00B14F',
   },
+  snowfallContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: SNOWFALL_HEIGHT,
+    zIndex: 1,
+    overflow: 'hidden',
+  },
+  snowflake: {
+    position: 'absolute',
+    top: 0,
+  },
+  snowflakeInner: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    opacity: 0.8,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -1970,6 +2090,7 @@ const styles = StyleSheet.create({
   // Header styles
   headerBackground: {
     width: '100%',
+    height: '12%',
     paddingHorizontal: 20,
     paddingBottom: 20,
     gap: 18,
@@ -1977,10 +2098,17 @@ const styles = StyleSheet.create({
   },
   headerBackgroundImage: {
     width: '120%',
-    height: '150%',
+    height: '134%',
     resizeMode: 'cover',
     left: 0,
     top: 0,
+  },
+  headerGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
   },
   // Location section
   locationSection: {
@@ -2021,7 +2149,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
     lineHeight: 24,
-    color: '#FFFFFF',
+    color: '#000000',
     letterSpacing: 0,
     textAlignVertical: 'center',
     flexShrink: 1,
@@ -2032,7 +2160,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontSize: 12,
     lineHeight: 18,
-    color: '#FFFFFF',
+    color: '#000000',
     opacity: 0.85,
   },
   profileButton: {
@@ -2075,12 +2203,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins',
     fontWeight: '400',
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#000000',
     paddingVertical: 0,
     textAlignVertical: 'center',
   },
   searchInputDisabled: {
-    color: 'rgba(255, 255, 255, 0.3)',
+    color: 'rgba(0, 0, 0, 0.3)',
   },
   vegModeContainer: {
     width: 46,
@@ -2097,7 +2225,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     textAlign: 'center',
-    color: '#FFFFFF',
+    color: '#000000',
     fontWeight: '600',
     opacity: 0.85,
   },
@@ -2108,22 +2236,22 @@ const styles = StyleSheet.create({
     width: 46,
     height: 21,
     borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     padding: 2,
     justifyContent: 'center',
     alignItems: 'flex-start',
   },
   vegToggleDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
   },
   vegToggleThumb: {
     width: 17,
     height: 17,
     borderRadius: 8.5,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#000000',
   },
   vegToggleThumbDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   vegToggleActive: {
     backgroundColor: '#00B14F',
