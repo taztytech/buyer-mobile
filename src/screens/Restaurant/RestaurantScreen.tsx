@@ -1680,6 +1680,27 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     ) : (
                       <View style={styles.noImageContainer}>
                         <Text style={styles.noImageText}>No Image Available</Text>
+                        
+                        {/* Heart Button Overlay - Same as when image exists */}
+                        <TouchableOpacity
+                          style={styles.itemHeartButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleToggleFavoriteItem(section.id, item.id);
+                          }}
+                          disabled={togglingFavoriteItemId === item.id}
+                          activeOpacity={0.7}
+                        >
+                          {togglingFavoriteItemId === item.id ? (
+                            <ActivityIndicator size="small" color="#000000" />
+                          ) : (
+                            <MaterialIcons
+                              name={item.isFavorite ? 'favorite' : 'favorite-border'}
+                              size={24}
+                              color={item.isFavorite ? '#FF0000' : '#9E9E9E'}
+                            />
+                          )}
+                        </TouchableOpacity>
                       </View>
                     )}
 
@@ -2558,6 +2579,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
+    position: 'relative',
   },
   noImageText: {
     fontFamily: 'Poppins',
