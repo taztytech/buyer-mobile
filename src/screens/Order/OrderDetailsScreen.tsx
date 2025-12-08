@@ -154,6 +154,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [promoError, setPromoError] = useState('');
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
   const lastAutoRemovedTotalRef = useRef<number | null>(null);
+  
+  // Track latest update sequence to ensure we only apply cart_summary from the most recent update
+  const updateSequenceRef = useRef<number>(0);
+  const pendingUpdateRef = useRef<{ itemId: string; quantity: number; sequence: number } | null>(null);
 
   // Convenience accessors for backend-calculated amounts (no client-side recomputation)
   const itemTotal = cartSummary?.subtotal ?? 0;
@@ -761,30 +765,66 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       })
     );
 
-    // Update CartContext (this will sync with backend)
-    await updateQuantity(itemId, newQuantity);
+    // Increment sequence number for this update
+    updateSequenceRef.current += 1;
+    const currentSequence = updateSequenceRef.current;
+    pendingUpdateRef.current = { itemId, quantity: newQuantity, sequence: currentSequence };
 
-    // Refetch cart summary to update bill details
-    await fetchCartSummary();
+    updateQuantity(itemId, newQuantity).then((updatedCartSummary) => {
+      // Only apply cart_summary if this is still the latest update
+      if (pendingUpdateRef.current?.sequence === currentSequence && updatedCartSummary) {
+        setCartSummary(updatedCartSummary);
+        
+        // Extract dynamic tip metadata from backend if available
+        const summaryAny = updatedCartSummary as any;
+        if (typeof summaryAny.max_tip_amount === 'number') {
+          setMaxTipAmount(summaryAny.max_tip_amount);
+        }
+
+        const tipAmount = summaryAny.tip_amount;
+        if (typeof tipAmount === 'number') {
+          setSelectedTip(tipAmount > 0 ? tipAmount : null);
+        }
+
+        // Clear pending update if this was the latest
+        if (pendingUpdateRef.current?.sequence === currentSequence) {
+          pendingUpdateRef.current = null;
+        }
+      } else if (pendingUpdateRef.current?.sequence === currentSequence && !updatedCartSummary) {
+        // Fallback: fetch cart summary if updateQuantity didn't return it
+        // This can happen if the item doesn't have cartItemId yet
+        fetchCartSummary();
+      }
+    }).catch(() => {
+      // On error, still try to fetch cart summary if this was the latest update
+      if (pendingUpdateRef.current?.sequence === currentSequence) {
+        fetchCartSummary();
+        pendingUpdateRef.current = null;
+      }
+    });
 
     // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
     // This ensures discount is recalculated correctly when cart items change
+    // Note: We don't await this - it will be handled when cart_summary updates
     if (isCouponApplied && promoCode && promoCode.trim() !== '') {
-      try {
-        const normalizedCode = promoCode.trim().toUpperCase();
-        const response = await cartService.applyCoupon(normalizedCode);
-        if (response.success && response.cart_summary) {
-          setCartSummary(response.cart_summary);
-          setPromoError('');
-        } else {
-          // If promo becomes invalid, clear it from state
-          setPromoCode('');
-          setPromoError(response.message || 'Promo code is no longer valid.');
+      // Delay promo re-application slightly to let cart_summary update first
+      setTimeout(async () => {
+        try {
+          const normalizedCode = promoCode.trim().toUpperCase();
+          const response = await cartService.applyCoupon(normalizedCode);
+          if (response.success && response.cart_summary) {
+            setCartSummary(response.cart_summary);
+            setPromoError('');
+          } else {
+            // If promo becomes invalid, clear it from state
+            setPromoCode('');
+            setPromoError(response.message || 'Promo code is no longer valid.');
+          }
+        } catch (error) {
+          // Silent fail - discount will be updated via cart summary
+          // If promo becomes invalid, it will be handled by auto-remove logic
         }
-      } catch (error) {
-        // Silent fail - discount will be updated via fetchCartSummary
-        // If promo becomes invalid, it will be handled by auto-remove logic
-      }
+      }, 400); // Wait 400ms after quantity update (debounce + API call time)
     }
 
     // Also call parent callback if provided (for backward compatibility)
@@ -806,30 +846,64 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         prev.filter(i => variantId ? i.variantId !== variantId : i.id !== itemId)
       );
 
-      // Remove from CartContext (this will sync with backend)
-      await removeFromCart(itemId);
+      // Increment sequence number for this update
+      updateSequenceRef.current += 1;
+      const currentSequence = updateSequenceRef.current;
+      pendingUpdateRef.current = { itemId, quantity: 0, sequence: currentSequence };
 
-      // Refetch cart summary to update bill details
-      await fetchCartSummary();
+      removeFromCart(itemId).then((updatedCartSummary) => {
+        // Only apply cart_summary if this is still the latest update
+        if (pendingUpdateRef.current?.sequence === currentSequence && updatedCartSummary) {
+          setCartSummary(updatedCartSummary);
+          
+          // Extract dynamic tip metadata from backend if available
+          const summaryAny = updatedCartSummary as any;
+          if (typeof summaryAny.max_tip_amount === 'number') {
+            setMaxTipAmount(summaryAny.max_tip_amount);
+          }
+
+          const tipAmount = summaryAny.tip_amount;
+          if (typeof tipAmount === 'number') {
+            setSelectedTip(tipAmount > 0 ? tipAmount : null);
+          }
+
+          // Clear pending update if this was the latest
+          if (pendingUpdateRef.current?.sequence === currentSequence) {
+            pendingUpdateRef.current = null;
+          }
+        } else if (pendingUpdateRef.current?.sequence === currentSequence && !updatedCartSummary) {
+          // Fallback: fetch cart summary if removeFromCart didn't return it
+          fetchCartSummary();
+        }
+      }).catch(() => {
+        // On error, still try to fetch cart summary if this was the latest update
+        if (pendingUpdateRef.current?.sequence === currentSequence) {
+          fetchCartSummary();
+          pendingUpdateRef.current = null;
+        }
+      });
 
       // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
       // This ensures discount is recalculated correctly when cart items change
       if (isCouponApplied && promoCode && promoCode.trim() !== '') {
-        try {
-          const normalizedCode = promoCode.trim().toUpperCase();
-          const response = await cartService.applyCoupon(normalizedCode);
-          if (response.success && response.cart_summary) {
-            setCartSummary(response.cart_summary);
-            setPromoError('');
-          } else {
-            // If promo becomes invalid, clear it from state
-            setPromoCode('');
-            setPromoError(response.message || 'Promo code is no longer valid.');
+        // Delay promo re-application slightly to let cart_summary update first
+        setTimeout(async () => {
+          try {
+            const normalizedCode = promoCode.trim().toUpperCase();
+            const response = await cartService.applyCoupon(normalizedCode);
+            if (response.success && response.cart_summary) {
+              setCartSummary(response.cart_summary);
+              setPromoError('');
+            } else {
+              // If promo becomes invalid, clear it from state
+              setPromoCode('');
+              setPromoError(response.message || 'Promo code is no longer valid.');
+            }
+          } catch (error) {
+            // Silent fail - discount will be updated via fetchCartSummary
+            // If promo becomes invalid, it will be handled by auto-remove logic
           }
-        } catch (error) {
-          // Silent fail - discount will be updated via fetchCartSummary
-          // If promo becomes invalid, it will be handled by auto-remove logic
-        }
+        }, 400); // Wait 400ms after remove (API call time)
       }
 
       // Also call parent callback if provided (for backward compatibility)
@@ -847,30 +921,64 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         })
       );
 
-      // Update CartContext (this will sync with backend)
-      await updateQuantity(itemId, newQuantity);
+      // Increment sequence number for this update
+      updateSequenceRef.current += 1;
+      const currentSequence = updateSequenceRef.current;
+      pendingUpdateRef.current = { itemId, quantity: newQuantity, sequence: currentSequence };
 
-      // Refetch cart summary to update bill details
-      await fetchCartSummary();
+      updateQuantity(itemId, newQuantity).then((updatedCartSummary) => {
+        // Only apply cart_summary if this is still the latest update
+        if (pendingUpdateRef.current?.sequence === currentSequence && updatedCartSummary) {
+          setCartSummary(updatedCartSummary);
+          
+          // Extract dynamic tip metadata from backend if available
+          const summaryAny = updatedCartSummary as any;
+          if (typeof summaryAny.max_tip_amount === 'number') {
+            setMaxTipAmount(summaryAny.max_tip_amount);
+          }
+
+          const tipAmount = summaryAny.tip_amount;
+          if (typeof tipAmount === 'number') {
+            setSelectedTip(tipAmount > 0 ? tipAmount : null);
+          }
+
+          // Clear pending update if this was the latest
+          if (pendingUpdateRef.current?.sequence === currentSequence) {
+            pendingUpdateRef.current = null;
+          }
+        } else if (pendingUpdateRef.current?.sequence === currentSequence && !updatedCartSummary) {
+          // Fallback: fetch cart summary if updateQuantity didn't return it
+          fetchCartSummary();
+        }
+      }).catch(() => {
+        // On error, still try to fetch cart summary if this was the latest update
+        if (pendingUpdateRef.current?.sequence === currentSequence) {
+          fetchCartSummary();
+          pendingUpdateRef.current = null;
+        }
+      });
 
       // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
       // This ensures discount is recalculated correctly when cart items change
       if (isCouponApplied && promoCode && promoCode.trim() !== '') {
-        try {
-          const normalizedCode = promoCode.trim().toUpperCase();
-          const response = await cartService.applyCoupon(normalizedCode);
-          if (response.success && response.cart_summary) {
-            setCartSummary(response.cart_summary);
-            setPromoError('');
-          } else {
-            // If promo becomes invalid, clear it from state
-            setPromoCode('');
-            setPromoError(response.message || 'Promo code is no longer valid.');
+        // Delay promo re-application slightly to let cart_summary update first
+        setTimeout(async () => {
+          try {
+            const normalizedCode = promoCode.trim().toUpperCase();
+            const response = await cartService.applyCoupon(normalizedCode);
+            if (response.success && response.cart_summary) {
+              setCartSummary(response.cart_summary);
+              setPromoError('');
+            } else {
+              // If promo becomes invalid, clear it from state
+              setPromoCode('');
+              setPromoError(response.message || 'Promo code is no longer valid.');
+            }
+          } catch (error) {
+            // Silent fail - discount will be updated via cart summary
+            // If promo becomes invalid, it will be handled by auto-remove logic
           }
-        } catch (error) {
-          // Silent fail - discount will be updated via fetchCartSummary
-          // If promo becomes invalid, it will be handled by auto-remove logic
-        }
+        }, 400); // Wait 400ms after quantity update (debounce + API call time)
       }
 
       // Also call parent callback if provided (for backward compatibility)

@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { cartService, AddToCartRequest } from '@/services/cart.service';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import { cartService, AddToCartRequest, CartSummary } from '@/services/cart.service';
 import { storageService } from '@/services/storage.service';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
@@ -30,8 +30,8 @@ export interface CartItem {
 interface CartContextType {
   cart: { [key: string]: CartItem };
   addToCart: (item: CartItem, overrideRestaurantId?: number) => Promise<void>;
-  removeFromCart: (itemId: string) => Promise<void>;
-  updateQuantity: (itemId: string, quantity: number) => Promise<void>;
+  removeFromCart: (itemId: string) => Promise<CartSummary | null>;
+  updateQuantity: (itemId: string, quantity: number) => Promise<CartSummary | null>;
   clearCart: () => Promise<void>;
   reloadCart: () => Promise<void>; // Reload cart from backend
   getTotalItems: () => number;
@@ -89,6 +89,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [restaurantLogo, setRestaurantLogo] = useState<any>(null);
   const [syncWithBackend, setSyncWithBackend] = useState<boolean>(false);
   const [isCartLoaded, setIsCartLoaded] = useState<boolean>(false);
+  
+  // Refs for debouncing and canceling pending requests
+  const updateQuantityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingUpdateRef = useRef<{ itemId: string; quantity: number } | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   /**
    * Save cart to local storage
@@ -350,8 +355,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   /**
    * Remove item from cart (local + backend sync)
+   * Returns cart_summary from API for immediate billing details update
    */
-  const removeFromCart = async (itemId: string) => {
+  const removeFromCart = async (itemId: string): Promise<CartSummary | null> => {
     const item = cart[itemId];
 
     // Update local cart immediately for responsive UI
@@ -365,14 +371,18 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const token = await storageService.getAccessToken();
       if (!token || !item?.cartItemId) {
-        return;
+        return null;
       }
 
       setSyncWithBackend(true);
 
-      await cartService.removeCartItem(item.cartItemId);
+      const removeResponse = await cartService.removeCartItem(item.cartItemId);
+      
+      // Return cart_summary from remove response
+      return removeResponse.cart_summary || null;
     } catch (error) {
       // Item already removed from local cart
+      return null;
     } finally {
       setSyncWithBackend(false);
     }
@@ -380,16 +390,17 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   /**
    * Update item quantity (local + backend sync)
+   * Returns cart_summary from API for immediate billing details update
    */
-  const updateQuantity = async (itemId: string, quantity: number) => {
+  const updateQuantity = async (itemId: string, quantity: number): Promise<CartSummary | null> => {
     const item = cart[itemId];
     if (!item) {
-      return;
+      return null;
     }
 
     if (quantity <= 0) {
       await removeFromCart(itemId);
-      return;
+      return null;
     }
 
     const safeQuantity = clampQuantity(quantity);
@@ -400,7 +411,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Avoid unnecessary updates
     if ((item.quantity || 0) === safeQuantity) {
-      return;
+      return null;
     }
 
     // Update local cart immediately for responsive UI
@@ -412,68 +423,108 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       },
     }));
 
-    // Sync with backend
-    try {
-      const token = await storageService.getAccessToken();
+    // Cancel any pending update for this item
+    if (updateQuantityTimeoutRef.current) {
+      clearTimeout(updateQuantityTimeoutRef.current);
+      updateQuantityTimeoutRef.current = null;
+    }
 
-      if (!token || !restaurantId) {
-        return;
-      }
+    // Cancel any pending API request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
 
-      // If item doesn't have cartItemId, add it to backend first
-      if (!item?.cartItemId) {
+    // Store pending update
+    pendingUpdateRef.current = { itemId, quantity: safeQuantity };
 
-        // Prepare backend request
-        const backendRequest: AddToCartRequest = {
-          restaurant_id: restaurantId,
-          item_id: item.itemId || parseInt(item.id, 10),
-            quantity: safeQuantity,
-          special_instructions: item.specialInstructions,
-        };
-
-        // Add customizations if item has variants
-        if (item.isCustomizable && item.variants && item.variants.length > 0) {
-          backendRequest.customizations = item.variants.map((variant) => ({
-            customization_group_id: parseInt(variant.variantId || '0', 10),
-            selected_options: (variant.addOns || []).map(addOnId => ({
-              id: parseInt(addOnId, 10),
-            })),
-          })).filter(c => c.customization_group_id > 0);
-        }
-
-        const addResponse = await cartService.addToCart(backendRequest);
-
-        if (addResponse.success && addResponse.cart_item_id) {
-          // Update local cart with backend cart_item_id
-          setCart(prev => {
-            const updatedCart = {
-              ...prev,
-              [item.id]: {
-                ...prev[item.id],
-                cartItemId: addResponse.cart_item_id,
-              },
-            };
-            // Save to storage after backend sync
-            saveCartToStorage(updatedCart, restaurantId, restaurantName, restaurantLogo);
-            return updatedCart;
-          });
-          return; // Quantity already set during add
-        } else {
+    return new Promise<CartSummary | null>((resolve) => {
+      updateQuantityTimeoutRef.current = setTimeout(async () => {
+        const pendingUpdate = pendingUpdateRef.current;
+        if (!pendingUpdate || pendingUpdate.itemId !== itemId) {
+          resolve(null);
           return;
         }
-      }
 
-      setSyncWithBackend(true);
+        // Create new abort controller for this request
+        abortControllerRef.current = new AbortController();
 
-      await cartService.updateCartItem(item.cartItemId, {
-        restaurant_id: restaurantId,
-        quantity: safeQuantity,
-      });
-    } catch (error) {
-      // Quantity already updated in local cart
-    } finally {
-      setSyncWithBackend(false);
-    }
+        try {
+          const token = await storageService.getAccessToken();
+
+          if (!token || !restaurantId) {
+            resolve(null);
+            return;
+          }
+
+          // If item doesn't have cartItemId, add it to backend first
+          if (!item?.cartItemId) {
+            // Prepare backend request
+            const backendRequest: AddToCartRequest = {
+              restaurant_id: restaurantId,
+              item_id: item.itemId || parseInt(item.id, 10),
+              quantity: safeQuantity,
+              special_instructions: item.specialInstructions,
+            };
+
+            // Add customizations if item has variants
+            if (item.isCustomizable && item.variants && item.variants.length > 0) {
+              backendRequest.customizations = item.variants.map((variant) => ({
+                customization_group_id: parseInt(variant.variantId || '0', 10),
+                selected_options: (variant.addOns || []).map(addOnId => ({
+                  id: parseInt(addOnId, 10),
+                })),
+              })).filter(c => c.customization_group_id > 0);
+            }
+
+            const addResponse = await cartService.addToCart(backendRequest);
+
+            if (addResponse.success && addResponse.cart_item_id) {
+              // Update local cart with backend cart_item_id
+              setCart(prev => {
+                const updatedCart = {
+                  ...prev,
+                  [item.id]: {
+                    ...prev[item.id],
+                    cartItemId: addResponse.cart_item_id,
+                  },
+                };
+                // Save to storage after backend sync
+                saveCartToStorage(updatedCart, restaurantId, restaurantName, restaurantLogo);
+                return updatedCart;
+              });
+              // Return cart_summary from add response
+              resolve(addResponse.cart_summary || null);
+              return;
+            } else {
+              resolve(null);
+              return;
+            }
+          }
+
+          setSyncWithBackend(true);
+
+          const updateResponse = await cartService.updateCartItem(item.cartItemId, {
+            restaurant_id: restaurantId,
+            quantity: safeQuantity,
+          });
+
+          // Return cart_summary from update response
+          resolve(updateResponse.cart_summary || null);
+        } catch (error: any) {
+          // If request was aborted, don't treat as error
+          if (error?.name === 'AbortError') {
+            resolve(null);
+            return;
+          }
+          // Quantity already updated in local cart
+          resolve(null);
+        } finally {
+          setSyncWithBackend(false);
+          pendingUpdateRef.current = null;
+          abortControllerRef.current = null;
+        }
+      }, 300); // 300ms debounce delay
+    });
   };
 
   /**

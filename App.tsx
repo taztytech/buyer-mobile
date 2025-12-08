@@ -36,6 +36,7 @@ import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
 import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
 import { ordersService, OrderListItem } from '@/services/orders.service';
+import { SearchSuggestion } from '@/services/search.service';
 import CustomSplashScreen from '@/components/CustomSplashScreen';
 import { fcmNotificationService } from '@/services/fcmNotification.service';
 import { NetworkStatusScreen } from '@/components/NetworkStatusScreen';
@@ -62,6 +63,7 @@ function AppContent() {
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchResults, setSearchResults] = React.useState<SearchSuggestion[]>([]);
   const [selectedLocation, setSelectedLocation] = React.useState<{
     name: string;
     address: string;
@@ -1376,6 +1378,12 @@ function AppContent() {
     });
   };
 
+  // Clear search state
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
   // Reorder functionality
   const handleReorder = async (orderId: string) => {
     try {
@@ -1778,6 +1786,11 @@ function AppContent() {
               <SearchScreen
                 onBack={handleBackFromSearch}
                 selectedLocation={selectedLocation}
+                searchQuery={searchQuery}
+                searchResults={searchResults}
+                onSearchQueryChange={setSearchQuery}
+                onSearchResultsChange={setSearchResults}
+                onClearSearch={handleClearSearch}
                 onSelectResult={(_result) => {
                   handleBackFromSearch();
                 }}
