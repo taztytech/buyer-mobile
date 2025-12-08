@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import { authService } from '@/services/auth.service';
+import { useSmsRetriever } from '@/hooks/useSmsRetriever';
 
 interface OTPVerificationScreenProps {
   phoneNumber?: string;
@@ -31,9 +32,124 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
     useRef<TextInput>(null),
     useRef<TextInput>(null),
   ];
+
+  // Define handleVerify early so it can be used in callbacks
+  const handleVerify = async () => {
+    const otpCode = otp.join('');
+    if (otpCode.length !== 4) {
+      setError('Please enter the complete 4-digit OTP');
+      return;
+    }
+
+    // Clear any previous messages before verifying
+    if (error) {
+      setError('');
+    }
+    if (info) {
+      setInfo('');
+    }
+
+    setIsVerifying(true);
+
+    try {
+      // Call the verify OTP API
+      const response = await authService.verifyOtp(phoneNumber, otpCode);
+
+      if (response.success && response.data) {
+        // OTP verified successfully
+
+        // Navigate based on existing_user status
+        if (onSuccess) {
+          onSuccess(response.data.existing_user);
+        }
+      } else {
+        // Check if OTP is expired or invalid
+        const errorMessage = response.error || response.message || '';
+        const isExpired = errorMessage.toLowerCase().includes('expired') || 
+                         errorMessage.toLowerCase().includes('expire') ||
+                         errorMessage.toLowerCase().includes('expiration');
+        
+        const detailedMessage = isExpired
+          ? 'Code expired. Please click on Resend OTP.'
+          : 'Incorrect OTP. Please enter the 4-digit code.';
+
+        setError(detailedMessage);
+        // Clear OTP inputs on error
+        setOtp(['', '', '', '']);
+        inputRefs[0].current?.focus();
+      }
+    } catch (error: any) {
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // SMS Retriever hook for auto-reading OTP
+  const { start: startSmsRetriever, stop: stopSmsRetriever } = useSmsRetriever({
+    timeoutMs: 60000, // 60 seconds timeout
+    onOtpReceived: (receivedOtp: string) => {
+      try {
+        // Auto-fill OTP when received
+        if (receivedOtp.length === 4) {
+          const digits = receivedOtp.split('');
+          setOtp(digits);
+          setInfo('OTP auto-filled from SMS');
+          // Clear info message after 3 seconds
+          setTimeout(() => setInfo(''), 3000);
+          // Auto-verify if all digits are filled
+          setTimeout(() => {
+            handleVerify();
+          }, 500);
+        } else if (receivedOtp.length > 4) {
+          // Take first 4 digits if OTP is longer
+          const digits = receivedOtp.slice(0, 4).split('');
+          setOtp(digits);
+          setInfo('OTP auto-filled from SMS');
+          setTimeout(() => setInfo(''), 3000);
+          setTimeout(() => {
+            handleVerify();
+          }, 500);
+        }
+      } catch (error) {
+        console.error('Error handling received OTP:', error);
+        // Don't crash - just log the error
+      }
+    },
+    onTimeout: () => {
+      // SMS retrieval timed out - this is normal, user can still enter manually
+      console.log('SMS Retriever timeout - user can enter OTP manually');
+    },
+    onError: (errorMessage: string) => {
+      console.warn('SMS Retriever error:', errorMessage);
+      // Don't show error to user - they can still enter OTP manually
+    },
+    autoStart: false, // Don't auto-start - we'll start manually to handle errors better
+  });
+
   // Auto-focus first input when component mounts
   useEffect(() => {
     inputRefs[0].current?.focus();
+    
+    // Start SMS Retriever when screen mounts (with error handling)
+    const initSmsRetriever = async () => {
+      try {
+        await startSmsRetriever();
+      } catch (error) {
+        // Silently fail - SMS Retriever is optional, manual entry still works
+        console.warn('SMS Retriever initialization failed (this is OK):', error);
+      }
+    };
+    
+    initSmsRetriever();
+    
+    // Cleanup: stop SMS Retriever when component unmounts
+    return () => {
+      stopSmsRetriever().catch((error) => {
+        // Silently fail on cleanup
+        console.warn('SMS Retriever cleanup error (this is OK):', error);
+      });
+    };
   }, []);
 
   useEffect(() => {
@@ -146,57 +262,6 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
     }
   };
 
-  const handleVerify = async () => {
-    const otpCode = otp.join('');
-    if (otpCode.length !== 4) {
-      setError('Please enter the complete 4-digit OTP');
-      return;
-    }
-
-    // Clear any previous messages before verifying
-    if (error) {
-      setError('');
-    }
-    if (info) {
-      setInfo('');
-    }
-
-    setIsVerifying(true);
-
-    try {
-      // Call the verify OTP API
-      const response = await authService.verifyOtp(phoneNumber, otpCode);
-
-      if (response.success && response.data) {
-        // OTP verified successfully
-
-        // Navigate based on existing_user status
-        if (onSuccess) {
-          onSuccess(response.data.existing_user);
-        }
-      } else {
-        // Check if OTP is expired or invalid
-        const errorMessage = response.error || response.message || '';
-        const isExpired = errorMessage.toLowerCase().includes('expired') || 
-                         errorMessage.toLowerCase().includes('expire') ||
-                         errorMessage.toLowerCase().includes('expiration');
-        
-        const detailedMessage = isExpired
-          ? 'Code expired. Please click on Resend OTP.'
-          : 'Incorrect OTP. Please enter the 4-digit code.';
-
-        setError(detailedMessage);
-        // Clear OTP inputs on error
-        setOtp(['', '', '', '']);
-        inputRefs[0].current?.focus();
-      }
-    } catch (error: any) {
-      setError('An unexpected error occurred. Please try again.');
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
   const handleResendCode = async () => {
     if (timer > 0) return;
 
@@ -220,6 +285,8 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
         setOtp(['', '', '', '']);
         inputRefs[0].current?.focus();
         setInfo('OTP has been resent to your phone number.');
+        // Restart SMS Retriever for the new OTP
+        startSmsRetriever().catch(console.error);
       } else {
         // Show error message with better context
         const errorMessage = response.error || 'Failed to resend OTP';
