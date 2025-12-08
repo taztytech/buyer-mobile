@@ -31,10 +31,146 @@ import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { favoritesService } from '@/services/favorites.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
-import { ItemTiming as ImportedItemTiming, isItemAvailable, formatItemTiming } from '@/utils/timing.utils';
+import { ItemTiming as ImportedItemTiming, isItemAvailable } from '@/utils/timing.utils';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+/**
+ * Format time difference in a user-friendly way
+ * @param minutes - Time difference in minutes
+ * @returns User-friendly time string (e.g., "in 1 min", "in 2 hrs 15 min", "in 3 days")
+ */
+const formatTimeDifference = (minutes: number): string => {
+  if (minutes < 60) {
+    return `in ${minutes} min`;
+  } else if (minutes < 1440) {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    
+    if (remainingMinutes === 0) {
+      return `in ${hours} ${hours === 1 ? 'hr' : 'hrs'}`;
+    } else {
+      return `in ${hours} ${hours === 1 ? 'hr' : 'hrs'} ${remainingMinutes} min`;
+    }
+  } else {
+    const days = Math.floor(minutes / 1440);
+    const remainingHours = Math.floor((minutes % 1440) / 60);
+    const remainingMinutes = minutes % 60;
+    
+    if (remainingHours === 0 && remainingMinutes === 0) {
+      return `in ${days} ${days === 1 ? 'day' : 'days'}`;
+    } else if (remainingMinutes === 0) {
+      return `in ${days} ${days === 1 ? 'day' : 'days'} ${remainingHours} ${remainingHours === 1 ? 'hr' : 'hrs'}`;
+    } else if (remainingHours === 0) {
+      return `in ${days} ${days === 1 ? 'day' : 'days'} ${remainingMinutes} min`;
+    } else {
+      return `in ${days} ${days === 1 ? 'day' : 'days'} ${remainingHours} ${remainingHours === 1 ? 'hr' : 'hrs'} ${remainingMinutes} min`;
+    }
+  }
+};
+
+/**
+ * Get the next available time slot from item timings (only for today)
+ * Returns only today's upcoming time slot with time difference
+ */
+/**
+ * Check if item has any timing slots for today (regardless of current time)
+ */
+const hasTimingForToday = (timings?: ItemTiming[]): boolean => {
+  if (!timings || timings.length === 0) return false;
+
+  const now = new Date();
+  const currentDay = now.getDay(); // 0 = Sunday, 6 = Saturday
+  const currentApiDay = currentDay === 0 ? 1 : currentDay + 1;
+
+  return timings.some(timing => {
+    if (timing.day_from <= timing.day_to) {
+      // Normal range (e.g., Mon-Fri)
+      return timing.day_from <= currentApiDay && currentApiDay <= timing.day_to;
+    } else {
+      // Wraps around week (e.g., Sat-Sun)
+      return currentApiDay >= timing.day_from || currentApiDay <= timing.day_to;
+    }
+  });
+};
+
+const getNextAvailableTime = (timings?: ItemTiming[]): { timeDifference?: string; hasTodaySlot: boolean } | null => {
+  if (!timings || timings.length === 0) return null;
+
+  const now = new Date();
+  const currentDay = now.getDay(); // 0 = Sunday, 6 = Saturday
+  const currentTime = now.getHours() * 100 + now.getMinutes(); // HHMM format
+
+  // Convert JS day (0-6) to API day format (1-7)
+  const currentApiDay = currentDay === 0 ? 1 : currentDay + 1;
+
+  // Check if item has any timing for today
+  const hasTodaySlot = hasTimingForToday(timings);
+
+  // Only find today's slots that haven't started yet
+  const todaySlots: Array<{ day: number; timeFrom: number; timeTo: number; originalTiming: ItemTiming }> = [];
+
+  timings.forEach(timing => {
+    const timeFrom = parseInt(timing.time_from, 10);
+    const timeTo = parseInt(timing.time_to, 10);
+
+    // Check if timing is for today
+    if (timing.day_from <= timing.day_to) {
+      // Normal range (e.g., Mon-Fri)
+      for (let day = timing.day_from; day <= timing.day_to; day++) {
+        const isToday = day === currentApiDay;
+        
+        if (isToday && timeFrom > currentTime) {
+          // Today, but time hasn't started yet
+          todaySlots.push({ day, timeFrom, timeTo, originalTiming: timing });
+        }
+      }
+    } else {
+      // Wraps around week (e.g., Sat-Sun)
+      for (let day = timing.day_from; day <= 7; day++) {
+        const isToday = day === currentApiDay;
+        
+        if (isToday && timeFrom > currentTime) {
+          todaySlots.push({ day, timeFrom, timeTo, originalTiming: timing });
+        }
+      }
+      for (let day = 1; day <= timing.day_to; day++) {
+        const isToday = day === currentApiDay;
+        
+        if (isToday && timeFrom > currentTime) {
+          todaySlots.push({ day, timeFrom, timeTo, originalTiming: timing });
+        }
+      }
+    }
+  });
+
+  // Sort today's slots by time
+  todaySlots.sort((a, b) => a.timeFrom - b.timeFrom);
+  
+  // If there's a next slot today, return it with time difference
+  const nextSlot = todaySlots.length > 0 ? todaySlots[0] : null;
+  
+  if (nextSlot) {
+    // Calculate time difference in minutes (only for today)
+    const hours = Math.floor(nextSlot.timeFrom / 100);
+    const minutes = nextSlot.timeFrom % 100;
+    const nextTime = new Date(now);
+    nextTime.setHours(hours, minutes, 0, 0);
+    const diffMs = nextTime.getTime() - now.getTime();
+    const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+    const timeDifference = formatTimeDifference(diffMinutes);
+
+    return { timeDifference, hasTodaySlot };
+  }
+
+  // If no next slot today but has timing for today, return that info
+  if (hasTodaySlot) {
+    return { hasTodaySlot: true };
+  }
+
+  return null;
+};
 
 interface RestaurantScreenProps {
   visible: boolean;
@@ -1154,13 +1290,13 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                    </View>
                  )}
                 </View>
-                {/* Only show rating and reviews if there's at least one review */}
-                {(restaurantData?.stats?.total_reviews > 0 || restaurantData?.total_reviews > 0) && (
+                {/* Only show rating if available */}
+                {((restaurantData?.stats?.average_rating && restaurantData?.stats?.average_rating > 0) || (restaurantData?.rating && restaurantData?.rating > 0)) && (
                   <View style={styles.ratingContainer}>
                     <View style={styles.ratingBadge}>
                       <MaterialIcons name="star" size={14} color="#00B14F" />
                       <Text style={styles.ratingText}>
-                        {(restaurantData?.stats?.average_rating || restaurantData?.rating || 0).toFixed(1)} ({restaurantData?.stats?.total_reviews || restaurantData?.total_reviews || '0'})
+                        {(restaurantData?.stats?.average_rating || restaurantData?.rating || 0).toFixed(1)}
                       </Text>
                     </View>
                   </View>
@@ -1416,29 +1552,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               // Item is only available if BOTH restaurant is open AND item timing is available
               const itemAvailable = !isRestaurantClosed && isItemCurrentlyAvailable;
 
-              // Build separate day + per-slot time labels from API-driven timings
-              let availabilityDay = '';
-              let availabilityTimes: string[] = [];
-              if (item.timings && item.timings.length > 0) {
-                const parsed = item.timings
-                  .map(t => {
-                    const formatted = formatItemTiming(t); // e.g., "Mon-Fri, 6:00 AM - 11:00 AM"
-                    const [dayPart, ...rest] = formatted.split(',');
-                    return {
-                      day: (dayPart || '').trim(),
-                      time: rest.join(',').trim(),
-                    };
-                  })
-                  .filter(p => p.day);
-
-                const uniqueDays = Array.from(new Set(parsed.map(p => p.day))).filter(Boolean);
-                const uniqueTimes = Array.from(
-                  new Set(parsed.map(p => p.time).filter(Boolean))
-                );
-
-                availabilityDay = uniqueDays.join(', ');
-                availabilityTimes = uniqueTimes;
-              }
+              // Get next available time slot (only show the next one, not all)
+              const nextAvailableTime = getNextAvailableTime(item.timings);
 
               return (
               <View key={item.id}>
@@ -1565,32 +1680,61 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     ) : (
                       <View style={styles.noImageContainer}>
                         <Text style={styles.noImageText}>No Image Available</Text>
+                        
+                        {/* Heart Button Overlay - Same as when image exists */}
+                        <TouchableOpacity
+                          style={styles.itemHeartButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleToggleFavoriteItem(section.id, item.id);
+                          }}
+                          disabled={togglingFavoriteItemId === item.id}
+                          activeOpacity={0.7}
+                        >
+                          {togglingFavoriteItemId === item.id ? (
+                            <ActivityIndicator size="small" color="#000000" />
+                          ) : (
+                            <MaterialIcons
+                              name={item.isFavorite ? 'favorite' : 'favorite-border'}
+                              size={24}
+                              color={item.isFavorite ? '#FF0000' : '#9E9E9E'}
+                            />
+                          )}
+                        </TouchableOpacity>
                       </View>
                     )}
 
-                    {/* Available Timing Label for Unavailable Items (only when we have API timings) */}
-                    {!itemAvailable && availabilityDay && availabilityTimes.length > 0 && (
+                    {/* Available Timing Badge - Show availability status */}
+                    {!itemAvailable && (
                       <View style={styles.availabilityBadge}>
                         <MaterialIcons
                           name="access-time"
-                          size={14}
+                          size={12}
                           color="#FFC529"
                           style={styles.availabilityIcon}
                         />
                         <View style={styles.availabilityTextContainer}>
-                          <Text style={styles.availabilityDay} numberOfLines={1}>
-                            {availabilityDay}
-                          </Text>
-                          {availabilityTimes.map((timeSlot, index) => (
-                            <Text
-                              // eslint-disable-next-line react/no-array-index-key
-                              key={`${item.id}-time-${index}`}
-                              style={styles.availabilityTime}
-                              numberOfLines={1}
-                            >
-                              {timeSlot}
+                          {nextAvailableTime?.timeDifference ? (
+                            // Item will be available today
+                            <>
+                              <Text style={styles.availabilityTimeText}>
+                                Not available now
+                              </Text>
+                              <Text style={styles.availabilityTimeDifference}>
+                                Will be available in {nextAvailableTime.timeDifference.replace('in ', '')}
+                              </Text>
+                            </>
+                          ) : nextAvailableTime?.hasTodaySlot ? (
+                            // Item has timing for today but no future slot (might be past today's time)
+                            <Text style={styles.availabilityTimeText}>
+                              Not available now
                             </Text>
-                          ))}
+                          ) : (
+                            // Item has no timing for today or no timings at all
+                            <Text style={styles.availabilityTimeText}>
+                              Not available now
+                            </Text>
+                          )}
                         </View>
                       </View>
                     )}
@@ -1722,7 +1866,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               // Use the current restaurant screen context so that back navigation
               // from checkout returns to this restaurant, even if the cart belongs
               // to a different restaurant.
-              onNavigateToCheckout(restaurantId, restaurantName, restaurantAddress, 'restaurant');
+              onNavigateToCheckout(restaurantId, restaurantName || '', restaurantAddress, 'restaurant');
             }}
             activeOpacity={0.8}
           >
@@ -1743,7 +1887,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           style={[
             styles.floatingMenuButton,
             totalCartItems > 0 && styles.floatingMenuButtonWithCart,
-            { bottom: totalCartItems > 0 ? 130 : 30 }
+            { bottom: totalCartItems > 0 ? 145 : 45 }
           ]}
           onPress={() => setShowQuickMenu(true)}
         >
@@ -1766,7 +1910,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           style={[
             styles.closeMenuButton,
             totalCartItems > 0 && styles.closeMenuButtonWithCart,
-            { bottom: totalCartItems > 0 ? 110 : 30 }
+            { bottom: totalCartItems > 0 ? 125 : 45 }
           ]}
           onPress={() => setShowQuickMenu(false)}
           activeOpacity={0.8}
@@ -2435,6 +2579,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
+    position: 'relative',
   },
   noImageText: {
     fontFamily: 'Poppins',
@@ -2466,41 +2611,59 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
     borderRadius: 16,
     zIndex: 5,
   },
   availabilityBadge: {
     position: 'absolute',
-    top: '45%',
-    left: 8,
-    right: 8,
-    transform: [{ translateY: -8 }],
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+    top: '50%',
+    left: 6,
+    right: 6,
+    transform: [{ translateY: -16 }],
+    paddingHorizontal: 7,
+    paddingVertical: 5,
     borderRadius: 6,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.88)',
+    alignItems: 'flex-start',
     justifyContent: 'center',
     flexDirection: 'row',
+    zIndex: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 6,
+    maxWidth: '100%',
+    minHeight: 28,
   },
   availabilityIcon: {
-    marginRight: 6,
+    marginRight: 5,
+    alignSelf: 'flex-start',
+    marginTop: 2,
   },
   availabilityTextContainer: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
     flexShrink: 1,
   },
-  availabilityDay: {
+  availabilityTimeText: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 8,
+    fontSize: 8.5,
     lineHeight: 11,
     color: '#FFFFFF',
+    textAlign: 'left',
+    letterSpacing: 0.2,
+    flexWrap: 'wrap',
+    flexShrink: 1,
   },
-  availabilityTime: {
+  availabilityTimeDifference: {
     fontFamily: 'Poppins_500Medium',
-    fontSize: 8,
+    fontSize: 8.5,
     lineHeight: 11,
-    color: '#FFFFFF',
+    color: '#FFC529',
+    letterSpacing: 0.2,
   },
   addButton: {
     flexDirection: 'row',
@@ -2703,7 +2866,7 @@ const styles = StyleSheet.create({
   floatingMenuButton: {
     position: 'absolute',
     right: 20,
-    bottom: 30,
+    bottom: 45,
     width: 50,
     height: 50,
     borderRadius: 10,
@@ -2717,7 +2880,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   floatingMenuButtonWithCart: {
-    bottom: 110,
+    bottom: 125,
   },
   arrowIcon: {
     transform: [{ rotate: '0deg' }],
@@ -2748,6 +2911,7 @@ const styles = StyleSheet.create({
   closeMenuButton: {
     position: 'absolute',
     right: 20,
+    bottom: 45,
     bottom: 30,
     width: 122,
     height: 50,
@@ -2767,7 +2931,7 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   closeMenuButtonWithCart: {
-    bottom: 110,
+    bottom: 125,
   },
   closeMenuText: {
     fontFamily: 'Poppins_500Medium',

@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { authService } from '@/services/auth.service';
-import { storageService } from '@/services/storage.service';
 
 interface ContactUsScreenProps {
   visible?: boolean;
@@ -34,32 +33,12 @@ export const ContactUsScreen: React.FC<ContactUsScreenProps> = ({
     const fetchSupportDetails = async () => {
       try {
         setIsLoading(true);
-
-        // Try API first
-        const response = await authService.getProfile();
-
-        if (response.success && response.data?.user) {
-          const user = response.data.user as any;
-          setSupportEmail(user.support_email || '');
-          setSupportNumber(user.support_number || '');
-        } else {
-          // Fallback to stored user
-          const storedUser = await storageService.getUser();
-          if (storedUser) {
-            setSupportEmail((storedUser as any).support_email || '');
-            setSupportNumber((storedUser as any).support_number || '');
-          }
-        }
+        // Get support details from cache first, only call API if not cached
+        const supportDetails = await authService.getSupportDetails(false);
+        setSupportEmail(supportDetails.support_email);
+        setSupportNumber(supportDetails.support_number);
       } catch {
-        try {
-          const storedUser = await storageService.getUser();
-          if (storedUser) {
-            setSupportEmail((storedUser as any).support_email || '');
-            setSupportNumber((storedUser as any).support_number || '');
-          }
-        } catch {
-          // Silent fail – leave defaults
-        }
+        // Silent fail – leave defaults
       } finally {
         setIsLoading(false);
       }
@@ -110,7 +89,7 @@ export const ContactUsScreen: React.FC<ContactUsScreenProps> = ({
               Have a question? We&apos;re here to help!
             </Text>
             <Text style={styles.topCardHours}>
-              Support Hours: 10 AM &ndash; 11 PM (Daily)
+              Support Hours: 8 AM &ndash; 11 PM (Daily)
             </Text>
           </View>
 

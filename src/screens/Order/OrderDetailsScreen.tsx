@@ -50,6 +50,7 @@ interface OrderDetailsScreenProps {
   };
   visible?: boolean;
   onBack?: () => void;
+  onAddMoreItems?: () => void;
   onEditCustomization?: (itemId: string, variantId: string, currentAddOnIds: string[], currentQuantity?: number) => void;
   onPlaceOrder?: () => void;
   onOrderSuccess?: (orderId: number) => void;
@@ -68,6 +69,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   selectedLocation,
   visible = true,
   onBack,
+  onAddMoreItems,
   onEditCustomization,
   onPlaceOrder,
   onOrderSuccess,
@@ -151,6 +153,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [tipError, setTipError] = useState('');
   const [promoError, setPromoError] = useState('');
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
+  const lastAutoRemovedTotalRef = useRef<number | null>(null);
 
   // Convenience accessors for backend-calculated amounts (no client-side recomputation)
   const itemTotal = cartSummary?.subtotal ?? 0;
@@ -283,6 +286,69 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [Object.keys(cart).length, localCartItems.length]); // Use cart length instead of JSON.stringify
 
+  // Automatically remove promo code if total amount goes below ₹100
+  useEffect(() => {
+    // Only check if cart summary is loaded and we have a valid total amount
+    if (!cartSummary || totalAmount === 0) {
+      return;
+    }
+
+    // Check if coupon is applied and total is below ₹100
+    const MINIMUM_ORDER_AMOUNT = 100;
+    const shouldRemovePromo = isCouponApplied && totalAmount < MINIMUM_ORDER_AMOUNT;
+
+    // Prevent duplicate removals for the same total amount
+    // Only remove if this is a new low total (different from last auto-removed total)
+    if (shouldRemovePromo && lastAutoRemovedTotalRef.current !== totalAmount) {
+      // Mark this total as handled
+      lastAutoRemovedTotalRef.current = totalAmount;
+
+      // Automatically remove the promo code
+      const autoRemovePromo = async () => {
+        try {
+          setIsApplyingPromo(true);
+          setPromoError('');
+
+          const response = await cartService.removeCoupon();
+
+          if (response.success && response.cart_summary) {
+            // Update cart summary with new values (without discount)
+            setCartSummary(response.cart_summary);
+
+            // Clear promo code input
+            setPromoCode('');
+            setPromoError('');
+
+            // Show user-friendly message explaining why promo was removed
+            showConfirmation({
+              title: 'Promo Code Removed',
+              message: `Your order total is below ₹${MINIMUM_ORDER_AMOUNT}. Promo codes require a minimum order value of ₹${MINIMUM_ORDER_AMOUNT}.`,
+              confirmText: 'OK',
+              cancelText: '',
+              confirmButtonColor: '#00B14F',
+              onConfirm: () => {},
+            });
+          } else {
+            // If removal fails, show error
+            setPromoError(response.message || 'Failed to remove promo code.');
+          }
+        } catch (error: any) {
+          setPromoError(error?.message || 'Failed to remove promo code.');
+        } finally {
+          setIsApplyingPromo(false);
+        }
+      };
+
+      autoRemovePromo();
+    }
+
+    // Reset the ref when total goes back above minimum (allows future auto-removal if needed)
+    if (totalAmount >= MINIMUM_ORDER_AMOUNT && lastAutoRemovedTotalRef.current !== null) {
+      lastAutoRemovedTotalRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalAmount, isCouponApplied, cartSummary]);
+
   const fetchCartSummary = async () => {
     try {
       setIsLoadingCartSummary(true);
@@ -303,6 +369,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           if (typeof tipAmount === 'number') {
             setSelectedTip(tipAmount > 0 ? tipAmount : null);
           }
+
+          // Only restore promo code from backend if field is empty (preserve user input)
+          // This prevents overwriting what the user has typed
+          if (promoCode.trim() === '') {
+            if (cartResponse.summary.applied_offer?.offer_code) {
+              setPromoCode(cartResponse.summary.applied_offer.offer_code);
+            }
+          }
+          // Note: We don't clear promo code if user has entered something, even if backend has no offer
+          // This allows user to keep typing/editing without interruption
         }
       } else {
         setCartData(null);
@@ -713,6 +789,26 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // Refetch cart summary to update bill details
     await fetchCartSummary();
 
+    // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
+    // This ensures discount is recalculated correctly when cart items change
+    if (isCouponApplied && promoCode && promoCode.trim() !== '') {
+      try {
+        const normalizedCode = promoCode.trim().toUpperCase();
+        const response = await cartService.applyCoupon(normalizedCode);
+        if (response.success && response.cart_summary) {
+          setCartSummary(response.cart_summary);
+          setPromoError('');
+        } else {
+          // If promo becomes invalid, clear it from state
+          setPromoCode('');
+          setPromoError(response.message || 'Promo code is no longer valid.');
+        }
+      } catch (error) {
+        // Silent fail - discount will be updated via fetchCartSummary
+        // If promo becomes invalid, it will be handled by auto-remove logic
+      }
+    }
+
     // Also call parent callback if provided (for backward compatibility)
     if (onUpdateCart) {
       onUpdateCart(itemId, variantId, newQuantity);
@@ -738,6 +834,26 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       // Refetch cart summary to update bill details
       await fetchCartSummary();
 
+      // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
+      // This ensures discount is recalculated correctly when cart items change
+      if (isCouponApplied && promoCode && promoCode.trim() !== '') {
+        try {
+          const normalizedCode = promoCode.trim().toUpperCase();
+          const response = await cartService.applyCoupon(normalizedCode);
+          if (response.success && response.cart_summary) {
+            setCartSummary(response.cart_summary);
+            setPromoError('');
+          } else {
+            // If promo becomes invalid, clear it from state
+            setPromoCode('');
+            setPromoError(response.message || 'Promo code is no longer valid.');
+          }
+        } catch (error) {
+          // Silent fail - discount will be updated via fetchCartSummary
+          // If promo becomes invalid, it will be handled by auto-remove logic
+        }
+      }
+
       // Also call parent callback if provided (for backward compatibility)
       if (onUpdateCart) {
         onUpdateCart(itemId, variantId, 0);
@@ -758,6 +874,26 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
       // Refetch cart summary to update bill details
       await fetchCartSummary();
+
+      // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
+      // This ensures discount is recalculated correctly when cart items change
+      if (isCouponApplied && promoCode && promoCode.trim() !== '') {
+        try {
+          const normalizedCode = promoCode.trim().toUpperCase();
+          const response = await cartService.applyCoupon(normalizedCode);
+          if (response.success && response.cart_summary) {
+            setCartSummary(response.cart_summary);
+            setPromoError('');
+          } else {
+            // If promo becomes invalid, clear it from state
+            setPromoCode('');
+            setPromoError(response.message || 'Promo code is no longer valid.');
+          }
+        } catch (error) {
+          // Silent fail - discount will be updated via fetchCartSummary
+          // If promo becomes invalid, it will be handled by auto-remove logic
+        }
+      }
 
       // Also call parent callback if provided (for backward compatibility)
       if (onUpdateCart) {
@@ -875,6 +1011,18 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       setPromoError('Please enter a promo code.');
       return;
     }
+
+    // Check if base order total (before any promo discount) is below minimum order amount
+    const MINIMUM_ORDER_AMOUNT = 100;
+    // Calculate base total: current total + existing discount (if any)
+    const baseTotal = totalAmount + discountAmount;
+    
+    // Validate minimum order amount before applying promo
+    // The backend will also validate this, but we check here for better UX
+    // if (baseTotal < MINIMUM_ORDER_AMOUNT) {
+    //   setPromoError(`Minimum order value of ₹${MINIMUM_ORDER_AMOUNT} required to apply promo codes.`);
+    //   return;
+    // }
 
     // Enforce uppercase-only input (letters are uppercased; digits remain as-is)
     const normalizedCode = trimmedCode.toUpperCase();
@@ -1093,7 +1241,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 })}
 
                 {/* Add More Items Button */}
-                <TouchableOpacity style={styles.addMoreButton} activeOpacity={0.7} onPress={onBack}>
+                <TouchableOpacity 
+                  style={styles.addMoreButton} 
+                  activeOpacity={0.7} 
+                  onPress={() => {
+                    if (onAddMoreItems) {
+                      onAddMoreItems();
+                    } else if (onBack) {
+                      onBack();
+                    }
+                  }}
+                >
                   <Text style={styles.addMoreButtonText}>+ Add More Items</Text>
                 </TouchableOpacity>
 

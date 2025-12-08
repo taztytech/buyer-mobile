@@ -70,9 +70,13 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
       return;
     }
 
-    // Basic email validation (only if user has entered an email)
+    if (!trimmedEmail) {
+      setError('Please enter your email');
+      return;
+    }
+    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (trimmedEmail && !emailRegex.test(trimmedEmail)) {
+    if (!emailRegex.test(trimmedEmail)) {
       setError('Please enter a valid email address');
       return;
     }
@@ -99,7 +103,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
       // Call the create profile API with the exact format required
       const response = await authService.createProfile({
         name: trimmedFullName,
-        email: trimmedEmail || undefined,
+        email: trimmedEmail,
         phone_number: parseInt(phoneNumber, 10),
         status: true,
       });
@@ -370,5 +374,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',
+  },
+  errorText: {
+    width: '100%',
+    marginTop: 4,
+    marginBottom: 4,
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#D32F2F',
   },
 });

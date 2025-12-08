@@ -229,14 +229,12 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
 
           {/* Rating and Delivery Time */}
           <View style={styles.ratingDeliveryRow}>
-            {(restaurant.reviewCount && restaurant.reviewCount > 0) && (
+            {restaurant.rating > 0 && (
               <>
                 <View style={styles.ratingContainer}>
                   <MaterialIcons name="star" size={16} color="#00B14F" />
                   <Text style={styles.ratingText}>
-                    {restaurant.rating.toFixed(1)} ({restaurant.reviewCount >= 1000
-                      ? `${(restaurant.reviewCount / 1000).toFixed(1)}K+`
-                      : restaurant.reviewCount})
+                    {restaurant.rating.toFixed(1)}
                   </Text>
                 </View>
                 <Text style={styles.deliveryDot}>•</Text>
@@ -255,8 +253,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
               {locationText}
             </Text>
-            <Text style={styles.distanceDot}>•</Text>
-            <Text style={styles.distanceText}>{restaurant.distance}</Text>
+            <View style={styles.distanceRow}>
+              <MaterialIcons name="two-wheeler" size={16} color="#00B14F" />
+              <Text style={styles.distanceText}>{restaurant.distance}</Text>
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 24,
     color: '#000000',
-    marginBottom: 2,
+    marginBottom: 5,
   },
   // Rating and Delivery Row
   ratingDeliveryRow: {
@@ -571,25 +571,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: '#666666',
-    marginBottom: 2,
+    marginBottom: 5,
   },
   // Location Row
   locationRow: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  distanceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+    marginTop: 5,
   },
   locationText: {
     fontFamily: 'Poppins_400Regular',
     fontSize: 11,
     lineHeight: 16,
     color: '#666666',
-    flex: 1,
-  },
-  distanceDot: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 11,
-    color: '#666666',
+    width: '100%',
   },
   distanceText: {
     fontFamily: 'Poppins_400Regular',

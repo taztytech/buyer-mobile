@@ -200,6 +200,45 @@ class AuthService {
   }
 
   /**
+   * Get support contact details (number and email)
+   * Uses cached data first, only calls API if not found in cache
+   * @param forceRefresh - If true, forces API call to refresh data
+   */
+  async getSupportDetails(forceRefresh: boolean = false): Promise<{ support_number: string; support_email: string }> {
+    // First check cache if not forcing refresh
+    if (!forceRefresh) {
+      const cachedUser = await storageService.getUser();
+      if (cachedUser && (cachedUser as any).support_number) {
+        return {
+          support_number: (cachedUser as any).support_number || '',
+          support_email: (cachedUser as any).support_email || '',
+        };
+      }
+    }
+
+    // If not in cache or force refresh, fetch from API
+    try {
+      const response = await this.getProfile();
+      if (response.success && response.data?.user) {
+        const user = response.data.user as any;
+        return {
+          support_number: user.support_number || '',
+          support_email: user.support_email || '',
+        };
+      }
+    } catch {
+      // Silent fail
+    }
+
+    // Final fallback to cache (even if empty)
+    const cachedUser = await storageService.getUser();
+    return {
+      support_number: (cachedUser as any)?.support_number || '',
+      support_email: (cachedUser as any)?.support_email || '',
+    };
+  }
+
+  /**
    * Get user profile
    */
   async getProfile(): Promise<ApiResponse<any>> {

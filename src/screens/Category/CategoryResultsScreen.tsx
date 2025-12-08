@@ -7,22 +7,18 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
-  Dimensions,
-  ActivityIndicator,
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { apiService } from '@/services/api.service';
-import { API_CONFIG } from '@/config/api.config';
 import { Shimmer } from '@/components/Shimmer';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { SearchBar } from '@/components/SearchBar';
-import { homeService } from '@/services/home.service';
+import { homeService, Restaurant } from '@/services/home.service';
 import { useVegMode } from '@/context/VegModeContext';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { addressService } from '@/services/address.service';
 
 interface CategoryItem {
   id: number | string;
@@ -36,41 +32,45 @@ interface CategoryResultsScreenProps {
   categories?: CategoryItem[];
   onBack?: () => void;
   onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
+  selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
 }
 
-interface TopRatedItem {
-  id: string;
-  name: string;
-  rating: number;
-  deliveryTime: string;
-  image: any;
-}
+// TopRatedItem interface commented out as Top Rated section is commented
+// interface TopRatedItem {
+//   id: string;
+//   name: string;
+//   rating: number;
+//   deliveryTime: string;
+//   image: any;
+// }
 
-interface RestaurantTiming {
-  day: number;
-  open_time: string;
-  close_time: string;
-  is_open: boolean;
-}
+// RestaurantTiming interface - using type from home.service instead
+// interface RestaurantTiming {
+//   day: number;
+//   open_time: string;
+//   close_time: string;
+//   is_open: boolean;
+// }
 
-interface RestaurantItem {
-  id: number;
-  name: string;
-  description: string;
-  logo_url: string;
-  rating: number;
-  delivery_time: string;
-  location: {
-    locality: string;
-    city: string;
-  };
-  distance: number;
-  is_open: boolean;
-  items_count: number;
-  isFavorite: boolean;
-  timings?: RestaurantTiming[];
-  isOpen?: boolean;
-}
+// RestaurantItem interface removed - using Restaurant type from home.service instead
+// interface RestaurantItem {
+//   id: number;
+//   name: string;
+//   description: string;
+//   logo_url: string;
+//   rating: number;
+//   delivery_time: string;
+//   location: {
+//     locality: string;
+//     city: string;
+//   };
+//   distance: number;
+//   is_open: boolean;
+//   items_count: number;
+//   isFavorite: boolean;
+//   timings?: RestaurantTiming[];
+//   isOpen?: boolean;
+// }
 
 // Fallback categories if none provided
 const FALLBACK_CATEGORIES = ['Biryani', 'South Indian', 'Pizza', 'Burger', 'Cakes'];
@@ -101,41 +101,50 @@ const ShimmerRestaurantCard = () => (
   </View>
 );
 
-// Shimmer Top Rated Card Component
+// Shimmer Top Rated Card Component - commented out as Top Rated section is commented
+/*
 const ShimmerTopRatedCard = () => (
   <View style={styles.topRatedCard}>
-    {/* Image Shimmer */}
     <View style={styles.topRatedImageContainer}>
       <Shimmer width={140} height={139} borderRadius={20} backgroundColor="#E8E8E8" />
     </View>
-    {/* Info Shimmer */}
     <View style={styles.topRatedInfo}>
-      {/* Name */}
       <Shimmer width={100} height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
-      {/* Delivery Time */}
       <Shimmer width={80} height={14} borderRadius={4} backgroundColor="#E8E8E8" />
     </View>
   </View>
 );
+*/
 
+
+// Default location coordinates (Madurai) - fallback if no location provided
+const DEFAULT_LOCATION = {
+  latitude: 9.9252,
+  longitude: 78.1198,
+};
 
 export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
   categoryName,
   categories,
   onBack,
   onNavigateToRestaurant,
+  selectedLocation,
 }) => {
   const { vegMode } = useVegMode();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(categoryName);
-  const [restaurants, setRestaurants] = useState<RestaurantItem[]>([]);
-  const [topRatedRestaurants, setTopRatedRestaurants] = useState<any[]>([]);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [_topRatedRestaurants, _setTopRatedRestaurants] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchResults, setSearchResults] = useState<RestaurantItem[]>([]);
+  const [searchResults, setSearchResults] = useState<Restaurant[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [scrollOffset, setScrollOffset] = useState(0);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [defaultAddressCoords, setDefaultAddressCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const categoryScrollViewRef = useRef<ScrollView>(null);
+  const hasAutoScrolledRef = useRef(false);
+  const isUserScrollingRef = useRef(false);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -146,13 +155,48 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
     ? categories.filter(cat => cat.name !== 'View All').map(cat => cat.name)
     : FALLBACK_CATEGORIES;
 
+  // Track if we've attempted to fetch default address
+  const [hasFetchedDefaultAddress, setHasFetchedDefaultAddress] = useState(false);
+
+  // Fetch default address coordinates
+  useEffect(() => {
+    const fetchDefaultAddress = async () => {
+      try {
+        const response = await addressService.getAddresses();
+        if (response.success && response.data) {
+          // Find the default address (is_default: true)
+          const defaultAddress = response.data.find(addr => addr.is_default);
+          if (defaultAddress) {
+            setDefaultAddressCoords({
+              latitude: defaultAddress.latitude,
+              longitude: defaultAddress.longitude,
+            });
+          } else {
+            // No default address found, mark as fetched but set to null
+            setDefaultAddressCoords(null);
+          }
+        } else {
+          // API failed, mark as fetched but set to null
+          setDefaultAddressCoords(null);
+        }
+      } catch (error) {
+        // Error fetching, mark as fetched but set to null
+        setDefaultAddressCoords(null);
+      } finally {
+        setHasFetchedDefaultAddress(true);
+      }
+    };
+
+    fetchDefaultAddress();
+  }, []);
+
   const fetchRestaurants = async () => {
     try {
       setIsLoading(true);
 
-      // Default location - you can make this dynamic later
-      const lat = 9.93550394286794;
-      const lng = 78.13114931086115;
+      // Use default address coordinates, then selectedLocation, then fallback to default
+      const lat = defaultAddressCoords?.latitude || selectedLocation?.latitude || DEFAULT_LOCATION.latitude;
+      const lng = defaultAddressCoords?.longitude || selectedLocation?.longitude || DEFAULT_LOCATION.longitude;
       const radius = 10;
 
       const query = selectedCategory.toLowerCase();
@@ -169,23 +213,33 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         new Promise(resolve => setTimeout(resolve, 1500)) // 1.5 second delay
       ]);
 
-      if (response.data?.success && response.data?.data?.restaurants) {
+      if (response && (response as any).data?.success && (response as any).data?.data?.restaurants) {
         // Transform API data to match RestaurantCard interface
-        const restaurantsData = response.data.data.restaurants.map((restaurant: any) => {
+        const restaurantsData = ((response as any).data.data.restaurants as any[]).map((restaurant: any) => {
           // Calculate real-time open status using timings if available
           const timings = restaurant.timings || [];
           const isOpen = timings.length > 0
             ? homeService.isRestaurantOpen(timings)
             : (restaurant.is_open !== undefined ? restaurant.is_open : true);
 
+          // Format cuisine_tags: if array, join with " • ", otherwise use as string
+          let cuisineText = 'Restaurant';
+          if (restaurant.cuisine_tags) {
+            if (Array.isArray(restaurant.cuisine_tags)) {
+              cuisineText = restaurant.cuisine_tags.join(' • ');
+            } else if (typeof restaurant.cuisine_tags === 'string' && restaurant.cuisine_tags.trim()) {
+              cuisineText = restaurant.cuisine_tags;
+            }
+          }
+
           return {
             id: restaurant.id,
             name: restaurant.name,
-            cuisine: restaurant.description || 'Restaurant',
+            cuisine: cuisineText,
             rating: restaurant.rating || 0,
             deliveryTime: restaurant.delivery_time || '25-30 mins',
             location: restaurant.location,
-            distance: restaurant.distance ? `${restaurant.distance.toFixed(1)}Kms` : '0Kms',
+            distance: restaurant.distance ? `${(Math.floor(restaurant.distance * 100) / 100).toFixed(2)}Kms` : '0Kms',
             image: restaurant.logo_url || restaurant.image,
             isFavorite: restaurant.is_favorite || false,
             isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
@@ -197,25 +251,25 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         setRestaurants(restaurantsData);
 
         // Handle top rated restaurants if available
-        if (response.data?.data?.top_rated_restaurants && response.data.data.top_rated_restaurants.length > 0) {
-          const topRatedData = response.data.data.top_rated_restaurants.map((restaurant: any) => ({
+        if ((response as any).data?.data?.top_rated_restaurants && ((response as any).data.data.top_rated_restaurants as any[]).length > 0) {
+          const topRatedData = ((response as any).data.data.top_rated_restaurants as any[]).map((restaurant: any) => ({
             id: restaurant.id.toString(),
             name: restaurant.name,
             rating: restaurant.rating || 0,
             deliveryTime: restaurant.delivery_time || '25-30 mins',
             image: restaurant.logo_url,
           }));
-          setTopRatedRestaurants(topRatedData);
+          _setTopRatedRestaurants(topRatedData);
         } else {
-          setTopRatedRestaurants([]);
+          _setTopRatedRestaurants([]);
         }
       } else {
         setRestaurants([]);
-        setTopRatedRestaurants([]);
+        _setTopRatedRestaurants([]);
       }
     } catch (error) {
       setRestaurants([]);
-      setTopRatedRestaurants([]);
+      _setTopRatedRestaurants([]);
     } finally {
       setIsLoading(false);
     }
@@ -225,9 +279,9 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
     try {
       setIsSearching(true);
 
-      // Default location - you can make this dynamic later
-      const lat = 9.93550394286794;
-      const lng = 78.13114931086115;
+      // Use default address coordinates, then selectedLocation, then fallback to default
+      const lat = defaultAddressCoords?.latitude || selectedLocation?.latitude || DEFAULT_LOCATION.latitude;
+      const lng = defaultAddressCoords?.longitude || selectedLocation?.longitude || DEFAULT_LOCATION.longitude;
       const radius = 10;
 
       let apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`;
@@ -239,23 +293,33 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
 
       const response = await apiService.get(apiEndpoint);
 
-      if (response.data?.success && response.data?.data?.restaurants) {
+      if (response && (response as any).data?.success && (response as any).data?.data?.restaurants) {
         // Transform API data to match RestaurantCard interface
-        const restaurantsData = response.data.data.restaurants.map((restaurant: any) => {
+        const restaurantsData = ((response as any).data.data.restaurants as any[]).map((restaurant: any) => {
           // Calculate real-time open status using timings if available
           const timings = restaurant.timings || [];
           const isOpen = timings.length > 0
             ? homeService.isRestaurantOpen(timings)
             : (restaurant.is_open !== undefined ? restaurant.is_open : true);
 
+          // Format cuisine_tags: if array, join with " • ", otherwise use as string
+          let cuisineText = 'Restaurant';
+          if (restaurant.cuisine_tags) {
+            if (Array.isArray(restaurant.cuisine_tags)) {
+              cuisineText = restaurant.cuisine_tags.join(' • ');
+            } else if (typeof restaurant.cuisine_tags === 'string' && restaurant.cuisine_tags.trim()) {
+              cuisineText = restaurant.cuisine_tags;
+            }
+          }
+
           return {
             id: restaurant.id,
             name: restaurant.name,
-            cuisine: restaurant.description || 'Restaurant',
+            cuisine: cuisineText,
             rating: restaurant.rating || 0,
             deliveryTime: restaurant.delivery_time || '25-30 mins',
             location: restaurant.location,
-            distance: restaurant.distance ? `${restaurant.distance.toFixed(1)}Kms` : '0Kms',
+            distance: restaurant.distance ? `${(Math.floor(restaurant.distance * 100) / 100).toFixed(2)}Kms` : '0Kms',
             image: restaurant.logo_url || restaurant.image,
             isFavorite: restaurant.is_favorite || false,
             isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
@@ -291,9 +355,36 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
 
   // Fetch restaurants data from API
   useEffect(() => {
-    fetchRestaurants();
+    // Wait for default address fetch to complete before fetching restaurants
+    if (hasFetchedDefaultAddress) {
+      fetchRestaurants();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory]);
+  }, [selectedCategory, defaultAddressCoords, hasFetchedDefaultAddress]);
+
+  // Auto-scroll to selected category only on initial mount
+  useEffect(() => {
+    if (categoryName && displayCategories.length > 0 && !hasAutoScrolledRef.current) {
+      const selectedIndex = displayCategories.indexOf(categoryName);
+      if (selectedIndex !== -1 && categoryScrollViewRef.current) {
+        // Calculate scroll position
+        // Category width: 74, marginRight: 4, total: 78
+        const categoryWidth = 74 + 4; // 78
+        const scrollX = selectedIndex * categoryWidth;
+        
+        // Wait for the ScrollView to be rendered
+        setTimeout(() => {
+          if (categoryScrollViewRef.current && !hasAutoScrolledRef.current) {
+            categoryScrollViewRef.current.scrollTo({
+              x: scrollX,
+              animated: true,
+            });
+            hasAutoScrolledRef.current = true;
+          }
+        }, 100);
+      }
+    }
+  }, [categoryName, displayCategories]);
 
   // Handle search with debounce
   useEffect(() => {
@@ -350,15 +441,16 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
     <View style={styles.outerContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" translucent={false} />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <ScrollView
-          style={styles.container}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-          overScrollMode="never"
-        >
-          {/* Top Section - Back Button + Search Bar */}
-          <SearchBar
+        <View style={styles.contentWrapper}>
+          <ScrollView
+            style={styles.container}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            overScrollMode="never"
+          >
+            {/* Top Section - Back Button + Search Bar */}
+            <SearchBar
             onBack={onBack}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -368,6 +460,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         {/* Categories Section with Images */}
         <View style={styles.categorySection}>
           <ScrollView
+            ref={categoryScrollViewRef}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoryScroll}
@@ -375,6 +468,24 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
               setScrollOffset(event.nativeEvent.contentOffset.x);
             }}
             scrollEventThrottle={16}
+            scrollEnabled={true}
+            bounces={true}
+            nestedScrollEnabled={false}
+            decelerationRate="fast"
+            directionalLockEnabled={true}
+            keyboardShouldPersistTaps="handled"
+            onScrollBeginDrag={() => {
+              isUserScrollingRef.current = true;
+            }}
+            onScrollEndDrag={() => {
+              // Reset after a delay to allow taps
+              setTimeout(() => {
+                isUserScrollingRef.current = false;
+              }, 100);
+            }}
+            onMomentumScrollEnd={() => {
+              isUserScrollingRef.current = false;
+            }}
           >
             {displayCategories.map((category, index) => {
               // Map category names to their images
@@ -407,10 +518,21 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
                 <View key={`${category}-${index}`} style={styles.categoryItemWrapper}>
                   <TouchableOpacity
                     onPress={() => {
-                      setSelectedCategory(category);
-                      handleClearSearch();
+                      // Prevent selection if user just scrolled (wait a bit)
+                      if (isUserScrollingRef.current) {
+                        setTimeout(() => {
+                          setSelectedCategory(category);
+                          handleClearSearch();
+                        }, 150);
+                      } else {
+                        setSelectedCategory(category);
+                        handleClearSearch();
+                      }
                     }}
                     style={styles.categoryItem}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                    delayPressIn={0}
                   >
                     {imageSource && (
                       <Image
@@ -482,7 +604,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         </View> */}
 
         {/* Top Rated Section - Only show when not loading, has data, and not showing search results */}
-        {!hasSearched && !isLoading && topRatedRestaurants.length > 0 ? (
+        {/* {!hasSearched && !isLoading && topRatedRestaurants.length > 0 ? (
           <>
             <View style={styles.sectionTitleContainer}>
               <LinearGradient
@@ -551,10 +673,10 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
               </Animated.View>
             </ScrollView>
           </>
-        ) : null}
+        ) : null} */}
 
-        {/* Restaurants Near You Section - Only show title if loading or has data */}
-        {(hasSearched ? (isSearching || searchResults.length > 0) : (isLoading || restaurants.length > 0)) && (
+        {/* Search Results Section - Only show title when searching */}
+        {hasSearched && (isSearching || searchResults.length > 0) && (
           <View style={styles.sectionTitleContainer}>
             <LinearGradient
               colors={['rgba(0, 0, 0, 0)', '#000000']}
@@ -563,7 +685,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
               style={styles.sectionTitleLine}
             />
             <Text style={styles.sectionTitle}>
-              {hasSearched ? `Search Results (${searchResults.length})` : 'Restaurants Near You'}
+              {`Search Results (${searchResults.length})`}
             </Text>
             <LinearGradient
               colors={['#000000', 'rgba(0, 0, 0, 0)']}
@@ -605,7 +727,8 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
                     restaurant={restaurant}
                     onPress={() => {
                       if (onNavigateToRestaurant) {
-                        onNavigateToRestaurant(restaurant.id, restaurant.name);
+                        const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
+                        onNavigateToRestaurant(restaurantId, restaurant.name);
                       }
                     }}
                   />
@@ -615,6 +738,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           )}
         </View>
       </ScrollView>
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -627,7 +751,14 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+    backgroundColor: '#00B14F',
+  },
+  contentWrapper: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
+    // borderTopLeftRadius: 20,
+    // borderTopRightRadius: 20,
+    overflow: 'hidden',
   },
   container: {
     flex: 1,
@@ -639,7 +770,7 @@ const styles = StyleSheet.create({
   // Top Section
   // Category Section
   categorySection: {
-    marginTop: 10,
+    // marginTop: 10,
     marginBottom: 0,
     height: 75,
   },
@@ -852,6 +983,7 @@ const styles = StyleSheet.create({
   },
   // Restaurant List
   restaurantList: {
+    marginTop: 15,
     paddingHorizontal: 20,
     paddingBottom: 20,
   },

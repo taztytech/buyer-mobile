@@ -113,8 +113,8 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
       }
 
       // Add rating if available
-      if (restaurantData.stats?.average_rating > 0 && restaurantData.stats?.total_reviews > 0) {
-        message += `⭐ ${restaurantData.stats.average_rating.toFixed(1)} (${restaurantData.stats.total_reviews} reviews)\n`;
+      if (restaurantData.stats?.average_rating > 0) {
+        message += `⭐ ${restaurantData.stats.average_rating.toFixed(1)}\n`;
       }
 
       // Add delivery info

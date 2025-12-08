@@ -27,7 +27,7 @@ import { HelpScreen } from '@/screens/Help/HelpScreen';
 import { ContactUsScreen } from '@/screens/Help/ContactUsScreen';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
 import { storageService } from '@/services/storage.service';
@@ -86,7 +86,7 @@ function AppContent() {
   const [orderTrackingCameFrom, setOrderTrackingCameFrom] = React.useState<'orders' | 'checkout' | 'orderDetail'>('orders');
   const [editingAddress, setEditingAddress] = React.useState<any>(null);
   const [helpOrderData, setHelpOrderData] = React.useState<OrderListItem | null>(null);
-  const [isRegistrationFlow, setIsRegistrationFlow] = React.useState(false);
+  const [_isRegistrationFlow, setIsRegistrationFlow] = React.useState(false);
   const [initialLocationCoords, setInitialLocationCoords] = React.useState<{ latitude?: number; longitude?: number } | null>(null);
   const [legalCameFrom, setLegalCameFrom] = React.useState<'profile' | 'login' | 'otp'>('profile');
   const [addressRefreshTrigger, setAddressRefreshTrigger] = React.useState(0);
@@ -121,10 +121,11 @@ function AppContent() {
     if (fontsLoaded) {
       // Set default font family for all Text components
       // This applies Poppins as the default font across the entire app
-      if (!Text.defaultProps) {
-        Text.defaultProps = {};
+      // Note: defaultProps is deprecated but still works in React Native
+      if (!(Text as any).defaultProps) {
+        (Text as any).defaultProps = {};
       }
-      Text.defaultProps.style = { fontFamily: 'Poppins' };
+      (Text as any).defaultProps.style = { fontFamily: 'Poppins' };
     }
   }, [fontsLoaded]);
 
@@ -870,6 +871,45 @@ function AppContent() {
     });
   }, [checkoutScreenSlide, checkoutCameFrom]);
 
+  // Handle Add More Items from Checkout - Navigate to restaurant menu, back goes to home
+  const handleAddMoreItemsFromCheckout = useCallback(() => {
+    const targetRestaurantId = cartRestaurantId || selectedRestaurantId;
+    const targetRestaurantName = cartRestaurantName || selectedRestaurantName;
+
+    if (!targetRestaurantId || !targetRestaurantName) {
+      // If no restaurant info, just go back
+      handleBackFromCheckout();
+      return;
+    }
+
+    // Set restaurant info
+    setSelectedRestaurantId(targetRestaurantId);
+    setSelectedRestaurantName(targetRestaurantName);
+    // Set restaurantCameFrom to 'home' so back button goes to home, not checkout
+    setRestaurantCameFrom('home');
+
+    // Reset restaurant screen to off-screen position first
+    restaurantScreenSlide.setValue(SCREEN_WIDTH);
+
+    // Slide out checkout screen and navigate to restaurant
+    Animated.parallel([
+      Animated.timing(checkoutScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 200,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(restaurantScreenSlide, {
+        toValue: 0,
+        duration: 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('restaurant');
+    });
+  }, [checkoutScreenSlide, restaurantScreenSlide, cartRestaurantId, cartRestaurantName, selectedRestaurantId, selectedRestaurantName, handleBackFromCheckout]);
+
   // Handle place order from checkout
   const handlePlaceOrderFromCheckout = useCallback(() => {
     // Navigate to order success/tracking
@@ -939,34 +979,34 @@ function AppContent() {
 
   // Back from Restaurant (dynamic based on where we came from)
   const handleBackFromRestaurant = () => {
-    // Set screen immediately for smoother transition
-    if (restaurantCameFrom === 'home') {
-      setCurrentScreen('home');
-    } else if (restaurantCameFrom === 'category') {
-      setCurrentScreen('categoryResults');
-    } else if (restaurantCameFrom === 'search') {
-      setCurrentScreen('search');
-      // Re-open search screen with animation
-      Animated.timing(searchScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    } else if (restaurantCameFrom === 'favorites') {
-      setCurrentScreen('exploreDishes');
-    } else if (restaurantCameFrom === 'orders') {
-      setCurrentScreen('orders');
-    } else {
-      setCurrentScreen('categoryResults');
-    }
-
     // Animate restaurant screen sliding out to the right
     Animated.timing(restaurantScreenSlide, {
       toValue: SCREEN_WIDTH,
       duration: 200,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
-    }).start();
+    }).start(() => {
+      // Set screen after animation completes to prevent double loading
+      if (restaurantCameFrom === 'home') {
+        setCurrentScreen('home');
+      } else if (restaurantCameFrom === 'category') {
+        setCurrentScreen('categoryResults');
+      } else if (restaurantCameFrom === 'search') {
+        setCurrentScreen('search');
+        // Re-open search screen with animation
+        Animated.timing(searchScreenSlide, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      } else if (restaurantCameFrom === 'favorites') {
+        setCurrentScreen('exploreDishes');
+      } else if (restaurantCameFrom === 'orders') {
+        setCurrentScreen('orders');
+      } else {
+        setCurrentScreen('categoryResults');
+      }
+    });
   };
 
   // Navigate to Restaurant Details
@@ -1852,7 +1892,6 @@ function AppContent() {
                 orderId={selectedOrderId}
                 visible={true}
                 onBack={handleBackFromOrderDetail}
-                onChatWithUs={() => {}}
                 onThankDriver={() => {}}
                 onRateOrder={handleNavigateToRateOrder}
                 onReorder={() => handleReorder(selectedOrderId)}
@@ -2114,6 +2153,7 @@ function AppContent() {
                 categories={categoryData}
                 onBack={handleBackFromCategoryResults}
                 onNavigateToRestaurant={handleNavigateToRestaurantFromCategory}
+                selectedLocation={selectedLocation}
               />
             </View>
           )}
@@ -2195,6 +2235,7 @@ function AppContent() {
                 selectedLocation={selectedLocation}
                 visible={currentScreen === 'checkout'}
                 onBack={handleBackFromCheckout}
+                onAddMoreItems={handleAddMoreItemsFromCheckout}
                 onPlaceOrder={handlePlaceOrderFromCheckout}
                 onOrderSuccess={handleOrderSuccessFromCheckout}
                 onOrderCancel={handleOrderCancelFromCheckout}

@@ -20,6 +20,13 @@ import { ordersService, OrderListItem } from '@/services/orders.service';
 import { Shimmer } from '@/components/Shimmer';
 import { useOrders } from '@/context/OrdersContext';
 import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
+import { authService } from '@/services/auth.service';
+
+// Module-level state to persist across component remounts (for scroll position and pagination)
+let persistedScrollPosition: number = 0;
+let persistedCurrentPage: number = 1;
+let persistedTotalOrders: number = 0;
+let hasPersistedData: boolean = false;
 
 // Unused interface - kept for reference
 // interface OrderItem {
@@ -58,10 +65,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   visible = false,
   onBack,
   onOrderDetails,
-  onReorder,
+  onReorder: _onReorder, // Unused but kept for API compatibility
   onRateOrder,
   onTrackOrder,
-  onHelp,
+  onHelp: _onHelp, // Unused but kept for API compatibility
   onViewMore: _onViewMore, // Unused but kept for API compatibility
   highlightOrderId,
 }) => {
@@ -72,11 +79,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const contextOrders = getOrdersList();
   
   // Local state for API pagination and loading
+  // Initialize from persisted data if available, otherwise use defaults
   const [localOrders, setLocalOrders] = useState<OrderListItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => !hasPersistedData);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalOrders, setTotalOrders] = useState(0);
+  const [currentPage, setCurrentPage] = useState(() => persistedCurrentPage);
+  const [totalOrders, setTotalOrders] = useState(() => persistedTotalOrders);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   // Refs to prevent API overload
@@ -86,6 +94,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const scrollViewRef = useRef<ScrollView>(null);
   const highlightedOrderRef = useRef<string | null>(null);
   
+  // Refs for initial mount tracking and scroll restoration
+  const isInitialMount = useRef(!hasPersistedData);
+  const hasRestoredScroll = useRef(false);
+  
   // Merge context orders (with FCM updates) with local orders from API
   // Priority: Context orders (have latest FCM updates) > Local orders
   const orders = React.useMemo(() => {
@@ -93,25 +105,20 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     const merged = [...localOrders];
     
     // Update local orders with context updates
-    merged.forEach((order, index) => {
-      const contextOrder = contextOrderMap.get(order.id.toString());
+    for (let i = 0; i < merged.length; i++) {
+      const contextOrder = contextOrderMap.get(merged[i].id.toString());
       if (contextOrder) {
-        merged[index] = contextOrder;
-        contextOrderMap.delete(order.id.toString());
+        merged[i] = contextOrder; // Use context order (has latest FCM updates)
+        contextOrderMap.delete(merged[i].id.toString()); // Remove from map
       }
-    });
+    }
     
-    // Add any new orders from context that aren't in local
+    // Add any new context orders that aren't in local orders
     contextOrderMap.forEach((order) => {
       merged.push(order);
     });
     
-    // Sort by updated_at descending (most recent first)
-    return merged.sort((a, b) => {
-      const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
-      const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
-      return dateB - dateA;
-    });
+    return merged;
   }, [contextOrders, localOrders]);
 
   // Sync localOrders to context store after state updates
@@ -124,13 +131,53 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   }, [localOrders, dispatch]);
 
+  // Fetch orders on mount - only if no persisted data exists
   useEffect(() => {
-    // Fetch fresh data whenever screen becomes visible
-    if (visible) {
+    if (visible && isInitialMount.current && !hasPersistedData) {
+      isInitialMount.current = false;
       setCurrentPage(1);
       fetchOrders(1, true);
+    } else if (visible && hasPersistedData) {
+      // Reset the restore flag when screen becomes visible
+      hasRestoredScroll.current = false;
     }
   }, [visible]);
+
+  // Separate effect to restore scroll position after orders are rendered
+  useEffect(() => {
+    if (visible && hasPersistedData && !hasRestoredScroll.current && orders.length > 0 && persistedScrollPosition > 0) {
+      // Wait for ScrollView to be fully rendered before restoring scroll
+      const restoreTimer = setTimeout(() => {
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({
+            y: persistedScrollPosition,
+            animated: false,
+          });
+          hasRestoredScroll.current = true; // Mark as restored
+        }
+      }, 200);
+      
+      return () => clearTimeout(restoreTimer);
+    }
+    return undefined;
+  }, [visible, orders.length]);
+
+  // Scroll to highlighted order when navigating from notification
+  useEffect(() => {
+    if (highlightOrderId && orders.length > 0 && scrollViewRef.current) {
+      const orderIndex = orders.findIndex(o => o.id.toString() === highlightOrderId);
+      if (orderIndex >= 0 && highlightedOrderRef.current !== highlightOrderId) {
+        highlightedOrderRef.current = highlightOrderId;
+        // Scroll to order after a short delay to ensure layout is complete
+        setTimeout(() => {
+          scrollViewRef.current?.scrollTo({
+            y: orderIndex * 250, // Approximate height per card
+            animated: true,
+          });
+        }, 500);
+      }
+    }
+  }, [highlightOrderId, orders]);
 
   const fetchOrders = async (page: number = 1, reset: boolean = false) => {
     // Prevent duplicate requests for the same page
@@ -150,6 +197,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       if (reset) {
         setIsLoading(true);
         lastRequestedPage.current = 0; // Reset when fetching first page
+        // Clear persisted scroll position when resetting
+        persistedScrollPosition = 0;
+        hasRestoredScroll.current = false;
       } else {
         setIsLoadingMore(true);
       }
@@ -181,13 +231,16 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         } else {
           // Append new orders to existing ones, filtering out duplicates
           setLocalOrders(prev => {
-            const existingIds = new Set(prev.map(o => o.id));
+            const existingIds = new Set(prev.map((o: OrderListItem) => o.id));
             const newOrders = ordersArray.filter((order: any) => !existingIds.has(order.id));
             return [...prev, ...newOrders];
           });
         }
         setTotalOrders(total);
+        persistedTotalOrders = total;
         setCurrentPage(page);
+        persistedCurrentPage = page;
+        hasPersistedData = true;
       } else {
         setError(response.error || 'Failed to load orders');
       }
@@ -212,6 +265,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   // Infinite scroll handler - automatically load more when near bottom
   const handleScroll = useCallback(({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
+    // Save scroll position to module-level variable for restoration across remounts
+    persistedScrollPosition = nativeEvent.contentOffset.y;
+
     // Clear any pending timeout
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
@@ -265,22 +321,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  // Scroll to highlighted order when navigating from notification
-  useEffect(() => {
-    if (highlightOrderId && orders.length > 0 && scrollViewRef.current) {
-      const orderIndex = orders.findIndex(o => o.id.toString() === highlightOrderId);
-      if (orderIndex >= 0 && highlightedOrderRef.current !== highlightOrderId) {
-        highlightedOrderRef.current = highlightOrderId;
-        // Scroll to order after a short delay to ensure layout is complete
-        setTimeout(() => {
-          scrollViewRef.current?.scrollTo({
-            y: orderIndex * 250, // Approximate height per card
-            animated: true,
-          });
-        }, 500);
-      }
-    }
-  }, [highlightOrderId, orders]);
 
   // Mock data kept for fallback (commented out)
   /*
@@ -365,12 +405,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   ];
   */
 
-  const handleReorder = (orderId: string) => {
-    if (onReorder) {
-      onReorder(orderId);
-    }
-  };
-
   const handleRateOrder = (orderId: string) => {
     if (onRateOrder) {
       // Find the order from the orders array
@@ -396,16 +430,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  const handleHelp = (order: OrderListItem) => {
-    if (onHelp) {
-      onHelp(order);
-    }
-  };
-
-  const handleCallSupportFromCancelled = () => {
-    const supportNumber = '8098777720';
-    if (!supportNumber) return;
-    const telUrl = `tel:${supportNumber.replace(/\s+/g, '')}`;
+  const handleCallSupportFromCancelled = async () => {
+    // Get support number from cache first, only call API if not found
+    const supportDetails = await authService.getSupportDetails(false);
+    const numberToCall = supportDetails.support_number;
+    
+    if (!numberToCall) return;
+    const telUrl = `tel:${numberToCall.replace(/\s+/g, '')}`;
     Linking.openURL(telUrl).catch(() => {});
   };
 
@@ -444,7 +475,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     const orderNumber = order.order_number || (order as any).orderNumber || `ORD-${order.id}`;
     
     // Get total amount - check multiple possible locations in API response
-    const totalAmount = order.total_amount || (order as any).summary?.total_amount || (order as any).total || 0;
+    const totalAmount = order.summary?.total_amount || order.total_amount || (order as any).total || 0;
 
     // Disable opening order details for payment failed orders
     const isPaymentFailed = statusToMap === 'payment_failed';
@@ -498,7 +529,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           <View style={styles.multipleItems}>
             {(order.items || []).slice(0, 2).map((item: any, index: number) => (
               <View key={`${order.id}-item-${item.id || index}-${index}`} style={styles.itemRow}>
-                <Text style={styles.itemName}>{item.quantity || 1}x {item.item_name || 'Item'}</Text>
+                <Text style={styles.itemName}>{item.quantity || 1}x {item.item_name || item.name || 'Item'}</Text>
               </View>
             ))}
             {/* Show +X more items if there are more than 2 */}
