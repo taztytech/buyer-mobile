@@ -89,7 +89,7 @@ export const ContactUsScreen: React.FC<ContactUsScreenProps> = ({
               Have a question? We&apos;re here to help!
             </Text>
             <Text style={styles.topCardHours}>
-              Support Hours: 10 AM &ndash; 11 PM (Daily)
+              Support Hours: 8 AM &ndash; 11 PM (Daily)
             </Text>
           </View>
 
