@@ -462,7 +462,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       <View style={styles.itemDetailLeft}>
                         <View style={styles.itemDetailNameRow}>
                           {/* Veg/Non-veg Icon */}
-                          <View style={[
+                          {/* <View style={[
                             styles.vegIndicator,
                             !isVeg && styles.nonVegIndicator
                           ]}>
@@ -470,7 +470,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                               styles.vegDot,
                               !isVeg && styles.nonVegDot
                             ]} />
-                          </View>
+                          </View> */}
                           {/* Product Name and Quantity */}
                           <Text style={styles.itemDetailName}>
                             {item.item_name} × {item.quantity}
