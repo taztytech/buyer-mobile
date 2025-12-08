@@ -253,8 +253,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
               {locationText}
             </Text>
-            <MaterialIcons name="two-wheeler" size={16} color="#00B14F" />
-            <Text style={styles.distanceText}>{restaurant.distance}</Text>
+            <View style={styles.distanceRow}>
+              <MaterialIcons name="two-wheeler" size={16} color="#00B14F" />
+              <Text style={styles.distanceText}>{restaurant.distance}</Text>
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -532,7 +534,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 24,
     color: '#000000',
-    marginBottom: 2,
+    marginBottom: 5,
   },
   // Rating and Delivery Row
   ratingDeliveryRow: {
@@ -569,20 +571,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: '#666666',
-    marginBottom: 2,
+    marginBottom: 5,
   },
   // Location Row
   locationRow: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  distanceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+    marginTop: 5,
   },
   locationText: {
     fontFamily: 'Poppins_400Regular',
     fontSize: 11,
     lineHeight: 16,
     color: '#666666',
-    flex: 1,
+    width: '100%',
   },
   distanceText: {
     fontFamily: 'Poppins_400Regular',
