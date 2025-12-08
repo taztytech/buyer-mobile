@@ -16,6 +16,7 @@ import { apiService } from '@/services/api.service';
 import { Shimmer } from '@/components/Shimmer';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { SearchBar } from '@/components/SearchBar';
+import { AppFooter } from '@/components/AppFooter';
 import { homeService, Restaurant } from '@/services/home.service';
 import { useVegMode } from '@/context/VegModeContext';
 import { addressService } from '@/services/address.service';
@@ -664,7 +665,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
                           </Text>
                         </View>
                         <View style={styles.topRatedDeliveryRow}>
-                          <MaterialIcons name="two-wheeler" size={15} color="#00B14F" />
+                          <MaterialIcons name="location-on" size={15} color="#00B14F" />
                           <Text style={styles.topRatedDeliveryText}>{item.deliveryTime}</Text>
                         </View>
                       </View>
@@ -737,6 +738,8 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
             </Animated.View>
           )}
         </View>
+
+        <AppFooter />
       </ScrollView>
         </View>
       </SafeAreaView>

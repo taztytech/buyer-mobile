@@ -4,3 +4,4 @@
  */
 
 export { Shimmer } from './Shimmer';
+export { AppFooter } from './AppFooter';

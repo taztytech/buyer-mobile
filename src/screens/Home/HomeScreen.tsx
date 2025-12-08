@@ -8,6 +8,7 @@ import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/ho
 import { addressService } from '@/services/address.service';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { Shimmer } from '@/components/Shimmer';
+import { AppFooter } from '@/components/AppFooter';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ViewCartBar } from '@/components/ViewCartBar';
@@ -1868,6 +1869,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
       </Modal>
 
+      <AppFooter />
       </ScrollView>
       </SafeAreaView>
 
