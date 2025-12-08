@@ -441,15 +441,16 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
     <View style={styles.outerContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" translucent={false} />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <ScrollView
-          style={styles.container}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-          overScrollMode="never"
-        >
-          {/* Top Section - Back Button + Search Bar */}
-          <SearchBar
+        <View style={styles.contentWrapper}>
+          <ScrollView
+            style={styles.container}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            overScrollMode="never"
+          >
+            {/* Top Section - Back Button + Search Bar */}
+            <SearchBar
             onBack={onBack}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -737,6 +738,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           )}
         </View>
       </ScrollView>
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -749,7 +751,14 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+    backgroundColor: '#00B14F',
+  },
+  contentWrapper: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
+    // borderTopLeftRadius: 20,
+    // borderTopRightRadius: 20,
+    overflow: 'hidden',
   },
   container: {
     flex: 1,
@@ -761,7 +770,7 @@ const styles = StyleSheet.create({
   // Top Section
   // Category Section
   categorySection: {
-    marginTop: 10,
+    // marginTop: 10,
     marginBottom: 0,
     height: 75,
   },
