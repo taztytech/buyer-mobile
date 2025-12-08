@@ -40,6 +40,7 @@ import { ordersService, OrderListItem } from '@/services/orders.service';
 import CustomSplashScreen from '@/components/CustomSplashScreen';
 import { fcmNotificationService } from '@/services/fcmNotification.service';
 import { NetworkStatusScreen } from '@/components/NetworkStatusScreen';
+import { analyticsService, AnalyticsEvents, AnalyticsScreens } from '@/services/analytics.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -161,6 +162,44 @@ function AppContent() {
   // Get orders dispatch from context
   const { dispatch: ordersDispatch } = useOrders();
 
+  // Track screen views
+  React.useEffect(() => {
+    if (isCheckingAuth) return;
+    
+    const screenNameMap: Record<typeof currentScreen, string> = {
+      login: AnalyticsScreens.LOGIN,
+      otp: AnalyticsScreens.OTP_VERIFICATION,
+      welcome: AnalyticsScreens.WELCOME,
+      home: AnalyticsScreens.HOME,
+      profile: AnalyticsScreens.PROFILE,
+      editProfile: AnalyticsScreens.EDIT_PROFILE,
+      orders: AnalyticsScreens.ORDERS,
+      orderDetail: AnalyticsScreens.ORDER_DETAIL,
+      rateOrder: AnalyticsScreens.RATE_ORDER,
+      orderTracking: AnalyticsScreens.ORDER_TRACKING,
+      search: AnalyticsScreens.SEARCH,
+      myAddresses: AnalyticsScreens.MY_ADDRESSES,
+      addressSelection: AnalyticsScreens.ADDRESS_SELECTION,
+      locationSelection: AnalyticsScreens.LOCATION_SELECTION,
+      categoryResults: AnalyticsScreens.CATEGORY_RESULTS,
+      restaurant: AnalyticsScreens.RESTAURANT,
+      restaurantDetails: AnalyticsScreens.RESTAURANT_DETAILS,
+      exploreDishes: AnalyticsScreens.EXPLORE_DISHES,
+      checkout: AnalyticsScreens.CHECKOUT,
+      privacyPolicy: AnalyticsScreens.PRIVACY_POLICY,
+      termsConditions: AnalyticsScreens.TERMS_CONDITIONS,
+      help: AnalyticsScreens.HELP,
+      contactUs: AnalyticsScreens.CONTACT_US,
+      faq: AnalyticsScreens.FAQ,
+      testFCM: 'Test FCM',
+    };
+    
+    const screenName = screenNameMap[currentScreen];
+    if (screenName) {
+      analyticsService.logScreenView(screenName);
+    }
+  }, [currentScreen, isCheckingAuth]);
+
   // Set up FCM handlers for order notifications
   React.useEffect(() => {
     // Set orders dispatch in FCM service
@@ -194,6 +233,12 @@ function AppContent() {
         fcmNotificationService.checkInitialNotification().catch((error) => {
           console.warn('⚠️  Failed to check initial notification:', error);
         });
+        
+        // Track app foreground
+        analyticsService.logEvent(AnalyticsEvents.APP_FOREGROUND);
+      } else if (nextAppState === 'background') {
+        // Track app background
+        analyticsService.logEvent(AnalyticsEvents.APP_BACKGROUND);
       }
     });
 
@@ -214,6 +259,10 @@ function AppContent() {
         // Initialize API service with stored tokens
         await apiService.initialize();
 
+        // Initialize Analytics
+        await analyticsService.initialize();
+        await analyticsService.logEvent(AnalyticsEvents.APP_OPEN);
+
         // Initialize FCM notifications
         fcmNotificationService.initialize().catch((error) => {
           console.error('FCM initialization error:', error);
@@ -223,6 +272,12 @@ function AppContent() {
         const isLoggedIn = await authService.isAuthenticated();
 
         if (isLoggedIn) {
+          // Get current user and set analytics user ID
+          const currentUser = await authService.getCurrentUser();
+          if (currentUser?.id) {
+            await analyticsService.setUserId(currentUser.id.toString());
+          }
+          
           // User has valid session, navigate to home
           setCurrentScreen('home');
         } else {
@@ -339,16 +394,28 @@ function AppContent() {
   const handleLoginSuccess = (phone: string) => {
     setPhoneNumber(phone);
     setCurrentScreen('otp');
+    analyticsService.logEvent(AnalyticsEvents.LOGIN_START, { phone_number: phone });
   };
 
-  const handleOtpSuccess = (isExistingUser: boolean) => {
+  const handleOtpSuccess = async (isExistingUser: boolean) => {
     if (isExistingUser) {
       // Existing user - go directly to home (skip address selection)
+      // Set analytics user ID
+      const currentUser = await authService.getCurrentUser();
+      if (currentUser?.id) {
+        await analyticsService.setUserId(currentUser.id.toString());
+      }
+      
+      await analyticsService.logEvent(AnalyticsEvents.LOGIN_SUCCESS, {
+        is_existing_user: true,
+      });
+      
       setCurrentScreen('home');
       setIsRegistrationFlow(false);
       reloadCart().catch(() => {});
     } else {
       // New user - show welcome screen for profile completion
+      await analyticsService.logEvent(AnalyticsEvents.SIGNUP_START);
       setCurrentScreen('welcome');
       setIsRegistrationFlow(true);
     }
@@ -367,10 +434,23 @@ function AppContent() {
           email,
         };
         await storageService.saveUser(updatedUser);
+        
+        // Set analytics user ID and properties
+        await analyticsService.setUserId(currentUser.id.toString());
+        await analyticsService.setUserProperties({
+          user_name: name,
+          user_email: email,
+        });
       }
     } catch (error) {
       // Silent fail
     }
+
+    // Log signup success
+    await analyticsService.logEvent(AnalyticsEvents.SIGNUP_SUCCESS, {
+      has_name: !!name,
+      has_email: !!email,
+    });
 
     // For new users, go directly to home
     // HomeScreen will check for addresses and redirect if needed
@@ -382,6 +462,12 @@ function AppContent() {
   };
 
   const handleLogout = async () => {
+    // Log logout event
+    await analyticsService.logEvent(AnalyticsEvents.LOGOUT);
+    
+    // Reset analytics data
+    await analyticsService.resetAnalyticsData();
+    
     // Clear authentication tokens and user data
     await authService.logout();
 
@@ -726,6 +812,13 @@ function AppContent() {
     setRestaurantCameFrom('home');
     setCurrentScreen('restaurant');
 
+    // Track restaurant view
+    analyticsService.logEvent(AnalyticsEvents.RESTAURANT_VIEW, {
+      restaurant_id: restaurantId,
+      restaurant_name: restaurantName,
+      source: 'home',
+    });
+
     // Animate restaurant screen sliding in from right
     Animated.timing(restaurantScreenSlide, {
       toValue: 0,
@@ -893,6 +986,7 @@ function AppContent() {
   // Orders Navigation
   const handleNavigateToOrders = () => {
     setCurrentScreen('orders');
+    analyticsService.logEvent(AnalyticsEvents.ORDER_VIEW);
   };
 
   const handleBackFromOrders = () => {
@@ -1368,6 +1462,9 @@ function AppContent() {
   // Search Navigation
   const handleNavigateToSearch = () => {
     setCurrentScreen('search');
+    
+    // Track search start
+    analyticsService.logEvent(AnalyticsEvents.SEARCH_START);
 
     Animated.parallel([
       Animated.timing(homeScreenSlide, {
