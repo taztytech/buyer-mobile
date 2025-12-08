@@ -1887,7 +1887,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           style={[
             styles.floatingMenuButton,
             totalCartItems > 0 && styles.floatingMenuButtonWithCart,
-            { bottom: totalCartItems > 0 ? 130 : 30 }
+            { bottom: totalCartItems > 0 ? 145 : 45 }
           ]}
           onPress={() => setShowQuickMenu(true)}
         >
@@ -1910,7 +1910,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           style={[
             styles.closeMenuButton,
             totalCartItems > 0 && styles.closeMenuButtonWithCart,
-            { bottom: totalCartItems > 0 ? 110 : 30 }
+            { bottom: totalCartItems > 0 ? 125 : 45 }
           ]}
           onPress={() => setShowQuickMenu(false)}
           activeOpacity={0.8}
@@ -2866,7 +2866,7 @@ const styles = StyleSheet.create({
   floatingMenuButton: {
     position: 'absolute',
     right: 20,
-    bottom: 30,
+    bottom: 45,
     width: 50,
     height: 50,
     borderRadius: 10,
@@ -2880,7 +2880,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   floatingMenuButtonWithCart: {
-    bottom: 110,
+    bottom: 125,
   },
   arrowIcon: {
     transform: [{ rotate: '0deg' }],
@@ -2911,6 +2911,7 @@ const styles = StyleSheet.create({
   closeMenuButton: {
     position: 'absolute',
     right: 20,
+    bottom: 45,
     bottom: 30,
     width: 122,
     height: 50,
@@ -2930,7 +2931,7 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   closeMenuButtonWithCart: {
-    bottom: 110,
+    bottom: 125,
   },
   closeMenuText: {
     fontFamily: 'Poppins_500Medium',
