@@ -1290,13 +1290,13 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                    </View>
                  )}
                 </View>
-                {/* Only show rating and reviews if there's at least one review */}
-                {(restaurantData?.stats?.total_reviews > 0 || restaurantData?.total_reviews > 0) && (
+                {/* Only show rating if available */}
+                {((restaurantData?.stats?.average_rating && restaurantData?.stats?.average_rating > 0) || (restaurantData?.rating && restaurantData?.rating > 0)) && (
                   <View style={styles.ratingContainer}>
                     <View style={styles.ratingBadge}>
                       <MaterialIcons name="star" size={14} color="#00B14F" />
                       <Text style={styles.ratingText}>
-                        {(restaurantData?.stats?.average_rating || restaurantData?.rating || 0).toFixed(1)} ({restaurantData?.stats?.total_reviews || restaurantData?.total_reviews || '0'})
+                        {(restaurantData?.stats?.average_rating || restaurantData?.rating || 0).toFixed(1)}
                       </Text>
                     </View>
                   </View>

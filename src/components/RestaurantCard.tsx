@@ -229,14 +229,12 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
 
           {/* Rating and Delivery Time */}
           <View style={styles.ratingDeliveryRow}>
-            {(restaurant.reviewCount && restaurant.reviewCount > 0) && (
+            {restaurant.rating > 0 && (
               <>
                 <View style={styles.ratingContainer}>
                   <MaterialIcons name="star" size={16} color="#00B14F" />
                   <Text style={styles.ratingText}>
-                    {restaurant.rating.toFixed(1)} ({restaurant.reviewCount >= 1000
-                      ? `${(restaurant.reviewCount / 1000).toFixed(1)}K+`
-                      : restaurant.reviewCount})
+                    {restaurant.rating.toFixed(1)}
                   </Text>
                 </View>
                 <Text style={styles.deliveryDot}>•</Text>
@@ -255,7 +253,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
               {locationText}
             </Text>
-            <Text style={styles.distanceDot}>•</Text>
+            <MaterialIcons name="two-wheeler" size={16} color="#00B14F" />
             <Text style={styles.distanceText}>{restaurant.distance}</Text>
           </View>
         </View>
@@ -585,11 +583,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: '#666666',
     flex: 1,
-  },
-  distanceDot: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 11,
-    color: '#666666',
   },
   distanceText: {
     fontFamily: 'Poppins_400Regular',
