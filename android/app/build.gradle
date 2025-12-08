@@ -129,7 +129,7 @@ android {
     // Get keystore properties from local.properties (primary source)
     // Fallback to gradle.properties only if local.properties doesn't exist (for backward compatibility)
     def keystoreStoreFile = localProperties.getProperty('MYAPP_RELEASE_STORE_FILE') ?: project.findProperty('MYAPP_RELEASE_STORE_FILE') ?: 'my-release-key.keystore'
-    def keystoreKeyAlias = localProperties.getProperty('MYAPP_RELEASE_KEY_ALIAS') ?: project.findProperty('MYAPP_RELEASE_KEY_ALIAS') ?: 'tazty-buyer'
+    def keystoreKeyAlias = localProperties.getProperty('MYAPP_RELEASE_KEY_ALIAS') ?: project.findProperty('MYAPP_RELEASE_KEY_ALIAS') ?: 'my-key-alias'
     def keystoreStorePassword = localProperties.getProperty('MYAPP_RELEASE_STORE_PASSWORD') ?: project.findProperty('MYAPP_RELEASE_STORE_PASSWORD')
     def keystoreKeyPassword = localProperties.getProperty('MYAPP_RELEASE_KEY_PASSWORD') ?: project.findProperty('MYAPP_RELEASE_KEY_PASSWORD')
     

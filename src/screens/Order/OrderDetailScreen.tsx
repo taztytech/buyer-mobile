@@ -9,9 +9,11 @@ import {
   StatusBar,
   ActivityIndicator,
   Linking,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { WebView } from 'react-native-webview';
 import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
 import { storageService } from '@/services/storage.service';
@@ -42,6 +44,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState<string>('');
   const [supportNumber, setSupportNumber] = useState<string>('');
+  const [showTrackingWebView, setShowTrackingWebView] = useState(false);
 
   // Fetch order details function
   const fetchOrderDetails = useCallback(async () => {
@@ -229,9 +232,18 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       'pending_payment': { title: 'Payment pending', color: '#DC2626' },
       'payment_failed': { title: 'Payment Failed', color: '#DC2626' },
       'cancelled': { title: 'Order cancelled', color: '#DC2626' },
+      'billed': { title: 'Order accepted & started preparing', color: '#00B14F' },
+      'packed': { title: 'Order ready', color: '#F59E0B' },
+      'agent-assigned': { title: 'Delivery Agent Assigned', color: '#E6F4EA' },
+      'picked': { title: 'Picked up', color: '#3B82F6' },
+      'payment_pending': { title: 'Payment pending', color: '#DC2626' },
+      'rejected': { title: 'Order rejected', color: '#DC2626' },
+      'pending': { title: 'Order pending', color: '#F59E0B' },
     };
     return statusMap[actualStatus] || { title: 'Order status', color: '#00B14F' };
   };
+
+  const statusDisplay = orderData ? getStatusDisplay(orderData.status, orderData) : null;
 
   return (
     <View style={styles.outerContainer}>
@@ -295,12 +307,17 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               />
             </View>
 
-            <View style={styles.statusBanner}>
+            <View
+              style={[
+                styles.statusBanner,
+                { backgroundColor: statusDisplay?.color || '#FACC15' },
+              ]}
+            >
               {/* <MaterialIcons
                 name={
                   orderData.status === 'delivered'
                     ? 'check-circle'
-                    : getStatusDisplay(orderData.status, orderData).title === 'Payment Failed'
+                    : (statusDisplay?.title || '').toLowerCase() === 'payment failed'
                     ? 'payment'
                     : orderData.status === 'cancelled'
                     ? 'cancel'
@@ -312,7 +329,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               <View style={styles.statusBannerTextContainer}>
                 <View style={styles.statusBannerTitleRow}>
                   <Text style={styles.statusBannerTitle}>
-                    {getStatusDisplay(orderData.status, orderData).title}
+                    {statusDisplay?.title || 'Order status'}
                   </Text>
                 </View>
                 <Text style={styles.statusBannerSubtitle}>
@@ -428,14 +445,38 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <Text style={styles.reorderButtonText}>Reorder</Text>
                 </TouchableOpacity>
               ) : ( */}
-                <TouchableOpacity
-                  style={styles.reorderButton}
-                  onPress={onTrackOrder}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
-                  <Text style={styles.reorderButtonText}>Track Order</Text>
-                </TouchableOpacity>
+                <View style={styles.trackOrderContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.reorderButton,
+                      (!orderData?.tracking_url || orderData?.tracking_url === null) && styles.disabledButton
+                    ]}
+                    onPress={() => {
+                      if (orderData?.tracking_url && orderData.tracking_url !== null) {
+                        setShowTrackingWebView(true);
+                      }
+                    }}
+                    activeOpacity={(!orderData?.tracking_url || orderData?.tracking_url === null) ? 1 : 0.8}
+                    disabled={!orderData?.tracking_url || orderData?.tracking_url === null}
+                  >
+                    <MaterialIcons 
+                      name="location-on" 
+                      size={20} 
+                      color={(!orderData?.tracking_url || orderData?.tracking_url === null) ? "#CCCCCC" : "#FFFFFF"} 
+                    />
+                    <Text style={[
+                      styles.reorderButtonText,
+                      (!orderData?.tracking_url || orderData?.tracking_url === null) && styles.disabledButtonText
+                    ]}>
+                      Track Order
+                    </Text>
+                  </TouchableOpacity>
+                  {(!orderData?.tracking_url || orderData?.tracking_url === null) && (
+                    <Text style={styles.trackingDisabledMessage}>
+                      Tracking unlocks after a delivery partner is assigned.
+                    </Text>
+                  )}
+                </View>
               {/* )} */}
             </View>
           </View>
@@ -641,6 +682,39 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         </ScrollView>
         )}
       </SafeAreaView>
+
+      {/* Tracking WebView Modal */}
+      <Modal
+        visible={showTrackingWebView}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowTrackingWebView(false)}
+      >
+        <SafeAreaView style={styles.webViewContainer} edges={['top']}>
+          <View style={styles.webViewHeader}>
+            <TouchableOpacity
+              onPress={() => setShowTrackingWebView(false)}
+              style={styles.webViewBackButton}
+            >
+              <MaterialIcons name="close" size={24} color="#001E1F" />
+            </TouchableOpacity>
+            <Text style={styles.webViewHeaderTitle}>Track Order</Text>
+            <View style={styles.webViewBackButton} />
+          </View>
+          {orderData?.tracking_url && (
+            <WebView
+              source={{ uri: orderData.tracking_url }}
+              style={styles.webView}
+              startInLoadingState={true}
+              renderLoading={() => (
+                <View style={styles.webViewLoadingContainer}>
+                  <ActivityIndicator size="large" color="#00B14F" />
+                </View>
+              )}
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
     </View>
   );
 };
@@ -1163,7 +1237,7 @@ const styles = StyleSheet.create({
   },
   statusIllustrationContainer: {
     alignItems: 'center',
-    // marginBottom: 6,
+    marginBottom: 6,
   },
   statusIllustration: {
     width: 180,
@@ -1206,4 +1280,68 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 2,
   },
+  disabledButton: {
+    backgroundColor: '#E5E5E5',
+    opacity: 0.6,
+  },
+  disabledButtonText: {
+    color: '#CCCCCC',
+  },
+  webViewContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  webViewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E4E4E4',
+    backgroundColor: '#FFFFFF',
+  },
+  webViewBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  webViewHeaderTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#001E1F',
+    flex: 1,
+    textAlign: 'center',
+  },
+  webView: {
+    flex: 1,
+  },
+  webViewLoadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  trackingDisabledMessage: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    color: 'rgba(0, 30, 31, 0.6)',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  trackOrderContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
 });
+
+
+
+

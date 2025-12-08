@@ -9,6 +9,7 @@ import { apiService } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { handleOrderNotification, OrdersDispatch } from './orderNotificationHandler';
 
 // Conditionally import Firebase to avoid errors if native modules aren't linked
 let messaging: any = null;
@@ -40,7 +41,7 @@ export interface NotificationPayload {
 }
 
 // Background message handler type
-type BackgroundMessageHandler = (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => Promise<void>;
+type BackgroundMessageHandler = (remoteMessage: any) => Promise<void>;
 
 // Navigation callback type for handling notification taps
 export type NotificationNavigationCallback = (orderId: string) => void;
@@ -55,6 +56,7 @@ class FCMNotificationService {
   private recentMessages: NotificationPayload[] = [];
   private readonly MAX_RECENT_MESSAGES = 50;
   private navigationCallback: NotificationNavigationCallback | null = null;
+  private ordersDispatch: OrdersDispatch | null = null;
 
   /**
    * Set navigation callback for handling notification taps
@@ -62,6 +64,13 @@ class FCMNotificationService {
    */
   setNavigationCallback(callback: NotificationNavigationCallback | null): void {
     this.navigationCallback = callback;
+  }
+
+  /**
+   * Set orders dispatch for updating orders store from FCM
+   */
+  setOrdersDispatch(dispatch: OrdersDispatch | null): void {
+    this.ordersDispatch = dispatch;
   }
 
   /**
@@ -327,7 +336,7 @@ class FCMNotificationService {
     // Foreground message listener
     // In foreground, FCM doesn't automatically show notifications
     // The native FCMService.kt will handle showing system notifications
-    // We just need to handle the data for navigation
+    // We just need to handle the data for navigation and order updates
     this.messageListener = messaging().onMessage(async (remoteMessage: any) => {
       console.log('📨 FCM: Foreground message received:', remoteMessage.messageId);
       console.log('   Title:', remoteMessage.notification?.title || 'N/A');
@@ -344,6 +353,13 @@ class FCMNotificationService {
       // Store recent message
       this.addRecentMessage(payload);
 
+      // Handle order notification updates if dispatch is available
+      if (this.ordersDispatch && remoteMessage.data?.type === 'order') {
+        handleOrderNotification(remoteMessage, this.ordersDispatch, false).catch((error) => {
+          console.warn('⚠️  FCM: Failed to handle order notification:', error);
+        });
+      }
+
       // Note: System notification is shown by native FCMService.kt
       // We handle navigation when user taps the notification
       // No need to manually show notification here - native layer handles it
@@ -359,6 +375,13 @@ class FCMNotificationService {
         data: remoteMessage.data as NotificationData,
         notificationId: remoteMessage.messageId,
       };
+
+      // Handle order notification updates if dispatch is available
+      if (this.ordersDispatch && remoteMessage.data?.type === 'order') {
+        handleOrderNotification(remoteMessage, this.ordersDispatch, true).catch((error) => {
+          console.warn('⚠️  FCM: Failed to handle order notification:', error);
+        });
+      }
 
       this.onNotificationOpened(payload);
     });
@@ -406,6 +429,13 @@ class FCMNotificationService {
           data: remoteMessage.data as NotificationData,
           notificationId: remoteMessage.messageId,
         };
+
+        // Handle order notification updates if dispatch is available
+        if (this.ordersDispatch && remoteMessage.data?.type === 'order') {
+          handleOrderNotification(remoteMessage, this.ordersDispatch, true).catch((error) => {
+            console.warn('⚠️  FCM: Failed to handle order notification:', error);
+          });
+        }
 
         // Wait a bit for app to initialize, then handle navigation
         setTimeout(() => {

@@ -11,11 +11,15 @@ import {
   Linking,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { WebView } from 'react-native-webview';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import { Shimmer } from '@/components/Shimmer';
+import { useOrders } from '@/context/OrdersContext';
+import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
 
 // Unused interface - kept for reference
 // interface OrderItem {
@@ -46,6 +50,8 @@ interface OrdersScreenProps {
   onTrackOrder?: (orderId: string) => void;
   onHelp?: (order: OrderListItem) => void;
   onViewMore?: () => void; // Unused but kept for API compatibility
+  // Optional: orderId to highlight when navigating from notification
+  highlightOrderId?: string | null;
 }
 
 export const OrdersScreen: React.FC<OrdersScreenProps> = ({
@@ -57,8 +63,16 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   onTrackOrder,
   onHelp,
   onViewMore: _onViewMore, // Unused but kept for API compatibility
+  highlightOrderId,
 }) => {
-  const [orders, setOrders] = useState<OrderListItem[]>([]);
+  // Use Orders Context for global state
+  const { dispatch, getOrdersList } = useOrders();
+  
+  // Get orders from context (live updates from FCM)
+  const contextOrders = getOrdersList();
+  
+  // Local state for API pagination and loading
+  const [localOrders, setLocalOrders] = useState<OrderListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -69,6 +83,46 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const isRequestInProgress = useRef(false);
   const lastRequestedPage = useRef(0);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const highlightedOrderRef = useRef<string | null>(null);
+  
+  // Merge context orders (with FCM updates) with local orders from API
+  // Priority: Context orders (have latest FCM updates) > Local orders
+  const orders = React.useMemo(() => {
+    const contextOrderMap = new Map(contextOrders.map(o => [o.id.toString(), o]));
+    const merged = [...localOrders];
+    
+    // Update local orders with context updates
+    merged.forEach((order, index) => {
+      const contextOrder = contextOrderMap.get(order.id.toString());
+      if (contextOrder) {
+        merged[index] = contextOrder;
+        contextOrderMap.delete(order.id.toString());
+      }
+    });
+    
+    // Add any new orders from context that aren't in local
+    contextOrderMap.forEach((order) => {
+      merged.push(order);
+    });
+    
+    // Sort by updated_at descending (most recent first)
+    return merged.sort((a, b) => {
+      const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
+      const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [contextOrders, localOrders]);
+
+  // Sync localOrders to context store after state updates
+  useEffect(() => {
+    if (localOrders.length > 0) {
+      dispatch({
+        type: 'BULK_SET_ORDERS',
+        payload: localOrders,
+      });
+    }
+  }, [localOrders, dispatch]);
 
   useEffect(() => {
     // Fetch fresh data whenever screen becomes visible
@@ -123,10 +177,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           ordersArray.length; // Fallback to array length
 
         if (reset) {
-          setOrders(ordersArray);
+          setLocalOrders(ordersArray);
         } else {
           // Append new orders to existing ones, filtering out duplicates
-          setOrders(prev => {
+          setLocalOrders(prev => {
             const existingIds = new Set(prev.map(o => o.id));
             const newOrders = ordersArray.filter((order: any) => !existingIds.has(order.id));
             return [...prev, ...newOrders];
@@ -146,6 +200,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
+  // Auto-load more orders when scrolling near bottom (infinite scroll)
   const handleViewMore = useCallback(() => {
     // Prevent if already loading or no more orders
     if (isRequestInProgress.current || isLoadingMore || orders.length >= totalOrders) {
@@ -155,7 +210,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     fetchOrders(nextPage, false);
   }, [currentPage, orders.length, totalOrders, isLoadingMore]);
 
-  // Debounced scroll handler to prevent API overload
+  // Infinite scroll handler - automatically load more when near bottom
   const handleScroll = useCallback(({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
     // Clear any pending timeout
     if (scrollTimeoutRef.current) {
@@ -164,12 +219,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
     // Capture scroll position values immediately
     const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-    const paddingToBottom = 200;
+    const paddingToBottom = 300; // Trigger when 300px from bottom
     const isNearBottom =
       layoutMeasurement.height + contentOffset.y >=
       contentSize.height - paddingToBottom;
 
-    // Debounce: wait 300ms after scrolling stops before checking if we need to load more
+    // Debounce: wait 200ms after scrolling stops before checking if we need to load more
     scrollTimeoutRef.current = setTimeout(() => {
       if (
         !isLoading &&
@@ -179,9 +234,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         orders.length < totalOrders &&
         isNearBottom
       ) {
+        // Automatically load more orders (infinite scroll)
         handleViewMore();
       }
-    }, 300);
+    }, 200);
   }, [isLoading, isLoadingMore, orders.length, totalOrders, handleViewMore]);
 
   // Cleanup timeout on unmount
@@ -209,23 +265,22 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  // Map API status to UI status
-  const mapStatus = (status: string | null | undefined): 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' => {
-    if (!status) return 'ongoing';
-    const statusMap: { [key: string]: 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' } = {
-      'delivered': 'delivered',
-      'completed': 'delivered',
-      'payment_failed': 'payment_failed',
-      'cancelled': 'cancelled',
-      'rejected': 'cancelled',
-      'pending': 'ongoing',
-      'confirmed': 'ongoing',
-      'preparing': 'ongoing',
-      'ready': 'ongoing',
-      'out_for_delivery': 'ongoing',
-    };
-    return statusMap[status.toLowerCase()] || 'ongoing';
-  };
+  // Scroll to highlighted order when navigating from notification
+  useEffect(() => {
+    if (highlightOrderId && orders.length > 0 && scrollViewRef.current) {
+      const orderIndex = orders.findIndex(o => o.id.toString() === highlightOrderId);
+      if (orderIndex >= 0 && highlightedOrderRef.current !== highlightOrderId) {
+        highlightedOrderRef.current = highlightOrderId;
+        // Scroll to order after a short delay to ensure layout is complete
+        setTimeout(() => {
+          scrollViewRef.current?.scrollTo({
+            y: orderIndex * 250, // Approximate height per card
+            animated: true,
+          });
+        }, 500);
+      }
+    }
+  }, [highlightOrderId, orders]);
 
   // Mock data kept for fallback (commented out)
   /*
@@ -324,8 +379,19 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  const handleTrackOrder = (orderId: string) => {
-    if (onTrackOrder) {
+  const [showTrackingWebView, setShowTrackingWebView] = useState(false);
+  const [selectedTrackingUrl, setSelectedTrackingUrl] = useState<string | null>(null);
+
+  const handleTrackOrder = (orderId: string, order?: OrderListItem) => {
+    // Check if order has tracking_url
+    const trackingUrl = (order as any)?.tracking_url || null;
+    
+    if (trackingUrl && trackingUrl !== null) {
+      // Open WebView with tracking URL
+      setSelectedTrackingUrl(trackingUrl);
+      setShowTrackingWebView(true);
+    } else if (onTrackOrder) {
+      // Fallback to parent handler if no tracking URL
       onTrackOrder(orderId);
     }
   };
@@ -350,78 +416,45 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   };
 
   const renderOrderCard = (order: OrderListItem) => {
-    const statusConfig = {
-      delivered: {
-        label: 'Delivered',
-        color: '#00B14F',
-        bgColor: 'rgba(0, 177, 79, 0.1)',
-        icon: 'check-circle',
-      },
-      cancelled: {
-        label: 'Cancelled',
-        color: '#DC2626',
-        bgColor: 'rgba(220, 38, 38, 0.1)',
-        icon: 'cancel',
-      },
-      payment_failed: {
-        label: 'Payment Failed',
-        color: '#DC2626',
-        bgColor: 'rgba(220, 38, 38, 0.1)',
-        icon: 'payment',
-      },
-      order_placed: {
-        label: 'Order Placed',
-        color: '#00B14F',
-        bgColor: 'rgba(0, 177, 79, 0.1)',
-        icon: 'check-circle',
-      },
-      ongoing: {
-        label: 'On the way',
-        color: '#F59E0B',
-        bgColor: 'rgba(245, 158, 11, 0.1)',
-        icon: 'local-shipping',
-      },
-    };
-
-    // Check for payment failed status - priority check
-    let actualStatus = mapStatus(order.status);
-    
-    // Check payment_status field first - if payment failed, show payment failed regardless of order status
-    if (order.payment_status?.toLowerCase() === 'failed' || 
-        order.payment_status?.toLowerCase() === 'payment_failed' ||
-        order.status?.toLowerCase() === 'payment_failed') {
-      actualStatus = 'payment_failed';
-    } else if (actualStatus === 'cancelled' && order.payment_method === 'online' && 
-        order.cancellation_reason?.toLowerCase().includes('payment failed')) {
-      actualStatus = 'payment_failed';
-    } else if (order.payment_method === 'online' && 
-               order.payment_status?.toLowerCase() === 'pending' && 
-               (order.status?.toLowerCase() === 'pending' || order.status?.toLowerCase() === 'cancelled')) {
-      // If payment is pending but order is cancelled/pending for online payment, it's likely a payment failure
-      actualStatus = 'payment_failed';
-    } else if (actualStatus === 'ongoing') {
-      // Distinguish between newly placed orders and orders on the way
-      const orderStatus = order.status?.toLowerCase();
-      if (orderStatus === 'pending' || orderStatus === 'confirmed') {
-        actualStatus = 'order_placed';
-      }
-      // For other ongoing statuses (preparing, ready, out_for_delivery), keep as 'ongoing' (On the way)
+    // Use status mapping utility for consistent status display
+    // Check for payment failed status first (priority)
+    let statusToMap = order.status;
+    if (
+      order.payment_status?.toLowerCase() === 'failed' ||
+      order.payment_status?.toLowerCase() === 'payment_failed' ||
+      order.status?.toLowerCase() === 'payment_failed'
+    ) {
+      statusToMap = 'payment_failed';
+    } else if (
+      order.payment_status?.toLowerCase() === 'pending' &&
+      (order.status?.toLowerCase() === 'pending' || order.status?.toLowerCase() === 'cancelled')
+    ) {
+      // If payment is pending but order is cancelled/pending, it's likely a payment failure
+      statusToMap = 'payment_failed';
     }
 
-    const status = statusConfig[actualStatus] || statusConfig.ongoing;
+    // Get status config from mapping utility
+    const statusConfig = mapOrderStatusToUI(statusToMap);
+    
+    // Check if this order should be highlighted
+    const isHighlighted = highlightOrderId === order.id.toString();
 
-    // Get location from delivery address
-    const location = order.delivery_address?.city || 'Unknown';
-    const totalAmount = order.summary?.total_amount || 0;
+    // Show order number from API response (e.g., "ORD-20251208-084")
+    // The API returns "order_number" field, so we use it directly
+    const orderNumber = order.order_number || (order as any).orderNumber || `ORD-${order.id}`;
+    
+    // Get total amount - check multiple possible locations in API response
+    const totalAmount = order.total_amount || (order as any).summary?.total_amount || (order as any).total || 0;
 
     // Disable opening order details for payment failed orders
-    const isPaymentFailed = actualStatus === 'payment_failed';
-    
+    const isPaymentFailed = statusToMap === 'payment_failed';
+
     return (
       <TouchableOpacity
         style={[
           styles.orderCard,
-          { paddingBottom: isPaymentFailed ? 0 : 20 }
+          { paddingBottom: isPaymentFailed ? 0 : 20 },
+          isHighlighted && styles.highlightedCard,
         ]}
         activeOpacity={isPaymentFailed ? 1 : 0.7}
         onPress={isPaymentFailed ? undefined : () => handleOrderPress(order.id.toString())}
@@ -437,7 +470,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             />
             <View style={styles.restaurantDetails}>
               <Text style={styles.restaurantName}>{order.restaurant?.name || 'Unknown Restaurant'}</Text>
-              <Text style={styles.restaurantLocation}>{location}</Text>
+              <Text style={styles.restaurantLocation}>{orderNumber}</Text>
             </View>
           </View>
           <View style={styles.orderMeta}>
@@ -447,9 +480,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
         {/* Status + Meta Row */}
         <View style={styles.statusRow}>
-          <View style={[styles.statusBadge, { backgroundColor: status.bgColor }]}>
-            <MaterialIcons name={status.icon as any} size={16} color={status.color} />
-            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}>
+            <MaterialIcons name={statusConfig.iconName as any} size={16} color={statusConfig.color} />
+            <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
           </View>
           <View style={styles.orderMeta}>
             <Text style={styles.orderDate}>{formatDate(order.created_at || '')}</Text>
@@ -479,7 +512,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
-          {actualStatus === 'ongoing' ? (
+          {statusToMap !== 'delivered' && statusToMap !== 'cancelled' && statusToMap !== 'payment_failed' ? (
             <>
               {/* <TouchableOpacity
                 style={styles.rateButton}
@@ -490,12 +523,25 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 <Text style={styles.rateButtonText}>Help</Text>
               </TouchableOpacity> */}
               <TouchableOpacity
-                style={styles.reorderButton}
-                onPress={() => handleTrackOrder(order.id.toString())}
-                activeOpacity={0.8}
+                style={[
+                  styles.reorderButton,
+                  (!(order as any)?.tracking_url || (order as any)?.tracking_url === null) && styles.disabledButton
+                ]}
+                onPress={() => handleTrackOrder(order.id.toString(), order)}
+                activeOpacity={(!(order as any)?.tracking_url || (order as any)?.tracking_url === null) ? 1 : 0.8}
+                disabled={!(order as any)?.tracking_url || (order as any)?.tracking_url === null}
               >
-                <MaterialIcons name="location-on" size={18} color="#FFFFFF" />
-                <Text style={styles.reorderButtonText}>Track Order</Text>
+                <MaterialIcons 
+                  name="location-on" 
+                  size={18} 
+                  color={(!(order as any)?.tracking_url || (order as any)?.tracking_url === null) ? "#CCCCCC" : "#FFFFFF"} 
+                />
+                <Text style={[
+                  styles.reorderButtonText,
+                  (!(order as any)?.tracking_url || (order as any)?.tracking_url === null) && styles.disabledButtonText
+                ]}>
+                  Track Order
+                </Text>
               </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.reorderButton}
@@ -508,10 +554,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             </>
           ) : (
             <>
-              {actualStatus === 'payment_failed' ? (
+              {isPaymentFailed ? (
                 // For payment failed orders, don't show any buttons
                 null
-              ) : actualStatus === 'cancelled' ? (
+              ) : statusToMap === 'cancelled' ? (
                 // For cancelled orders, show Call Support button instead of Help
                 <TouchableOpacity
                   style={styles.rateButton}
@@ -539,7 +585,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 </TouchableOpacity>
               )}
               {/* Reorder button - shown for all non-ongoing orders except payment_failed */}
-              {/* {actualStatus !== 'payment_failed' && (
+              {/* {statusToMap !== 'payment_failed' && (
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={() => handleReorder(order.id.toString())}
@@ -549,7 +595,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   <Text style={styles.reorderButtonText}>Reorder</Text>
                 </TouchableOpacity>
               )} */}
-               {actualStatus !== 'payment_failed' && (
+               {!isPaymentFailed && (
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={() => handleOrderPress(order.id.toString())}
@@ -605,6 +651,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
       {/* Orders List */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -653,20 +700,19 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
               </React.Fragment>
             ))}
 
-            {/* View More Button - Show only if there are more orders to load */}
-            {orders.length < totalOrders && (
-              <TouchableOpacity
-                style={styles.viewMoreButton}
-                onPress={handleViewMore}
-                activeOpacity={0.7}
-                disabled={isLoadingMore}
-              >
-                {isLoadingMore ? (
-                  <ActivityIndicator size="small" color="#00B14F" />
-                ) : (
-                  <Text style={styles.viewMoreText}>View more orders</Text>
-                )}
-              </TouchableOpacity>
+            {/* Infinite scroll loading indicator */}
+            {isLoadingMore && (
+              <View style={styles.loadingMoreContainer}>
+                <ActivityIndicator size="small" color="#00B14F" />
+                <Text style={styles.loadingMoreText}>Loading more orders...</Text>
+              </View>
+            )}
+
+            {/* Show message when all orders are loaded */}
+            {!isLoadingMore && orders.length >= totalOrders && orders.length > 0 && (
+              <View style={styles.endOfListContainer}>
+                <Text style={styles.endOfListText}>You've reached the end</Text>
+              </View>
             )}
 
             {/* App Version */}
@@ -676,6 +722,39 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       </ScrollView>
 
       </SafeAreaView>
+
+      {/* Tracking WebView Modal */}
+      <Modal
+        visible={showTrackingWebView}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowTrackingWebView(false)}
+      >
+        <SafeAreaView style={styles.webViewContainer} edges={['top']}>
+          <View style={styles.webViewHeader}>
+            <TouchableOpacity
+              onPress={() => setShowTrackingWebView(false)}
+              style={styles.webViewBackButton}
+            >
+              <MaterialIcons name="close" size={24} color="#001E1F" />
+            </TouchableOpacity>
+            <Text style={styles.webViewHeaderTitle}>Track Order</Text>
+            <View style={styles.webViewBackButton} />
+          </View>
+          {selectedTrackingUrl && (
+            <WebView
+              source={{ uri: selectedTrackingUrl }}
+              style={styles.webView}
+              startInLoadingState={true}
+              renderLoading={() => (
+                <View style={styles.webViewLoadingContainer}>
+                  <ActivityIndicator size="large" color="#00B14F" />
+                </View>
+              )}
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
     </View>
   );
 };
@@ -952,16 +1031,29 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     lineHeight: 21,
   },
-  viewMoreButton: {
-    alignItems: 'flex-start',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    marginTop: 4,
+  loadingMoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    gap: 12,
   },
-  viewMoreText: {
-    fontFamily: 'Poppins_500Medium',
+  loadingMoreText: {
+    fontFamily: 'Poppins',
     fontSize: 14,
-    color: '#00B14F',
+    color: 'rgba(0, 30, 31, 0.6)',
+    lineHeight: 21,
+  },
+  endOfListContainer: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+  },
+  endOfListText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: 'rgba(0, 30, 31, 0.5)',
     lineHeight: 21,
   },
   appVersion: {
@@ -1004,5 +1096,58 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
     color: '#FFFFFF',
+  },
+  highlightedCard: {
+    borderWidth: 2,
+    borderColor: '#00B14F',
+    backgroundColor: '#F0FDF4',
+  },
+  disabledButton: {
+    backgroundColor: '#E5E5E5',
+    opacity: 0.6,
+  },
+  disabledButtonText: {
+    color: '#CCCCCC',
+  },
+  webViewContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  webViewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E4E4E4',
+    backgroundColor: '#FFFFFF',
+  },
+  webViewBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  webViewHeaderTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#001E1F',
+    flex: 1,
+    textAlign: 'center',
+  },
+  webView: {
+    flex: 1,
+  },
+  webViewLoadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
   },
 });

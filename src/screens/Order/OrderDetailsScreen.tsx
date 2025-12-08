@@ -561,7 +561,25 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         const responseData = orderResponse.data as any;
         const orderData = responseData.order || responseData;
         const orderNumber = orderData.order_number || orderData.orderNumber || 'N/A';
-        const orderId = orderData.id || orderData.order_id || orderData.order_id;
+        const orderId = orderData.id || orderData.order_id;
+        
+        // Validate orderId exists
+        if (!orderId) {
+          console.error('Order ID not found in response:', orderData);
+          showConfirmation({
+            title: 'Error',
+            message: 'Order was created but order ID is missing. Please check My Orders.',
+            confirmText: 'OK',
+            cancelText: '',
+            confirmButtonColor: '#DC2626',
+            onConfirm: () => {
+              if (onOrderCancel) {
+                onOrderCancel();
+              }
+            },
+          });
+          return;
+        }
 
         // Process online payment via Razorpay
         // Get user details for payment
@@ -588,15 +606,19 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             message: orderNumber !== 'N/A'
               ? `Your order #${orderNumber} has been placed and paid successfully.`
               : 'Your order has been placed and paid successfully.',
-            confirmText: 'Track Order',
+            confirmText: 'View Order Details',
             cancelText: '',
             confirmButtonColor: '#00B14F',
             showRibbon: false,
             onConfirm: () => {
-              if (onOrderSuccess && orderId) {
-                onOrderSuccess(orderId);
+              // Ensure orderId is a number
+              const numericOrderId = typeof orderId === 'number' ? orderId : parseInt(orderId, 10);
+              if (onOrderSuccess && numericOrderId && !isNaN(numericOrderId)) {
+                onOrderSuccess(numericOrderId);
               } else if (onPlaceOrder) {
                 onPlaceOrder();
+              } else {
+                console.error('Navigation failed: orderId is invalid or callbacks not provided', { orderId, numericOrderId, onOrderSuccess, onPlaceOrder });
               }
             },
             onCancel: () => {

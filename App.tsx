@@ -35,6 +35,7 @@ import { homeService } from '@/services/home.service';
 import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
 import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
+import { OrdersProvider, useOrders } from '@/context/OrdersContext';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import CustomSplashScreen from '@/components/CustomSplashScreen';
 import { fcmNotificationService } from '@/services/fcmNotification.service';
@@ -78,6 +79,7 @@ function AppContent() {
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
   const [selectedOrderData, setSelectedOrderData] = React.useState<any>(null);
+  const [highlightOrderId, setHighlightOrderId] = React.useState<string | null>(null);
   const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses' | 'registration'>('home');
   const [locationSelectionCameFrom, setLocationSelectionCameFrom] = React.useState<'home' | 'addressSelection' | 'myAddresses'>('home');
   const [orderTrackingCameFrom, setOrderTrackingCameFrom] = React.useState<'orders' | 'checkout' | 'orderDetail'>('orders');
@@ -156,20 +158,33 @@ function AppContent() {
     };
   }, []);
 
-  // Set up FCM navigation callback for notification taps
+  // Get orders dispatch from context
+  const { dispatch: ordersDispatch } = useOrders();
+
+  // Set up FCM handlers for order notifications
   React.useEffect(() => {
+    // Set orders dispatch in FCM service
+    fcmNotificationService.setOrdersDispatch(ordersDispatch);
+
     // Set navigation callback to handle notification taps
-    // All notifications will redirect to Order Tracking page
+    // Navigate to My Orders screen and highlight the order
     fcmNotificationService.setNavigationCallback((orderId: string) => {
-      console.log('📱 FCM: Notification tapped, navigating to Order Tracking:', orderId);
-      handleNavigateToOrderTracking(orderId, 'orders');
+      console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
+      setHighlightOrderId(orderId);
+      setCurrentScreen('orders');
+      
+      // Clear highlight after 3 seconds (enough time for scroll animation)
+      setTimeout(() => {
+        setHighlightOrderId(null);
+      }, 3000);
     });
 
-    // Cleanup callback on unmount
+    // Cleanup callbacks on unmount
     return () => {
       fcmNotificationService.setNavigationCallback(null);
+      fcmNotificationService.setOrdersDispatch(null);
     };
-  }, []);
+  }, [ordersDispatch]);
 
   // Handle app state changes to check for notifications when app becomes active
   React.useEffect(() => {
@@ -773,25 +788,38 @@ function AppContent() {
     }).start();
   }, [checkoutScreenSlide]);
 
-  // Handle order success from checkout - Track Order button
+  // Handle order success from checkout - View Order Details button
   const handleOrderSuccessFromCheckout = useCallback((orderId: number) => {
-    if (orderId) {
-      // Set order ID and tracking source immediately
-      setSelectedOrderId(orderId.toString());
-      setOrderTrackingCameFrom('checkout');
-      
-      // Set screen to orderTracking immediately to ensure correct screen is shown
-      setCurrentScreen('orderTracking');
-      
-      // Close checkout screen with animation (it will be unmounted since currentScreen !== 'checkout')
-      Animated.timing(checkoutScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 200,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }).start();
+    // Validate orderId
+    if (!orderId || isNaN(orderId)) {
+      console.error('Invalid orderId received:', orderId);
+      return;
     }
-  }, [checkoutScreenSlide]);
+
+    // Ensure restaurant screen is properly hidden and reset state
+    restaurantScreenSlide.setValue(SCREEN_WIDTH);
+    // Reset restaurant selection to prevent any unwanted rendering
+    setSelectedRestaurantId(1);
+    setSelectedRestaurantName('');
+    setSelectedRestaurantAddress('');
+
+    // Set order ID immediately to ensure it's available
+    setSelectedOrderId(orderId.toString());
+
+    // Close checkout screen with animation first, then navigate to order detail
+    Animated.timing(checkoutScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 200,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      // After checkout screen closes, navigate to order detail
+      // Use requestAnimationFrame to ensure state updates are processed
+      requestAnimationFrame(() => {
+        setCurrentScreen('orderDetail');
+      });
+    });
+  }, [checkoutScreenSlide, restaurantScreenSlide]);
 
   // Handle order cancel from checkout - OK button after payment failure
   const handleOrderCancelFromCheckout = useCallback(() => {
@@ -1711,6 +1739,7 @@ function AppContent() {
                 onOrderDetails={handleNavigateToOrderDetail}
                 onReorder={handleReorder}
                 onRateOrder={handleNavigateToRateOrder}
+                highlightOrderId={highlightOrderId}
                 onTrackOrder={handleNavigateToOrderTracking}
                 onHelp={(order) => handleNavigateToHelp('orders', order)}
                 onViewMore={() => {}}
@@ -2112,7 +2141,9 @@ export default function App() {
       <VegModeProvider>
         <CartProvider>
           <ConfirmationProvider>
-            <AppContent />
+            <OrdersProvider>
+              <AppContent />
+            </OrdersProvider>
           </ConfirmationProvider>
         </CartProvider>
       </VegModeProvider>
@@ -2170,7 +2201,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 5,
+    zIndex: 8,
     backgroundColor: '#F3F4F6',
   },
   rateOrderOverlay: {
