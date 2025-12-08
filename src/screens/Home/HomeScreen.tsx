@@ -1612,25 +1612,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 }}
               />
 
-              {/* Navigation Buttons - only show if more than 1 banner */}
-              {carouselData.length > 1 && (
-                <View style={styles.carouselNavigation}>
-                  <TouchableOpacity
-                    style={styles.navButton}
-                    onPress={() => handleCarouselNavigation('prev')}
-                    activeOpacity={0.7}
-                  >
-                    <MaterialIcons name="chevron-left" size={20} color="#FFFFFF" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.navButton}
-                    onPress={() => handleCarouselNavigation('next')}
-                    activeOpacity={0.7}
-                  >
-                    <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
-              )}
+              {/* Navigation Buttons - removed but functionality preserved (manual sliding and auto-slide still work) */}
             </View>
           </>
         )}
