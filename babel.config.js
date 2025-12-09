@@ -31,7 +31,7 @@ module.exports = function (api) {
   const isProduction = 
     process.env.NODE_ENV === 'production' || 
     process.env.BABEL_ENV === 'production' ||
-    (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== undefined);
+    (process.env.NODE_ENV === 'development' && process.env.NODE_ENV !== undefined);
   
   if (isProduction) {
     plugins.push([
