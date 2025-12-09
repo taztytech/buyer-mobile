@@ -8,7 +8,7 @@ import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
 import { TestFCMScreen } from '@/screens/Profile/TestFCMScreen';
-import { OrdersScreen } from '@/screens/Order/OrdersScreen';
+import { OrdersScreen, resetOrdersPersistence } from '@/screens/Order/OrdersScreen';
 import { OrderDetailScreen } from '@/screens/Order/OrderDetailScreen';
 import { RateOrderScreen } from '@/screens/Order/RateOrderScreen';
 import { OrderTrackingScreen } from '@/screens/Order/OrderTrackingScreen';
@@ -161,7 +161,7 @@ function AppContent() {
   }, []);
 
   // Get orders dispatch from context
-  const { dispatch: ordersDispatch } = useOrders();
+  const { dispatch: ordersDispatch, getOrderByOrderNumber } = useOrders();
 
   // Track screen views
   React.useEffect(() => {
@@ -206,6 +206,10 @@ function AppContent() {
     // Set orders dispatch in FCM service
     fcmNotificationService.setOrdersDispatch(ordersDispatch);
 
+    // Set order lookup function for FCM handler (to find orders by order_number)
+    const { setOrderLookupFunction } = require('@/services/orderNotificationHandler');
+    setOrderLookupFunction(getOrderByOrderNumber);
+
     // Set navigation callback to handle notification taps
     // Navigate to My Orders screen and highlight the order
     fcmNotificationService.setNavigationCallback((orderId: string) => {
@@ -224,7 +228,7 @@ function AppContent() {
       fcmNotificationService.setNavigationCallback(null);
       fcmNotificationService.setOrdersDispatch(null);
     };
-  }, [ordersDispatch]);
+  }, [ordersDispatch, getOrderByOrderNumber]);
 
   // Handle app state changes to check for notifications when app becomes active
   React.useEffect(() => {
@@ -498,6 +502,15 @@ function AppContent() {
   };
 
   const handleNavigateToProfile = () => {
+    // Reset persisted orders and scroll position when navigating to profile
+    // This ensures a fresh state when user returns to orders screen
+    resetOrdersPersistence();
+    
+    // Clear orders context to ensure fresh data on next visit
+    if (ordersDispatch) {
+      ordersDispatch({ type: 'CLEAR_ORDERS' });
+    }
+    
     setCurrentScreen('profile');
 
     // Slide both screens simultaneously

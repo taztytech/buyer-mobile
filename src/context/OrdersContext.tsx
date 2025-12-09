@@ -49,10 +49,38 @@ function ordersReducer(state: OrdersState, action: OrdersAction): OrdersState {
 
     case 'UPSERT_ORDER_FROM_FCM': {
       const orderData = action.payload;
-      const orderId = orderData.id.toString();
+      
+      // Try to find existing order by id first
+      let orderId = orderData.id ? orderData.id.toString() : null;
+      let existingOrder = orderId ? state.byId[orderId] : undefined;
+      
+      // If no existing order found by id, try to find by order_number
+      if (!existingOrder && orderData.order_number) {
+        for (const id of state.orderList) {
+          const order = state.byId[id];
+          if (order && order.order_number === orderData.order_number) {
+            existingOrder = order;
+            orderId = id;
+            console.log('📦 OrdersContext: Found existing order by order_number:', orderData.order_number, '-> id:', orderId);
+            break;
+          }
+        }
+      }
+      
+      // If still no orderId, we need to create a new one
+      // Use order_number as a temporary id if no id is provided
+      if (!orderId) {
+        if (orderData.order_number) {
+          // Try to extract numeric id from order_number (e.g., "ORD-20251209-888" -> use as string id)
+          orderId = orderData.order_number;
+        } else {
+          // Fallback: generate a temporary id
+          orderId = `temp-${Date.now()}`;
+        }
+        console.log('📦 OrdersContext: Creating new order entry with id:', orderId);
+      }
 
       // If order exists, merge updates; otherwise create new entry
-      const existingOrder = state.byId[orderId];
       const updatedOrder: OrderListItem = existingOrder
         ? {
             ...existingOrder,
@@ -61,10 +89,14 @@ function ordersReducer(state: OrdersState, action: OrdersAction): OrdersState {
             restaurant: orderData.restaurant || existingOrder.restaurant,
             items: orderData.items || existingOrder.items,
             summary: orderData.summary || existingOrder.summary,
+            // Ensure status is updated
+            status: orderData.status || existingOrder.status,
+            // Ensure updated_at is set
+            updated_at: orderData.updated_at || new Date().toISOString(),
           }
         : ({
-            id: orderData.id,
-            order_number: orderData.order_number || `ORD-${orderData.id}`,
+            id: orderData.id || parseInt(orderId) || 0,
+            order_number: orderData.order_number || `ORD-${orderData.id || orderId}`,
             status: orderData.status || 'confirmed',
             restaurant: orderData.restaurant || {
               id: 0,
@@ -111,6 +143,7 @@ interface OrdersContextType {
   dispatch: React.Dispatch<OrdersAction>;
   // Helper methods
   getOrderById: (orderId: string) => OrderListItem | undefined;
+  getOrderByOrderNumber: (orderNumber: string) => OrderListItem | undefined;
   getOrdersList: () => OrderListItem[];
 }
 
@@ -126,6 +159,18 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     return state.byId[orderId];
   };
 
+  // Helper to get order by order_number
+  const getOrderByOrderNumber = (orderNumber: string): OrderListItem | undefined => {
+    // Search through all orders to find by order_number
+    for (const orderId of state.orderList) {
+      const order = state.byId[orderId];
+      if (order && order.order_number === orderNumber) {
+        return order;
+      }
+    }
+    return undefined;
+  };
+
   // Helper to get orders as array (in display order)
   const getOrdersList = (): OrderListItem[] => {
     return state.orderList.map((orderId) => state.byId[orderId]).filter(Boolean);
@@ -135,6 +180,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     state,
     dispatch,
     getOrderById,
+    getOrderByOrderNumber,
     getOrdersList,
   };
 

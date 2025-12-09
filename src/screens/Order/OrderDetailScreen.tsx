@@ -10,12 +10,15 @@ import {
   ActivityIndicator,
   Linking,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
+import { useOrders } from '@/context/OrdersContext';
+import { useRef } from 'react';
 
 interface OrderDetailScreenProps {
   orderId?: string;
@@ -38,12 +41,17 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   onTrackOrder,
   onDownloadInvoice,
 }) => {
+  const { getOrderById } = useOrders();
+  const [contextOrder, setContextOrder] = useState<any>(null);
   const [orderData, setOrderData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState<string>('');
   const [supportNumber, setSupportNumber] = useState<string>('');
   const [showTrackingWebView, setShowTrackingWebView] = useState(false);
+  const lastFetchedStatusRef = useRef<string | null>(null);
+  const lastFetchedAtRef = useRef<number>(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Fetch order details function
   const fetchOrderDetails = useCallback(async () => {
@@ -83,6 +91,54 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       fetchOrderDetails();
     }
   }, [visible, orderId, fetchOrderDetails]);
+
+  // Subscribe to live context updates (FCM) for this order
+  useEffect(() => {
+    if (!orderId) return;
+    const orderFromContext = getOrderById(orderId);
+    setContextOrder(orderFromContext || null);
+  }, [orderId, getOrderById, visible]);
+
+  // Merge live context updates into local orderData to reflect status changes instantly
+  useEffect(() => {
+    if (!contextOrder) return;
+    setOrderData((prev: any) => {
+      if (!prev) return contextOrder;
+      return {
+        ...prev,
+        ...contextOrder,
+        restaurant: contextOrder.restaurant || prev.restaurant,
+        items: contextOrder.items || prev.items,
+        summary: contextOrder.summary || prev.summary,
+        status: contextOrder.status || prev.status,
+        updated_at: contextOrder.updated_at || prev.updated_at,
+      };
+    });
+  }, [contextOrder]);
+
+  // If FCM/context status changes, refetch full details once to stay in sync
+  useEffect(() => {
+    if (!visible || !orderId || !contextOrder) return;
+    const currentStatus = (contextOrder.status || '').toString();
+    const lastFetchedStatus = lastFetchedStatusRef.current;
+    const now = Date.now();
+    // Avoid spamming: only refetch if status changed AND at least 5s since last fetch
+    if (currentStatus !== lastFetchedStatus && now - lastFetchedAtRef.current > 5000) {
+      lastFetchedStatusRef.current = currentStatus;
+      lastFetchedAtRef.current = now;
+      fetchOrderDetails();
+    }
+  }, [visible, orderId, contextOrder, fetchOrderDetails]);
+
+  const handleRefresh = async () => {
+    if (!orderId) return;
+    setIsRefreshing(true);
+    try {
+      await fetchOrderDetails();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // Fetch user's phone number on mount
   useEffect(() => {
@@ -277,6 +333,14 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                tintColor="#00B14F"
+                colors={['#00B14F']}
+              />
+            }
           >
           {/* Delivery Status Card - Illustration + Banner */}fv
           <View style={[styles.card, styles.statusCard]}>
@@ -427,36 +491,60 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 </TouchableOpacity>
               ) : ( */}
                 <View style={styles.trackOrderContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.reorderButton,
-                      (!orderData?.tracking_url || orderData?.tracking_url === null) && styles.disabledButton
-                    ]}
-                    onPress={() => {
-                      if (orderData?.tracking_url && orderData.tracking_url !== null) {
-                        setShowTrackingWebView(true);
-                      }
-                    }}
-                    activeOpacity={(!orderData?.tracking_url || orderData?.tracking_url === null) ? 1 : 0.8}
-                    disabled={!orderData?.tracking_url || orderData?.tracking_url === null}
-                  >
-                    <MaterialIcons 
-                      name="location-on" 
-                      size={20} 
-                      color={(!orderData?.tracking_url || orderData?.tracking_url === null) ? "#CCCCCC" : "#FFFFFF"} 
-                    />
-                    <Text style={[
-                      styles.reorderButtonText,
-                      (!orderData?.tracking_url || orderData?.tracking_url === null) && styles.disabledButtonText
-                    ]}>
-                      Track Order
-                    </Text>
-                  </TouchableOpacity>
-                  {(!orderData?.tracking_url || orderData?.tracking_url === null) && (
-                    <Text style={styles.trackingDisabledMessage}>
-                      Tracking unlocks after a delivery partner is assigned.
-                    </Text>
-                  )}
+                  {(() => {
+                    // Enable tracking if status is agent-assigned or later, OR if tracking_url exists
+                    const rawStatus = (orderData?.status || '').toString().toLowerCase();
+                    // Normalize: underscores/spaces to hyphen
+                    const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
+                    const isTrackingEnabled = 
+                      (orderData?.tracking_url && orderData.tracking_url !== null) ||
+                      normalizedStatus === 'agent-assigned' ||
+                      normalizedStatus === 'picked' ||
+                      normalizedStatus === 'out-for-delivery' ||
+                      normalizedStatus === 'on-the-way' ||
+                      normalizedStatus === 'delivered';
+                    
+                    return (
+                      <>
+                        <TouchableOpacity
+                          style={[
+                            styles.reorderButton,
+                            !isTrackingEnabled && styles.disabledButton
+                          ]}
+                          onPress={() => {
+                            if (isTrackingEnabled) {
+                              // If tracking_url exists, use it; otherwise navigate to tracking screen
+                              if (orderData?.tracking_url && orderData.tracking_url !== null) {
+                                setShowTrackingWebView(true);
+                              } else if (onTrackOrder) {
+                                // Fallback to tracking screen if no URL but status allows it
+                                onTrackOrder();
+                              }
+                            }
+                          }}
+                          activeOpacity={!isTrackingEnabled ? 1 : 0.8}
+                          disabled={!isTrackingEnabled}
+                        >
+                          <MaterialIcons 
+                            name="location-on" 
+                            size={20} 
+                            color={!isTrackingEnabled ? "#CCCCCC" : "#FFFFFF"} 
+                          />
+                          <Text style={[
+                            styles.reorderButtonText,
+                            !isTrackingEnabled && styles.disabledButtonText
+                          ]}>
+                            Track Order
+                          </Text>
+                        </TouchableOpacity>
+                        {!isTrackingEnabled && (
+                          <Text style={styles.trackingDisabledMessage}>
+                            Tracking unlocks after a delivery partner is assigned.
+                          </Text>
+                        )}
+                      </>
+                    );
+                  })()}
                 </View>
               {/* )} */}
             </View>

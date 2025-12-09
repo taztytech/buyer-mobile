@@ -554,24 +554,38 @@ class FCMNotificationService {
 
   /**
    * Handle navigation based on notification data
-   * Centralized navigation - all notifications redirect to Order Tracking if orderId is present
+   * Centralized navigation - all notifications redirect to My Orders if orderId/orderNumber is present
    */
   private handleNotificationNavigation(data: NotificationData): void {
     // Extract orderId from notification data
-    // Support multiple possible field names: orderId, order_id, orderId, etc.
-    const orderId = data.orderId || data.order_id || data.orderID || data['order-id'];
+    // Support multiple possible field names: orderId, order_id, orderID, etc.
+    let orderId = data.orderId || data.order_id || data.orderID || data['order-id'];
+    
+    // If no orderId but we have order_number, try to find it using the lookup function
+    if (!orderId) {
+      const orderNumber = data.order_number || data.orderNumber || data['order-number'];
+      if (orderNumber && this.ordersDispatch) {
+        // We can't directly lookup here, but the handler will find it
+        // For navigation, we'll use order_number as a fallback identifier
+        // The navigation callback should handle both orderId and orderNumber
+        console.log('🧭 FCM: No orderId, using order_number for navigation:', orderNumber);
+        // Note: The navigation callback expects orderId, but we can pass orderNumber
+        // and let the OrdersScreen find it by order_number
+        orderId = orderNumber; // Use order_number as identifier
+      }
+    }
     
     if (orderId) {
-      console.log('🧭 FCM: Navigating to Order Tracking for order:', orderId);
+      console.log('🧭 FCM: Navigating to My Orders for order:', orderId);
       
       // Call navigation callback if set
       if (this.navigationCallback) {
         this.navigationCallback(orderId);
       } else {
-        console.warn('⚠️  FCM: Navigation callback not set. Cannot navigate to Order Tracking.');
+        console.warn('⚠️  FCM: Navigation callback not set. Cannot navigate to My Orders.');
       }
     } else {
-      console.log('ℹ️  FCM: No orderId found in notification data. Skipping navigation.');
+      console.log('ℹ️  FCM: No orderId or order_number found in notification data. Skipping navigation.');
     }
   }
 

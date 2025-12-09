@@ -12,6 +12,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -23,10 +24,23 @@ import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
 import { authService } from '@/services/auth.service';
 
 // Module-level state to persist across component remounts (for scroll position and pagination)
+let persistedOrders: OrderListItem[] = [];
 let persistedScrollPosition: number = 0;
 let persistedCurrentPage: number = 1;
 let persistedTotalOrders: number = 0;
 let hasPersistedData: boolean = false;
+
+// Export function to reset persisted orders and scroll position
+// This is called when navigating to profile page to clear the state
+export function resetOrdersPersistence() {
+  persistedOrders = [];
+  persistedScrollPosition = 0;
+  persistedCurrentPage = 1;
+  persistedTotalOrders = 0;
+  hasPersistedData = false;
+  // Force a flag that can be checked on next mount
+  // This ensures the reset is detected even if component doesn't fully remount
+}
 
 // Unused interface - kept for reference
 // interface OrderItem {
@@ -80,12 +94,19 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   
   // Local state for API pagination and loading
   // Initialize from persisted data if available, otherwise use defaults
-  const [localOrders, setLocalOrders] = useState<OrderListItem[]>([]);
+  // Note: When reset is called, hasPersistedData is false, so state initializes empty
+  const [localOrders, setLocalOrders] = useState<OrderListItem[]>(() => {
+    if (hasPersistedData && persistedOrders.length > 0) {
+      return persistedOrders;
+    }
+    return [];
+  });
   const [isLoading, setIsLoading] = useState(() => !hasPersistedData);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(() => persistedCurrentPage);
-  const [totalOrders, setTotalOrders] = useState(() => persistedTotalOrders);
+  const [currentPage, setCurrentPage] = useState(() => hasPersistedData ? persistedCurrentPage : 1);
+  const [totalOrders, setTotalOrders] = useState(() => hasPersistedData ? persistedTotalOrders : 0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Refs to prevent API overload
   const isRequestInProgress = useRef(false);
@@ -95,12 +116,19 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const highlightedOrderRef = useRef<string | null>(null);
   
   // Refs for initial mount tracking and scroll restoration
+  // Reset isInitialMount when hasPersistedData is false (reset was called)
   const isInitialMount = useRef(!hasPersistedData);
   const hasRestoredScroll = useRef(false);
-  
   // Merge context orders (with FCM updates) with local orders from API
   // Priority: Context orders (have latest FCM updates) > Local orders
+  // Fallback: If context is empty but we have persisted localOrders, use localOrders
   const orders = React.useMemo(() => {
+    // If context is empty but we have localOrders, use localOrders directly
+    // This handles the case where context was cleared but localOrders persisted
+    if (contextOrders.length === 0 && localOrders.length > 0) {
+      return localOrders;
+    }
+    
     const contextOrderMap = new Map(contextOrders.map(o => [o.id.toString(), o]));
     const merged = [...localOrders];
     
@@ -124,6 +152,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // Sync localOrders to context store after state updates
   useEffect(() => {
     if (localOrders.length > 0) {
+      // Save to persisted storage
+      persistedOrders = localOrders;
+      // Update context
       dispatch({
         type: 'BULK_SET_ORDERS',
         payload: localOrders,
@@ -131,17 +162,54 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   }, [localOrders, dispatch]);
 
-  // Fetch orders on mount - only if no persisted data exists
+  // Handle screen visibility and reset state
+  // This effect runs when visible changes or component mounts
   useEffect(() => {
-    if (visible && isInitialMount.current && !hasPersistedData) {
-      isInitialMount.current = false;
-      setCurrentPage(1);
-      fetchOrders(1, true);
-    } else if (visible && hasPersistedData) {
-      // Reset the restore flag when screen becomes visible
+    if (!visible) {
+      return;
+    }
+
+    // Check if reset was called (hasPersistedData is false)
+    // hasPersistedData is module-level, so we check it directly each time visible changes
+    if (!hasPersistedData) {
+      // Reset was called (when navigating to profile) - clear state and fetch fresh data
+      // Clear local state immediately
+      if (localOrders.length > 0 || currentPage !== 1 || totalOrders !== 0) {
+        setLocalOrders([]);
+        setCurrentPage(1);
+        setTotalOrders(0);
+      }
+      
+      // Always fetch fresh data when reset (hasPersistedData is false)
+      // Check if we need to fetch (no data and no request in progress)
+      if (localOrders.length === 0 && !isRequestInProgress.current) {
+        isInitialMount.current = false;
+        // Use requestAnimationFrame to ensure component is fully mounted and ready
+        const rafId = requestAnimationFrame(() => {
+          if (!isRequestInProgress.current) {
+            fetchOrders(1, true);
+          }
+        });
+        return () => cancelAnimationFrame(rafId);
+      }
+      return undefined;
+    } else if (hasPersistedData && persistedOrders.length > 0) {
+      // Has persisted data - restore it
+      // Always restore context from persisted orders when screen becomes visible
+      dispatch({
+        type: 'BULK_SET_ORDERS',
+        payload: persistedOrders,
+      });
+      
+      // Only update localOrders if it's empty or doesn't match persisted data
+      if (localOrders.length === 0 || localOrders.length !== persistedOrders.length) {
+        setLocalOrders(persistedOrders);
+      }
+      // Reset the restore flag when screen becomes visible with persisted data
       hasRestoredScroll.current = false;
     }
-  }, [visible]);
+    return undefined;
+  }, [visible, dispatch, localOrders.length, currentPage, totalOrders]);
 
   // Separate effect to restore scroll position after orders are rendered
   useEffect(() => {
@@ -165,7 +233,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // Scroll to highlighted order when navigating from notification
   useEffect(() => {
     if (highlightOrderId && orders.length > 0 && scrollViewRef.current) {
-      const orderIndex = orders.findIndex(o => o.id.toString() === highlightOrderId);
+      // Try to find by id first, then by order_number (in case navigation passed order_number)
+      const orderIndex = orders.findIndex(
+        o => o.id.toString() === highlightOrderId || o.order_number === highlightOrderId
+      );
       if (orderIndex >= 0 && highlightedOrderRef.current !== highlightOrderId) {
         highlightedOrderRef.current = highlightOrderId;
         // Scroll to order after a short delay to ensure layout is complete
@@ -200,6 +271,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         // Clear persisted scroll position when resetting
         persistedScrollPosition = 0;
         hasRestoredScroll.current = false;
+        // Clear persisted orders when resetting (fresh fetch)
+        persistedOrders = [];
+        hasPersistedData = false;
       } else {
         setIsLoadingMore(true);
       }
@@ -228,12 +302,16 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
         if (reset) {
           setLocalOrders(ordersArray);
+          persistedOrders = ordersArray;
         } else {
           // Append new orders to existing ones, filtering out duplicates
           setLocalOrders(prev => {
             const existingIds = new Set(prev.map((o: OrderListItem) => o.id));
             const newOrders = ordersArray.filter((order: any) => !existingIds.has(order.id));
-            return [...prev, ...newOrders];
+            const updatedOrders = [...prev, ...newOrders];
+            // Save to persisted storage
+            persistedOrders = updatedOrders;
+            return updatedOrders;
           });
         }
         setTotalOrders(total);
@@ -250,6 +328,17 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       setIsLoading(false);
       setIsLoadingMore(false);
       isRequestInProgress.current = false;
+    }
+  };
+
+  // Pull-to-refresh handler
+  const handleRefresh = async () => {
+    if (isRequestInProgress.current) return;
+    setIsRefreshing(true);
+    try {
+      await fetchOrders(1, true);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -468,7 +557,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     const statusConfig = mapOrderStatusToUI(statusToMap);
     
     // Check if this order should be highlighted
-    const isHighlighted = highlightOrderId === order.id.toString();
+    // Check if this order should be highlighted (by id or order_number)
+    const isHighlighted = highlightOrderId === order.id.toString() || highlightOrderId === order.order_number;
 
     // Show order number from API response (e.g., "ORD-20251208-084")
     // The API returns "order_number" field, so we use it directly
@@ -553,27 +643,43 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 <MaterialIcons name="help-outline" size={18} color="#001E1F" />
                 <Text style={styles.rateButtonText}>Help</Text>
               </TouchableOpacity> */}
-              <TouchableOpacity
-                style={[
-                  styles.reorderButton,
-                  (!(order as any)?.tracking_url || (order as any)?.tracking_url === null) && styles.disabledButton
-                ]}
-                onPress={() => handleTrackOrder(order.id.toString(), order)}
-                activeOpacity={(!(order as any)?.tracking_url || (order as any)?.tracking_url === null) ? 1 : 0.8}
-                disabled={!(order as any)?.tracking_url || (order as any)?.tracking_url === null}
-              >
-                <MaterialIcons 
-                  name="location-on" 
-                  size={18} 
-                  color={(!(order as any)?.tracking_url || (order as any)?.tracking_url === null) ? "#CCCCCC" : "#FFFFFF"} 
-                />
-                <Text style={[
-                  styles.reorderButtonText,
-                  (!(order as any)?.tracking_url || (order as any)?.tracking_url === null) && styles.disabledButtonText
-                ]}>
-                  Track Order
-                </Text>
-              </TouchableOpacity>
+              {(() => {
+                // Enable tracking if status is agent-assigned or later, OR if tracking_url exists
+                const rawStatus = (order.status || '').toString().toLowerCase();
+                const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
+                const hasTrackingUrl = (order as any)?.tracking_url && (order as any)?.tracking_url !== null;
+                const isTrackingEnabled = 
+                  hasTrackingUrl ||
+                  normalizedStatus === 'agent-assigned' ||
+                  normalizedStatus === 'picked' ||
+                  normalizedStatus === 'out-for-delivery' ||
+                  normalizedStatus === 'on-the-way' ||
+                  normalizedStatus === 'delivered';
+                
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.reorderButton,
+                      !isTrackingEnabled && styles.disabledButton
+                    ]}
+                    onPress={() => handleTrackOrder(order.id.toString(), order)}
+                    activeOpacity={!isTrackingEnabled ? 1 : 0.8}
+                    disabled={!isTrackingEnabled}
+                  >
+                    <MaterialIcons 
+                      name="location-on" 
+                      size={18} 
+                      color={!isTrackingEnabled ? "#CCCCCC" : "#FFFFFF"} 
+                    />
+                    <Text style={[
+                      styles.reorderButtonText,
+                      !isTrackingEnabled && styles.disabledButtonText
+                    ]}>
+                      Track Order
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })()}
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={() => handleOrderPress(order.id.toString())}
@@ -690,6 +796,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         overScrollMode="never"
         scrollEventThrottle={100}
         onScroll={handleScroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor="#00B14F"
+            colors={['#00B14F']}
+          />
+        }
       >
         {isLoading ? (
           // Loading shimmer
