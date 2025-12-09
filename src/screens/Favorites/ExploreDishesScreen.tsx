@@ -15,6 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { favoritesService } from '@/services/favorites.service';
 import { Shimmer } from '@/components/Shimmer';
+import { AppFooter } from '@/components/AppFooter';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PADDING = 20;
@@ -366,6 +367,8 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
               )}
             </>
           )}
+
+          <AppFooter />
         </ScrollView>
       </SafeAreaView>
     </View>
