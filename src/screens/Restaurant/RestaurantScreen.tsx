@@ -331,6 +331,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const sectionRefs = React.useRef<{ [key: string]: View | null }>({});
   const sectionPositions = React.useRef<{ [key: string]: number }>({});
   const updatingItemsRef = React.useRef<Set<string>>(new Set());
+  // Track latest quantity for each item to prevent stale reads during rapid clicks
+  const itemQuantityRefs = React.useRef<{ [key: string]: number }>({});
 
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -510,6 +512,27 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }, restaurantId);
   };
 
+  // Sync itemQuantityRefs with cart state whenever cart changes
+  React.useEffect(() => {
+    Object.keys(cart).forEach(itemId => {
+      const cartItem = cart[itemId];
+      if (cartItem) {
+        if (cartItem.isCustomizable && cartItem.variants) {
+          const totalQuantity = cartItem.variants.reduce((sum, variant) => sum + variant.quantity, 0);
+          itemQuantityRefs.current[itemId] = totalQuantity;
+        } else {
+          itemQuantityRefs.current[itemId] = cartItem.quantity || 0;
+        }
+      }
+    });
+    // Remove refs for items no longer in cart
+    Object.keys(itemQuantityRefs.current).forEach(itemId => {
+      if (!cart[itemId]) {
+        delete itemQuantityRefs.current[itemId];
+      }
+    });
+  }, [cart]);
+
   // Increment item quantity
   const incrementItem = (itemId: string) => {
     if (!ensureRestaurantOpen()) {
@@ -524,9 +547,15 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       return;
     }
 
-    // For non-customizable items, just increment quantity
-    const currentQuantity = cartItem?.quantity || 0;
-    updateQuantity(itemId, currentQuantity + 1);
+    // For non-customizable items, use ref to get latest quantity (avoids stale reads during rapid clicks)
+    const currentQuantity = itemQuantityRefs.current[itemId] || cartItem?.quantity || 0;
+    const newQuantity = currentQuantity + 1;
+    
+    // Update ref immediately for next click
+    itemQuantityRefs.current[itemId] = newQuantity;
+    
+    // Update quantity (will sync with backend)
+    updateQuantity(itemId, newQuantity);
   };
 
   // Decrement item quantity
@@ -540,9 +569,19 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       return;
     }
 
-    // For non-customizable items, decrement or remove
-    const quantity = cartItem?.quantity || 0;
-    updateQuantity(itemId, quantity - 1); // updateQuantity will remove if quantity becomes 0
+    // For non-customizable items, use ref to get latest quantity (avoids stale reads during rapid clicks)
+    const currentQuantity = itemQuantityRefs.current[itemId] || cartItem?.quantity || 0;
+    const newQuantity = Math.max(0, currentQuantity - 1);
+    
+    // Update ref immediately for next click
+    if (newQuantity > 0) {
+      itemQuantityRefs.current[itemId] = newQuantity;
+    } else {
+      delete itemQuantityRefs.current[itemId];
+    }
+    
+    // Update quantity (updateQuantity will remove if quantity becomes 0)
+    updateQuantity(itemId, newQuantity);
   };
 
   const handleCustomizableItemClick = (item: MenuItem) => {
