@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   // Left Side - Image
   imageContainer: {
@@ -655,8 +655,8 @@ const styles = StyleSheet.create({
   // Restaurant Name
   restaurantName: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 18,
+    lineHeight: 30,
     color: '#000000',
     marginBottom: 3,
     marginTop: 0,
@@ -694,8 +694,8 @@ const styles = StyleSheet.create({
   // Cuisine
   cuisineText: {
     fontFamily: 'Poppins_400Regular',
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 18,
     color: '#666666',
     marginBottom: 2,
   },
@@ -709,20 +709,20 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontFamily: 'Poppins_400Regular',
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     color: '#666666',
     flexShrink: 1,
   },
   locationSeparator: {
     fontFamily: 'Poppins_400Regular',
-    fontSize: 10,
+    fontSize: 12,
     color: '#666666',
   },
   distanceText: {
     fontFamily: 'Poppins_400Regular',
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     color: '#666666',
   },
   openingTimeContainer: {
@@ -738,7 +738,7 @@ const styles = StyleSheet.create({
   openingTimeText: {
     fontFamily: 'Poppins_400Regular',
     fontSize: 12,
-    lineHeight: 16,
+    lineHeight: 30,
     color: '#000000',
     letterSpacing: 0.1,
   },

@@ -2425,7 +2425,7 @@ const styles = StyleSheet.create({
     paddingBottom: 160, // Extra padding when cart modal is visible
   },
   restaurantCardWrapper: {
-    marginBottom: 10,
+    marginBottom: 14,
   },
   restaurantCardShimmer: {
     flexDirection: 'row',
