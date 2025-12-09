@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState, Linking } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
@@ -7,8 +7,7 @@ import { WelcomeScreen } from '@/screens/Auth/WelcomeScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
-import { TestFCMScreen } from '@/screens/Profile/TestFCMScreen';
-import { OrdersScreen } from '@/screens/Order/OrdersScreen';
+import { OrdersScreen, resetOrdersPersistence } from '@/screens/Order/OrdersScreen';
 import { OrderDetailScreen } from '@/screens/Order/OrderDetailScreen';
 import { RateOrderScreen } from '@/screens/Order/RateOrderScreen';
 import { OrderTrackingScreen } from '@/screens/Order/OrderTrackingScreen';
@@ -35,10 +34,12 @@ import { homeService } from '@/services/home.service';
 import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
 import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
+import { OrdersProvider, useOrders } from '@/context/OrdersContext';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import CustomSplashScreen from '@/components/CustomSplashScreen';
 import { fcmNotificationService } from '@/services/fcmNotification.service';
 import { NetworkStatusScreen } from '@/components/NetworkStatusScreen';
+import { analyticsService, AnalyticsEvents, AnalyticsScreens } from '@/services/analytics.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -58,7 +59,7 @@ function AppContent() {
   } = useCart();
   const { showConfirmation } = useConfirmation();
 
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'testFCM'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -78,6 +79,7 @@ function AppContent() {
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
   const [selectedOrderData, setSelectedOrderData] = React.useState<any>(null);
+  const [highlightOrderId, setHighlightOrderId] = React.useState<string | null>(null);
   const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses' | 'registration'>('home');
   const [locationSelectionCameFrom, setLocationSelectionCameFrom] = React.useState<'home' | 'addressSelection' | 'myAddresses'>('home');
   const [orderTrackingCameFrom, setOrderTrackingCameFrom] = React.useState<'orders' | 'checkout' | 'orderDetail'>('orders');
@@ -103,7 +105,6 @@ function AppContent() {
   const faqScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const restaurantScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const checkoutScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const testFCMScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
   const [fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
@@ -157,12 +158,112 @@ function AppContent() {
     };
   }, []);
 
+  // Get orders dispatch from context
+  const { dispatch: ordersDispatch, getOrderByOrderNumber } = useOrders();
+
+  // Track screen views
+  React.useEffect(() => {
+    if (isCheckingAuth) return;
+    
+    const screenNameMap: Record<typeof currentScreen, string> = {
+      login: AnalyticsScreens.LOGIN,
+      otp: AnalyticsScreens.OTP_VERIFICATION,
+      welcome: AnalyticsScreens.WELCOME,
+      home: AnalyticsScreens.HOME,
+      profile: AnalyticsScreens.PROFILE,
+      editProfile: AnalyticsScreens.EDIT_PROFILE,
+      orders: AnalyticsScreens.ORDERS,
+      orderDetail: AnalyticsScreens.ORDER_DETAIL,
+      rateOrder: AnalyticsScreens.RATE_ORDER,
+      orderTracking: AnalyticsScreens.ORDER_TRACKING,
+      search: AnalyticsScreens.SEARCH,
+      myAddresses: AnalyticsScreens.MY_ADDRESSES,
+      addressSelection: AnalyticsScreens.ADDRESS_SELECTION,
+      locationSelection: AnalyticsScreens.LOCATION_SELECTION,
+      categoryResults: AnalyticsScreens.CATEGORY_RESULTS,
+      restaurant: AnalyticsScreens.RESTAURANT,
+      restaurantDetails: AnalyticsScreens.RESTAURANT_DETAILS,
+      exploreDishes: AnalyticsScreens.EXPLORE_DISHES,
+      checkout: AnalyticsScreens.CHECKOUT,
+      privacyPolicy: AnalyticsScreens.PRIVACY_POLICY,
+      termsConditions: AnalyticsScreens.TERMS_CONDITIONS,
+      help: AnalyticsScreens.HELP,
+      contactUs: AnalyticsScreens.CONTACT_US,
+      faq: AnalyticsScreens.FAQ,
+    };
+    
+    const screenName = screenNameMap[currentScreen];
+    if (screenName) {
+      analyticsService.logScreenView(screenName);
+    }
+  }, [currentScreen, isCheckingAuth]);
+
+  // Set up FCM handlers for order notifications
+  React.useEffect(() => {
+    // Set orders dispatch in FCM service
+    fcmNotificationService.setOrdersDispatch(ordersDispatch);
+
+    // Set order lookup function for FCM handler (to find orders by order_number)
+    const { setOrderLookupFunction } = require('@/services/orderNotificationHandler');
+    setOrderLookupFunction(getOrderByOrderNumber);
+
+    // Set navigation callback to handle notification taps
+    // Navigate to My Orders screen and highlight the order
+    fcmNotificationService.setNavigationCallback((orderId: string) => {
+      console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
+      setHighlightOrderId(orderId);
+      setCurrentScreen('orders');
+      
+      // Clear highlight after 3 seconds (enough time for scroll animation)
+      setTimeout(() => {
+        setHighlightOrderId(null);
+      }, 3000);
+    });
+
+    // Cleanup callbacks on unmount
+    return () => {
+      fcmNotificationService.setNavigationCallback(null);
+      fcmNotificationService.setOrdersDispatch(null);
+    };
+  }, [ordersDispatch, getOrderByOrderNumber]);
+
+  // Handle app state changes to check for notifications when app becomes active
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        // Check if app was opened from notification when it becomes active
+        fcmNotificationService.checkInitialNotification().catch((error) => {
+          console.warn('⚠️  Failed to check initial notification:', error);
+        });
+        
+        // Track app foreground
+        analyticsService.logEvent(AnalyticsEvents.APP_FOREGROUND);
+      } else if (nextAppState === 'background') {
+        // Track app background
+        analyticsService.logEvent(AnalyticsEvents.APP_BACKGROUND);
+      }
+    });
+
+    // Also check immediately when component mounts
+    fcmNotificationService.checkInitialNotification().catch((error) => {
+      console.warn('⚠️  Failed to check initial notification on mount:', error);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   // Check if user is already logged in on app startup
   React.useEffect(() => {
     const checkAuth = async () => {
       try {
         // Initialize API service with stored tokens
         await apiService.initialize();
+
+        // Initialize Analytics
+        await analyticsService.initialize();
+        await analyticsService.logEvent(AnalyticsEvents.APP_OPEN);
 
         // Initialize FCM notifications
         fcmNotificationService.initialize().catch((error) => {
@@ -173,6 +274,12 @@ function AppContent() {
         const isLoggedIn = await authService.isAuthenticated();
 
         if (isLoggedIn) {
+          // Get current user and set analytics user ID
+          const currentUser = await authService.getCurrentUser();
+          if (currentUser?.id) {
+            await analyticsService.setUserId(currentUser.id.toString());
+          }
+          
           // User has valid session, navigate to home
           setCurrentScreen('home');
         } else {
@@ -263,9 +370,6 @@ function AppContent() {
         case 'contactUs':
           handleBackFromContactUs();
           return true;
-        case 'testFCM':
-          handleBackFromTestFCM();
-          return true;
         case 'help':
           handleBackFromHelp();
           return true;
@@ -289,18 +393,51 @@ function AppContent() {
   const handleLoginSuccess = (phone: string) => {
     setPhoneNumber(phone);
     setCurrentScreen('otp');
+    analyticsService.logEvent(AnalyticsEvents.LOGIN_START, { phone_number: phone });
   };
 
-  const handleOtpSuccess = (isExistingUser: boolean) => {
+  // Ensure notification permission after login
+  const ensureNotificationPermission = React.useCallback(async () => {
+    try {
+      // Always request permission after login (will show popup if not granted)
+      // This ensures users are prompted for notifications after successful login
+      console.log('📱 Requesting notification permission after login...');
+      const granted = await fcmNotificationService.requestPermission();
+      if (granted) {
+        console.log('✅ Notification permission granted');
+        // Get token after permission is granted
+        await fcmNotificationService.getToken();
+      } else {
+        console.warn('⚠️ Notification permission denied by user');
+      }
+    } catch (error) {
+      console.warn('⚠️ Notification permission check failed:', error);
+    }
+  }, []);
+
+  const handleOtpSuccess = async (isExistingUser: boolean) => {
     if (isExistingUser) {
       // Existing user - go directly to home (skip address selection)
+      // Set analytics user ID
+      const currentUser = await authService.getCurrentUser();
+      if (currentUser?.id) {
+        await analyticsService.setUserId(currentUser.id.toString());
+      }
+      
+      await analyticsService.logEvent(AnalyticsEvents.LOGIN_SUCCESS, {
+        is_existing_user: true,
+      });
+      
       setCurrentScreen('home');
       setIsRegistrationFlow(false);
       reloadCart().catch(() => {});
+      ensureNotificationPermission();
     } else {
       // New user - show welcome screen for profile completion
+      await analyticsService.logEvent(AnalyticsEvents.SIGNUP_START);
       setCurrentScreen('welcome');
       setIsRegistrationFlow(true);
+      ensureNotificationPermission();
     }
     setPhoneNumber('');
   };
@@ -317,10 +454,23 @@ function AppContent() {
           email,
         };
         await storageService.saveUser(updatedUser);
+        
+        // Set analytics user ID and properties
+        await analyticsService.setUserId(currentUser.id.toString());
+        await analyticsService.setUserProperties({
+          user_name: name,
+          user_email: email,
+        });
       }
     } catch (error) {
       // Silent fail
     }
+
+    // Log signup success
+    await analyticsService.logEvent(AnalyticsEvents.SIGNUP_SUCCESS, {
+      has_name: !!name,
+      has_email: !!email,
+    });
 
     // For new users, go directly to home
     // HomeScreen will check for addresses and redirect if needed
@@ -332,6 +482,12 @@ function AppContent() {
   };
 
   const handleLogout = async () => {
+    // Log logout event
+    await analyticsService.logEvent(AnalyticsEvents.LOGOUT);
+    
+    // Reset analytics data
+    await analyticsService.resetAnalyticsData();
+    
     // Clear authentication tokens and user data
     await authService.logout();
 
@@ -361,6 +517,15 @@ function AppContent() {
   };
 
   const handleNavigateToProfile = () => {
+    // Reset persisted orders and scroll position when navigating to profile
+    // This ensures a fresh state when user returns to orders screen
+    resetOrdersPersistence();
+    
+    // Clear orders context to ensure fresh data on next visit
+    if (ordersDispatch) {
+      ordersDispatch({ type: 'CLEAR_ORDERS' });
+    }
+    
     setCurrentScreen('profile');
 
     // Slide both screens simultaneously
@@ -676,6 +841,13 @@ function AppContent() {
     setRestaurantCameFrom('home');
     setCurrentScreen('restaurant');
 
+    // Track restaurant view
+    analyticsService.logEvent(AnalyticsEvents.RESTAURANT_VIEW, {
+      restaurant_id: restaurantId,
+      restaurant_name: restaurantName,
+      source: 'home',
+    });
+
     // Animate restaurant screen sliding in from right
     Animated.timing(restaurantScreenSlide, {
       toValue: 0,
@@ -777,25 +949,38 @@ function AppContent() {
     }).start();
   }, [checkoutScreenSlide]);
 
-  // Handle order success from checkout - Track Order button
+  // Handle order success from checkout - View Order Details button
   const handleOrderSuccessFromCheckout = useCallback((orderId: number) => {
-    if (orderId) {
-      // Set order ID and tracking source immediately
-      setSelectedOrderId(orderId.toString());
-      setOrderTrackingCameFrom('checkout');
-      
-      // Set screen to orderTracking immediately to ensure correct screen is shown
-      setCurrentScreen('orderTracking');
-      
-      // Close checkout screen with animation (it will be unmounted since currentScreen !== 'checkout')
-      Animated.timing(checkoutScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 200,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }).start();
+    // Validate orderId
+    if (!orderId || isNaN(orderId)) {
+      console.error('Invalid orderId received:', orderId);
+      return;
     }
-  }, [checkoutScreenSlide]);
+
+    // Ensure restaurant screen is properly hidden and reset state
+    restaurantScreenSlide.setValue(SCREEN_WIDTH);
+    // Reset restaurant selection to prevent any unwanted rendering
+    setSelectedRestaurantId(1);
+    setSelectedRestaurantName('');
+    setSelectedRestaurantAddress('');
+
+    // Set order ID immediately to ensure it's available
+    setSelectedOrderId(orderId.toString());
+
+    // Close checkout screen with animation first, then navigate to order detail
+    Animated.timing(checkoutScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 200,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      // After checkout screen closes, navigate to order detail
+      // Use requestAnimationFrame to ensure state updates are processed
+      requestAnimationFrame(() => {
+        setCurrentScreen('orderDetail');
+      });
+    });
+  }, [checkoutScreenSlide, restaurantScreenSlide]);
 
   // Handle order cancel from checkout - OK button after payment failure
   const handleOrderCancelFromCheckout = useCallback(() => {
@@ -869,6 +1054,7 @@ function AppContent() {
   // Orders Navigation
   const handleNavigateToOrders = () => {
     setCurrentScreen('orders');
+    analyticsService.logEvent(AnalyticsEvents.ORDER_VIEW);
   };
 
   const handleBackFromOrders = () => {
@@ -1141,41 +1327,6 @@ function AppContent() {
     }
   };
 
-  // Test FCM Navigation
-  const handleNavigateToTestFCM = () => {
-    setCurrentScreen('testFCM');
-
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(testFCMScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const handleBackFromTestFCM = () => {
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(testFCMScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('profile');
-    });
-  };
-
   // Help Navigation
   const [helpCameFrom, setHelpCameFrom] = React.useState<'profile' | 'orders'>('profile');
   const [isHelpClosing, setIsHelpClosing] = React.useState(false);
@@ -1344,6 +1495,9 @@ function AppContent() {
   // Search Navigation
   const handleNavigateToSearch = () => {
     setCurrentScreen('search');
+    
+    // Track search start
+    analyticsService.logEvent(AnalyticsEvents.SEARCH_START);
 
     Animated.parallel([
       Animated.timing(homeScreenSlide, {
@@ -1651,7 +1805,6 @@ function AppContent() {
               onPrivacyPolicy={handleNavigateToPrivacyPolicy}
               onTermsConditions={handleNavigateToTermsConditions}
               onFaq={handleNavigateToFaq}
-              onTestFCM={handleNavigateToTestFCM}
             />
           </Animated.View>
 
@@ -1715,6 +1868,7 @@ function AppContent() {
                 onOrderDetails={handleNavigateToOrderDetail}
                 onReorder={handleReorder}
                 onRateOrder={handleNavigateToRateOrder}
+                highlightOrderId={highlightOrderId}
                 onTrackOrder={handleNavigateToOrderTracking}
                 onHelp={(order) => handleNavigateToHelp('orders', order)}
                 onViewMore={() => {}}
@@ -1955,22 +2109,6 @@ function AppContent() {
             />
           </Animated.View>
 
-          {/* Test FCM Screen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.testFCMOverlay,
-              {
-                transform: [{ translateX: testFCMScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'testFCM' ? 'auto' : 'none'}
-          >
-            <TestFCMScreen
-              visible={currentScreen === 'testFCM'}
-              onBack={handleBackFromTestFCM}
-            />
-          </Animated.View>
-
           {/* Conditionally render EditProfileScreen only when needed */}
           {currentScreen === 'editProfile' && (
             <View style={styles.editProfileOverlay}>
@@ -2117,7 +2255,9 @@ export default function App() {
       <VegModeProvider>
         <CartProvider>
           <ConfirmationProvider>
-            <AppContent />
+            <OrdersProvider>
+              <AppContent />
+            </OrdersProvider>
           </ConfirmationProvider>
         </CartProvider>
       </VegModeProvider>
@@ -2175,7 +2315,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 5,
+    zIndex: 8,
     backgroundColor: '#F3F4F6',
   },
   rateOrderOverlay: {

@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$Environment = 'dev',
   [string]$Artifact = 'apk',
   [string]$Target = 'all'
@@ -16,7 +16,7 @@ if (-not (Test-Path $androidDir)) {
 if ($env:ENV_FILE) {
   $envFile = Join-Path $projectRoot $env:ENV_FILE
   if (Test-Path $envFile) {
-    Write-Host "📄 Loading environment file: $envFile" -ForegroundColor Cyan
+    Write-Host "[INFO] Loading environment file: $envFile" -ForegroundColor Cyan
     Get-Content $envFile | ForEach-Object {
       if ($_ -match '^\s*([^#][^=]*)=(.*)$') {
         $key = $matches[1].Trim()
@@ -39,6 +39,9 @@ Set-Location $androidDir
 $env:APP_ENV = $Environment
 $env:BUILD_ARTIFACT = $Artifact
 $env:BUILD_TARGET = $Target
+# Set BABEL_ENV=production for release builds to remove console.log via Babel
+# Using BABEL_ENV instead of NODE_ENV to avoid interfering with Expo bundling
+$env:BABEL_ENV = 'production'
 
 $gradleCmd = if ($IsWindows) { '.\gradlew.bat' } else { './gradlew' }
 # Use flavor-specific build tasks: devRelease or prodRelease
@@ -47,13 +50,13 @@ $buildTask = if ($Artifact -eq 'bundle') { "bundle${flavor}Release" } else { "as
 
 $architectures = if ($Target -eq 'all') { 'arm64-v8a,armeabi-v7a,x86,x86_64' } else { $Target }
 
-Write-Host "🚀 Building Android Release Files..."
-Write-Host "📱 App: $appName"
-Write-Host "📦 Version: $version"
+Write-Host "[BUILD] Building Android Release Files..." -ForegroundColor Cyan
+Write-Host "[INFO] App: $appName" -ForegroundColor Green
+Write-Host "[INFO] Version: $version" -ForegroundColor Green
 Write-Host ""
 $buildLabel = if ($Artifact -eq 'bundle') { 'AAB' } else { 'APK' }
-Write-Host "🔨 Building $buildLabel for $Environment environment..."
-Write-Host "📋 Gradle task: $buildTask"
+Write-Host "[BUILD] Building $buildLabel for $Environment environment..." -ForegroundColor Yellow
+Write-Host "[INFO] Gradle task: $buildTask" -ForegroundColor Cyan
 
 & $gradleCmd $buildTask "-PreactNativeArchitectures=$architectures"
 
@@ -66,12 +69,12 @@ $aabSrc = Join-Path $outputDir "bundle/$envSuffix/release/app-$envSuffix-release
 $aabDest = Join-Path $outputDir "bundle/$envSuffix/release/$safeAppName-$version-$envSuffix.aab"
 
 Write-Host ""
-Write-Host "📁 Renaming files..."
+Write-Host "[INFO] Renaming files..." -ForegroundColor Cyan
 
 if ($Artifact -eq 'apk') {
   if (Test-Path $apkSrc) {
     Copy-Item $apkSrc $apkDest -Force
-    Write-Host "✅ APK: $(Split-Path $apkDest -Leaf)"
+    Write-Host "[SUCCESS] APK: $(Split-Path $apkDest -Leaf)" -ForegroundColor Green
   } else {
     Write-Warning "APK not found at $apkSrc"
   }
@@ -80,15 +83,15 @@ if ($Artifact -eq 'apk') {
 if ($Artifact -eq 'bundle') {
   if (Test-Path $aabSrc) {
     Copy-Item $aabSrc $aabDest -Force
-    Write-Host "✅ AAB: $(Split-Path $aabDest -Leaf)"
+    Write-Host "[SUCCESS] AAB: $(Split-Path $aabDest -Leaf)" -ForegroundColor Green
   } else {
     Write-Warning "AAB not found at $aabSrc"
   }
 }
 
 Write-Host ""
-Write-Host "🎉 Build completed successfully!"
-Write-Host "📋 Generated files:"
+Write-Host "[SUCCESS] Build completed successfully!" -ForegroundColor Green
+Write-Host "[INFO] Generated files:" -ForegroundColor Cyan
 if ($Artifact -eq 'apk') {
   Write-Host "   APK: android/app/build/outputs/apk/$envSuffix/release/$safeAppName-$version-$envSuffix.apk"
 }
@@ -96,4 +99,4 @@ if ($Artifact -eq 'bundle') {
   Write-Host "   AAB: android/app/build/outputs/bundle/$envSuffix/release/$safeAppName-$version-$envSuffix.aab"
 }
 Write-Host ""
-Write-Host "📤 Ready for distribution!"
+Write-Host "[SUCCESS] Ready for distribution!" -ForegroundColor Green
