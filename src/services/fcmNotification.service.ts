@@ -4,11 +4,12 @@
  * Replaces expo-notifications with native FCM
  */
 
-import { Platform, AppState, NativeEventEmitter, NativeModules } from 'react-native';
+import { Platform, AppState, NativeEventEmitter, NativeModules, PermissionsAndroid } from 'react-native';
 import { apiService } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { handleOrderNotification, OrdersDispatch } from './orderNotificationHandler';
 
 // Conditionally import Firebase to avoid errors if native modules aren't linked
 let messaging: any = null;
@@ -40,7 +41,10 @@ export interface NotificationPayload {
 }
 
 // Background message handler type
-type BackgroundMessageHandler = (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => Promise<void>;
+type BackgroundMessageHandler = (remoteMessage: any) => Promise<void>;
+
+// Navigation callback type for handling notification taps
+export type NotificationNavigationCallback = (orderId: string) => void;
 
 class FCMNotificationService {
   private fcmToken: string | null = null;
@@ -51,6 +55,23 @@ class FCMNotificationService {
   private backgroundMessageHandler: BackgroundMessageHandler | null = null;
   private recentMessages: NotificationPayload[] = [];
   private readonly MAX_RECENT_MESSAGES = 50;
+  private navigationCallback: NotificationNavigationCallback | null = null;
+  private ordersDispatch: OrdersDispatch | null = null;
+
+  /**
+   * Set navigation callback for handling notification taps
+   * This callback will be called when a notification is tapped
+   */
+  setNavigationCallback(callback: NotificationNavigationCallback | null): void {
+    this.navigationCallback = callback;
+  }
+
+  /**
+   * Set orders dispatch for updating orders store from FCM
+   */
+  setOrdersDispatch(dispatch: OrdersDispatch | null): void {
+    this.ordersDispatch = dispatch;
+  }
 
   /**
    * Initialize FCM service
@@ -65,12 +86,8 @@ class FCMNotificationService {
         return false;
       }
 
-      // Request permissions
-      const hasPermission = await this.requestPermission();
-      if (!hasPermission) {
-        console.warn('⚠️  FCM: Notification permissions not granted');
-        return false;
-      }
+      // Do NOT request permissions here. Permissions are requested after login in App.tsx.
+      // This prevents showing the popup on splash/startup.
 
       // Get FCM token
       await this.getToken();
@@ -113,10 +130,47 @@ class FCMNotificationService {
           return false;
         }
       } else {
-        // Android 13+ requires runtime permission
-        const authStatus = await messaging().requestPermission();
-        console.log('✅ FCM: Android permission granted');
-        return true;
+        // Android 13+ (API 33+) requires POST_NOTIFICATIONS runtime permission
+        const androidVersion = typeof Platform.Version === 'number' ? Platform.Version : parseInt(Platform.Version, 10);
+        if (androidVersion >= 33) {
+          try {
+            const hasPermission = await PermissionsAndroid.check(
+              PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+            );
+            
+            if (!hasPermission) {
+              console.log('📱 Android 13+: Requesting POST_NOTIFICATIONS permission...');
+              const result = await PermissionsAndroid.request(
+                PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+              );
+              
+              if (result === PermissionsAndroid.RESULTS.GRANTED) {
+                console.log('✅ FCM: Android POST_NOTIFICATIONS permission granted');
+                // Also request FCM permission
+                await messaging().requestPermission();
+                return true;
+              } else {
+                console.warn('⚠️  FCM: Android POST_NOTIFICATIONS permission denied');
+                return false;
+              }
+            } else {
+              console.log('✅ FCM: Android POST_NOTIFICATIONS already granted');
+              // Still request FCM permission to ensure token is available
+              await messaging().requestPermission();
+              return true;
+            }
+          } catch (error) {
+            console.warn('⚠️  FCM: Error requesting Android permission:', error);
+            // Fallback to FCM permission request
+            await messaging().requestPermission();
+            return true;
+          }
+        } else {
+          // Android 12 and below - FCM handles permissions automatically
+          await messaging().requestPermission();
+          console.log('✅ FCM: Android permission granted');
+          return true;
+        }
       }
     } catch (error) {
       console.error('❌ FCM: Permission request failed:', error);
@@ -140,7 +194,23 @@ class FCMNotificationService {
           authStatus === messaging.AuthorizationStatus.PROVISIONAL
         );
       } else {
-        return true; // Android doesn't have a direct check
+        // Android 13+ (API 33+) requires explicit permission check
+        const androidVersion = typeof Platform.Version === 'number' ? Platform.Version : parseInt(Platform.Version, 10);
+        if (androidVersion >= 33) {
+          try {
+            const hasPermission = await PermissionsAndroid.check(
+              PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+            );
+            return hasPermission;
+          } catch (error) {
+            console.warn('⚠️  FCM: Error checking Android permission:', error);
+            // Fallback: assume granted for older behavior
+            return true;
+          }
+        } else {
+          // Android 12 and below - permissions are granted by default
+          return true;
+        }
       }
     } catch (error) {
       console.error('❌ FCM: Error checking notification status:', error);
@@ -228,6 +298,31 @@ class FCMNotificationService {
   }
 
   /**
+   * Register FCM token after login
+   * Call this after successful authentication
+   */
+  async registerTokenAfterLogin(): Promise<boolean> {
+    try {
+      // Get or request token
+      const token = await this.getToken();
+      if (!token) {
+        console.warn('⚠️  FCM: No token available to register after login');
+        return false;
+      }
+      
+      // Send token to backend
+      const success = await this.sendTokenToBackend(token);
+      if (success) {
+        console.log('✅ FCM: Token registered successfully after login');
+      }
+      return success;
+    } catch (error) {
+      console.error('❌ FCM: Failed to register token after login:', error);
+      return false;
+    }
+  }
+
+  /**
    * Send FCM token to backend
    * Now public so it can be called from test screen
    */
@@ -288,12 +383,14 @@ class FCMNotificationService {
     });
 
     // Foreground message listener
+    // In foreground, FCM doesn't automatically show notifications
+    // The native FCMService.kt will handle showing system notifications
+    // We just need to handle the data for navigation and order updates
     this.messageListener = messaging().onMessage(async (remoteMessage: any) => {
       console.log('📨 FCM: Foreground message received:', remoteMessage.messageId);
       console.log('   Title:', remoteMessage.notification?.title || 'N/A');
       console.log('   Body:', remoteMessage.notification?.body || 'N/A');
       console.log('   Data:', JSON.stringify(remoteMessage.data || {}, null, 2));
-      console.log('   Full message:', JSON.stringify(remoteMessage, null, 2));
       
       const payload: NotificationPayload = {
         title: remoteMessage.notification?.title,
@@ -305,8 +402,16 @@ class FCMNotificationService {
       // Store recent message
       this.addRecentMessage(payload);
 
-      // Emit event for app to handle
-      this.onForegroundMessage(payload);
+      // Handle order notification updates if dispatch is available
+      if (this.ordersDispatch && remoteMessage.data?.type === 'order') {
+        handleOrderNotification(remoteMessage, this.ordersDispatch, false).catch((error) => {
+          console.warn('⚠️  FCM: Failed to handle order notification:', error);
+        });
+      }
+
+      // Note: System notification is shown by native FCMService.kt
+      // We handle navigation when user taps the notification
+      // No need to manually show notification here - native layer handles it
     });
 
     // Notification opened listener (when user taps notification)
@@ -319,6 +424,13 @@ class FCMNotificationService {
         data: remoteMessage.data as NotificationData,
         notificationId: remoteMessage.messageId,
       };
+
+      // Handle order notification updates if dispatch is available
+      if (this.ordersDispatch && remoteMessage.data?.type === 'order') {
+        handleOrderNotification(remoteMessage, this.ordersDispatch, true).catch((error) => {
+          console.warn('⚠️  FCM: Failed to handle order notification:', error);
+        });
+      }
 
       this.onNotificationOpened(payload);
     });
@@ -345,13 +457,16 @@ class FCMNotificationService {
 
   /**
    * Check if app was opened from a notification
+   * This handles both FCM getInitialNotification and Android intent extras
+   * Call this when app becomes active
    */
-  private async checkInitialNotification(): Promise<void> {
+  async checkInitialNotification(): Promise<void> {
     try {
       if (!messaging) {
         return;
       }
 
+      // Check FCM initial notification (works for both iOS and Android)
       const remoteMessage = await messaging().getInitialNotification();
       
       if (remoteMessage) {
@@ -364,13 +479,52 @@ class FCMNotificationService {
           notificationId: remoteMessage.messageId,
         };
 
-        // Wait a bit for app to initialize
+        // Handle order notification updates if dispatch is available
+        if (this.ordersDispatch && remoteMessage.data?.type === 'order') {
+          handleOrderNotification(remoteMessage, this.ordersDispatch, true).catch((error) => {
+            console.warn('⚠️  FCM: Failed to handle order notification:', error);
+          });
+        }
+
+        // Wait a bit for app to initialize, then handle navigation
         setTimeout(() => {
           this.onNotificationOpened(payload);
-        }, 1000);
+        }, 1500);
+        return;
       }
+
+      // For Android: Also check if app was opened from notification via intent
+      // This is handled by the native layer and will be caught by onNotificationOpened
+      // when the app becomes active
     } catch (error) {
       console.error('❌ FCM: Error checking initial notification:', error);
+    }
+  }
+
+  /**
+   * Handle notification data from Android intent extras
+   * Call this when app becomes active to check for notification data
+   */
+  handleNotificationFromIntent(data: { [key: string]: string } | null): void {
+    if (!data) {
+      return;
+    }
+
+    // Extract orderId from various possible field names
+    const orderId = data.orderId || data.order_id || data.orderID || data['order-id'];
+    
+    if (orderId) {
+      console.log('📱 FCM: App opened from notification (intent), orderId:', orderId);
+      
+      const payload: NotificationPayload = {
+        title: data.title,
+        body: data.body,
+        data: data as NotificationData,
+        notificationId: data.messageId || Date.now().toString(),
+      };
+
+      // Handle navigation
+      this.onNotificationOpened(payload);
     }
   }
 
@@ -449,19 +603,38 @@ class FCMNotificationService {
 
   /**
    * Handle navigation based on notification data
+   * Centralized navigation - all notifications redirect to My Orders if orderId/orderNumber is present
    */
   private handleNotificationNavigation(data: NotificationData): void {
-    // Example navigation handling
-    // You can integrate with your navigation library here
+    // Extract orderId from notification data
+    // Support multiple possible field names: orderId, order_id, orderID, etc.
+    let orderId = data.orderId || data.order_id || data.orderID || data['order-id'];
     
-    if (data.screen) {
-      console.log('🧭 FCM: Navigate to screen:', data.screen);
-      // Example: navigation.navigate(data.screen, data.params ? JSON.parse(data.params) : {});
+    // If no orderId but we have order_number, try to find it using the lookup function
+    if (!orderId) {
+      const orderNumber = data.order_number || data.orderNumber || data['order-number'];
+      if (orderNumber && this.ordersDispatch) {
+        // We can't directly lookup here, but the handler will find it
+        // For navigation, we'll use order_number as a fallback identifier
+        // The navigation callback should handle both orderId and orderNumber
+        console.log('🧭 FCM: No orderId, using order_number for navigation:', orderNumber);
+        // Note: The navigation callback expects orderId, but we can pass orderNumber
+        // and let the OrdersScreen find it by order_number
+        orderId = orderNumber; // Use order_number as identifier
+      }
     }
     
-    if (data.orderId) {
-      console.log('🧭 FCM: Navigate to order:', data.orderId);
-      // Example: navigation.navigate('OrderDetails', { orderId: data.orderId });
+    if (orderId) {
+      console.log('🧭 FCM: Navigating to My Orders for order:', orderId);
+      
+      // Call navigation callback if set
+      if (this.navigationCallback) {
+        this.navigationCallback(orderId);
+      } else {
+        console.warn('⚠️  FCM: Navigation callback not set. Cannot navigate to My Orders.');
+      }
+    } else {
+      console.log('ℹ️  FCM: No orderId or order_number found in notification data. Skipping navigation.');
     }
   }
 

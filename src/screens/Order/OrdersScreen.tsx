@@ -11,19 +11,36 @@ import {
   Linking,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  Modal,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { WebView } from 'react-native-webview';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import { Shimmer } from '@/components/Shimmer';
+import { useOrders } from '@/context/OrdersContext';
+import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
 import { authService } from '@/services/auth.service';
 
-// Module-level state to persist across component remounts
+// Module-level state to persist across component remounts (for scroll position and pagination)
 let persistedOrders: OrderListItem[] = [];
+let persistedScrollPosition: number = 0;
 let persistedCurrentPage: number = 1;
 let persistedTotalOrders: number = 0;
-let persistedScrollPosition: number = 0;
 let hasPersistedData: boolean = false;
+
+// Export function to reset persisted orders and scroll position
+// This is called when navigating to profile page to clear the state
+export function resetOrdersPersistence() {
+  persistedOrders = [];
+  persistedScrollPosition = 0;
+  persistedCurrentPage = 1;
+  persistedTotalOrders = 0;
+  hasPersistedData = false;
+  // Force a flag that can be checked on next mount
+  // This ensures the reset is detected even if component doesn't fully remount
+}
 
 // Unused interface - kept for reference
 // interface OrderItem {
@@ -54,6 +71,8 @@ interface OrdersScreenProps {
   onTrackOrder?: (orderId: string) => void;
   onHelp?: (order: OrderListItem) => void;
   onViewMore?: () => void; // Unused but kept for API compatibility
+  // Optional: orderId to highlight when navigating from notification
+  highlightOrderId?: string | null;
 }
 
 export const OrdersScreen: React.FC<OrdersScreenProps> = ({
@@ -65,9 +84,18 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   onTrackOrder,
   onHelp: _onHelp, // Unused but kept for API compatibility
   onViewMore: _onViewMore, // Unused but kept for API compatibility
+  highlightOrderId,
 }) => {
-  // Initialize state from persisted data if available
-  const [orders, setOrders] = useState<OrderListItem[]>(() => {
+  // Use Orders Context for global state
+  const { dispatch, getOrdersList } = useOrders();
+  
+  // Get orders from context (live updates from FCM)
+  const contextOrders = getOrdersList();
+  
+  // Local state for API pagination and loading
+  // Initialize from persisted data if available, otherwise use defaults
+  // Note: When reset is called, hasPersistedData is false, so state initializes empty
+  const [localOrders, setLocalOrders] = useState<OrderListItem[]>(() => {
     if (hasPersistedData && persistedOrders.length > 0) {
       return persistedOrders;
     }
@@ -75,31 +103,113 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   });
   const [isLoading, setIsLoading] = useState(() => !hasPersistedData);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(() => persistedCurrentPage);
-  const [totalOrders, setTotalOrders] = useState(() => persistedTotalOrders);
+  const [currentPage, setCurrentPage] = useState(() => hasPersistedData ? persistedCurrentPage : 1);
+  const [totalOrders, setTotalOrders] = useState(() => hasPersistedData ? persistedTotalOrders : 0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Refs to prevent API overload
   const isRequestInProgress = useRef(false);
   const lastRequestedPage = useRef(0);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Refs for scroll position preservation
   const scrollViewRef = useRef<ScrollView>(null);
+  const highlightedOrderRef = useRef<string | null>(null);
+  
+  // Refs for initial mount tracking and scroll restoration
+  // Reset isInitialMount when hasPersistedData is false (reset was called)
   const isInitialMount = useRef(!hasPersistedData);
   const hasRestoredScroll = useRef(false);
+  // Merge context orders (with FCM updates) with local orders from API
+  // Priority: Context orders (have latest FCM updates) > Local orders
+  // Fallback: If context is empty but we have persisted localOrders, use localOrders
+  const orders = React.useMemo(() => {
+    // If context is empty but we have localOrders, use localOrders directly
+    // This handles the case where context was cleared but localOrders persisted
+    if (contextOrders.length === 0 && localOrders.length > 0) {
+      return localOrders;
+    }
+    
+    const contextOrderMap = new Map(contextOrders.map(o => [o.id.toString(), o]));
+    const merged = [...localOrders];
+    
+    // Update local orders with context updates
+    for (let i = 0; i < merged.length; i++) {
+      const contextOrder = contextOrderMap.get(merged[i].id.toString());
+      if (contextOrder) {
+        merged[i] = contextOrder; // Use context order (has latest FCM updates)
+        contextOrderMap.delete(merged[i].id.toString()); // Remove from map
+      }
+    }
+    
+    // Add any new context orders that aren't in local orders
+    contextOrderMap.forEach((order) => {
+      merged.push(order);
+    });
+    
+    return merged;
+  }, [contextOrders, localOrders]);
 
+  // Sync localOrders to context store after state updates
   useEffect(() => {
-    // Only fetch fresh data on initial mount if no persisted data exists
-    if (visible && isInitialMount.current && !hasPersistedData) {
-      isInitialMount.current = false;
-      setCurrentPage(1);
-      fetchOrders(1, true);
-    } else if (visible && hasPersistedData) {
-      // Reset the restore flag when screen becomes visible
+    if (localOrders.length > 0) {
+      // Save to persisted storage
+      persistedOrders = localOrders;
+      // Update context
+      dispatch({
+        type: 'BULK_SET_ORDERS',
+        payload: localOrders,
+      });
+    }
+  }, [localOrders, dispatch]);
+
+  // Handle screen visibility and reset state
+  // This effect runs when visible changes or component mounts
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
+    // Check if reset was called (hasPersistedData is false)
+    // hasPersistedData is module-level, so we check it directly each time visible changes
+    if (!hasPersistedData) {
+      // Reset was called (when navigating to profile) - clear state and fetch fresh data
+      // Clear local state immediately
+      if (localOrders.length > 0 || currentPage !== 1 || totalOrders !== 0) {
+        setLocalOrders([]);
+        setCurrentPage(1);
+        setTotalOrders(0);
+      }
+      
+      // Always fetch fresh data when reset (hasPersistedData is false)
+      // Check if we need to fetch (no data and no request in progress)
+      if (localOrders.length === 0 && !isRequestInProgress.current) {
+        isInitialMount.current = false;
+        // Use requestAnimationFrame to ensure component is fully mounted and ready
+        const rafId = requestAnimationFrame(() => {
+          if (!isRequestInProgress.current) {
+            fetchOrders(1, true);
+          }
+        });
+        return () => cancelAnimationFrame(rafId);
+      }
+      return undefined;
+    } else if (hasPersistedData && persistedOrders.length > 0) {
+      // Has persisted data - restore it
+      // Always restore context from persisted orders when screen becomes visible
+      dispatch({
+        type: 'BULK_SET_ORDERS',
+        payload: persistedOrders,
+      });
+      
+      // Only update localOrders if it's empty or doesn't match persisted data
+      if (localOrders.length === 0 || localOrders.length !== persistedOrders.length) {
+        setLocalOrders(persistedOrders);
+      }
+      // Reset the restore flag when screen becomes visible with persisted data
       hasRestoredScroll.current = false;
     }
-  }, [visible]);
+    return undefined;
+  }, [visible, dispatch, localOrders.length, currentPage, totalOrders]);
 
   // Separate effect to restore scroll position after orders are rendered
   useEffect(() => {
@@ -119,6 +229,26 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
     return undefined;
   }, [visible, orders.length]);
+
+  // Scroll to highlighted order when navigating from notification
+  useEffect(() => {
+    if (highlightOrderId && orders.length > 0 && scrollViewRef.current) {
+      // Try to find by id first, then by order_number (in case navigation passed order_number)
+      const orderIndex = orders.findIndex(
+        o => o.id.toString() === highlightOrderId || o.order_number === highlightOrderId
+      );
+      if (orderIndex >= 0 && highlightedOrderRef.current !== highlightOrderId) {
+        highlightedOrderRef.current = highlightOrderId;
+        // Scroll to order after a short delay to ensure layout is complete
+        setTimeout(() => {
+          scrollViewRef.current?.scrollTo({
+            y: orderIndex * 250, // Approximate height per card
+            animated: true,
+          });
+        }, 500);
+      }
+    }
+  }, [highlightOrderId, orders]);
 
   const fetchOrders = async (page: number = 1, reset: boolean = false) => {
     // Prevent duplicate requests for the same page
@@ -141,6 +271,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         // Clear persisted scroll position when resetting
         persistedScrollPosition = 0;
         hasRestoredScroll.current = false;
+        // Clear persisted orders when resetting (fresh fetch)
+        persistedOrders = [];
+        hasPersistedData = false;
       } else {
         setIsLoadingMore(true);
       }
@@ -168,14 +301,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           ordersArray.length; // Fallback to array length
 
         if (reset) {
-          setOrders(ordersArray);
+          setLocalOrders(ordersArray);
           persistedOrders = ordersArray;
         } else {
           // Append new orders to existing ones, filtering out duplicates
-          setOrders(prev => {
-            const existingIds = new Set(prev.map(o => o.id));
+          setLocalOrders(prev => {
+            const existingIds = new Set(prev.map((o: OrderListItem) => o.id));
             const newOrders = ordersArray.filter((order: any) => !existingIds.has(order.id));
             const updatedOrders = [...prev, ...newOrders];
+            // Save to persisted storage
             persistedOrders = updatedOrders;
             return updatedOrders;
           });
@@ -197,6 +331,18 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
+  // Pull-to-refresh handler
+  const handleRefresh = async () => {
+    if (isRequestInProgress.current) return;
+    setIsRefreshing(true);
+    try {
+      await fetchOrders(1, true);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Auto-load more orders when scrolling near bottom (infinite scroll)
   const handleViewMore = useCallback(() => {
     // Prevent if already loading or no more orders
     if (isRequestInProgress.current || isLoadingMore || orders.length >= totalOrders) {
@@ -206,7 +352,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     fetchOrders(nextPage, false);
   }, [currentPage, orders.length, totalOrders, isLoadingMore]);
 
-  // Debounced scroll handler to prevent API overload
+  // Infinite scroll handler - automatically load more when near bottom
   const handleScroll = useCallback(({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
     // Save scroll position to module-level variable for restoration across remounts
     persistedScrollPosition = nativeEvent.contentOffset.y;
@@ -218,12 +364,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
     // Capture scroll position values immediately
     const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-    const paddingToBottom = 200;
+    const paddingToBottom = 300; // Trigger when 300px from bottom
     const isNearBottom =
       layoutMeasurement.height + contentOffset.y >=
       contentSize.height - paddingToBottom;
 
-    // Debounce: wait 300ms after scrolling stops before checking if we need to load more
+    // Debounce: wait 200ms after scrolling stops before checking if we need to load more
     scrollTimeoutRef.current = setTimeout(() => {
       if (
         !isLoading &&
@@ -233,9 +379,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         orders.length < totalOrders &&
         isNearBottom
       ) {
+        // Automatically load more orders (infinite scroll)
         handleViewMore();
       }
-    }, 300);
+    }, 200);
   }, [isLoading, isLoadingMore, orders.length, totalOrders, handleViewMore]);
 
   // Cleanup timeout on unmount
@@ -263,23 +410,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  // Map API status to UI status
-  const mapStatus = (status: string | null | undefined): 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' | 'order_placed' => {
-    if (!status) return 'ongoing';
-    const statusMap: { [key: string]: 'delivered' | 'cancelled' | 'ongoing' | 'payment_failed' | 'order_placed' } = {
-      'delivered': 'delivered',
-      'completed': 'delivered',
-      'payment_failed': 'payment_failed',
-      'cancelled': 'cancelled',
-      'rejected': 'cancelled',
-      'pending': 'ongoing',
-      'confirmed': 'ongoing',
-      'preparing': 'ongoing',
-      'ready': 'ongoing',
-      'out_for_delivery': 'ongoing',
-    };
-    return statusMap[status.toLowerCase()] || 'ongoing';
-  };
 
   // Mock data kept for fallback (commented out)
   /*
@@ -372,8 +502,19 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  const handleTrackOrder = (orderId: string) => {
-    if (onTrackOrder) {
+  const [showTrackingWebView, setShowTrackingWebView] = useState(false);
+  const [selectedTrackingUrl, setSelectedTrackingUrl] = useState<string | null>(null);
+
+  const handleTrackOrder = (orderId: string, order?: OrderListItem) => {
+    // Check if order has tracking_url
+    const trackingUrl = (order as any)?.tracking_url || null;
+    
+    if (trackingUrl && trackingUrl !== null) {
+      // Open WebView with tracking URL
+      setSelectedTrackingUrl(trackingUrl);
+      setShowTrackingWebView(true);
+    } else if (onTrackOrder) {
+      // Fallback to parent handler if no tracking URL
       onTrackOrder(orderId);
     }
   };
@@ -395,83 +536,46 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   };
 
   const renderOrderCard = (order: OrderListItem) => {
-    const statusConfig: Record<'delivered' | 'cancelled' | 'payment_failed' | 'order_placed' | 'ongoing', {
-      label: string;
-      color: string;
-      bgColor: string;
-      icon: string;
-    }> = {
-      delivered: {
-        label: 'Delivered',
-        color: '#00B14F',
-        bgColor: 'rgba(0, 177, 79, 0.1)',
-        icon: 'check-circle',
-      },
-      cancelled: {
-        label: 'Cancelled',
-        color: '#DC2626',
-        bgColor: 'rgba(220, 38, 38, 0.1)',
-        icon: 'cancel',
-      },
-      payment_failed: {
-        label: 'Payment Failed',
-        color: '#DC2626',
-        bgColor: 'rgba(220, 38, 38, 0.1)',
-        icon: 'payment',
-      },
-      order_placed: {
-        label: 'Order Placed',
-        color: '#00B14F',
-        bgColor: 'rgba(0, 177, 79, 0.1)',
-        icon: 'check-circle',
-      },
-      ongoing: {
-        label: 'On the way',
-        color: '#F59E0B',
-        bgColor: 'rgba(245, 158, 11, 0.1)',
-        icon: 'local-shipping',
-      },
-    };
-
-    // Check for payment failed status - priority check
-    let actualStatus = mapStatus(order.status);
-    
-    // Check payment_status field first - if payment failed, show payment failed regardless of order status
-    if (order.payment_status?.toLowerCase() === 'failed' || 
-        order.payment_status?.toLowerCase() === 'payment_failed' ||
-        order.status?.toLowerCase() === 'payment_failed') {
-      actualStatus = 'payment_failed';
-    } else if (actualStatus === 'cancelled' && order.payment_method === 'online' && 
-        order.cancellation_reason?.toLowerCase().includes('payment failed')) {
-      actualStatus = 'payment_failed';
-    } else if (order.payment_method === 'online' && 
-               order.payment_status?.toLowerCase() === 'pending' && 
-               (order.status?.toLowerCase() === 'pending' || order.status?.toLowerCase() === 'cancelled')) {
-      // If payment is pending but order is cancelled/pending for online payment, it's likely a payment failure
-      actualStatus = 'payment_failed';
-    } else if (actualStatus === 'ongoing') {
-      // Distinguish between newly placed orders and orders on the way
-      const orderStatus = order.status?.toLowerCase();
-      if (orderStatus === 'pending' || orderStatus === 'confirmed') {
-        actualStatus = 'order_placed';
-      }
-      // For other ongoing statuses (preparing, ready, out_for_delivery), keep as 'ongoing' (On the way)
+    // Use status mapping utility for consistent status display
+    // Check for payment failed status first (priority)
+    let statusToMap = order.status;
+    if (
+      order.payment_status?.toLowerCase() === 'failed' ||
+      order.payment_status?.toLowerCase() === 'payment_failed' ||
+      order.status?.toLowerCase() === 'payment_failed'
+    ) {
+      statusToMap = 'payment_failed';
+    } else if (
+      order.payment_status?.toLowerCase() === 'pending' &&
+      (order.status?.toLowerCase() === 'pending' || order.status?.toLowerCase() === 'cancelled')
+    ) {
+      // If payment is pending but order is cancelled/pending, it's likely a payment failure
+      statusToMap = 'payment_failed';
     }
 
-    const status = statusConfig[actualStatus] || statusConfig.ongoing;
+    // Get status config from mapping utility
+    const statusConfig = mapOrderStatusToUI(statusToMap);
+    
+    // Check if this order should be highlighted
+    // Check if this order should be highlighted (by id or order_number)
+    const isHighlighted = highlightOrderId === order.id.toString() || highlightOrderId === order.order_number;
 
-    // Get location from delivery address
-    const location = order.delivery_address?.city || 'Unknown';
-    const totalAmount = order.summary?.total_amount || 0;
+    // Show order number from API response (e.g., "ORD-20251208-084")
+    // The API returns "order_number" field, so we use it directly
+    const orderNumber = order.order_number || (order as any).orderNumber || `ORD-${order.id}`;
+    
+    // Get total amount - check multiple possible locations in API response
+    const totalAmount = order.summary?.total_amount || order.total_amount || (order as any).total || 0;
 
     // Disable opening order details for payment failed orders
-    const isPaymentFailed = actualStatus === 'payment_failed';
-    
+    const isPaymentFailed = statusToMap === 'payment_failed';
+
     return (
       <TouchableOpacity
         style={[
           styles.orderCard,
-          { paddingBottom: isPaymentFailed ? 0 : 20 }
+          { paddingBottom: isPaymentFailed ? 0 : 20 },
+          isHighlighted && styles.highlightedCard,
         ]}
         activeOpacity={isPaymentFailed ? 1 : 0.7}
         onPress={isPaymentFailed ? undefined : () => handleOrderPress(order.id.toString())}
@@ -487,7 +591,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             />
             <View style={styles.restaurantDetails}>
               <Text style={styles.restaurantName}>{order.restaurant?.name || 'Unknown Restaurant'}</Text>
-              <Text style={styles.restaurantLocation}>{location}</Text>
+              <Text style={styles.restaurantLocation}>{orderNumber}</Text>
             </View>
           </View>
           <View style={styles.orderMeta}>
@@ -497,9 +601,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
         {/* Status + Meta Row */}
         <View style={styles.statusRow}>
-          <View style={[styles.statusBadge, { backgroundColor: status.bgColor }]}>
-            <MaterialIcons name={status.icon as any} size={16} color={status.color} />
-            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}>
+            <MaterialIcons name={statusConfig.iconName as any} size={16} color={statusConfig.color} />
+            <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
           </View>
           <View style={styles.orderMeta}>
             <Text style={styles.orderDate}>{formatDate(order.created_at || '')}</Text>
@@ -529,7 +633,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
-          {actualStatus === 'ongoing' ? (
+          {statusToMap !== 'delivered' && statusToMap !== 'cancelled' && statusToMap !== 'payment_failed' ? (
             <>
               {/* <TouchableOpacity
                 style={styles.rateButton}
@@ -539,14 +643,43 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 <MaterialIcons name="help-outline" size={18} color="#001E1F" />
                 <Text style={styles.rateButtonText}>Help</Text>
               </TouchableOpacity> */}
-              <TouchableOpacity
-                style={styles.reorderButton}
-                onPress={() => handleTrackOrder(order.id.toString())}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons name="location-on" size={18} color="#FFFFFF" />
-                <Text style={styles.reorderButtonText}>Track Order</Text>
-              </TouchableOpacity>
+              {(() => {
+                // Enable tracking if status is agent-assigned or later, OR if tracking_url exists
+                const rawStatus = (order.status || '').toString().toLowerCase();
+                const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
+                const hasTrackingUrl = (order as any)?.tracking_url && (order as any)?.tracking_url !== null;
+                const isTrackingEnabled = 
+                  hasTrackingUrl ||
+                  normalizedStatus === 'agent-assigned' ||
+                  normalizedStatus === 'picked' ||
+                  normalizedStatus === 'out-for-delivery' ||
+                  normalizedStatus === 'on-the-way' ||
+                  normalizedStatus === 'delivered';
+                
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.reorderButton,
+                      !isTrackingEnabled && styles.disabledButton
+                    ]}
+                    onPress={() => handleTrackOrder(order.id.toString(), order)}
+                    activeOpacity={!isTrackingEnabled ? 1 : 0.8}
+                    disabled={!isTrackingEnabled}
+                  >
+                    <MaterialIcons 
+                      name="location-on" 
+                      size={18} 
+                      color={!isTrackingEnabled ? "#CCCCCC" : "#FFFFFF"} 
+                    />
+                    <Text style={[
+                      styles.reorderButtonText,
+                      !isTrackingEnabled && styles.disabledButtonText
+                    ]}>
+                      Track Order
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })()}
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={() => handleOrderPress(order.id.toString())}
@@ -558,10 +691,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             </>
           ) : (
             <>
-              {actualStatus === 'payment_failed' ? (
+              {isPaymentFailed ? (
                 // For payment failed orders, don't show any buttons
                 null
-              ) : actualStatus === 'cancelled' ? (
+              ) : statusToMap === 'cancelled' ? (
                 // For cancelled orders, show Call Support button instead of Help
                 <TouchableOpacity
                   style={styles.rateButton}
@@ -589,7 +722,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 </TouchableOpacity>
               )}
               {/* Reorder button - shown for all non-ongoing orders except payment_failed */}
-              {/* {actualStatus !== 'payment_failed' && (
+              {/* {statusToMap !== 'payment_failed' && (
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={() => handleReorder(order.id.toString())}
@@ -599,7 +732,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   <Text style={styles.reorderButtonText}>Reorder</Text>
                 </TouchableOpacity>
               )} */}
-               {actualStatus !== 'payment_failed' && (
+               {!isPaymentFailed && (
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={() => handleOrderPress(order.id.toString())}
@@ -663,6 +796,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         overScrollMode="never"
         scrollEventThrottle={100}
         onScroll={handleScroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor="#00B14F"
+            colors={['#00B14F']}
+          />
+        }
       >
         {isLoading ? (
           // Loading shimmer
@@ -704,20 +845,19 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
               </React.Fragment>
             ))}
 
-            {/* View More Button - Show only if there are more orders to load */}
-            {orders.length < totalOrders && (
-              <TouchableOpacity
-                style={styles.viewMoreButton}
-                onPress={handleViewMore}
-                activeOpacity={0.7}
-                disabled={isLoadingMore}
-              >
-                {isLoadingMore ? (
-                  <ActivityIndicator size="small" color="#00B14F" />
-                ) : (
-                  <Text style={styles.viewMoreText}>View more orders</Text>
-                )}
-              </TouchableOpacity>
+            {/* Infinite scroll loading indicator */}
+            {isLoadingMore && (
+              <View style={styles.loadingMoreContainer}>
+                <ActivityIndicator size="small" color="#00B14F" />
+                <Text style={styles.loadingMoreText}>Loading more orders...</Text>
+              </View>
+            )}
+
+            {/* Show message when all orders are loaded */}
+            {!isLoadingMore && orders.length >= totalOrders && orders.length > 0 && (
+              <View style={styles.endOfListContainer}>
+                <Text style={styles.endOfListText}>You've reached the end</Text>
+              </View>
             )}
 
             {/* App Version */}
@@ -727,6 +867,50 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       </ScrollView>
 
       </SafeAreaView>
+
+      {/* Tracking WebView Modal */}
+      <Modal
+        visible={showTrackingWebView}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowTrackingWebView(false)}
+      >
+        <SafeAreaView style={styles.webViewContainer} edges={['top']}>
+          <View style={styles.webViewHeader}>
+            <TouchableOpacity
+              onPress={() => setShowTrackingWebView(false)}
+              style={styles.webViewBackButton}
+            >
+              <MaterialIcons name="close" size={24} color="#001E1F" />
+            </TouchableOpacity>
+            <Text style={styles.webViewHeaderTitle}>Track Order</Text>
+            <View style={styles.webViewBackButton} />
+          </View>
+          {selectedTrackingUrl && (
+            <WebView
+              source={{ uri: selectedTrackingUrl }}
+              style={styles.webView}
+              startInLoadingState={true}
+              renderLoading={() => (
+                <View style={styles.webViewLoadingContainer}>
+                  <ActivityIndicator size="large" color="#00B14F" />
+                </View>
+              )}
+              onError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.error('WebView error:', nativeEvent);
+              }}
+              onHttpError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.error('WebView HTTP error:', nativeEvent.statusCode, nativeEvent.description);
+              }}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              mixedContentMode="always"
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
     </View>
   );
 };
@@ -1003,16 +1187,29 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     lineHeight: 21,
   },
-  viewMoreButton: {
-    alignItems: 'flex-start',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    marginTop: 4,
+  loadingMoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    gap: 12,
   },
-  viewMoreText: {
-    fontFamily: 'Poppins_500Medium',
+  loadingMoreText: {
+    fontFamily: 'Poppins',
     fontSize: 14,
-    color: '#00B14F',
+    color: 'rgba(0, 30, 31, 0.6)',
+    lineHeight: 21,
+  },
+  endOfListContainer: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+  },
+  endOfListText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: 'rgba(0, 30, 31, 0.5)',
     lineHeight: 21,
   },
   appVersion: {
@@ -1055,5 +1252,58 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
     color: '#FFFFFF',
+  },
+  highlightedCard: {
+    borderWidth: 2,
+    borderColor: '#00B14F',
+    backgroundColor: '#F0FDF4',
+  },
+  disabledButton: {
+    backgroundColor: '#E5E5E5',
+    opacity: 0.6,
+  },
+  disabledButtonText: {
+    color: '#CCCCCC',
+  },
+  webViewContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  webViewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E4E4E4',
+    backgroundColor: '#FFFFFF',
+  },
+  webViewBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  webViewHeaderTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#001E1F',
+    flex: 1,
+    textAlign: 'center',
+  },
+  webView: {
+    flex: 1,
+  },
+  webViewLoadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
   },
 });

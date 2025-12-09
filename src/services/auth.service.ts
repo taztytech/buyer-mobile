@@ -6,7 +6,7 @@
 import { apiService, ApiResponse } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 import { storageService, UserData } from './storage.service';
-import { pushNotificationService } from './pushNotification.service';
+import { fcmNotificationService } from './fcmNotification.service';
 
 // Types
 export interface SendOtpRequest {
@@ -137,9 +137,11 @@ class AuthService {
           response.data.expires_in || 3600
         );
 
-        // 4. Register for push notifications (don't block login if this fails)
-        pushNotificationService.registerForPushNotifications().catch((error) => {
-          // Silent fail - push notifications are optional
+        // 4. Register FCM token after successful login
+        // This ensures the token is uploaded to backend after authentication
+        fcmNotificationService.registerTokenAfterLogin().catch((error) => {
+          console.warn('⚠️  Failed to register FCM token after login:', error);
+          // Silent fail - push notifications are optional, but log the error
         });
       }
 
@@ -158,8 +160,9 @@ class AuthService {
    */
   async logout(): Promise<ApiResponse> {
     try {
-      // Unregister push notifications (don't block logout if this fails)
-      pushNotificationService.unregisterPushToken().catch(() => {
+      // Delete FCM token from backend and Firebase (don't block logout if this fails)
+      fcmNotificationService.unregisterToken().catch((error) => {
+        console.warn('⚠️  Failed to unregister FCM token on logout:', error);
         // Silent fail - continue with logout even if this fails
       });
 

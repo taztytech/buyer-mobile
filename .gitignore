@@ -42,3 +42,6 @@ yarn-error.*
 # generated native folders
 /ios
 # /android - keeping android in git to preserve custom assets
+
+# Android local properties (contains sensitive keystore passwords)
+android/local.properties

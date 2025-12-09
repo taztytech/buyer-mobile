@@ -6,7 +6,6 @@ import {
   StatusBar,
   TouchableOpacity,
   ScrollView,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -26,7 +25,6 @@ interface ProfileScreenProps {
   onPrivacyPolicy?: () => void;
   onTermsConditions?: () => void;
   onFaq?: () => void;
-  onTestFCM?: () => void;
   onLogout?: () => void;
 }
 
@@ -41,7 +39,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onPrivacyPolicy,
   onTermsConditions,
   onFaq,
-  onTestFCM,
   onLogout,
 }) => {
   const { showConfirmation } = useConfirmation();
@@ -222,7 +219,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <MenuItem label="My Addresses" icon="location-on" onPress={onMyAddresses} />
             <MenuItem label="Favorites" icon="favorite" onPress={onFavorites} />
             <MenuItem label="Contact Us" icon="chat" onPress={onContactUs} />
-            <MenuItem label="Test FCM" icon="notifications-active" onPress={onTestFCM} />
 
             {/* Notification Toggle */}
             {/* <View style={styles.menuItem}>

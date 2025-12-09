@@ -9,11 +9,16 @@ import {
   StatusBar,
   ActivityIndicator,
   Linking,
+  Modal,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { WebView } from 'react-native-webview';
 import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
+import { useOrders } from '@/context/OrdersContext';
+import { useRef } from 'react';
 
 interface OrderDetailScreenProps {
   orderId?: string;
@@ -36,11 +41,17 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   onTrackOrder,
   onDownloadInvoice,
 }) => {
+  const { getOrderById } = useOrders();
+  const [contextOrder, setContextOrder] = useState<any>(null);
   const [orderData, setOrderData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState<string>('');
   const [supportNumber, setSupportNumber] = useState<string>('');
+  const [showTrackingWebView, setShowTrackingWebView] = useState(false);
+  const lastFetchedStatusRef = useRef<string | null>(null);
+  const lastFetchedAtRef = useRef<number>(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Fetch order details function
   const fetchOrderDetails = useCallback(async () => {
@@ -80,6 +91,54 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       fetchOrderDetails();
     }
   }, [visible, orderId, fetchOrderDetails]);
+
+  // Subscribe to live context updates (FCM) for this order
+  useEffect(() => {
+    if (!orderId) return;
+    const orderFromContext = getOrderById(orderId);
+    setContextOrder(orderFromContext || null);
+  }, [orderId, getOrderById, visible]);
+
+  // Merge live context updates into local orderData to reflect status changes instantly
+  useEffect(() => {
+    if (!contextOrder) return;
+    setOrderData((prev: any) => {
+      if (!prev) return contextOrder;
+      return {
+        ...prev,
+        ...contextOrder,
+        restaurant: contextOrder.restaurant || prev.restaurant,
+        items: contextOrder.items || prev.items,
+        summary: contextOrder.summary || prev.summary,
+        status: contextOrder.status || prev.status,
+        updated_at: contextOrder.updated_at || prev.updated_at,
+      };
+    });
+  }, [contextOrder]);
+
+  // If FCM/context status changes, refetch full details once to stay in sync
+  useEffect(() => {
+    if (!visible || !orderId || !contextOrder) return;
+    const currentStatus = (contextOrder.status || '').toString();
+    const lastFetchedStatus = lastFetchedStatusRef.current;
+    const now = Date.now();
+    // Avoid spamming: only refetch if status changed AND at least 5s since last fetch
+    if (currentStatus !== lastFetchedStatus && now - lastFetchedAtRef.current > 5000) {
+      lastFetchedStatusRef.current = currentStatus;
+      lastFetchedAtRef.current = now;
+      fetchOrderDetails();
+    }
+  }, [visible, orderId, contextOrder, fetchOrderDetails]);
+
+  const handleRefresh = async () => {
+    if (!orderId) return;
+    setIsRefreshing(true);
+    try {
+      await fetchOrderDetails();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // Fetch user's phone number on mount
   useEffect(() => {
@@ -210,9 +269,18 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       'pending_payment': { title: 'Payment pending', color: '#DC2626' },
       'payment_failed': { title: 'Payment Failed', color: '#DC2626' },
       'cancelled': { title: 'Order cancelled', color: '#DC2626' },
+      'billed': { title: 'Order accepted & started preparing', color: '#00B14F' },
+      'packed': { title: 'Order ready', color: '#F59E0B' },
+      'agent-assigned': { title: 'Delivery Agent Assigned', color: '#E6F4EA' },
+      'picked': { title: 'Picked up', color: '#3B82F6' },
+      'payment_pending': { title: 'Payment pending', color: '#DC2626' },
+      'rejected': { title: 'Order rejected', color: '#DC2626' },
+      'pending': { title: 'Order pending', color: '#F59E0B' },
     };
     return statusMap[actualStatus] || { title: 'Order status', color: '#00B14F' };
   };
+
+  const statusDisplay = orderData ? getStatusDisplay(orderData.status, orderData) : null;
 
   return (
     <View style={styles.outerContainer}>
@@ -265,6 +333,14 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                tintColor="#00B14F"
+                colors={['#00B14F']}
+              />
+            }
           >
           {/* Delivery Status Card - Illustration + Banner */}fv
           <View style={[styles.card, styles.statusCard]}>
@@ -276,12 +352,17 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               />
             </View>
 
-            <View style={styles.statusBanner}>
+            <View
+              style={[
+                styles.statusBanner,
+                { backgroundColor: statusDisplay?.color || '#FACC15' },
+              ]}
+            >
               {/* <MaterialIcons
                 name={
                   orderData.status === 'delivered'
                     ? 'check-circle'
-                    : getStatusDisplay(orderData.status, orderData).title === 'Payment Failed'
+                    : (statusDisplay?.title || '').toLowerCase() === 'payment failed'
                     ? 'payment'
                     : orderData.status === 'cancelled'
                     ? 'cancel'
@@ -293,7 +374,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               <View style={styles.statusBannerTextContainer}>
                 <View style={styles.statusBannerTitleRow}>
                   <Text style={styles.statusBannerTitle}>
-                    {getStatusDisplay(orderData.status, orderData).title}
+                    {statusDisplay?.title || 'Order status'}
                   </Text>
                 </View>
                 <Text style={styles.statusBannerSubtitle}>
@@ -399,42 +480,73 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <Text style={styles.rateButtonText}>Rate Order</Text>
                 </TouchableOpacity>
               ) : null}
-              
-              {/* Show Support button for cancelled or payment_failed orders */}
-              {(() => {
-                const normalizedStatus = getStatusDisplay(orderData.status, orderData).title.toLowerCase();
-                const isCancelled = orderData.status === 'cancelled' || normalizedStatus.includes('cancelled');
-                const isPaymentFailed = orderData.status === 'payment_failed' || 
-                                       orderData.payment_status?.toLowerCase() === 'failed' ||
-                                       orderData.payment_status?.toLowerCase() === 'payment_failed' ||
-                                       normalizedStatus.includes('payment failed');
-                const isDelivered = orderData.status === 'delivered' || normalizedStatus.includes('delivered');
-                
-                if (isCancelled || isPaymentFailed) {
-                  return (
-                    <TouchableOpacity
-                      style={styles.reorderButton}
-                      onPress={handleCallSupport}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialIcons name="phone" size={20} color="#FFFFFF" />
-                      <Text style={styles.reorderButtonText}>Support</Text>
-                    </TouchableOpacity>
-                  );
-                } else if (!isDelivered && !isCancelled) {
-                  return (
-                    <TouchableOpacity
-                      style={styles.reorderButton}
-                      onPress={onTrackOrder}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
-                      <Text style={styles.reorderButtonText}>Track Order</Text>
-                    </TouchableOpacity>
-                  );
-                }
-                return null;
-              })()}
+              {/* {orderData.status === 'delivered' || orderData.status === 'cancelled' ? (
+                <TouchableOpacity
+                  style={styles.reorderButton}
+                  onPress={onReorder}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
+                  <Text style={styles.reorderButtonText}>Reorder</Text>
+                </TouchableOpacity>
+              ) : ( */}
+                <View style={styles.trackOrderContainer}>
+                  {(() => {
+                    // Enable tracking if status is agent-assigned or later, OR if tracking_url exists
+                    const rawStatus = (orderData?.status || '').toString().toLowerCase();
+                    // Normalize: underscores/spaces to hyphen
+                    const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
+                    const isTrackingEnabled = 
+                      (orderData?.tracking_url && orderData.tracking_url !== null) ||
+                      normalizedStatus === 'agent-assigned' ||
+                      normalizedStatus === 'picked' ||
+                      normalizedStatus === 'out-for-delivery' ||
+                      normalizedStatus === 'on-the-way' ||
+                      normalizedStatus === 'delivered';
+                    
+                    return (
+                      <>
+                        <TouchableOpacity
+                          style={[
+                            styles.reorderButton,
+                            !isTrackingEnabled && styles.disabledButton
+                          ]}
+                          onPress={() => {
+                            if (isTrackingEnabled) {
+                              // If tracking_url exists, use it; otherwise navigate to tracking screen
+                              if (orderData?.tracking_url && orderData.tracking_url !== null) {
+                                setShowTrackingWebView(true);
+                              } else if (onTrackOrder) {
+                                // Fallback to tracking screen if no URL but status allows it
+                                onTrackOrder();
+                              }
+                            }
+                          }}
+                          activeOpacity={!isTrackingEnabled ? 1 : 0.8}
+                          disabled={!isTrackingEnabled}
+                        >
+                          <MaterialIcons 
+                            name="location-on" 
+                            size={20} 
+                            color={!isTrackingEnabled ? "#CCCCCC" : "#FFFFFF"} 
+                          />
+                          <Text style={[
+                            styles.reorderButtonText,
+                            !isTrackingEnabled && styles.disabledButtonText
+                          ]}>
+                            Track Order
+                          </Text>
+                        </TouchableOpacity>
+                        {!isTrackingEnabled && (
+                          <Text style={styles.trackingDisabledMessage}>
+                            Tracking unlocks after a delivery partner is assigned.
+                          </Text>
+                        )}
+                      </>
+                    );
+                  })()}
+                </View>
+              {/* )} */}
             </View>
           </View>
 
@@ -639,6 +751,50 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         </ScrollView>
         )}
       </SafeAreaView>
+
+      {/* Tracking WebView Modal */}
+      <Modal
+        visible={showTrackingWebView}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowTrackingWebView(false)}
+      >
+        <SafeAreaView style={styles.webViewContainer} edges={['top']}>
+          <View style={styles.webViewHeader}>
+            <TouchableOpacity
+              onPress={() => setShowTrackingWebView(false)}
+              style={styles.webViewBackButton}
+            >
+              <MaterialIcons name="close" size={24} color="#001E1F" />
+            </TouchableOpacity>
+            <Text style={styles.webViewHeaderTitle}>Track Order</Text>
+            <View style={styles.webViewBackButton} />
+          </View>
+          {orderData?.tracking_url && (
+            <WebView
+              source={{ uri: orderData.tracking_url }}
+              style={styles.webView}
+              startInLoadingState={true}
+              renderLoading={() => (
+                <View style={styles.webViewLoadingContainer}>
+                  <ActivityIndicator size="large" color="#00B14F" />
+                </View>
+              )}
+              onError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.error('WebView error:', nativeEvent);
+              }}
+              onHttpError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.error('WebView HTTP error:', nativeEvent.statusCode, nativeEvent.description);
+              }}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              mixedContentMode="always"
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
     </View>
   );
 };
@@ -1161,7 +1317,7 @@ const styles = StyleSheet.create({
   },
   statusIllustrationContainer: {
     alignItems: 'center',
-    // marginBottom: 6,
+    marginBottom: 6,
   },
   statusIllustration: {
     width: 180,
@@ -1204,4 +1360,68 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 2,
   },
+  disabledButton: {
+    backgroundColor: '#E5E5E5',
+    opacity: 0.6,
+  },
+  disabledButtonText: {
+    color: '#CCCCCC',
+  },
+  webViewContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  webViewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E4E4E4',
+    backgroundColor: '#FFFFFF',
+  },
+  webViewBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  webViewHeaderTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#001E1F',
+    flex: 1,
+    textAlign: 'center',
+  },
+  webView: {
+    flex: 1,
+  },
+  webViewLoadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  trackingDisabledMessage: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    color: 'rgba(0, 30, 31, 0.6)',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  trackOrderContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
 });
+
+
+
+

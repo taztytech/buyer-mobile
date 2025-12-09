@@ -159,7 +159,7 @@ export const TestFCMScreen: React.FC<TestFCMScreenProps> = ({
         const success = await fcmNotificationService.sendTokenToBackend(token);
         
         if (success) {
-          Alert.alert('Success', 'Token sent to backend successfully!');
+        Alert.alert('Success', 'Token sent to backend successfully!');
         } else {
           Alert.alert('Error', 'Failed to send token to backend. Check console for details.');
         }
