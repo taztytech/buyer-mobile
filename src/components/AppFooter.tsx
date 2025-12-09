@@ -9,7 +9,9 @@ export const AppFooter: React.FC = () => {
       resizeMode="cover"
     >
       <View style={styles.contentContainer}>
-        <Text style={styles.footerTitle}>Go Tazty,{'\n'}     Get Fed!</Text>
+        <Text style={styles.footerTitle}>
+          Go <Text style={styles.taztyText}>Tazty</Text>,{'\n'}     Get Fed!
+        </Text>
         <Text style={styles.footerSubtitle}>
           Crafted with <Text style={styles.heart}>❤</Text> in Madurai, India
         </Text>
@@ -51,5 +53,8 @@ const styles = StyleSheet.create({
   },
   heart: {
     color: '#FF6B9D',
+  },
+  taztyText: {
+    color: '#00B14F',
   },
 });
