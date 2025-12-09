@@ -4,7 +4,7 @@
  * Replaces expo-notifications with native FCM
  */
 
-import { Platform, AppState, NativeEventEmitter, NativeModules } from 'react-native';
+import { Platform, AppState, NativeEventEmitter, NativeModules, PermissionsAndroid } from 'react-native';
 import { apiService } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -86,12 +86,8 @@ class FCMNotificationService {
         return false;
       }
 
-      // Request permissions
-      const hasPermission = await this.requestPermission();
-      if (!hasPermission) {
-        console.warn('⚠️  FCM: Notification permissions not granted');
-        return false;
-      }
+      // Do NOT request permissions here. Permissions are requested after login in App.tsx.
+      // This prevents showing the popup on splash/startup.
 
       // Get FCM token
       await this.getToken();
@@ -134,10 +130,47 @@ class FCMNotificationService {
           return false;
         }
       } else {
-        // Android 13+ requires runtime permission
-        const authStatus = await messaging().requestPermission();
-        console.log('✅ FCM: Android permission granted');
-        return true;
+        // Android 13+ (API 33+) requires POST_NOTIFICATIONS runtime permission
+        const androidVersion = typeof Platform.Version === 'number' ? Platform.Version : parseInt(Platform.Version, 10);
+        if (androidVersion >= 33) {
+          try {
+            const hasPermission = await PermissionsAndroid.check(
+              PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+            );
+            
+            if (!hasPermission) {
+              console.log('📱 Android 13+: Requesting POST_NOTIFICATIONS permission...');
+              const result = await PermissionsAndroid.request(
+                PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+              );
+              
+              if (result === PermissionsAndroid.RESULTS.GRANTED) {
+                console.log('✅ FCM: Android POST_NOTIFICATIONS permission granted');
+                // Also request FCM permission
+                await messaging().requestPermission();
+                return true;
+              } else {
+                console.warn('⚠️  FCM: Android POST_NOTIFICATIONS permission denied');
+                return false;
+              }
+            } else {
+              console.log('✅ FCM: Android POST_NOTIFICATIONS already granted');
+              // Still request FCM permission to ensure token is available
+              await messaging().requestPermission();
+              return true;
+            }
+          } catch (error) {
+            console.warn('⚠️  FCM: Error requesting Android permission:', error);
+            // Fallback to FCM permission request
+            await messaging().requestPermission();
+            return true;
+          }
+        } else {
+          // Android 12 and below - FCM handles permissions automatically
+          await messaging().requestPermission();
+          console.log('✅ FCM: Android permission granted');
+          return true;
+        }
       }
     } catch (error) {
       console.error('❌ FCM: Permission request failed:', error);
@@ -161,7 +194,23 @@ class FCMNotificationService {
           authStatus === messaging.AuthorizationStatus.PROVISIONAL
         );
       } else {
-        return true; // Android doesn't have a direct check
+        // Android 13+ (API 33+) requires explicit permission check
+        const androidVersion = typeof Platform.Version === 'number' ? Platform.Version : parseInt(Platform.Version, 10);
+        if (androidVersion >= 33) {
+          try {
+            const hasPermission = await PermissionsAndroid.check(
+              PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+            );
+            return hasPermission;
+          } catch (error) {
+            console.warn('⚠️  FCM: Error checking Android permission:', error);
+            // Fallback: assume granted for older behavior
+            return true;
+          }
+        } else {
+          // Android 12 and below - permissions are granted by default
+          return true;
+        }
       }
     } catch (error) {
       console.error('❌ FCM: Error checking notification status:', error);

@@ -780,6 +780,17 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <ActivityIndicator size="large" color="#00B14F" />
                 </View>
               )}
+              onError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.error('WebView error:', nativeEvent);
+              }}
+              onHttpError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.error('WebView HTTP error:', nativeEvent.statusCode, nativeEvent.description);
+              }}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              mixedContentMode="always"
             />
           )}
         </SafeAreaView>

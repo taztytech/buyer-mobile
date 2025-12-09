@@ -396,6 +396,25 @@ function AppContent() {
     analyticsService.logEvent(AnalyticsEvents.LOGIN_START, { phone_number: phone });
   };
 
+  // Ensure notification permission after login
+  const ensureNotificationPermission = React.useCallback(async () => {
+    try {
+      // Always request permission after login (will show popup if not granted)
+      // This ensures users are prompted for notifications after successful login
+      console.log('📱 Requesting notification permission after login...');
+      const granted = await fcmNotificationService.requestPermission();
+      if (granted) {
+        console.log('✅ Notification permission granted');
+        // Get token after permission is granted
+        await fcmNotificationService.getToken();
+      } else {
+        console.warn('⚠️ Notification permission denied by user');
+      }
+    } catch (error) {
+      console.warn('⚠️ Notification permission check failed:', error);
+    }
+  }, []);
+
   const handleOtpSuccess = async (isExistingUser: boolean) => {
     if (isExistingUser) {
       // Existing user - go directly to home (skip address selection)
@@ -412,11 +431,13 @@ function AppContent() {
       setCurrentScreen('home');
       setIsRegistrationFlow(false);
       reloadCart().catch(() => {});
+      ensureNotificationPermission();
     } else {
       // New user - show welcome screen for profile completion
       await analyticsService.logEvent(AnalyticsEvents.SIGNUP_START);
       setCurrentScreen('welcome');
       setIsRegistrationFlow(true);
+      ensureNotificationPermission();
     }
     setPhoneNumber('');
   };

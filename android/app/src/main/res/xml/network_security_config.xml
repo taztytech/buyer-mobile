@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext traffic for WebView (tracking URLs) -->
+    <!-- Note: This is required for HTTP tracking URLs in release builds -->
+    <!-- For better security, ensure tracking URLs use HTTPS when possible -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
