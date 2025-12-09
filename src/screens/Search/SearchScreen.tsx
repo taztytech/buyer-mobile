@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { searchService, SearchSuggestion } from '@/services/search.service';
 import { SearchBar } from '@/components/SearchBar';
+import { AppFooter } from '@/components/AppFooter';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useVegMode } from '@/context/VegModeContext';
@@ -262,6 +263,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                 renderItem={({ item, index }) => renderSearchResult({ item, index })}
                 keyExtractor={(item) => `${item.type}-${item.id}`}
                 showsVerticalScrollIndicator={false}
+            ListFooterComponent={<AppFooter />}
                 nestedScrollEnabled={true}
                 contentContainerStyle={styles.flatListContent}
               />
@@ -291,6 +293,11 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
               </Text>
             </View>
           )}
+
+      {/* Footer - Show when no results or initial state */}
+      {!isLoading && (searchQuery.trim().length < 2 || searchResults.length === 0) && (
+        <AppFooter />
+      )}
         </View>
       </SafeAreaView>
     </View>

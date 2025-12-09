@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { restaurantService, RestaurantDetails } from '@/services/restaurant.service';
 import { isExpoGo } from '@/utils/platform.util';
+import { AppFooter } from '@/components/AppFooter';
 
 // Conditionally import MapView only for standalone builds
 let MapView: any;
@@ -526,6 +527,8 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
               <Text style={styles.termsLink}>here</Text>
             </Text> */}
           </View>
+
+          <AppFooter />
         </ScrollView>
         )}
       </View>

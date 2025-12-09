@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Animated } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { favoritesService } from '@/services/favorites.service';
 import { Shimmer } from '@/components/Shimmer';
+import { homeService } from '@/services/home.service';
+import { formatTime } from '@/utils/timing.utils';
 
 export interface RestaurantTiming {
   day: number;
@@ -54,10 +56,100 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
     setIsFavorite(restaurant.isFavorite || false);
   }, [restaurant.isFavorite]);
 
+  // Calculate isOpen dynamically from API timings if not provided
+  const isRestaurantOpen = React.useMemo(() => {
+    if (restaurant.isOpen !== undefined) {
+      return restaurant.isOpen;
+    }
+    // If isOpen is not provided, calculate from timings
+    if (restaurant.timings && restaurant.timings.length > 0) {
+      return homeService.isRestaurantOpen(restaurant.timings);
+    }
+    // Default to true if no timing info available
+    return true;
+  }, [restaurant.isOpen, restaurant.timings]);
+
   // Handle location - convert object to string if needed
   const locationText = typeof restaurant.location === 'string'
     ? restaurant.location
     : restaurant.location?.locality || restaurant.location?.city || 'Unknown';
+
+  // Get next opening time message from API timings - all data from API, no hardcoding
+  const getNextOpeningTimeMessage = (): { message: string; time: string } | null => {
+    // Only show message if restaurant is closed
+    if (isRestaurantOpen) return null;
+    
+    // Use API timings data only
+    if (!restaurant.timings || restaurant.timings.length === 0) return null;
+
+    // First try the service method
+    let nextOpening = homeService.getNextOpeningTime(restaurant.timings);
+    
+    // If service returns null, calculate from timings directly using open_time
+    if (!nextOpening) {
+      const now = new Date();
+      const jsDay = now.getDay();
+      const currentTime = now.getHours() * 100 + now.getMinutes();
+      const apiDay = jsDay + 1;
+      
+      // Check if restaurant opens later today
+      const todayTiming = restaurant.timings.find(t => t.day === apiDay);
+      if (todayTiming && todayTiming.open_time) {
+        const openTime = parseInt(todayTiming.open_time);
+        if (currentTime < openTime) {
+          nextOpening = {
+            day: apiDay,
+            time: todayTiming.open_time,
+            daysUntil: 0,
+            minutesUntil: 0,
+          };
+        }
+      }
+      
+      // If not today, check next 7 days
+      if (!nextOpening) {
+        for (let i = 1; i <= 7; i++) {
+          const nextDay = (apiDay + i) > 7 ? (apiDay + i) - 7 : (apiDay + i);
+          const nextDayTiming = restaurant.timings.find(t => t.day === nextDay);
+          
+          if (nextDayTiming && nextDayTiming.open_time) {
+            nextOpening = {
+              day: nextDay,
+              time: nextDayTiming.open_time,
+              daysUntil: i,
+              minutesUntil: 0,
+            };
+            break;
+          }
+        }
+      }
+    }
+    
+    if (!nextOpening) return null;
+
+    // Format time from API data
+    const formattedTime = formatTime(nextOpening.time);
+    const dayNames = ['', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    
+    // Use API calculated daysUntil and day - all from API data
+    let message = '';
+    if (nextOpening.daysUntil === 0) {
+      message = `Opens today at ${formattedTime}`;
+    } else if (nextOpening.daysUntil === 1) {
+      message = `Opens tomorrow at ${formattedTime}`;
+    } else {
+      // Use API day number to get day name
+      const dayName = dayNames[nextOpening.day] || '';
+      message = `Opens ${dayName} at ${formattedTime}`;
+    }
+
+    return {
+      message,
+      time: formattedTime,
+    };
+  };
+
+  const nextOpeningInfo = getNextOpeningTimeMessage();
 
   // Handle image source - support both local and remote images
   const getImageSource = () => {
@@ -112,10 +204,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
     return (
       <TouchableOpacity
         key="horizontal"
-        style={[
-          styles.card,
-          restaurant.isOpen === false && styles.cardClosed
-        ]}
+        style={styles.card}
         onPress={onPress}
         activeOpacity={0.7}
         testID={`restaurant-card-${restaurant.id}`}
@@ -134,12 +223,12 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             source={getImageSource()}
             style={[
               styles.image,
-              restaurant.isOpen === false && styles.imageClosed,
+              !isRestaurantOpen && styles.imageClosed,
               { opacity: imageOpacity }
             ]}
             resizeMode="cover"
             testID={`restaurant-image-${restaurant.id}`}
-            onError={(error) => {
+            onError={() => {
               // Mark as loaded even on error
               setImageLoaded(true);
               Animated.timing(imageOpacity, {
@@ -183,10 +272,16 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             style={styles.gradientOverlayBottom}
           />
 
+          {/* Gray Overlay for Closed Restaurants */}
+          {!isRestaurantOpen && (
+            <View style={styles.grayOverlay} />
+          )}
+
           {/* Closed Now Overlay */}
-          {restaurant.isOpen === false && (
+          {!isRestaurantOpen && (
             <View style={styles.closedOverlay}>
-              <Text style={styles.closedText}>CLOSED NOW</Text>
+              <Text style={styles.closedTextCurrently}>CURRENTLY</Text>
+              <Text style={styles.closedTextClosed}>CLOSED</Text>
             </View>
           )}
 
@@ -210,10 +305,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
         </View>
 
         {/* Right Side - Details (Vertically Centered) */}
-        <View style={[
-          styles.detailsContainer,
-          restaurant.isOpen === false && styles.detailsContainerClosed
-        ]}>
+        <View style={styles.detailsContainer}>
           {/* Pure Veg Badge */}
           {restaurant.isVeg && (
             <View style={styles.pureVegBadge}>
@@ -232,7 +324,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             {restaurant.rating > 0 && (
               <>
                 <View style={styles.ratingContainer}>
-                  <MaterialIcons name="star" size={16} color="#00B14F" />
+                  <MaterialIcons name="star" size={14} color="#00B14F" />
                   <Text style={styles.ratingText}>
                     {restaurant.rating.toFixed(1)}
                   </Text>
@@ -248,16 +340,23 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             {restaurant.cuisine}
           </Text>
 
-          {/* Location and Distance */}
-          <View style={styles.locationRow}>
+          {/* Location and Distance - Same Row */}
+          <View style={styles.locationDistanceRow}>
             <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
               {locationText}
             </Text>
-            <View style={styles.distanceRow}>
-              <MaterialIcons name="two-wheeler" size={16} color="#00B14F" />
-              <Text style={styles.distanceText}>{restaurant.distance}</Text>
-            </View>
+            <Text style={styles.locationSeparator}>•</Text>
+            <MaterialIcons name="location-on" size={14} color="#00B14F" />
+            <Text style={styles.distanceText}>{restaurant.distance}</Text>
           </View>
+
+          {/* Opening Time (when closed) - All data from API */}
+          {nextOpeningInfo && (
+            <View style={styles.openingTimeContainer}>
+              <View style={styles.separator} />
+              <Text style={styles.openingTimeText}>{nextOpeningInfo.message}</Text>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -266,10 +365,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   return (
     <TouchableOpacity
       key="vertical"
-      style={[
-        styles.cardVertical,
-        restaurant.isOpen === false && styles.cardClosed
-      ]}
+      style={styles.cardVertical}
       onPress={onPress}
       activeOpacity={0.7}
       testID={`restaurant-card-${restaurant.id}`}
@@ -288,12 +384,12 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           source={getImageSource()}
           style={[
             styles.imageVertical,
-            restaurant.isOpen === false && styles.imageClosed,
+            !isRestaurantOpen && styles.imageClosed,
             { opacity: imageOpacity }
           ]}
           resizeMode="cover"
           testID={`restaurant-image-${restaurant.id}`}
-          onError={(error) => {
+          onError={() => {
             // Mark as loaded even on error
             setImageLoaded(true);
             Animated.timing(imageOpacity, {
@@ -337,10 +433,16 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           style={styles.gradientOverlayBottomVertical}
         />
 
+        {/* Gray Overlay for Closed Restaurants */}
+        {!isRestaurantOpen && (
+          <View style={styles.grayOverlayVertical} />
+        )}
+
         {/* Closed Now Overlay */}
-        {restaurant.isOpen === false && (
+        {!isRestaurantOpen && (
           <View style={styles.closedOverlayVertical}>
-            <Text style={styles.closedText}>CLOSED NOW</Text>
+            <Text style={styles.closedTextCurrently}>CURRENTLY</Text>
+            <Text style={styles.closedTextClosed}>CLOSED</Text>
           </View>
         )}
 
@@ -364,10 +466,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
       </View>
 
       {/* Bottom - Details Below Image */}
-      <View style={[
-        styles.detailsContainerVertical,
-        restaurant.isOpen === false && styles.detailsContainerClosed
-      ]}>
+      <View style={styles.detailsContainerVertical}>
         {/* Store Name Row with Rating on Right */}
         <View style={styles.nameRatingRow}>
           <Text style={styles.restaurantNameVertical} numberOfLines={2} ellipsizeMode="tail">
@@ -395,7 +494,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           {restaurant.distance && (
             <>
               <Text style={styles.distanceSeparator}>•</Text>
-              <MaterialIcons name="two-wheeler" size={16} color="#00B14F" />
+              <MaterialIcons name="location-on" size={16} color="#00B14F" />
               <Text style={styles.distanceTextVertical}>{restaurant.distance}</Text>
             </>
           )}
@@ -405,17 +504,29 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
         {restaurant.price !== undefined && (
           <Text style={styles.priceText}>₹{restaurant.price.toFixed(1)} for two</Text>
         )}
+
+        {/* Opening Time (when closed) - All data from API */}
+        {nextOpeningInfo && (
+          <View style={styles.openingTimeContainerVertical}>
+            <View style={styles.separatorVertical} />
+            <Text style={styles.openingTimeTextVertical}>{nextOpeningInfo.message}</Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
 }, (prevProps, nextProps) => {
   // Custom comparison function for React.memo
   // Return true if props are equal (skip re-render)
+  // Compare timings array to ensure re-render when API timing data changes
+  const timingsEqual = JSON.stringify(prevProps.restaurant.timings) === JSON.stringify(nextProps.restaurant.timings);
+  
   return (
     prevProps.restaurant.id === nextProps.restaurant.id &&
     prevProps.restaurant.isFavorite === nextProps.restaurant.isFavorite &&
     prevProps.restaurant.name === nextProps.restaurant.name &&
     prevProps.restaurant.isOpen === nextProps.restaurant.isOpen &&
+    timingsEqual &&
     prevProps.isVerticalLayout === nextProps.isVerticalLayout
   );
 });
@@ -431,9 +542,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     marginBottom: 8,
-  },
-  cardClosed: {
-    opacity: 0.6,
   },
   // Left Side - Image
   imageContainer: {
@@ -457,27 +565,46 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   imageClosed: {
-    opacity: 0.5,
+    opacity: 1,
+  },
+  grayOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(120, 120, 120, 0.75)',
+    borderRadius: 16,
+    zIndex: 2,
   },
   closedOverlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'transparent',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
+    zIndex: 3,
   },
-  closedText: {
+  closedTextCurrently: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 16,
+    lineHeight: 20,
     color: '#FFFFFF',
     letterSpacing: 0.5,
+  },
+  closedTextClosed: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    marginTop: -2,
   },
   gradientOverlayTop: {
     position: 'absolute',
@@ -504,16 +631,13 @@ const styles = StyleSheet.create({
     padding: 4,
     zIndex: 10,
   },
-  // Right Side - Details Container (Vertically Centered)
+  // Right Side - Details Container
   detailsContainer: {
     flex: 1,
-    justifyContent: 'center',
-    paddingVertical: 16,
+    justifyContent: 'flex-start',
+    paddingVertical: 10,
     paddingHorizontal: 12,
-    gap: 4,
-  },
-  detailsContainerClosed: {
-    opacity: 0.5,
+    gap: 3,
   },
   // Pure Veg Badge
   pureVegBadge: {
@@ -524,79 +648,99 @@ const styles = StyleSheet.create({
   },
   pureVegText: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 16,
     color: '#00B14F',
   },
   // Restaurant Name
   restaurantName: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 18,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 20,
     color: '#000000',
-    marginBottom: 5,
+    marginBottom: 3,
+    marginTop: 0,
   },
   // Rating and Delivery Row
   ratingDeliveryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     marginBottom: 2,
+    flexWrap: 'wrap',
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
   },
   ratingText: {
     fontFamily: 'Poppins_500Medium',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     color: '#000000',
   },
   deliveryDot: {
     fontFamily: 'Poppins_500Medium',
-    fontSize: 14,
+    fontSize: 13,
     color: '#000000',
   },
   deliveryText: {
     fontFamily: 'Poppins_500Medium',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     color: '#000000',
   },
   // Cuisine
   cuisineText: {
     fontFamily: 'Poppins_400Regular',
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 10,
+    lineHeight: 14,
     color: '#666666',
-    marginBottom: 5,
+    marginBottom: 2,
   },
-  // Location Row
-  locationRow: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: 4,
-  },
-  distanceRow: {
+  // Location and Distance Row (Same Row)
+  locationDistanceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 5,
+    marginBottom: 2,
+    flexWrap: 'wrap',
   },
   locationText: {
     fontFamily: 'Poppins_400Regular',
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 10,
+    lineHeight: 14,
     color: '#666666',
-    width: '100%',
+    flexShrink: 1,
+  },
+  locationSeparator: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 10,
+    color: '#666666',
   },
   distanceText: {
     fontFamily: 'Poppins_400Regular',
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 10,
+    lineHeight: 14,
     color: '#666666',
+  },
+  openingTimeContainer: {
+    marginTop: 4,
+    paddingTop: 3,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginBottom: 3,
+    width: '100%',
+  },
+  openingTimeText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#000000',
+    letterSpacing: 0.1,
   },
 
   // Vertical Layout (Style 2)
@@ -644,18 +788,30 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
   },
+  grayOverlayVertical: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(120, 120, 120, 0.75)',
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+    zIndex: 2,
+  },
   closedOverlayVertical: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'transparent',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
+    zIndex: 3,
   },
   gradientOverlayTopVertical: {
     position: 'absolute',
@@ -763,5 +919,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: '#000000',
+  },
+  openingTimeContainerVertical: {
+    marginTop: 6,
+    paddingTop: 6,
+  },
+  separatorVertical: {
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginBottom: 6,
+    width: '100%',
+  },
+  openingTimeTextVertical: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#000000',
+    letterSpacing: 0.1,
   },
 });

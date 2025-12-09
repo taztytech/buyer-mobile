@@ -22,6 +22,7 @@ import { apiService } from '@/services/api.service';
 import { homeService } from '@/services/home.service';
 import { Shimmer } from '@/components/Shimmer';
 import { CustomizationModal } from '@/components/CustomizationModal';
+import { AppFooter } from '@/components/AppFooter';
 import { CustomisationsReviewModal } from '@/components/CustomisationsReviewModal';
 import { FoodItemDetailModal } from '@/components/FoodItemDetailModal';
 import { FilterState } from '@/components/FilterModal';
@@ -95,7 +96,7 @@ const hasTimingForToday = (timings?: ItemTiming[]): boolean => {
   });
 };
 
-const getNextAvailableTime = (timings?: ItemTiming[]): { timeDifference?: string; hasTodaySlot: boolean } | null => {
+const getNextAvailableTime = (timings?: ItemTiming[]): { timeDifference?: string; availableTime?: string; hoursRemaining?: number; minutesRemaining?: number; hasTodaySlot: boolean } | null => {
   if (!timings || timings.length === 0) return null;
 
   const now = new Date();
@@ -161,7 +162,22 @@ const getNextAvailableTime = (timings?: ItemTiming[]): { timeDifference?: string
     const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
     const timeDifference = formatTimeDifference(diffMinutes);
 
-    return { timeDifference, hasTodaySlot };
+    // Format time with AM/PM
+    const timeString = String(nextSlot.timeFrom).padStart(4, '0');
+    const formatTime = (time: string): string => {
+      const hours = parseInt(time.substring(0, 2), 10);
+      const minutes = time.substring(2, 4);
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+      return `${displayHours}:${minutes} ${period}`;
+    };
+    const availableTime = formatTime(timeString);
+
+    // Calculate hours and minutes remaining
+    const hoursRemaining = Math.floor(diffMinutes / 60);
+    const minutesRemaining = diffMinutes % 60;
+
+    return { timeDifference, availableTime, hoursRemaining, minutesRemaining, hasTodaySlot };
   }
 
   // If no next slot today but has timing for today, return that info
@@ -1591,7 +1607,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               // Item is only available if BOTH restaurant is open AND item timing is available
               const itemAvailable = !isRestaurantClosed && isItemCurrentlyAvailable;
 
-              // Get next available time slot (only show the next one, not all)
+              // Get next available time slot to check if available today
               const nextAvailableTime = getNextAvailableTime(item.timings);
 
               return (
@@ -1672,10 +1688,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                         )}
                         <Image
                           source={item.image}
-                          style={[
-                            styles.itemImage,
-                            !itemAvailable && styles.itemImageDisabled
-                          ]}
+                          style={styles.itemImage}
                           resizeMode="cover"
                           onLoad={() => handleImageLoad(item.id)}
                           fadeDuration={0}
@@ -1711,7 +1724,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                           )}
                         </TouchableOpacity>
 
-                        {/* Grey Overlay for Unavailable Items */}
+                        {/* Gray Overlay for Unavailable Items - Only on image */}
                         {!itemAvailable && (
                           <View style={styles.unavailableOverlay} />
                         )}
@@ -1719,6 +1732,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     ) : (
                       <View style={styles.noImageContainer}>
                         <Text style={styles.noImageText}>No Image Available</Text>
+                        
+                        {/* Gray Overlay for Unavailable Items - Also on no image container */}
+                        {!itemAvailable && (
+                          <View style={styles.unavailableOverlay} />
+                        )}
                         
                         {/* Heart Button Overlay - Same as when image exists */}
                         <TouchableOpacity
@@ -1743,45 +1761,28 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                       </View>
                     )}
 
-                    {/* Available Timing Badge - Show availability status */}
+                    {/* Availability Badge - Bottom Left (like RestaurantCard design) */}
                     {!itemAvailable && (
                       <View style={styles.availabilityBadge}>
-                        <MaterialIcons
-                          name="access-time"
-                          size={12}
-                          color="#FFC529"
-                          style={styles.availabilityIcon}
-                        />
-                        <View style={styles.availabilityTextContainer}>
-                          {nextAvailableTime?.timeDifference ? (
-                            // Item will be available today
-                            <>
-                              <Text style={styles.availabilityTimeText}>
-                                Not available now
-                              </Text>
-                              <Text style={styles.availabilityTimeDifference}>
-                                Will be available in {nextAvailableTime.timeDifference.replace('in ', '')}
-                              </Text>
-                            </>
-                          ) : nextAvailableTime?.hasTodaySlot ? (
-                            // Item has timing for today but no future slot (might be past today's time)
-                            <Text style={styles.availabilityTimeText}>
-                              Not available now
-                            </Text>
-                          ) : (
-                            // Item has no timing for today or no timings at all
-                            <Text style={styles.availabilityTimeText}>
-                              Not available now
-                            </Text>
-                          )}
-                        </View>
+                        {nextAvailableTime?.availableTime ? (
+                          // Item will be available today - show timing with AM/PM and "today" on same line
+                          <Text style={styles.availabilityTimeTextMain}>
+                            Available at {nextAvailableTime.availableTime}
+                            <Text style={styles.availabilityTimeTextSub}> today</Text>
+                          </Text>
+                        ) : (
+                          // Not available today - show simple message
+                          <Text style={styles.availabilityTimeTextMain}>
+                            Not available
+                          </Text>
+                        )}
                       </View>
                     )}
                   </TouchableOpacity>
 
                   {/* Add Button or Increment/Decrement Controls */}
-                  {/* Show button when image is loaded, or when item has no image, or when item is disabled (to show disabled state) */}
-                  {(loadedImages.has(item.id) || !item.image || !itemAvailable) && (
+                  {/* Only show when item is available and image is loaded (or no image) */}
+                  {itemAvailable && (loadedImages.has(item.id) || !item.image) && (
                     <>
                       {cart[item.id] ? (
                         // Show increment/decrement controls if item is in cart
@@ -1797,37 +1798,18 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                           <Text style={styles.quantityText}>{getItemQuantity(item.id)}</Text>
                           <TouchableOpacity
                             style={styles.quantityButton}
-                            onPress={() => {
-                              if (!itemAvailable) {
-                                return;
-                              }
-                              incrementItem(item.id);
-                            }}
-                            disabled={!itemAvailable}
+                            onPress={() => incrementItem(item.id)}
                             activeOpacity={0.7}
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                           >
-                            <Text
-                              style={[
-                                styles.quantityButtonText,
-                                !itemAvailable && styles.quantityButtonTextDisabled,
-                              ]}
-                            >
-                              +
-                            </Text>
+                            <Text style={styles.quantityButtonText}>+</Text>
                           </TouchableOpacity>
                         </View>
                       ) : (
                         // Show Add button
                         <TouchableOpacity
-                          style={[
-                            styles.addButton,
-                            !itemAvailable && styles.addButtonDisabled,
-                          ]}
+                          style={styles.addButton}
                           onPress={() => {
-                            if (!itemAvailable) {
-                              return;
-                            }
                             if (item.isCustomizable) {
                               // Open customization modal for customizable items
                               handleCustomizableItemClick(item);
@@ -1836,25 +1818,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                               addToCart(item);
                             }
                           }}
-                          disabled={!itemAvailable}
                           activeOpacity={0.7}
                         >
-                          <Text
-                            style={[
-                              styles.addButtonPlus,
-                              !itemAvailable && styles.addButtonDisabledText,
-                            ]}
-                          >
-                            +
-                          </Text>
-                          <Text
-                            style={[
-                              styles.addButtonText,
-                              !itemAvailable && styles.addButtonDisabledText,
-                            ]}
-                          >
-                            Add
-                          </Text>
+                          <Text style={styles.addButtonPlus}>+</Text>
+                          <Text style={styles.addButtonText}>Add</Text>
                         </TouchableOpacity>
                       )}
                     </>
@@ -1873,6 +1840,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           ))
         )}
         </View>
+
+        <AppFooter />
       </ScrollView>
 
       {/* Bottom Cart Bar */}
@@ -2208,8 +2177,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   restaurantName: {
-    fontFamily: 'Poppins',
-    fontWeight: '600',
+    fontFamily: 'Poppins_700Bold',
+    fontWeight: '700',
     fontSize: 18,
     lineHeight: 27,
     color: '#000000',
@@ -2605,9 +2574,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 2,
   },
-  itemImageDisabled: {
-    opacity: 0.7,
-  },
   noImageContainer: {
     width: 155,
     height: 137,
@@ -2650,59 +2616,37 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    backgroundColor: 'rgba(120, 120, 120, 0.75)',
     borderRadius: 16,
     zIndex: 5,
   },
   availabilityBadge: {
     position: 'absolute',
-    top: '50%',
-    left: 6,
-    right: 6,
-    transform: [{ translateY: -16 }],
-    paddingHorizontal: 7,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0, 0, 0, 0.88)',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'transparent',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     alignItems: 'flex-start',
     justifyContent: 'center',
-    flexDirection: 'row',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
     zIndex: 6,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-    elevation: 6,
-    maxWidth: '100%',
-    minHeight: 28,
   },
-  availabilityIcon: {
-    marginRight: 5,
-    alignSelf: 'flex-start',
-    marginTop: 2,
-  },
-  availabilityTextContainer: {
-    flex: 1,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    flexShrink: 1,
-  },
-  availabilityTimeText: {
+  availabilityTimeTextMain: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 8.5,
-    lineHeight: 11,
+    fontSize: 12,
+    lineHeight: 16,
     color: '#FFFFFF',
-    textAlign: 'left',
-    letterSpacing: 0.2,
-    flexWrap: 'wrap',
-    flexShrink: 1,
+    letterSpacing: 0.5,
   },
-  availabilityTimeDifference: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 8.5,
-    lineHeight: 11,
-    color: '#FFC529',
-    letterSpacing: 0.2,
+  availabilityTimeTextSub: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   addButton: {
     flexDirection: 'row',
@@ -2950,7 +2894,6 @@ const styles = StyleSheet.create({
   closeMenuButton: {
     position: 'absolute',
     right: 20,
-    bottom: 45,
     bottom: 30,
     width: 122,
     height: 50,
