@@ -1,25 +1,28 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ImageBackground } from 'react-native';
 
 export const AppFooter: React.FC = () => {
   return (
-    <View style={styles.footer}>
+    <ImageBackground
+      source={require('../../assets/2148723447_Copy.jpg')}
+      style={styles.footer}
+      resizeMode="cover"
+    >
       <View style={styles.contentContainer}>
         <Text style={styles.footerTitle}>Go Tazty,{'\n'}     Get Fed!</Text>
         <Text style={styles.footerSubtitle}>
           Crafted with <Text style={styles.heart}>❤</Text> in Madurai, India
         </Text>
       </View>
-    </View>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
   footer: {
     width: '100%',
-    backgroundColor: '#E8E8E8',
     paddingVertical: 80,
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
   },
   contentContainer: {
     alignItems: 'flex-start',
@@ -28,19 +31,21 @@ const styles = StyleSheet.create({
   },
   footerTitle: {
     fontFamily: 'Poppins_700Bold',
-    fontSize: 56,
-    fontWeight: '700',
-    lineHeight: 62,
-    color: '#9B9B9B',
-    marginBottom: 16,
-    textAlign: 'left',
+    fontSize: 36,
+    marginLeft: 10,
+    // fontWeight: '700',
+    lineHeight: 40,
+    color: '#FFFFFF',
+    marginBottom: 10,
+    // textAlign: 'left',
     letterSpacing: -1,
   },
   footerSubtitle: {
     fontFamily: 'Poppins_400Regular',
-    fontSize: 13,
+    fontSize: 10,
+    marginLeft: 10,
     lineHeight: 20,
-    color: '#ABABAB',
+    color: '#FFFFFF',
     textAlign: 'left',
     letterSpacing: 0.13,
   },
