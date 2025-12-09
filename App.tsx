@@ -7,7 +7,6 @@ import { WelcomeScreen } from '@/screens/Auth/WelcomeScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
-import { TestFCMScreen } from '@/screens/Profile/TestFCMScreen';
 import { OrdersScreen, resetOrdersPersistence } from '@/screens/Order/OrdersScreen';
 import { OrderDetailScreen } from '@/screens/Order/OrderDetailScreen';
 import { RateOrderScreen } from '@/screens/Order/RateOrderScreen';
@@ -60,7 +59,7 @@ function AppContent() {
   } = useCart();
   const { showConfirmation } = useConfirmation();
 
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'testFCM'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -106,7 +105,6 @@ function AppContent() {
   const faqScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const restaurantScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const checkoutScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const testFCMScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
   const [fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
@@ -192,7 +190,6 @@ function AppContent() {
       help: AnalyticsScreens.HELP,
       contactUs: AnalyticsScreens.CONTACT_US,
       faq: AnalyticsScreens.FAQ,
-      testFCM: 'Test FCM',
     };
     
     const screenName = screenNameMap[currentScreen];
@@ -372,9 +369,6 @@ function AppContent() {
           return true;
         case 'contactUs':
           handleBackFromContactUs();
-          return true;
-        case 'testFCM':
-          handleBackFromTestFCM();
           return true;
         case 'help':
           handleBackFromHelp();
@@ -1312,41 +1306,6 @@ function AppContent() {
     }
   };
 
-  // Test FCM Navigation
-  const handleNavigateToTestFCM = () => {
-    setCurrentScreen('testFCM');
-
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(testFCMScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const handleBackFromTestFCM = () => {
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(testFCMScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('profile');
-    });
-  };
-
   // Help Navigation
   const [helpCameFrom, setHelpCameFrom] = React.useState<'profile' | 'orders'>('profile');
   const [isHelpClosing, setIsHelpClosing] = React.useState(false);
@@ -1825,7 +1784,6 @@ function AppContent() {
               onPrivacyPolicy={handleNavigateToPrivacyPolicy}
               onTermsConditions={handleNavigateToTermsConditions}
               onFaq={handleNavigateToFaq}
-              onTestFCM={handleNavigateToTestFCM}
             />
           </Animated.View>
 
@@ -2127,22 +2085,6 @@ function AppContent() {
             <ContactUsScreen
               visible={currentScreen === 'contactUs'}
               onBack={handleBackFromContactUs}
-            />
-          </Animated.View>
-
-          {/* Test FCM Screen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.testFCMOverlay,
-              {
-                transform: [{ translateX: testFCMScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'testFCM' ? 'auto' : 'none'}
-          >
-            <TestFCMScreen
-              visible={currentScreen === 'testFCM'}
-              onBack={handleBackFromTestFCM}
             />
           </Animated.View>
 
