@@ -3,8 +3,21 @@
  * Firebase Analytics implementation for tracking user events and app usage
  */
 
-import analytics from '@react-native-firebase/analytics';
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
+
+// Conditionally import Firebase to avoid errors if native modules aren't linked
+let analytics: any = null;
+
+try {
+  // Check if native module exists before requiring
+  if (NativeModules.RNFBAppModule) {
+    analytics = require('@react-native-firebase/analytics').default;
+  } else {
+    console.warn('⚠️  Analytics: Native module RNFBAppModule not found. Rebuild native app to enable Analytics.');
+  }
+} catch (error) {
+  console.warn('⚠️  Analytics: Firebase Analytics not available. Rebuild native app to enable Analytics.');
+}
 
 // Firebase Analytics Standard Events (from Firebase documentation)
 export const FirebaseStandardEvents = {
