@@ -1,6 +1,6 @@
 {
   "name": "tazty",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -71,6 +71,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "prettier": "^3.6.2",
+    "sharp": "^0.34.5",
     "typescript": "~5.9.2"
   },
   "private": true,
