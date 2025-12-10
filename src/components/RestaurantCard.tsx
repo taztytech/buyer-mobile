@@ -315,12 +315,18 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           )}
 
           {/* Restaurant Name */}
-          <Text style={styles.restaurantName} numberOfLines={2} ellipsizeMode="tail">
+          <Text style={[
+            styles.restaurantName,
+            isRestaurantOpen && styles.restaurantNameOpen
+          ]} numberOfLines={2} ellipsizeMode="tail">
             {restaurant.name}
           </Text>
 
           {/* Rating and Timings */}
-          <View style={styles.ratingDeliveryRow}>
+          <View style={[
+            styles.ratingDeliveryRow,
+            isRestaurantOpen && styles.ratingDeliveryRowOpen
+          ]}>
             {restaurant.rating > 0 && (
               <>
                 <View style={styles.ratingContainer}>
@@ -336,7 +342,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           </View>
 
           {/* Product Items (Cuisine) */}
-          <Text style={styles.cuisineText} numberOfLines={2} ellipsizeMode="tail">
+          <Text style={[
+            styles.cuisineText,
+            isRestaurantOpen && styles.cuisineTextOpen
+          ]} numberOfLines={2} ellipsizeMode="tail">
             {restaurant.cuisine}
           </Text>
 
@@ -344,7 +353,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           {isRestaurantOpen ? (
             <>
               {/* Location - No icon */}
-              <View style={styles.locationRow}>
+              <View style={[
+                styles.locationRow,
+                styles.locationRowOpen
+              ]}>
                 <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
                   {locationText}
                 </Text>
@@ -557,7 +569,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     width: '100%',
-    height: 160,
+    height: 150,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     overflow: 'hidden',
@@ -566,7 +578,7 @@ const styles = StyleSheet.create({
   // Left Side - Image
   imageContainer: {
     width: 130,
-    height: 160,
+    height: 150,
     position: 'relative',
     backgroundColor: '#F5F5F5',
     borderRadius: 16,
@@ -576,12 +588,12 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     width: 130,
-    height: 160,
+    height: 150,
     zIndex: 1,
   },
   image: {
     width: 130,
-    height: 160,
+    height: 150,
     borderRadius: 16,
   },
   imageClosed: {
@@ -681,6 +693,9 @@ const styles = StyleSheet.create({
     marginBottom: 3,
     marginTop: 0,
   },
+  restaurantNameOpen: {
+    marginBottom: 6,
+  },
   // Rating and Delivery Row
   ratingDeliveryRow: {
     flexDirection: 'row',
@@ -688,6 +703,9 @@ const styles = StyleSheet.create({
     gap: 4,
     marginBottom: 2,
     flexWrap: 'wrap',
+  },
+  ratingDeliveryRowOpen: {
+    marginBottom: 6,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -719,12 +737,18 @@ const styles = StyleSheet.create({
     color: '#666666',
     marginBottom: 2,
   },
+  cuisineTextOpen: {
+    marginBottom: 6,
+  },
   // Location Row (when open - separate row)
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginBottom: 2,
+  },
+  locationRowOpen: {
+    marginBottom: 6,
   },
   // Distance Row (when open - separate row)
   distanceRow: {
