@@ -147,13 +147,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [hasMoreRestaurants, setHasMoreRestaurants] = React.useState(false);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
 
-  // Check if current time is between 5 PM (17:00) and 8 AM (08:00) - closed hours
+  // Check if current time is between 11 PM (23:00) and 8 AM (08:00) - closed hours
   const checkClosedHours = React.useCallback(() => {
     const now = new Date();
     const currentHour = now.getHours();
-    // Closed from 5 PM (17:00) to 8 AM (08:00) next day
-    // At 5 PM (17:00) or later, or before 8 AM (08:00)
-    const isClosed = currentHour >= 17 || currentHour < 8;
+    // Closed from 11 PM (23:00) to 8 AM (08:00) next day
+    // At 11 PM (23:00) or later, or before 8 AM (08:00)
+    const isClosed = currentHour >= 23 || currentHour < 8;
     // Debug log (remove in production if needed)
     console.log(`[Closed Hours Check] Current hour: ${currentHour}, Is closed: ${isClosed}`);
     return isClosed;
@@ -1505,7 +1505,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <>
       <View style={styles.carouselContainer}>
         {isCurrentlyClosed ? (
-          // Show closed banner during closed hours (5 PM to 8 AM)
+          // Show closed banner during closed hours (11 PM to 8 AM)
           <View style={styles.closedBannerContainer}>
             <Image
               source={require('@../../../assets/Closed Banner.png')}
