@@ -19,6 +19,7 @@ import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
 import { useOrders } from '@/context/OrdersContext';
 import { useRef } from 'react';
+import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
 
 interface OrderDetailScreenProps {
   orderId?: string;
@@ -343,6 +344,27 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   };
 
   const statusDisplay = orderData ? getStatusDisplay(orderData.status, orderData) : null;
+  
+  // Get status config for consistent colors (same as Orders page)
+  // Use the actual status for color mapping, but handle payment_failed specially
+  const getStatusForColorMapping = (status: string, orderData?: any): string => {
+    // Check payment_status field first - if payment failed, show payment failed regardless of order status
+    if (orderData?.payment_status?.toLowerCase() === 'failed' || 
+        orderData?.payment_status?.toLowerCase() === 'payment_failed' ||
+        status?.toLowerCase() === 'payment_failed') {
+      return 'payment_failed';
+    } else if (status === 'cancelled' && orderData?.payment_method === 'online' && 
+        orderData?.cancellation_reason?.toLowerCase().includes('payment failed')) {
+      return 'payment_failed';
+    } else if (orderData?.payment_method === 'online' && 
+               orderData?.payment_status?.toLowerCase() === 'pending' && 
+               (status?.toLowerCase() === 'pending' || status?.toLowerCase() === 'cancelled')) {
+      return 'payment_failed';
+    }
+    return status;
+  };
+  
+  const statusConfig = orderData ? mapOrderStatusToUI(getStatusForColorMapping(orderData.status, orderData)) : null;
 
   return (
     <View style={styles.outerContainer}>
@@ -417,7 +439,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             <View
               style={[
                 styles.statusBanner,
-                { backgroundColor: statusDisplay?.color || '#FACC15' },
+                { backgroundColor: statusConfig?.bgColor || '#FACC15' },
               ]}
             >
               {/* <MaterialIcons
@@ -435,11 +457,17 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               /> */}
               <View style={styles.statusBannerTextContainer}>
                 <View style={styles.statusBannerTitleRow}>
-                  <Text style={styles.statusBannerTitle}>
+                  <Text style={[
+                    styles.statusBannerTitle,
+                    { color: statusConfig?.color || '#111827' }
+                  ]}>
                     {statusDisplay?.title || 'Order status'}
                   </Text>
                 </View>
-                <Text style={styles.statusBannerSubtitle}>
+                <Text style={[
+                  styles.statusBannerSubtitle,
+                  { color: statusConfig?.color || '#111827' }
+                ]}>
                   Order id #{orderData.order_number}
                 </Text>
               </View>
