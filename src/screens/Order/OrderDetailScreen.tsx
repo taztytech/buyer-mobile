@@ -19,6 +19,7 @@ import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
 import { useOrders } from '@/context/OrdersContext';
 import { useRef } from 'react';
+import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
 
 interface OrderDetailScreenProps {
   orderId?: string;
@@ -261,26 +262,109 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       actualStatus = 'payment_failed';
     }
 
+    // Normalize status to lowercase for consistent matching
+    const normalizedStatus = actualStatus?.toLowerCase().trim();
+
+    // Status messages from API configuration
+    const statusMessages: { [key: string]: { title: string; color: string } } = {
+      'billed': { 
+        title: 'Your order has been billed and is being processed.', 
+        color: '#00B14F' 
+      },
+      'packed': { 
+        title: 'Your order has been packed and is ready for pickup.', 
+        color: '#F59E0B' 
+      },
+      'agent_assigned': { 
+        title: 'A delivery partner has been assigned to your order.', 
+        color: '#3B82F6' 
+      },
+      'agent-assigned': { 
+        title: 'A delivery partner has been assigned to your order.', 
+        color: '#3B82F6' 
+      },
+      'agent_arrived_restaurant': { 
+        title: 'The delivery partner has arrived at the restaurant to pick up your order.', 
+        color: '#3B82F6' 
+      },
+      'agent-arrived-restaurant': { 
+        title: 'The delivery partner has arrived at the restaurant to pick up your order.', 
+        color: '#3B82F6' 
+      },
+      'picked': { 
+        title: 'Your order has been picked up by the delivery partner.', 
+        color: '#3B82F6' 
+      },
+      'out_for_delivery': { 
+        title: 'Your order is on the way to your location.', 
+        color: '#F59E0B' 
+      },
+      'out-for-delivery': { 
+        title: 'Your order is on the way to your location.', 
+        color: '#F59E0B' 
+      },
+      'delivered': { 
+        title: 'Your order has been delivered.', 
+        color: '#00B14F' 
+      },
+      'completed': { 
+        title: 'Your order has been delivered.', 
+        color: '#00B14F' 
+      },
+      'cancelled': { 
+        title: 'Your order has been cancelled.', 
+        color: '#DC2626' 
+      },
+      'canceled': { 
+        title: 'Your order has been cancelled.', 
+        color: '#DC2626' 
+      },
+      'rejected': { 
+        title: 'Your order has been cancelled.', 
+        color: '#DC2626' 
+      },
+    };
+
+    // Check if we have a specific message for this status
+    if (statusMessages[normalizedStatus]) {
+      return statusMessages[normalizedStatus];
+    }
+
+    // Fallback to other statuses
     const statusMap: { [key: string]: { title: string; color: string } } = {
-      'delivered': { title: 'Your order was delivered!', color: '#00B14F' },
-      'confirmed': { title: 'Restaurant  Accepted & Started Preparing!', color: '#00B14F' },
+      'confirmed': { title: 'Your order has been successfully placed', color: '#00B14F' },
       'preparing': { title: 'Order is being prepared', color: '#F59E0B' },
-      'out_for_delivery': { title: 'Order is on the way!', color: '#F59E0B' },
       'pending_payment': { title: 'Payment pending', color: '#DC2626' },
       'payment_failed': { title: 'Payment Failed', color: '#DC2626' },
-      'cancelled': { title: 'Order cancelled', color: '#DC2626' },
-      'billed': { title: 'Order accepted & started preparing', color: '#00B14F' },
-      'packed': { title: 'Order ready', color: '#F59E0B' },
-      'agent-assigned': { title: 'Delivery Agent Assigned', color: '#E6F4EA' },
-      'picked': { title: 'Picked up', color: '#3B82F6' },
       'payment_pending': { title: 'Payment pending', color: '#DC2626' },
-      'rejected': { title: 'Order rejected', color: '#DC2626' },
       'pending': { title: 'Order pending', color: '#F59E0B' },
     };
-    return statusMap[actualStatus] || { title: 'Order status', color: '#00B14F' };
+    
+    return statusMap[normalizedStatus] || { title: 'Order status', color: '#00B14F' };
   };
 
   const statusDisplay = orderData ? getStatusDisplay(orderData.status, orderData) : null;
+  
+  // Get status config for consistent colors (same as Orders page)
+  // Use the actual status for color mapping, but handle payment_failed specially
+  const getStatusForColorMapping = (status: string, orderData?: any): string => {
+    // Check payment_status field first - if payment failed, show payment failed regardless of order status
+    if (orderData?.payment_status?.toLowerCase() === 'failed' || 
+        orderData?.payment_status?.toLowerCase() === 'payment_failed' ||
+        status?.toLowerCase() === 'payment_failed') {
+      return 'payment_failed';
+    } else if (status === 'cancelled' && orderData?.payment_method === 'online' && 
+        orderData?.cancellation_reason?.toLowerCase().includes('payment failed')) {
+      return 'payment_failed';
+    } else if (orderData?.payment_method === 'online' && 
+               orderData?.payment_status?.toLowerCase() === 'pending' && 
+               (status?.toLowerCase() === 'pending' || status?.toLowerCase() === 'cancelled')) {
+      return 'payment_failed';
+    }
+    return status;
+  };
+  
+  const statusConfig = orderData ? mapOrderStatusToUI(getStatusForColorMapping(orderData.status, orderData)) : null;
 
   return (
     <View style={styles.outerContainer}>
@@ -355,7 +439,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             <View
               style={[
                 styles.statusBanner,
-                { backgroundColor: statusDisplay?.color || '#FACC15' },
+                { backgroundColor: statusConfig?.bgColor || '#FACC15' },
               ]}
             >
               {/* <MaterialIcons
@@ -373,11 +457,17 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               /> */}
               <View style={styles.statusBannerTextContainer}>
                 <View style={styles.statusBannerTitleRow}>
-                  <Text style={styles.statusBannerTitle}>
+                  <Text style={[
+                    styles.statusBannerTitle,
+                    { color: statusConfig?.color || '#111827' }
+                  ]}>
                     {statusDisplay?.title || 'Order status'}
                   </Text>
                 </View>
-                <Text style={styles.statusBannerSubtitle}>
+                <Text style={[
+                  styles.statusBannerSubtitle,
+                  { color: statusConfig?.color || '#111827' }
+                ]}>
                   Order id #{orderData.order_number}
                 </Text>
               </View>
@@ -492,17 +582,48 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               ) : ( */}
                 <View style={styles.trackOrderContainer}>
                   {(() => {
-                    // Enable tracking if status is agent-assigned or later, OR if tracking_url exists
+                    // Track Order is enabled ONLY for: picked, out-for-delivery, on-the-way, delivered
+                    // Disabled for: confirmed (order placed), billed (order accepted), packed (order ready), agent-assigned
                     const rawStatus = (orderData?.status || '').toString().toLowerCase();
                     // Normalize: underscores/spaces to hyphen
                     const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
-                    const isTrackingEnabled = 
-                      (orderData?.tracking_url && orderData.tracking_url !== null) ||
-                      normalizedStatus === 'agent-assigned' ||
-                      normalizedStatus === 'picked' ||
-                      normalizedStatus === 'out-for-delivery' ||
-                      normalizedStatus === 'on-the-way' ||
-                      normalizedStatus === 'delivered';
+                    
+                    // Explicitly disabled statuses - tracking is NOT allowed for these
+                    const disabledStatuses = [
+                      'confirmed',
+                      'billed',
+                      'packed',
+                      'agent-assigned',
+                      'agent_assigned',
+                      'agent-arrived-restaurant',
+                      'agent_arrived_restaurant',
+                      'cancelled',
+                      'canceled',
+                      'rejected',
+                      'payment-failed',
+                      'payment_failed',
+                      'pending',
+                      'pending-payment',
+                      'pending_payment',
+                      'preparing'
+                    ];
+                    
+                    // Define enabled statuses - tracking only works from "picked" status onward
+                    const enabledStatuses = [
+                      'picked',
+                      'out-for-delivery',
+                      'out_for_delivery',
+                      'on-the-way',
+                      'on_the_way',
+                      'delivered',
+                      'completed'
+                    ];
+                    
+                    // Check if status is explicitly disabled first - force disable
+                    const isExplicitlyDisabled = disabledStatuses.includes(normalizedStatus);
+                    
+                    // Enable tracking only if status is in enabled list AND not explicitly disabled
+                    const isTrackingEnabled = !isExplicitlyDisabled && enabledStatuses.includes(normalizedStatus);
                     
                     return (
                       <>
@@ -539,7 +660,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                         </TouchableOpacity>
                         {!isTrackingEnabled && (
                           <Text style={styles.trackingDisabledMessage}>
-                            Tracking unlocks after a delivery partner is assigned.
+                            Tracking unlocks after your order is picked up.
                           </Text>
                         )}
                       </>
