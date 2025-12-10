@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { colors, spacing, typography } from '@/theme';
+import { View, Text, StyleSheet, ImageBackground } from 'react-native';
+import { spacing, typography } from '@/theme';
 
 const ACCENT_SPACING = 32; // Spacing before "Get Fed!" in pixels
 
@@ -10,13 +10,17 @@ export const AppFooter: React.FC = () => {
   const spacerText = '  '.repeat(spacesCount);
 
   return (
-    <View style={styles.footer}>
+    <ImageBackground
+      source={require('@../../../assets/2148723447.jpg')}
+      style={styles.footer}
+      resizeMode="cover"
+    >
       <View style={styles.contentContainer}>
         <View style={styles.titleContainer}>
           <Text style={styles.footerTitle}>
-            Go Tazty,{'\n'}
+            Go <Text style={styles.taztyText}>Tazty</Text>,{'\n'}
             <Text style={styles.spacer}>{spacerText}</Text>
-            <Text style={styles.footerTitleAccent}>Get Fed!</Text>
+            <Text style={styles.footerTitleWhite}>Get Fed!</Text>
           </Text>
         </View>
         <View style={styles.divider} />
@@ -24,18 +28,18 @@ export const AppFooter: React.FC = () => {
           Crafted with <Text style={styles.heart}>❤</Text> in Madurai, India
         </Text>
       </View>
-    </View>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
   footer: {
     width: '100%',
-    backgroundColor: '#E8E8E8',
-    paddingVertical: spacing.xxl * 1.5,
-    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xxl,
+    // paddingHorizontal: spacing.lg,
     alignItems: 'flex-start',
     justifyContent: 'center',
+    minHeight: 100,
   },
   contentContainer: {
     alignItems: 'flex-start',
@@ -48,32 +52,38 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   footerTitle: {
-    ...typography.h1,
+    // ...typography.h1,
     fontFamily: 'Poppins_700Bold',
-    fontSize: 56,
-    lineHeight: 64,
-    color: colors.text,
-    textAlign: 'left',
-    letterSpacing: 1.5,
+    fontSize: 32,
+    lineHeight: 36,
+    color: '#FFFFFF',
+    // textAlign: 'left',
+    marginLeft: 10,
+    // letterSpacing: 1.5,
+  },
+  taztyText: {
+    color: '#01B14F', // Theme color for "Tazty"
   },
   spacer: {
-    fontSize: 56,
+    // fontSize: 56,
+    color: '#FFFFFF',
   },
-  footerTitleAccent: {
-    ...typography.h1,
+  footerTitleWhite: {
+    // ...typography.h1,
     fontFamily: 'Poppins_700Bold',
-    fontSize: 56,
-    lineHeight: 64,
-    color: colors.primary,
+    fontSize: 32,
+    lineHeight: 36,
+    color: '#FFFFFF',
     letterSpacing: 1.5,
   },
   divider: {
     width: 80,
     height: 3,
-    backgroundColor: colors.primary,
+    marginLeft: 15,
+    backgroundColor: '#FFFFFF',
     marginBottom: spacing.lg,
     borderRadius: 2,
-    shadowColor: colors.primary,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -82,14 +92,15 @@ const styles = StyleSheet.create({
   footerSubtitle: {
     ...typography.caption,
     fontFamily: 'Poppins_400Regular',
-    fontSize: 13,
+    fontSize: 10,
+    marginLeft: 15,
     lineHeight: 20,
-    color: colors.textSecondary,
+    color: '#FFFFFF',
     textAlign: 'left',
     letterSpacing: 0.5,
   },
   heart: {
-    color: colors.primary,
+    color: '#FFFFFF',
     fontSize: 14,
     fontFamily: 'Poppins_600SemiBold',
   },

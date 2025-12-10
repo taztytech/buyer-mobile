@@ -319,7 +319,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             {restaurant.name}
           </Text>
 
-          {/* Rating and Delivery Time */}
+          {/* Rating and Timings */}
           <View style={styles.ratingDeliveryRow}>
             {restaurant.rating > 0 && (
               <>
@@ -335,27 +335,47 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             <Text style={styles.deliveryText}>{restaurant.deliveryTime}</Text>
           </View>
 
-          {/* Cuisine */}
+          {/* Product Items (Cuisine) */}
           <Text style={styles.cuisineText} numberOfLines={2} ellipsizeMode="tail">
             {restaurant.cuisine}
           </Text>
 
-          {/* Location and Distance - Same Row */}
-          <View style={styles.locationDistanceRow}>
-            <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
-              {locationText}
-            </Text>
-            <Text style={styles.locationSeparator}>•</Text>
-            <MaterialIcons name="location-on" size={14} color="#00B14F" />
-            <Text style={styles.distanceText}>{restaurant.distance}</Text>
-          </View>
-
-          {/* Opening Time (when closed) - All data from API */}
-          {nextOpeningInfo && (
-            <View style={styles.openingTimeContainer}>
+          {/* When Open: Location and Distance on separate rows */}
+          {isRestaurantOpen ? (
+            <>
+              {/* Location - No icon */}
+              <View style={styles.locationRow}>
+                <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
+                  {locationText}
+                </Text>
+              </View>
+              {/* Distance - With icon */}
+              <View style={styles.distanceRow}>
+                <MaterialIcons name="location-on" size={14} color="#00B14F" />
+                <Text style={styles.distanceText}>{restaurant.distance}</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              {/* When Closed: Location (left) and Distance (right) - Same Row */}
+              <View style={styles.locationDistanceRowClosed}>
+                <View style={styles.locationRowClosed}>
+                  <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
+                    {locationText}
+                  </Text>
+                </View>
+                <View style={styles.distanceRowClosed}>
+                  <MaterialIcons name="location-on" size={14} color="#00B14F" />
+                  <Text style={styles.distanceText}>{restaurant.distance}</Text>
+                </View>
+              </View>
+              {/* Separator Line */}
               <View style={styles.separator} />
-              <Text style={styles.openingTimeText}>{nextOpeningInfo.message}</Text>
-            </View>
+              {/* Opens Tomorrow Text */}
+              {nextOpeningInfo && (
+                <Text style={styles.openingTimeText}>{nextOpeningInfo.message}</Text>
+              )}
+            </>
           )}
         </View>
       </TouchableOpacity>
@@ -699,13 +719,38 @@ const styles = StyleSheet.create({
     color: '#666666',
     marginBottom: 2,
   },
-  // Location and Distance Row (Same Row)
-  locationDistanceRow: {
+  // Location Row (when open - separate row)
+  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginBottom: 2,
-    flexWrap: 'wrap',
+  },
+  // Distance Row (when open - separate row)
+  distanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  // Location and Distance Row (when closed - same row, left and right)
+  locationDistanceRowClosed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  locationRowClosed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+    marginRight: 8,
+  },
+  distanceRowClosed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   locationText: {
     fontFamily: 'Poppins_400Regular',
@@ -732,14 +777,15 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: '#E0E0E0',
-    marginBottom: 3,
+    marginTop: 4,
+    marginBottom: 4,
     width: '100%',
   },
   openingTimeText: {
     fontFamily: 'Poppins_400Regular',
     fontSize: 12,
     lineHeight: 16,
-    color: '#000000',
+    color: '#666666',
     letterSpacing: 0.1,
   },
 
