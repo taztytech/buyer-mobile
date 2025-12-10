@@ -261,23 +261,85 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       actualStatus = 'payment_failed';
     }
 
+    // Normalize status to lowercase for consistent matching
+    const normalizedStatus = actualStatus?.toLowerCase().trim();
+
+    // Status messages from API configuration
+    const statusMessages: { [key: string]: { title: string; color: string } } = {
+      'billed': { 
+        title: 'Your order has been billed and is being processed.', 
+        color: '#00B14F' 
+      },
+      'packed': { 
+        title: 'Your order has been packed and is ready for pickup.', 
+        color: '#F59E0B' 
+      },
+      'agent_assigned': { 
+        title: 'A delivery partner has been assigned to your order.', 
+        color: '#3B82F6' 
+      },
+      'agent-assigned': { 
+        title: 'A delivery partner has been assigned to your order.', 
+        color: '#3B82F6' 
+      },
+      'agent_arrived_restaurant': { 
+        title: 'The delivery partner has arrived at the restaurant to pick up your order.', 
+        color: '#3B82F6' 
+      },
+      'agent-arrived-restaurant': { 
+        title: 'The delivery partner has arrived at the restaurant to pick up your order.', 
+        color: '#3B82F6' 
+      },
+      'picked': { 
+        title: 'Your order has been picked up by the delivery partner.', 
+        color: '#3B82F6' 
+      },
+      'out_for_delivery': { 
+        title: 'Your order is on the way to your location.', 
+        color: '#F59E0B' 
+      },
+      'out-for-delivery': { 
+        title: 'Your order is on the way to your location.', 
+        color: '#F59E0B' 
+      },
+      'delivered': { 
+        title: 'Your order has been delivered.', 
+        color: '#00B14F' 
+      },
+      'completed': { 
+        title: 'Your order has been delivered.', 
+        color: '#00B14F' 
+      },
+      'cancelled': { 
+        title: 'Your order has been cancelled.', 
+        color: '#DC2626' 
+      },
+      'canceled': { 
+        title: 'Your order has been cancelled.', 
+        color: '#DC2626' 
+      },
+      'rejected': { 
+        title: 'Your order has been cancelled.', 
+        color: '#DC2626' 
+      },
+    };
+
+    // Check if we have a specific message for this status
+    if (statusMessages[normalizedStatus]) {
+      return statusMessages[normalizedStatus];
+    }
+
+    // Fallback to other statuses
     const statusMap: { [key: string]: { title: string; color: string } } = {
-      'delivered': { title: 'Your order was delivered!', color: '#00B14F' },
-      'confirmed': { title: 'Restaurant  Accepted & Started Preparing!', color: '#00B14F' },
+      'confirmed': { title: 'Your order has been successfully placed', color: '#00B14F' },
       'preparing': { title: 'Order is being prepared', color: '#F59E0B' },
-      'out_for_delivery': { title: 'Order is on the way!', color: '#F59E0B' },
       'pending_payment': { title: 'Payment pending', color: '#DC2626' },
       'payment_failed': { title: 'Payment Failed', color: '#DC2626' },
-      'cancelled': { title: 'Order cancelled', color: '#DC2626' },
-      'billed': { title: 'Order accepted & started preparing', color: '#00B14F' },
-      'packed': { title: 'Order ready', color: '#F59E0B' },
-      'agent-assigned': { title: 'Delivery Agent Assigned', color: '#E6F4EA' },
-      'picked': { title: 'Picked up', color: '#3B82F6' },
       'payment_pending': { title: 'Payment pending', color: '#DC2626' },
-      'rejected': { title: 'Order rejected', color: '#DC2626' },
       'pending': { title: 'Order pending', color: '#F59E0B' },
     };
-    return statusMap[actualStatus] || { title: 'Order status', color: '#00B14F' };
+    
+    return statusMap[normalizedStatus] || { title: 'Order status', color: '#00B14F' };
   };
 
   const statusDisplay = orderData ? getStatusDisplay(orderData.status, orderData) : null;
