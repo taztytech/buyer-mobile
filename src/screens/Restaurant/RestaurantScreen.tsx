@@ -2083,7 +2083,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           <OrderSuccessScreen
             onContinue={() => {
               setShowOrderSuccess(false);
-              clearCart(); // Clear the cart after successful order
+              // Cart clearing handled by backend
             }}
           />
         </View>

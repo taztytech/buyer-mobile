@@ -78,7 +78,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   onUpdateCart,
   onAddressChange,
 }) => {
-  const { cart, clearCart, updateQuantity, removeFromCart, setRestaurantInfo, restaurantId: contextRestaurantId, restaurantName: contextRestaurantName } = useCart();
+  const { cart, updateQuantity, removeFromCart, setRestaurantInfo, restaurantId: contextRestaurantId, restaurantName: contextRestaurantName } = useCart();
   const { showConfirmation } = useConfirmation();
   const [orderExpanded, setOrderExpanded] = useState(true);
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
@@ -675,8 +675,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         );
 
         if (paymentResult.success) {
-          // Payment successful - clear cart and reset form
-          clearCart();
+          // Payment successful - cart clearing handled by backend
           setNotes(''); // Reset notes for next order
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount
@@ -708,7 +707,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             },
           });
         } else {
-          // Payment failed - Mark order as payment failed and clear cart
+          // Payment failed - Mark order as payment failed (cart clearing handled by backend)
           try {
             // Use payment failure endpoint to mark order as payment_failed
             await paymentService.handlePaymentFailure(orderId, {
@@ -724,8 +723,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             }
           }
 
-          // Clear cart after payment failure
-          clearCart();
+          // Payment failed - cart clearing handled by backend
           setNotes(''); // Reset notes
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount

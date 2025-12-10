@@ -6,6 +6,7 @@ import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
 import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/home.service';
 import { addressService } from '@/services/address.service';
+import { sortRestaurantsByAvailability, deduplicateRestaurants } from '@/services/availability.service';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { Shimmer } from '@/components/Shimmer';
 import { AppFooter } from '@/components/AppFooter';
@@ -236,9 +237,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       // User selected a different address, fetch restaurants for the new location
       // Clear data first to prevent showing stale cached data
       if (externalSelectedLocation.latitude && externalSelectedLocation.longitude) {
+        // Clear all data and reset pagination state
         setRestaurantData([]);
         setCarouselData([]);
         setCategoryData([]);
+        setCurrentPage(1);
+        setHasMoreRestaurants(false);
+        setIsLoadingMore(false);
         fetchHomeData(externalSelectedLocation.latitude, externalSelectedLocation.longitude);
       }
     }
@@ -296,10 +301,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           }
 
           // Fetch home data with default address coordinates
-          // Clear data first to prevent showing stale cached data
+          // Clear data first to prevent showing stale cached data and reset pagination
           setRestaurantData([]);
           setCarouselData([]);
           setCategoryData([]);
+          setCurrentPage(1);
+          setHasMoreRestaurants(false);
+          setIsLoadingMore(false);
           await fetchHomeData(defaultAddress.latitude, defaultAddress.longitude);
         } else {
           // No default address, use fallback location
@@ -310,9 +318,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           });
 
           // Fetch home data with default Madurai coordinates
+          // Clear data and reset pagination
           setRestaurantData([]);
           setCarouselData([]);
           setCategoryData([]);
+          setCurrentPage(1);
+          setHasMoreRestaurants(false);
+          setIsLoadingMore(false);
           await fetchHomeData(undefined, undefined);
         }
       } else {
@@ -455,10 +467,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
 
     // Reload data with current coordinates when veg mode changes
+    // Clear data and reset pagination
     const coords = defaultAddressCoords || { latitude: DEFAULT_LOCATION.latitude, longitude: DEFAULT_LOCATION.longitude };
     setRestaurantData([]);
     setCarouselData([]);
     setCategoryData([]);
+    setCurrentPage(1);
+    setHasMoreRestaurants(false);
+    setIsLoadingMore(false);
     fetchHomeData(coords.latitude, coords.longitude);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vegMode]);
@@ -496,9 +512,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setIsLoadingLocation(false);
 
         // Reload home page data with user's actual location
+        // Clear data and reset pagination
         setRestaurantData([]);
         setCarouselData([]);
         setCategoryData([]);
+        setCurrentPage(1);
+        setHasMoreRestaurants(false);
+        setIsLoadingMore(false);
         await fetchHomeData(userLatitude, userLongitude);
       } else {
         setHasShownLocationModal(true); // Mark as shown to prevent repeated popups
@@ -670,6 +690,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setRestaurantData([]);
         setCarouselData([]);
         setCategoryData([]);
+        setCurrentPage(1);
+        setHasMoreRestaurants(false);
+        setIsLoadingMore(false);
         lastFetchedCoords.current = { latitude: lat, longitude: lng };
       }
 
@@ -861,7 +884,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               };
             });
 
-            setRestaurantData(transformedRestaurants);
+            // Ensure we have all restaurants - deduplicate only true duplicates
+            // This preserves all unique restaurants even if IDs are in different formats
+            const uniqueRestaurants = deduplicateRestaurants(transformedRestaurants);
+
+            // Sort restaurants: opened stores first (asc by distance), closed stores last (asc by distance)
+            // This sorting preserves all restaurants, just reorders them
+            const sortedRestaurants = sortRestaurantsByAvailability(uniqueRestaurants);
+
+            setRestaurantData(sortedRestaurants);
 
             // Handle pagination metadata
             if (pagination) {
@@ -872,6 +903,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             setNoRestaurantsFound(true);
             setRestaurantData([]);
             setHasMoreRestaurants(false);
+            setCurrentPage(1);
+            setIsLoadingMore(false);
           }
         } else {
           // API call failed - show network error
@@ -880,6 +913,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           onCategoriesLoaded?.([]);
           setHasNetworkError(true);
           setRestaurantData([]);
+          setCurrentPage(1);
+          setHasMoreRestaurants(false);
+          setIsLoadingMore(false);
         }
       } catch (error) {
         setCarouselData([]);
@@ -887,6 +923,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         onCategoriesLoaded?.([]);
         setHasNetworkError(true);
         setRestaurantData([]);
+        setCurrentPage(1);
+        setHasMoreRestaurants(false);
+        setIsLoadingMore(false);
       } finally {
         setIsLoadingBanners(false);
         setIsLoadingCategories(false);
@@ -960,8 +999,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             };
           });
 
-          // Append new restaurants to existing list
-          setRestaurantData(prevData => [...prevData, ...transformedRestaurants]);
+          // Append new restaurants to existing list, deduplicate, and sort
+          // This ensures we don't lose any restaurants and maintain proper order
+          setRestaurantData(prevData => {
+            // Combine existing and new restaurants
+            const combinedRestaurants = [...prevData, ...transformedRestaurants];
+            
+            // Deduplicate by ID (handles string/number ID mismatches)
+            // Preserves first occurrence of each unique restaurant
+            const uniqueRestaurants = deduplicateRestaurants(combinedRestaurants);
+            
+            // Sort: opened first (asc distance), closed last (asc distance)
+            // This preserves all restaurants, just reorders them
+            return sortRestaurantsByAvailability(uniqueRestaurants);
+          });
           setCurrentPage(nextPage);
 
           // Update pagination state
@@ -1227,10 +1278,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const lat = externalSelectedLocation?.latitude || defaultAddressCoords?.latitude || DEFAULT_LOCATION.latitude;
     const lng = externalSelectedLocation?.longitude || defaultAddressCoords?.longitude || DEFAULT_LOCATION.longitude;
 
-    // Reload home data - clear cached data first
+    // Reload home data - clear cached data first and reset all related states
     setRestaurantData([]);
     setCarouselData([]);
     setCategoryData([]);
+    setCurrentPage(1);
+    setHasMoreRestaurants(false);
+    setIsLoadingMore(false);
+    
     await fetchHomeData(lat, lng);
 
     setIsRefreshing(false);
@@ -1637,12 +1692,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* Restaurant List - Only show if there's data, still loading, or error states */}
       {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
-        <View style={[
-          styles.restaurantListContainer,
-          totalCartItems > 0 && {
-            paddingBottom: 160 + Math.max(insets.bottom, 0)
-          }
-        ]}>
+        <View style={styles.restaurantListContainer}>
           {showRestaurantShimmer ? (
             <>
               {/* Shimmer for 2 restaurant cards */}
@@ -1708,8 +1758,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           ) : (
             <FlatList
               data={restaurantData}
-              renderItem={({ item: restaurant }) => (
-                <View style={styles.restaurantCardWrapper}>
+              renderItem={({ item: restaurant, index }) => (
+                <View style={[
+                  styles.restaurantCardWrapper,
+                  index === restaurantData.length - 1 && styles.restaurantCardWrapperLast
+                ]}>
                   <RestaurantCard
                     restaurant={restaurant}
                     onPress={() => {
@@ -1731,6 +1784,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               windowSize={5}
               initialNumToRender={3}
               updateCellsBatchingPeriod={50}
+              contentContainerStyle={[
+                styles.restaurantListContent,
+                totalCartItems > 0 && {
+                  paddingBottom: 160 + Math.max(insets.bottom, 0)
+                }
+              ]}
             />
           )}
 
@@ -2417,15 +2476,27 @@ const styles = StyleSheet.create({
   restaurantListContainer: {
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 20,
-    gap: 10,
+    paddingBottom: 0,
     backgroundColor: '#FFFFFF',
+  },
+  restaurantListContent: {
+    paddingBottom: 0,
   },
   restaurantListWithCart: {
     paddingBottom: 160, // Extra padding when cart modal is visible
   },
   restaurantCardWrapper: {
     marginBottom: 10,
+  },
+  restaurantCardWrapperLast: {
+    marginBottom: 0,
+  },
+  loadingMoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 12,
   },
   restaurantCardShimmer: {
     flexDirection: 'row',
@@ -2443,13 +2514,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 16,
     paddingHorizontal: 12,
-  },
-  loadingMoreContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    gap: 12,
   },
   loadingMoreText: {
     fontFamily: 'Poppins',
