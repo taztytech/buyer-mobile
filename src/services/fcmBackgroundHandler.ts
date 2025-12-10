@@ -20,6 +20,12 @@ let FirebaseMessagingTypes: any = null;
 const BACKGROUND_NOTIFICATIONS_KEY = '@tazty_background_notifications';
 
 try {
+  // Check if we're in a development build (not Expo Go)
+  const { NativeModules } = require('react-native');
+  if (!NativeModules.RNFBAppModule) {
+    throw new Error('Firebase native module not available - rebuild required');
+  }
+  
   const firebaseMessaging = require('@react-native-firebase/messaging');
   messaging = firebaseMessaging.default;
   FirebaseMessagingTypes = firebaseMessaging.FirebaseMessagingTypes;
@@ -33,7 +39,7 @@ try {
    * This handler saves order notification data to AsyncStorage
    * The app will read and process these on next open
    */
-  if (messaging) {
+  if (messaging && typeof messaging === 'function') {
     messaging().setBackgroundMessageHandler(
       async (remoteMessage: any) => {
         console.log('📨 FCM: Background message received:', remoteMessage.messageId);

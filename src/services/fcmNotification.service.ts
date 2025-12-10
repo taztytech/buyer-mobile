@@ -16,11 +16,19 @@ let messaging: any = null;
 let FirebaseMessagingTypes: any = null;
 
 try {
-  const firebaseMessaging = require('@react-native-firebase/messaging');
-  messaging = firebaseMessaging.default;
-  FirebaseMessagingTypes = firebaseMessaging.FirebaseMessagingTypes;
+  // Check if native module exists before requiring
+  const { NativeModules } = require('react-native');
+  if (NativeModules.RNFBAppModule) {
+    const firebaseMessaging = require('@react-native-firebase/messaging');
+    messaging = firebaseMessaging.default;
+    FirebaseMessagingTypes = firebaseMessaging.FirebaseMessagingTypes;
+  } else {
+    console.warn('⚠️  FCM: Native module RNFBAppModule not found. Rebuild native app to enable FCM.');
+    console.warn('   Run: npm run android:dev or npm run ios:dev');
+  }
 } catch (error) {
   console.warn('⚠️  FCM: Native module not available. Rebuild native app to enable FCM.');
+  console.warn('   Error:', error.message);
 }
 
 const PUSH_TOKEN_KEY = '@tazty_fcm_token';

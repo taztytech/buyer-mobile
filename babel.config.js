@@ -30,8 +30,7 @@ module.exports = function (api) {
   // Check NODE_ENV or BABEL_ENV for production builds
   const isProduction = 
     process.env.NODE_ENV === 'production' || 
-    process.env.BABEL_ENV === 'production' ||
-    (process.env.NODE_ENV === 'development' && process.env.NODE_ENV !== undefined);
+    process.env.BABEL_ENV === 'production';
   
   if (isProduction) {
     plugins.push([
