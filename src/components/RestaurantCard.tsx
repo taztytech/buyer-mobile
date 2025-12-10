@@ -218,43 +218,49 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             </View>
           )}
 
-          {/* Actual image with fade-in animation */}
-          <Animated.Image
-            source={getImageSource()}
-            style={[
-              styles.image,
-              !isRestaurantOpen && styles.imageClosed,
-              { opacity: imageOpacity }
-            ]}
-            resizeMode="cover"
-            testID={`restaurant-image-${restaurant.id}`}
-            onError={() => {
-              // Mark as loaded even on error
-              setImageLoaded(true);
-              Animated.timing(imageOpacity, {
-                toValue: 1,
-                duration: 300,
-                useNativeDriver: true,
-              }).start();
-              if (onImageLoad) {
-                onImageLoad();
-              }
-            }}
-            onLoad={() => {
-              // Fade in the image
-              setImageLoaded(true);
-              Animated.timing(imageOpacity, {
-                toValue: 1,
-                duration: 300,
-                useNativeDriver: true,
-              }).start();
-              if (onImageLoad) {
-                onImageLoad();
-              }
-            }}
-            fadeDuration={0}
-            progressiveRenderingEnabled={true}
-          />
+          {/* Actual image with fade-in animation - wrapped for grayscale effect */}
+          <View style={styles.imageWrapper}>
+            <Animated.Image
+              source={getImageSource()}
+              style={[
+                styles.image,
+                !isRestaurantOpen && styles.imageGrayscale,
+                { opacity: imageOpacity }
+              ]}
+              resizeMode="cover"
+              testID={`restaurant-image-${restaurant.id}`}
+              onError={() => {
+                // Mark as loaded even on error
+                setImageLoaded(true);
+                Animated.timing(imageOpacity, {
+                  toValue: 1,
+                  duration: 300,
+                  useNativeDriver: true,
+                }).start();
+                if (onImageLoad) {
+                  onImageLoad();
+                }
+              }}
+              onLoad={() => {
+                // Fade in the image
+                setImageLoaded(true);
+                Animated.timing(imageOpacity, {
+                  toValue: 1,
+                  duration: 300,
+                  useNativeDriver: true,
+                }).start();
+                if (onImageLoad) {
+                  onImageLoad();
+                }
+              }}
+              fadeDuration={0}
+              progressiveRenderingEnabled={true}
+            />
+            {/* Single optimized overlay that blends with image to create grayscale - only for closed stores */}
+            {!isRestaurantOpen && (
+              <View style={styles.grayscaleBlendOverlay} pointerEvents="none" />
+            )}
+          </View>
 
           {/* Top Gradient Overlay */}
           <LinearGradient
@@ -272,10 +278,6 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             style={styles.gradientOverlayBottom}
           />
 
-          {/* Gray Overlay for Closed Restaurants */}
-          {!isRestaurantOpen && (
-            <View style={styles.grayOverlay} />
-          )}
 
           {/* Closed Now Overlay */}
           {!isRestaurantOpen && (
@@ -315,7 +317,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           )}
 
           {/* Restaurant Name */}
-          <Text style={styles.restaurantName} numberOfLines={2} ellipsizeMode="tail">
+          <Text style={[
+            styles.restaurantName,
+            !isRestaurantOpen && styles.restaurantNameClosed
+          ]} numberOfLines={2} ellipsizeMode="tail">
             {restaurant.name}
           </Text>
 
@@ -325,7 +330,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
               <>
                 <View style={styles.ratingContainer}>
                   <MaterialIcons name="star" size={14} color="#00B14F" />
-                  <Text style={styles.ratingText}>
+                  <Text style={[
+                    styles.ratingText,
+                    !isRestaurantOpen && styles.ratingTextClosed
+                  ]}>
                     {restaurant.rating.toFixed(1)}
                   </Text>
                 </View>
@@ -336,27 +344,42 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           </View>
 
           {/* Cuisine */}
-          <Text style={styles.cuisineText} numberOfLines={2} ellipsizeMode="tail">
+          <Text style={[
+            styles.cuisineText,
+            !isRestaurantOpen && styles.cuisineTextClosed
+          ]} numberOfLines={2} ellipsizeMode="tail">
             {restaurant.cuisine}
           </Text>
 
-          {/* Location and Distance - Same Row */}
-          <View style={styles.locationDistanceRow}>
-            <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
+          {/* Location - Separate Row */}
+          <View style={styles.locationRow}>
+            <Text style={[
+              styles.locationText,
+              !isRestaurantOpen && styles.locationTextClosed
+            ]} numberOfLines={1} ellipsizeMode="tail">
               {locationText}
             </Text>
-            <Text style={styles.locationSeparator}>•</Text>
+          </View>
+
+          {/* Distance - Separate Row Below Location */}
+          <View style={styles.distanceRow}>
             <MaterialIcons name="location-on" size={14} color="#00B14F" />
-            <Text style={styles.distanceText}>{restaurant.distance}</Text>
+            <Text style={[
+              styles.distanceText,
+              !isRestaurantOpen && styles.distanceTextClosed
+            ]}>{restaurant.distance}</Text>
           </View>
 
           {/* Opening Time (when closed) - All data from API */}
-          {nextOpeningInfo && (
-            <View style={styles.openingTimeContainer}>
-              <View style={styles.separator} />
-              <Text style={styles.openingTimeText}>{nextOpeningInfo.message}</Text>
-            </View>
-          )}
+          {/* Always render container to maintain consistent row height */}
+          <View style={styles.openingTimeContainer}>
+            {nextOpeningInfo && (
+              <>
+                <View style={styles.separator} />
+                <Text style={styles.openingTimeText}>{nextOpeningInfo.message}</Text>
+              </>
+            )}
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -379,43 +402,49 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           </View>
         )}
 
-        {/* Actual image with fade-in animation */}
-        <Animated.Image
-          source={getImageSource()}
-          style={[
-            styles.imageVertical,
-            !isRestaurantOpen && styles.imageClosed,
-            { opacity: imageOpacity }
-          ]}
-          resizeMode="cover"
-          testID={`restaurant-image-${restaurant.id}`}
-          onError={() => {
-            // Mark as loaded even on error
-            setImageLoaded(true);
-            Animated.timing(imageOpacity, {
-              toValue: 1,
-              duration: 300,
-              useNativeDriver: true,
-            }).start();
-            if (onImageLoad) {
-              onImageLoad();
-            }
-          }}
-          onLoad={() => {
-            // Fade in the image
-            setImageLoaded(true);
-            Animated.timing(imageOpacity, {
-              toValue: 1,
-              duration: 300,
-              useNativeDriver: true,
-            }).start();
-            if (onImageLoad) {
-              onImageLoad();
-            }
-          }}
-          fadeDuration={0}
-          progressiveRenderingEnabled={true}
-        />
+        {/* Actual image with fade-in animation - wrapped for grayscale effect */}
+        <View style={styles.imageWrapperVertical}>
+          <Animated.Image
+            source={getImageSource()}
+            style={[
+              styles.imageVertical,
+              !isRestaurantOpen && styles.imageGrayscale,
+              { opacity: imageOpacity }
+            ]}
+            resizeMode="cover"
+            testID={`restaurant-image-${restaurant.id}`}
+            onError={() => {
+              // Mark as loaded even on error
+              setImageLoaded(true);
+              Animated.timing(imageOpacity, {
+                toValue: 1,
+                duration: 300,
+                useNativeDriver: true,
+              }).start();
+              if (onImageLoad) {
+                onImageLoad();
+              }
+            }}
+            onLoad={() => {
+              // Fade in the image
+              setImageLoaded(true);
+              Animated.timing(imageOpacity, {
+                toValue: 1,
+                duration: 300,
+                useNativeDriver: true,
+              }).start();
+              if (onImageLoad) {
+                onImageLoad();
+              }
+            }}
+            fadeDuration={0}
+            progressiveRenderingEnabled={true}
+          />
+          {/* Single optimized overlay that blends with image to create grayscale - only for closed stores */}
+          {!isRestaurantOpen && (
+            <View style={styles.grayscaleBlendOverlayVertical} pointerEvents="none" />
+          )}
+        </View>
 
         {/* Top Gradient Overlay */}
         <LinearGradient
@@ -433,10 +462,6 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           style={styles.gradientOverlayBottomVertical}
         />
 
-        {/* Gray Overlay for Closed Restaurants */}
-        {!isRestaurantOpen && (
-          <View style={styles.grayOverlayVertical} />
-        )}
 
         {/* Closed Now Overlay */}
         {!isRestaurantOpen && (
@@ -469,13 +494,19 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
       <View style={styles.detailsContainerVertical}>
         {/* Store Name Row with Rating on Right */}
         <View style={styles.nameRatingRow}>
-          <Text style={styles.restaurantNameVertical} numberOfLines={2} ellipsizeMode="tail">
+          <Text style={[
+            styles.restaurantNameVertical,
+            !isRestaurantOpen && styles.restaurantNameVerticalClosed
+          ]} numberOfLines={2} ellipsizeMode="tail">
             {restaurant.name}
           </Text>
           {restaurant.rating > 0 && (
             <View style={styles.ratingBadge}>
               <MaterialIcons name="star" size={14} color="#FFFFFF" />
-              <Text style={styles.ratingBadgeText}>
+              <Text style={[
+                styles.ratingBadgeText,
+                !isRestaurantOpen && styles.ratingBadgeTextClosed
+              ]}>
                 {restaurant.rating.toFixed(1)}
               </Text>
             </View>
@@ -483,7 +514,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
         </View>
 
         {/* Store Description/Cuisine */}
-        <Text style={styles.cuisineTextVertical} numberOfLines={2} ellipsizeMode="tail">
+        <Text style={[
+          styles.cuisineTextVertical,
+          !isRestaurantOpen && styles.cuisineTextVerticalClosed
+        ]} numberOfLines={2} ellipsizeMode="tail">
           {restaurant.cuisine}
         </Text>
 
@@ -495,7 +529,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             <>
               <Text style={styles.distanceSeparator}>•</Text>
               <MaterialIcons name="location-on" size={16} color="#00B14F" />
-              <Text style={styles.distanceTextVertical}>{restaurant.distance}</Text>
+              <Text style={[
+                styles.distanceTextVertical,
+                !isRestaurantOpen && styles.distanceTextVerticalClosed
+              ]}>{restaurant.distance}</Text>
             </>
           )}
         </View>
@@ -564,17 +601,51 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 16,
   },
+  imageWrapper: {
+    width: 130,
+    height: 160,
+    position: 'relative',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  imageWrapperVertical: {
+    width: '100%',
+    height: 200,
+    position: 'relative',
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+    overflow: 'hidden',
+  },
   imageClosed: {
     opacity: 1,
   },
-  grayOverlay: {
+  imageGrayscale: {
+    // Style applied to image when closed - the overlay will create the grayscale effect
+    opacity: 6,
+  },
+  grayscaleBlendOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(120, 120, 120, 0.75)',
+    // Single overlay optimized to create true black & white grayscale effect
+    // Using a neutral grey that desaturates colors completely when applied
+    backgroundColor: 'rgba(127, 127, 127, 0.6)',
     borderRadius: 16,
+    zIndex: 2,
+  },
+  grayscaleBlendOverlayVertical: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    // Single overlay optimized to create true black & white grayscale effect
+    // Using a neutral grey that desaturates colors completely when applied
+    backgroundColor: 'rgba(127, 127, 127, 0.15)',
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
     zIndex: 2,
   },
   closedOverlay: {
@@ -661,6 +732,10 @@ const styles = StyleSheet.create({
     marginBottom: 3,
     marginTop: 0,
   },
+  restaurantNameClosed: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
   // Rating and Delivery Row
   ratingDeliveryRow: {
     flexDirection: 'row',
@@ -679,6 +754,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: '#000000',
+  },
+  ratingTextClosed: {
+    fontSize: 11,
+    lineHeight: 16,
   },
   deliveryDot: {
     fontFamily: 'Poppins_500Medium',
@@ -699,25 +778,33 @@ const styles = StyleSheet.create({
     color: '#666666',
     marginBottom: 2,
   },
-  // Location and Distance Row (Same Row)
-  locationDistanceRow: {
+  cuisineTextClosed: {
+    fontSize: 10,
+    lineHeight: 16,
+  },
+  // Location Row (Separate)
+  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
-    flexWrap: 'wrap',
+    marginBottom: 4,
   },
   locationText: {
     fontFamily: 'Poppins_400Regular',
     fontSize: 12,
     lineHeight: 16,
     color: '#666666',
-    flexShrink: 1,
+    flex: 1,
   },
-  locationSeparator: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 12,
-    color: '#666666',
+  locationTextClosed: {
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  // Distance Row (Separate, Below Location)
+  distanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
   },
   distanceText: {
     fontFamily: 'Poppins_400Regular',
@@ -725,9 +812,14 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: '#666666',
   },
+  distanceTextClosed: {
+    fontSize: 10,
+    lineHeight: 14,
+  },
   openingTimeContainer: {
     marginTop: 4,
-    paddingTop: 3,
+    minHeight: 20, // Reserve minimum height to maintain consistent row height
+    justifyContent: 'flex-start',
   },
   separator: {
     height: 1,
@@ -738,7 +830,7 @@ const styles = StyleSheet.create({
   openingTimeText: {
     fontFamily: 'Poppins_400Regular',
     fontSize: 12,
-    lineHeight: 30,
+    lineHeight: 16,
     color: '#000000',
     letterSpacing: 0.1,
   },
@@ -787,17 +879,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 10,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
-  },
-  grayOverlayVertical: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(120, 120, 120, 0.75)',
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
-    zIndex: 2,
   },
   closedOverlayVertical: {
     position: 'absolute',
@@ -857,6 +938,10 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: '#000000',
   },
+  restaurantNameVerticalClosed: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
   // Rating Badge
   ratingBadge: {
     flexDirection: 'row',
@@ -875,6 +960,10 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#FFFFFF',
   },
+  ratingBadgeTextClosed: {
+    fontSize: 10,
+    lineHeight: 16,
+  },
   // Cuisine
   cuisineTextVertical: {
     fontFamily: 'Poppins',
@@ -883,6 +972,10 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#666666',
     marginBottom: 6,
+  },
+  cuisineTextVerticalClosed: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   // Delivery Row
   deliveryRow: {
@@ -911,6 +1004,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: '#00B14F',
+  },
+  distanceTextVerticalClosed: {
+    fontSize: 10,
+    lineHeight: 16,
   },
   // Price
   priceText: {
