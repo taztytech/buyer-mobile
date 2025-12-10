@@ -644,17 +644,48 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 <Text style={styles.rateButtonText}>Help</Text>
               </TouchableOpacity> */}
               {(() => {
-                // Enable tracking if status is agent-assigned or later, OR if tracking_url exists
+                // Track Order is enabled ONLY for: picked, out-for-delivery, on-the-way, delivered
+                // Disabled for: confirmed (order placed), billed (order accepted), packed (order ready), agent-assigned
                 const rawStatus = (order.status || '').toString().toLowerCase();
                 const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
-                const hasTrackingUrl = (order as any)?.tracking_url && (order as any)?.tracking_url !== null;
-                const isTrackingEnabled = 
-                  hasTrackingUrl ||
-                  normalizedStatus === 'agent-assigned' ||
-                  normalizedStatus === 'picked' ||
-                  normalizedStatus === 'out-for-delivery' ||
-                  normalizedStatus === 'on-the-way' ||
-                  normalizedStatus === 'delivered';
+                
+                // Explicitly disabled statuses - tracking is NOT allowed for these
+                const disabledStatuses = [
+                  'confirmed',
+                  'billed',
+                  'packed',
+                  'agent-assigned',
+                  'agent_assigned',
+                  'agent-arrived-restaurant',
+                  'agent_arrived_restaurant',
+                  'cancelled',
+                  'canceled',
+                  'rejected',
+                  'payment-failed',
+                  'payment_failed',
+                  'pending',
+                  'pending-payment',
+                  'pending_payment',
+                  'preparing'
+                ];
+                
+                // Define enabled statuses - tracking only works from "picked" status onward
+                const enabledStatuses = [
+                  'picked',
+                  'out-for-delivery',
+                  'out_for_delivery',
+                  'on-the-way',
+                  'on_the_way',
+                  'delivered',
+                  'completed'
+                ];
+                
+                // Check if status is explicitly disabled first - force disable
+                const isExplicitlyDisabled = disabledStatuses.includes(normalizedStatus);
+                
+                // Enable tracking only if status is in enabled list AND not explicitly disabled
+                // Note: tracking_url override removed - status must be enabled
+                const isTrackingEnabled = !isExplicitlyDisabled && enabledStatuses.includes(normalizedStatus);
                 
                 return (
                   <TouchableOpacity

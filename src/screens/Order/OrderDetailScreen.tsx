@@ -554,17 +554,48 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               ) : ( */}
                 <View style={styles.trackOrderContainer}>
                   {(() => {
-                    // Enable tracking if status is agent-assigned or later, OR if tracking_url exists
+                    // Track Order is enabled ONLY for: picked, out-for-delivery, on-the-way, delivered
+                    // Disabled for: confirmed (order placed), billed (order accepted), packed (order ready), agent-assigned
                     const rawStatus = (orderData?.status || '').toString().toLowerCase();
                     // Normalize: underscores/spaces to hyphen
                     const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
-                    const isTrackingEnabled = 
-                      (orderData?.tracking_url && orderData.tracking_url !== null) ||
-                      normalizedStatus === 'agent-assigned' ||
-                      normalizedStatus === 'picked' ||
-                      normalizedStatus === 'out-for-delivery' ||
-                      normalizedStatus === 'on-the-way' ||
-                      normalizedStatus === 'delivered';
+                    
+                    // Explicitly disabled statuses - tracking is NOT allowed for these
+                    const disabledStatuses = [
+                      'confirmed',
+                      'billed',
+                      'packed',
+                      'agent-assigned',
+                      'agent_assigned',
+                      'agent-arrived-restaurant',
+                      'agent_arrived_restaurant',
+                      'cancelled',
+                      'canceled',
+                      'rejected',
+                      'payment-failed',
+                      'payment_failed',
+                      'pending',
+                      'pending-payment',
+                      'pending_payment',
+                      'preparing'
+                    ];
+                    
+                    // Define enabled statuses - tracking only works from "picked" status onward
+                    const enabledStatuses = [
+                      'picked',
+                      'out-for-delivery',
+                      'out_for_delivery',
+                      'on-the-way',
+                      'on_the_way',
+                      'delivered',
+                      'completed'
+                    ];
+                    
+                    // Check if status is explicitly disabled first - force disable
+                    const isExplicitlyDisabled = disabledStatuses.includes(normalizedStatus);
+                    
+                    // Enable tracking only if status is in enabled list AND not explicitly disabled
+                    const isTrackingEnabled = !isExplicitlyDisabled && enabledStatuses.includes(normalizedStatus);
                     
                     return (
                       <>
@@ -601,7 +632,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                         </TouchableOpacity>
                         {!isTrackingEnabled && (
                           <Text style={styles.trackingDisabledMessage}>
-                            Tracking unlocks after a delivery partner is assigned.
+                            Tracking unlocks after your order is picked up.
                           </Text>
                         )}
                       </>
