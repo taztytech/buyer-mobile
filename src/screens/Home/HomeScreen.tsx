@@ -147,6 +147,44 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [hasMoreRestaurants, setHasMoreRestaurants] = React.useState(false);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
 
+  // Check if current time is between 5 PM (17:00) and 8 AM (08:00) - closed hours
+  const checkClosedHours = React.useCallback(() => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    // Closed from 5 PM (17:00) to 8 AM (08:00) next day
+    // At 5 PM (17:00) or later, or before 8 AM (08:00)
+    const isClosed = currentHour >= 17 || currentHour < 8;
+    // Debug log (remove in production if needed)
+    console.log(`[Closed Hours Check] Current hour: ${currentHour}, Is closed: ${isClosed}`);
+    return isClosed;
+  }, []);
+
+  // Update closed hours status - check immediately and update frequently
+  const [isCurrentlyClosed, setIsCurrentlyClosed] = React.useState(() => checkClosedHours());
+  
+  React.useEffect(() => {
+    // Check immediately on mount and when screen becomes focused
+    const updateClosedStatus = () => {
+      const isClosed = checkClosedHours();
+      setIsCurrentlyClosed(isClosed);
+    };
+
+    // Check immediately
+    updateClosedStatus();
+
+    // Check every 10 seconds for more responsive updates
+    const interval = setInterval(updateClosedStatus, 10000);
+
+    return () => clearInterval(interval);
+  }, [checkClosedHours]);
+
+  // Also check when screen becomes focused
+  React.useEffect(() => {
+    if (isFocused) {
+      setIsCurrentlyClosed(checkClosedHours());
+    }
+  }, [isFocused, checkClosedHours]);
+
   // Refresh trigger - increments to force data reload
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_refreshTrigger, _setRefreshTrigger] = React.useState(0);
@@ -1462,11 +1500,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
       )}
 
-      {/* Ad Banner Carousel */}
+      {/* Ad Banner Carousel or Closed Banner */}
       {isLocationServiceable && (
       <>
       <View style={styles.carouselContainer}>
-        {showBannerShimmer ? (
+        {isCurrentlyClosed ? (
+          // Show closed banner during closed hours (5 PM to 8 AM)
+          <View style={styles.closedBannerContainer}>
+            <Image
+              source={require('@../../../assets/Closed Banner.png')}
+              style={styles.closedBannerImage}
+              resizeMode="contain"
+            />
+          </View>
+        ) : showBannerShimmer ? (
           <View style={styles.loadingContainer}>
             
             <Shimmer width="100%" height={149} borderRadius={20} backgroundColor="#00BEC8" />
@@ -1512,8 +1559,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         )}
       </View>
 
-      {/* What's On Your Mind Section - Only show if there's data or still loading */}
-      {(showCategoryShimmer || categoryData.length > 0) && (
+      {/* What's On Your Mind Section - Only show if there's data or still loading, and NOT during closed hours */}
+      {!isCurrentlyClosed && (showCategoryShimmer || categoryData.length > 0) && (
         <>
           <View style={[
             styles.sectionTitleContainer,
@@ -2103,6 +2150,17 @@ const styles = StyleSheet.create({
   carouselContainer: {
     marginTop: -35,
     marginBottom: 16,
+  },
+  closedBannerContainer: {
+    width: '100%',
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closedBannerImage: {
+    width: BANNER_WIDTH,
+    height: 340,
+    borderRadius: 20,
   },
   loadingContainer: {
     width: '100%',
