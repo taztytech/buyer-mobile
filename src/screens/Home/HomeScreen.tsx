@@ -48,6 +48,13 @@ interface CarouselItem {
   backgroundColor?: string;
 }
 
+interface AppOperationStatus {
+  is_open: boolean;
+  reason?: string;
+  message?: string;
+  next_open_time?: string;
+}
+
 
 // Utility to normalize veg food types returned by API (handles values like "pure-veg")
 const isVegFoodType = (foodType?: string, isVegFlag?: boolean): boolean => {
@@ -147,43 +154,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [hasMoreRestaurants, setHasMoreRestaurants] = React.useState(false);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
 
-  // Check if current time is between 11 PM (23:00) and 8 AM (08:00) - closed hours
-  const checkClosedHours = React.useCallback(() => {
-    const now = new Date();
-    const currentHour = now.getHours();
-    // Closed from 11 PM (23:00) to 8 AM (08:00) next day
-    // At 11 PM (23:00) or later, or before 8 AM (08:00)
-    const isClosed = currentHour >= 23 || currentHour < 8;
-    // Debug log (remove in production if needed)
-    console.log(`[Closed Hours Check] Current hour: ${currentHour}, Is closed: ${isClosed}`);
-    return isClosed;
-  }, []);
-
-  // Update closed hours status - check immediately and update frequently
-  const [isCurrentlyClosed, setIsCurrentlyClosed] = React.useState(() => checkClosedHours());
-  
-  React.useEffect(() => {
-    // Check immediately on mount and when screen becomes focused
-    const updateClosedStatus = () => {
-      const isClosed = checkClosedHours();
-      setIsCurrentlyClosed(isClosed);
-    };
-
-    // Check immediately
-    updateClosedStatus();
-
-    // Check every 10 seconds for more responsive updates
-    const interval = setInterval(updateClosedStatus, 10000);
-
-    return () => clearInterval(interval);
-  }, [checkClosedHours]);
-
-  // Also check when screen becomes focused
-  React.useEffect(() => {
-    if (isFocused) {
-      setIsCurrentlyClosed(checkClosedHours());
-    }
-  }, [isFocused, checkClosedHours]);
+  // App operation status from API
+  const [appOperationStatus, setAppOperationStatus] = React.useState<AppOperationStatus | null>(null);
 
   // Refresh trigger - increments to force data reload
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -693,6 +665,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       // Reset pagination state for fresh load
       setCurrentPage(1);
       setHasMoreRestaurants(false);
+      
+      // Reset app operation status
+      setAppOperationStatus(null);
 
       // Use provided coordinates or default Madurai location
       const lat = latitude ?? DEFAULT_LOCATION.latitude;
@@ -732,7 +707,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           const whatsOnYourMind = actualData.whats_on_your_mind;
           const nearbyRestaurants = actualData.nearby_restaurants;
           const pagination = actualData.pagination;
+          const appOperationStatusData = actualData.app_operation_status;
 
+          // Store app operation status
+          if (appOperationStatusData) {
+            setAppOperationStatus(appOperationStatusData);
+          }
 
           // Handle promotional banners
           if (promotionalBanner) {
@@ -1504,14 +1484,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {isLocationServiceable && (
       <>
       <View style={styles.carouselContainer}>
-        {isCurrentlyClosed ? (
-          // Show closed banner during closed hours (11 PM to 8 AM)
+        {appOperationStatus && !appOperationStatus.is_open ? (
+          // Show closed banner when app is not open
           <View style={styles.closedBannerContainer}>
             <Image
               source={require('@../../../assets/Closed Banner.png')}
               style={styles.closedBannerImage}
               resizeMode="contain"
             />
+            {appOperationStatus.message && (
+              <View style={styles.closedBannerMessageContainer}>
+                <Text style={styles.closedBannerMessage}>
+                  {appOperationStatus.message}
+                </Text>
+              </View>
+            )}
           </View>
         ) : showBannerShimmer ? (
           <View style={styles.loadingContainer}>
@@ -1559,8 +1546,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         )}
       </View>
 
-      {/* What's On Your Mind Section - Only show if there's data or still loading, and NOT during closed hours */}
-      {!isCurrentlyClosed && (showCategoryShimmer || categoryData.length > 0) && (
+      {/* What's On Your Mind Section - Only show if there's data or still loading, and when app is open */}
+      {appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0) && (
         <>
           <View style={[
             styles.sectionTitleContainer,
@@ -2156,11 +2143,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   closedBannerImage: {
     width: BANNER_WIDTH,
     height: 340,
     borderRadius: 20,
+  },
+  closedBannerMessageContainer: {
+    position: 'absolute',
+    bottom: 45,
+    left: 20,
+    right: 20,
+    width: BANNER_WIDTH,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closedBannerMessage: {
+    width: '100%',
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#00B14F',
+    textAlign: 'center',
   },
   loadingContainer: {
     width: '100%',
