@@ -191,6 +191,40 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     });
   };
 
+  // Helper function to format estimated delivery time
+  const formatEstimatedDeliveryTime = (timeString: string | null | undefined): string | null => {
+    if (!timeString) return null;
+    
+    try {
+      const date = new Date(timeString);
+      if (isNaN(date.getTime())) {
+        return null;
+      }
+      
+      // Format as "Dec 12, 2025 at 12:00 PM"
+      const formattedDate = date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      const formattedTime = date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+      
+      return `${formattedDate} at ${formattedTime}`;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  // Get estimated delivery time
+  const estimatedDeliveryTime = formatEstimatedDeliveryTime(
+    orderData?.estimated_delivery_time || 
+    orderData?.preorder_delivery_date
+  );
+
   // Calculate bill details from items if summary is missing or zero
   const calculateBillFromItems = (orderData: any) => {
     
@@ -426,7 +460,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               />
             }
           >
-          {/* Delivery Status Card - Illustration + Banner */}fv
+          {/* Delivery Status Card - Illustration + Banner */}
           <View style={[styles.card, styles.statusCard]}>
             <View style={styles.statusIllustrationContainer}>
               <Image
@@ -779,6 +813,19 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 {orderData.delivery_address?.alternate_phone_number || userPhoneNumber || 'N/A'}
               </Text>
             </View>
+            {/* Show estimated delivery time for all items */}
+            {estimatedDeliveryTime && (
+              <>
+                <View style={styles.dashedDivider} />
+                <View style={styles.addressRow}>
+                  <MaterialIcons name="access-time" size={24} color="#00B14F" />
+                  <View style={styles.estimatedDeliveryContainer}>
+                    <Text style={styles.estimatedDeliveryLabel}>Estimated Delivery Time</Text>
+                    <Text style={styles.estimatedDeliveryValue}>{estimatedDeliveryTime}</Text>
+                  </View>
+                </View>
+              </>
+            )}
           </View>
 
           {/* Bill Summary Card */}
@@ -1204,6 +1251,22 @@ const styles = StyleSheet.create({
     color: '#001E1F',
     lineHeight: 21,
     flex: 1,
+  },
+  estimatedDeliveryContainer: {
+    flex: 1,
+  },
+  estimatedDeliveryLabel: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    color: 'rgba(0, 30, 31, 0.6)',
+    lineHeight: 18,
+    marginBottom: 2,
+  },
+  estimatedDeliveryValue: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#001E1F',
+    lineHeight: 21,
   },
   dashedDivider: {
     height: 1,
