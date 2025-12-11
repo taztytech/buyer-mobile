@@ -117,7 +117,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
         // Show error message
         showConfirmation({
           title: 'Error',
-          message: response.error || 'Failed to create profile. Please try again.',
+          message: 'Email already exist',
           confirmText: 'OK',
           cancelText: 'Close',
           onConfirm: () => {},
@@ -126,7 +126,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
     } catch (error: any) {
       showConfirmation({
         title: 'Error',
-        message: 'An unexpected error occurred. Please try again.',
+        message: 'Email already exist',
         confirmText: 'OK',
         cancelText: 'Close',
         onConfirm: () => {},
@@ -193,6 +193,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
                     }
                   }}
                   autoCapitalize="words"
+                  maxLength={18}
                   onFocus={() => {
                     // Scroll to make name input visible when focused
                     setTimeout(() => {
@@ -218,6 +219,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
                   }}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  maxLength={30}
                   onFocus={() => {
                     // Scroll to bottom when email input is focused to ensure it's visible
                     setTimeout(() => {

@@ -61,12 +61,24 @@ export interface RazorpayOptions {
   };
 }
 
+/**
+ * Payment error types based on Razorpay SDK actions
+ * Simplified to handle only: Network Error, Payment Cancelled, Payment Failed
+ */
+export enum PaymentErrorType {
+  USER_CANCELLED = 'USER_CANCELLED',
+  NETWORK_ERROR = 'NETWORK_ERROR',
+  PAYMENT_FAILED = 'PAYMENT_FAILED',
+}
+
 export interface PaymentResult {
   success: boolean;
   razorpay_payment_id?: string;
   razorpay_order_id?: string;
   razorpay_signature?: string;
   error?: string;
+  errorType?: PaymentErrorType;
+  errorCode?: string;
 }
 
 class PaymentService {
@@ -75,6 +87,91 @@ class PaymentService {
   constructor() {
     // Get Razorpay key from environment
     this.razorpayKeyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || '';
+  }
+
+  /**
+   * Parse Razorpay SDK error and map to user-friendly message
+   * Only handles: Network Error, Payment Cancelled, Payment Failed
+   * Any other error (including user backing out) is treated as Payment Cancelled
+   */
+  private parseRazorpayError(error: any): {
+    errorType: PaymentErrorType;
+    errorMessage: string;
+    errorCode?: string;
+  } {
+    // Extract error code from various possible locations
+    const errorCode = 
+      error?.code || 
+      error?.error?.code || 
+      error?.errorCode ||
+      error?.razorpay_error_code;
+
+    // Extract description from various possible locations
+    const errorDescription = 
+      error?.description || 
+      error?.error?.description || 
+      error?.message ||
+      error?.razorpay_error_description ||
+      error?.error?.message;
+
+    // Normalize error code to uppercase for comparison
+    const normalizedCode = errorCode?.toString().toUpperCase() || '';
+    const normalizedDescription = errorDescription?.toString().toLowerCase() || '';
+
+    // Check for Network Error first
+    if (
+      normalizedCode === 'NETWORK_ERROR' ||
+      normalizedCode === 'NETWORK_ISSUE' ||
+      normalizedDescription.includes('network') ||
+      normalizedDescription.includes('connection') ||
+      normalizedDescription.includes('timeout') ||
+      normalizedDescription.includes('internet')
+    ) {
+      return {
+        errorType: PaymentErrorType.NETWORK_ERROR,
+        errorMessage: 'Unable to connect. Please check your internet connection and try again.',
+        errorCode: normalizedCode || 'NETWORK_ERROR',
+      };
+    }
+
+    // Check for Payment Failed (card declined, insufficient funds, etc.)
+    if (
+      normalizedCode === 'PAYMENT_FAILED' ||
+      normalizedCode === 'PAYMENT_DECLINED' ||
+      normalizedCode === 'CARD_DECLINED' ||
+      normalizedCode === 'INSUFFICIENT_FUNDS' ||
+      normalizedDescription.includes('payment failed') ||
+      normalizedDescription.includes('declined') ||
+      normalizedDescription.includes('insufficient') ||
+      (normalizedDescription.includes('failed') && !normalizedDescription.includes('cancelled'))
+    ) {
+      // Provide more specific message based on error description
+      let paymentFailureMessage = 'Payment could not be processed.';
+      
+      if (normalizedDescription.includes('insufficient') || normalizedDescription.includes('funds')) {
+        paymentFailureMessage = 'Not enough money in your account. Please use a different payment method or add money to your account.';
+      } else if (normalizedDescription.includes('declined') || normalizedDescription.includes('card')) {
+        paymentFailureMessage = 'Your payment was declined. Please try a different payment method.';
+      } else if (normalizedDescription.includes('expired')) {
+        paymentFailureMessage = 'Your card has expired. Please use a different payment method.';
+      } else if (normalizedDescription.includes('invalid')) {
+        paymentFailureMessage = 'The payment details you entered are incorrect. Please check and try again.';
+      }
+
+      return {
+        errorType: PaymentErrorType.PAYMENT_FAILED,
+        errorMessage: paymentFailureMessage,
+        errorCode: normalizedCode || 'PAYMENT_FAILED',
+      };
+    }
+
+    // Default: Treat everything else as Payment Cancelled
+    // This includes: user backing out, closing Razorpay, cancellation, or any other error
+    return {
+      errorType: PaymentErrorType.USER_CANCELLED,
+      errorMessage: 'Payment was cancelled. You can try again when ready.',
+      errorCode: normalizedCode || 'USER_CANCELLED',
+    };
   }
 
   /**
@@ -106,9 +203,12 @@ class PaymentService {
       const razorpayKey = options.key || this.razorpayKeyId;
       
       if (!razorpayKey) {
+        // Treat configuration error as payment cancelled for simplicity
         return {
           success: false,
-          error: 'Razorpay configuration is missing. Please contact support.',
+          error: 'Payment was cancelled. You can try again when ready.',
+          errorType: PaymentErrorType.USER_CANCELLED,
+          errorCode: 'MISSING_RAZORPAY_KEY',
         };
       }
 
@@ -130,10 +230,14 @@ class PaymentService {
         razorpay_signature: data.razorpay_signature,
       };
     } catch (error: any) {
-      // User cancelled or payment failed
+      // Parse SDK error and map to user-friendly message based on error type
+      const parsedError = this.parseRazorpayError(error);
+      
       return {
         success: false,
-        error: error.description || error.error?.description || 'Payment was cancelled or failed',
+        error: parsedError.errorMessage,
+        errorType: parsedError.errorType,
+        errorCode: parsedError.errorCode,
       };
     }
   }
@@ -204,14 +308,19 @@ class PaymentService {
       const paymentResult = await this.openCheckout(checkoutOptions);
 
       if (!paymentResult.success) {
-        // Payment failed or cancelled
-        await this.handlePaymentFailure(orderId, {
-          reason: paymentResult.error || 'Payment cancelled by user',
-        });
+        // Only mark as payment failure if it's not a user cancellation or network error
+        // User cancellations and network errors don't need to be marked as failures
+        if (
+          paymentResult.errorType === PaymentErrorType.PAYMENT_FAILED
+        ) {
+          await this.handlePaymentFailure(orderId, {
+            reason: paymentResult.error || 'Payment could not be processed',
+          });
+        }
         return paymentResult;
       }
 
-      // Step 3: Verify payment on backend
+      // Step 2: Verify payment on backend
       const verifyResponse = await this.verifyPayment({
         razorpay_payment_id: paymentResult.razorpay_payment_id!,
         razorpay_order_id: paymentResult.razorpay_order_id!,
@@ -219,13 +328,15 @@ class PaymentService {
       });
 
       if (!verifyResponse.success) {
-        // Verification failed
+        // Verification failed - treat as payment failed
         await this.handlePaymentFailure(orderId, {
-          reason: 'Payment verification failed',
+          reason: 'Payment could not be confirmed',
         });
         return {
           success: false,
-          error: verifyResponse.error || 'Payment verification failed',
+          error: verifyResponse.error || 'Payment could not be processed. If money was deducted from your account, please contact support.',
+          errorType: PaymentErrorType.PAYMENT_FAILED,
+          errorCode: 'VERIFICATION_FAILED',
         };
       }
 
@@ -236,9 +347,13 @@ class PaymentService {
         razorpay_signature: paymentResult.razorpay_signature,
       };
     } catch (error: any) {
+      // Parse any unexpected errors
+      const parsedError = this.parseRazorpayError(error);
       return {
         success: false,
-        error: error.message || 'Payment processing failed',
+        error: parsedError.errorMessage,
+        errorType: parsedError.errorType,
+        errorCode: parsedError.errorCode,
       };
     }
   }
