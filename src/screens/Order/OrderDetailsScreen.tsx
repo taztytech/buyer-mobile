@@ -170,11 +170,27 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const estimatedDeliveryTimeRaw = (cartSummary as any)?.estimated_delivery_time ?? null;
   
   // Format estimated delivery time to user-friendly format
-  const formatEstimatedDeliveryTime = (dateString: string | null): string | null => {
-    if (!dateString) return null;
+  // Handles two formats:
+  // 1. ISO date string: "2025-12-12T12:00:00.000Z" - format it
+  // 2. Time range string: "11-17 minutes" - show as is
+  const formatEstimatedDeliveryTime = (timeString: string | null): string | null => {
+    if (!timeString) return null;
+    
+    // Check if it's a time range format (e.g., "11-17 minutes")
+    // Pattern: contains numbers, dash, and "minute" or "mins"
+    const timeRangePattern = /^\d+-\d+\s*(minutes?|mins?)$/i;
+    if (timeRangePattern.test(timeString.trim())) {
+      // Return as is for time range format
+      return timeString;
+    }
+    
+    // Try to parse as ISO date string
     try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return null;
+      const date = new Date(timeString);
+      if (isNaN(date.getTime())) {
+        // If parsing fails, return as is (might be another format)
+        return timeString;
+      }
       
       // Format as "Dec 12, 2025 at 12:00 PM"
       const formattedDate = date.toLocaleDateString('en-US', {
@@ -190,7 +206,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       
       return `${formattedDate} at ${formattedTime}`;
     } catch (error) {
-      return null;
+      // If any error occurs, return the original string
+      return timeString;
     }
   };
   
