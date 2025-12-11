@@ -140,9 +140,11 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
     }
 
     try {
+      console.log('orderItems', orderItems);
       // Prepare food ratings array with comments only if they exist
-      const food_ratings = orderItems.map((item, index) => {
-        const itemId = item.id || item.item_id || index;
+      const food_ratings = orderItems.map((item) => {
+        // const itemId = item.id || item.item_id || index;
+        const itemId = item.item_id || 0;
         const itemRating = itemRatings[itemId];
         const foodItem: any = {
           item_id: itemId,
@@ -175,6 +177,9 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
       if (photos.length > 0) {
         reviewData.photos = photos;
       }
+
+      // Log the payload for debugging
+      console.log('📦 Rate Order Payload:', JSON.stringify(reviewData, null, 2));
 
       // Submit review to API
       const response = await ordersService.submitReview(reviewData);
