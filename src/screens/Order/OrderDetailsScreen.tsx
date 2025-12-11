@@ -796,33 +796,34 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           const errorMessage = paymentResult.error || 'Payment could not be processed';
 
           // Determine title and message based on error type
+          // Cart is NOT cleared on payment failure/cancellation - user can try again
           let title = 'Payment Cancelled';
-          let message = 'You cancelled the payment. Your order is still pending. You can complete the payment later from My Orders.';
+          let message = 'Payment was cancelled. You can try again placing the order.';
           let shouldMarkAsFailed = false;
 
           switch (errorType) {
             case PaymentErrorType.USER_CANCELLED:
               title = 'Payment Cancelled';
-              message = 'You cancelled the payment. Your order is still pending. You can complete the payment later from My Orders.';
+              message = 'Payment was cancelled. You can try again placing the order.';
               shouldMarkAsFailed = false;
               break;
 
             case PaymentErrorType.NETWORK_ERROR:
               title = 'Connection Problem';
-              message = 'We couldn\'t connect to complete your payment. Please check your internet connection and try again. Your order is still pending.';
+              message = 'We couldn\'t connect to complete your payment. Please check your internet connection and try again placing the order.';
               shouldMarkAsFailed = false;
               break;
 
             case PaymentErrorType.PAYMENT_FAILED:
               title = 'Payment Failed';
-              message = `${errorMessage} Your order has been marked as Payment Failed and can be viewed in My Orders.`;
+              message = `${errorMessage} You can try again placing the order.`;
               shouldMarkAsFailed = true;
               break;
 
             default:
               // Default to cancelled (user backing out or any other error)
               title = 'Payment Cancelled';
-              message = 'You cancelled the payment. Your order is still pending. You can complete the payment later from My Orders.';
+              message = 'Payment was cancelled. You can try again placing the order.';
               shouldMarkAsFailed = false;
           }
 
@@ -844,24 +845,20 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             }
           }
 
-          // Reset form (cart will be cleared by backend after payment failure, but not for cancellations)
-          if (shouldMarkAsFailed) {
-            setNotes(''); // Reset notes
-            setSelectedTip(null); // Reset tip selection
-            setCustomTipAmount(''); // Reset custom tip amount
-          }
+          // Don't reset form or clear cart - user can try again with same selections
+          // Cart is preserved so user can retry placing the order
 
-          // Show appropriate confirmation based on error type
+          // Show appropriate confirmation with "Try Again" button for all error types
+          // User stays on OrderDetailsScreen (cart page) to try again
           showConfirmation({
             title,
             message,
-            confirmText: errorType === PaymentErrorType.USER_CANCELLED ? 'Try Again' : 'OK',
+            confirmText: 'Try Again',
             cancelText: '',
-            confirmButtonColor: errorType === PaymentErrorType.USER_CANCELLED ? '#00B14F' : '#DC2626',
+            confirmButtonColor: '#00B14F',
             onConfirm: () => {
-              if (onOrderCancel) {
-                onOrderCancel();
-              }
+              // Just close the dialog - user stays on OrderDetailsScreen (cart page) to try again
+              // No navigation needed, cart is preserved
             },
           });
         }
