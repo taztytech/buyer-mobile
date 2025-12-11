@@ -119,6 +119,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // Reset isInitialMount when hasPersistedData is false (reset was called)
   const isInitialMount = useRef(!hasPersistedData);
   const hasRestoredScroll = useRef(false);
+  
+  // Track previous visible state to detect when returning from another screen
+  const prevVisibleRef = useRef(visible);
+  const lastRefreshTimeRef = useRef<number>(0);
   // Merge context orders (with FCM updates) with local orders from API
   // Priority: Context orders (have latest FCM updates) > Local orders
   // Fallback: If context is empty but we have persisted localOrders, use localOrders
@@ -166,8 +170,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // This effect runs when visible changes or component mounts
   useEffect(() => {
     if (!visible) {
+      prevVisibleRef.current = visible;
       return;
     }
+
+    // Check if we're returning to this screen (was hidden, now visible)
+    const isReturning = !prevVisibleRef.current && visible;
+    prevVisibleRef.current = visible;
 
     // Check if reset was called (hasPersistedData is false)
     // hasPersistedData is module-level, so we check it directly each time visible changes
@@ -207,6 +216,75 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       }
       // Reset the restore flag when screen becomes visible with persisted data
       hasRestoredScroll.current = false;
+      
+      // If returning from another screen (e.g., Order Details), refresh orders to get new ones
+      // Only refresh if it's been at least 2 seconds since last refresh to avoid excessive API calls
+      if (isReturning && !isRequestInProgress.current) {
+        const now = Date.now();
+        const timeSinceLastRefresh = now - lastRefreshTimeRef.current;
+        const MIN_REFRESH_INTERVAL = 2000; // 2 seconds
+        
+        if (timeSinceLastRefresh >= MIN_REFRESH_INTERVAL) {
+          // Refresh first page in background to get any new orders
+          // Don't show loading state - just silently update
+          const refreshOrders = async () => {
+            try {
+              isRequestInProgress.current = true;
+              lastRequestedPage.current = 0; // Reset to allow fetching page 1
+              
+              const response = await ordersService.getOrders(5, 1);
+              
+              if (response.success && response.data) {
+                // Handle different response structures (same as fetchOrders)
+                const responseData = response.data as any;
+                
+                const ordersArray =
+                  responseData.data ||
+                  responseData.orders ||
+                  (Array.isArray(responseData) ? responseData : []);
+
+                const total =
+                  responseData.total ||
+                  responseData.meta?.total ||
+                  responseData.data?.total ||
+                  responseData.pagination?.total ||
+                  responseData.metadata?.total ||
+                  ordersArray.length;
+                
+                // Update persisted data
+                persistedOrders = ordersArray;
+                persistedCurrentPage = 1;
+                persistedTotalOrders = total;
+                hasPersistedData = true;
+                
+                // Update local state
+                setLocalOrders(ordersArray);
+                setCurrentPage(1);
+                setTotalOrders(total);
+                
+                // Update context with fresh orders
+                dispatch({
+                  type: 'BULK_SET_ORDERS',
+                  payload: ordersArray,
+                });
+                
+                lastRefreshTimeRef.current = now;
+              }
+            } catch (error) {
+              console.warn('Failed to refresh orders on return:', error);
+            } finally {
+              isRequestInProgress.current = false;
+            }
+          };
+          
+          // Delay refresh slightly to ensure smooth transition
+          const refreshTimer = setTimeout(() => {
+            refreshOrders();
+          }, 300);
+          
+          return () => clearTimeout(refreshTimer);
+        }
+      }
     }
     return undefined;
   }, [visible, dispatch, localOrders.length, currentPage, totalOrders]);
@@ -319,6 +397,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         setCurrentPage(page);
         persistedCurrentPage = page;
         hasPersistedData = true;
+        
+        // Update context with fetched orders
+        dispatch({
+          type: 'BULK_SET_ORDERS',
+          payload: reset ? ordersArray : [...localOrders, ...ordersArray],
+        });
+        
+        // Update last refresh time
+        lastRefreshTimeRef.current = Date.now();
       } else {
         setError(response.error || 'Failed to load orders');
       }
