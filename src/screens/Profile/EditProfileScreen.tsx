@@ -126,7 +126,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
       } else {
         showConfirmation({
           title: 'Error',
-          message: response.error || 'Failed to update profile',
+          message: 'Email already exist',
           confirmText: 'OK',
           cancelText: 'Close',
           onConfirm: () => {},
@@ -135,7 +135,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
     } catch (error) {
       showConfirmation({
         title: 'Error',
-        message: 'An unexpected error occurred',
+        message: 'Email already exist',
         confirmText: 'OK',
         cancelText: 'Close',
         onConfirm: () => {},
@@ -211,6 +211,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
                   }}
                   placeholder="Enter your name"
                   placeholderTextColor="rgba(0, 0, 0, 0.3)"
+                  maxLength={18}
                 />
               </View>
 
@@ -233,6 +234,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
                   placeholderTextColor="rgba(0, 0, 0, 0.3)"
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  maxLength={30}
                 />
               </View>
 

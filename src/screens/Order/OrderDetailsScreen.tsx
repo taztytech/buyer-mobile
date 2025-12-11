@@ -16,7 +16,7 @@ import { AddressSelectionModal } from '@/components/AddressSelectionModal';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { ordersService } from '@/services/orders.service';
 import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
-import { paymentService } from '@/services/payment.service';
+import { paymentService, PaymentErrorType } from '@/services/payment.service';
 import { homeService } from '@/services/home.service';
 import { cartService, CartSummary } from '@/services/cart.service';
 import { restaurantService } from '@/services/restaurant.service';
@@ -791,33 +791,73 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             },
           });
         } else {
-          // Payment failed - Mark order as payment failed and clear cart
-          try {
-            // Use payment failure endpoint to mark order as payment_failed
-            await paymentService.handlePaymentFailure(orderId, {
-              reason: paymentResult.error || 'Payment could not be processed',
-            });
-          } catch (failureError) {
-            // If payment failure endpoint fails, try cancel order as fallback
+          // Handle payment error types: Network Error, Payment Cancelled, Payment Failed
+          const errorType = paymentResult.errorType || PaymentErrorType.USER_CANCELLED;
+          const errorMessage = paymentResult.error || 'Payment could not be processed';
+
+          // Determine title and message based on error type
+          let title = 'Payment Cancelled';
+          let message = 'You cancelled the payment. Your order is still pending. You can complete the payment later from My Orders.';
+          let shouldMarkAsFailed = false;
+
+          switch (errorType) {
+            case PaymentErrorType.USER_CANCELLED:
+              title = 'Payment Cancelled';
+              message = 'You cancelled the payment. Your order is still pending. You can complete the payment later from My Orders.';
+              shouldMarkAsFailed = false;
+              break;
+
+            case PaymentErrorType.NETWORK_ERROR:
+              title = 'Connection Problem';
+              message = 'We couldn\'t connect to complete your payment. Please check your internet connection and try again. Your order is still pending.';
+              shouldMarkAsFailed = false;
+              break;
+
+            case PaymentErrorType.PAYMENT_FAILED:
+              title = 'Payment Failed';
+              message = `${errorMessage} Your order has been marked as Payment Failed and can be viewed in My Orders.`;
+              shouldMarkAsFailed = true;
+              break;
+
+            default:
+              // Default to cancelled (user backing out or any other error)
+              title = 'Payment Cancelled';
+              message = 'You cancelled the payment. Your order is still pending. You can complete the payment later from My Orders.';
+              shouldMarkAsFailed = false;
+          }
+
+          // Only mark as payment failed if it's not a user cancellation or network error
+          if (shouldMarkAsFailed) {
             try {
-              await ordersService.cancelOrder(orderId, `Payment failed: ${paymentResult.error || 'Payment could not be processed'}`);
-            } catch (cancelError) {
-              // If both fail, log but don't block user flow
-              console.error('Failed to mark order as payment failed:', failureError, cancelError);
+              // Use payment failure endpoint to mark order as payment_failed
+              await paymentService.handlePaymentFailure(orderId, {
+                reason: errorMessage,
+              });
+            } catch (failureError) {
+              // If payment failure endpoint fails, try cancel order as fallback
+              try {
+                await ordersService.cancelOrder(orderId, `Payment failed: ${errorMessage}`);
+              } catch (cancelError) {
+                // If both fail, log but don't block user flow
+                console.error('Failed to mark order as payment failed:', failureError, cancelError);
+              }
             }
           }
 
-          // Reset form (cart will be cleared by backend after payment failure)
-          setNotes(''); // Reset notes
-          setSelectedTip(null); // Reset tip selection
-          setCustomTipAmount(''); // Reset custom tip amount
+          // Reset form (cart will be cleared by backend after payment failure, but not for cancellations)
+          if (shouldMarkAsFailed) {
+            setNotes(''); // Reset notes
+            setSelectedTip(null); // Reset tip selection
+            setCustomTipAmount(''); // Reset custom tip amount
+          }
 
+          // Show appropriate confirmation based on error type
           showConfirmation({
-            title: 'Payment Failed',
-            message: 'Payment could not be processed. Your order has been marked as Payment Failed and can be viewed in My Orders.',
-            confirmText: 'OK',
-            cancelText: '', // Remove Close button
-            confirmButtonColor: '#DC2626',
+            title,
+            message,
+            confirmText: errorType === PaymentErrorType.USER_CANCELLED ? 'Try Again' : 'OK',
+            cancelText: '',
+            confirmButtonColor: errorType === PaymentErrorType.USER_CANCELLED ? '#00B14F' : '#DC2626',
             onConfirm: () => {
               if (onOrderCancel) {
                 onOrderCancel();
