@@ -25,6 +25,8 @@ export interface CartItem {
   isCustomizable?: boolean;
   variants?: CartVariant[];
   specialInstructions?: string;
+  isPreorder?: boolean;
+  campaignId?: string;
 }
 
 interface CartContextType {
@@ -80,6 +82,20 @@ const getCartItemTotalQuantity = (item: CartItem | undefined): number => {
     return item.variants.reduce((sum, variant) => sum + variant.quantity, 0);
   }
   return item.quantity || 0;
+};
+
+/**
+ * Check if cart contains only preorder items (or is empty)
+ * Returns true if cart is empty OR all items in cart are preorder items
+ * Returns false if cart has any non-preorder items
+ */
+const isCartOnlyPreorder = (currentCart: { [key: string]: CartItem }): boolean => {
+  const cartItems = Object.values(currentCart);
+  if (cartItems.length === 0) {
+    return true; // Empty cart means we can add preorder items as preorder
+  }
+  // Check if ALL items are preorder items
+  return cartItems.every(item => item.isPreorder === true);
 };
 
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -190,6 +206,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               image: item.item_images?.[0],
               specialInstructions: item.special_instructions || undefined,
               isCustomizable: item.has_customizations || (item.customizations && item.customizations.length > 0),
+              isPreorder: (item as any).is_preorder === true,
+              campaignId: (item as any).campaign_id?.toString(),
             };
 
             if (item.customizations && item.customizations.length > 0) {
@@ -317,6 +335,21 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         special_instructions: normalizedItem.specialInstructions,
       };
 
+      // Check current cart state (excluding the item being added)
+      const currentCartWithoutNewItem = { ...cart };
+      delete currentCartWithoutNewItem[normalizedItem.id];
+      const cartHasOnlyPreorder = isCartOnlyPreorder(currentCartWithoutNewItem);
+
+      // Only include preorder fields if:
+      // 1. Item is actually a preorder item
+      // 2. Cart contains ONLY preorder items (no normal items mixed in)
+      if (normalizedItem.isPreorder === true && cartHasOnlyPreorder) {
+        backendRequest.is_preorder = true;
+        if (normalizedItem.campaignId) {
+          backendRequest.campaign_id = normalizedItem.campaignId;
+        }
+      }
+
       // Add customizations if item has variants (customizable items)
       if (normalizedItem.isCustomizable && normalizedItem.variants && normalizedItem.variants.length > 0) {
         // Map frontend variants to backend customizations structure
@@ -345,9 +378,50 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           saveCartToStorage(updatedCart, overrideRestaurantId || restaurantId, restaurantName, restaurantLogo);
           return updatedCart;
         });
+      } else {
+        // Backend returned an error - remove item from local cart and throw error with status code
+        setCart(prev => {
+          const newCart = { ...prev };
+          delete newCart[normalizedItem.id];
+          return newCart;
+        });
+        const error: any = new Error(response.message || 'Failed to add item to cart');
+        // Preserve status code if available in response
+        if ((response as any).statusCode) {
+          error.statusCode = (response as any).statusCode;
+        } else if ((response as any).status) {
+          error.statusCode = (response as any).status;
+        }
+        throw error;
       }
-    } catch (error) {
-      // Item remains in local cart even if backend sync fails
+    } catch (error: any) {
+      // If error is already thrown from above, re-throw it (it should have statusCode preserved)
+      if (error instanceof Error) {
+        // Preserve statusCode if it exists
+        const errorAny = error as any;
+        if (errorAny.statusCode !== undefined) {
+          throw error;
+        }
+        // If error doesn't have statusCode, try to extract it
+        const statusCode = errorAny?.statusCode || errorAny?.status || errorAny?.response?.status;
+        if (statusCode !== undefined) {
+          errorAny.statusCode = statusCode;
+        }
+        throw error;
+      }
+      // For other errors, remove item from local cart and throw
+      setCart(prev => {
+        const newCart = { ...prev };
+        delete newCart[normalizedItem.id];
+        return newCart;
+      });
+      const newError: any = new Error(error?.message || 'Failed to add item to cart');
+      // Preserve statusCode if available
+      const statusCode = error?.statusCode || error?.status || error?.response?.status;
+      if (statusCode !== undefined) {
+        newError.statusCode = statusCode;
+      }
+      throw newError;
     } finally {
       setSyncWithBackend(false);
     }
@@ -437,7 +511,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Store pending update
     pendingUpdateRef.current = { itemId, quantity: safeQuantity };
 
-    return new Promise<CartSummary | null>((resolve) => {
+    return new Promise<CartSummary | null>((resolve, reject) => {
       updateQuantityTimeoutRef.current = setTimeout(async () => {
         const pendingUpdate = pendingUpdateRef.current;
         if (!pendingUpdate || pendingUpdate.itemId !== itemId) {
@@ -465,6 +539,21 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               quantity: safeQuantity,
               special_instructions: item.specialInstructions,
             };
+
+            // Check if cart contains only preorder items (excluding current item being updated)
+            const cartWithoutCurrentItem = { ...cart };
+            delete cartWithoutCurrentItem[itemId];
+            const cartHasOnlyPreorder = isCartOnlyPreorder(cartWithoutCurrentItem);
+
+            // Only include preorder fields if:
+            // 1. Item is actually a preorder item
+            // 2. Cart contains ONLY preorder items (no normal items mixed in)
+            if (item.isPreorder === true && cartHasOnlyPreorder) {
+              backendRequest.is_preorder = true;
+              if (item.campaignId) {
+                backendRequest.campaign_id = item.campaignId;
+              }
+            }
 
             // Add customizations if item has variants
             if (item.isCustomizable && item.variants && item.variants.length > 0) {
@@ -496,6 +585,14 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               resolve(addResponse.cart_summary || null);
               return;
             } else {
+              // Revert local cart change on failure
+              setCart(prev => ({
+                ...prev,
+                [itemId]: {
+                  ...prev[itemId],
+                  quantity: item.quantity || 0,
+                },
+              }));
               resolve(null);
               return;
             }
@@ -503,20 +600,56 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           setSyncWithBackend(true);
 
+          // Update existing cart item - do NOT pass is_preorder or campaign_id
+          // These fields are only sent when adding new items via addToCart API
           const updateResponse = await cartService.updateCartItem(item.cartItemId, {
             restaurant_id: restaurantId,
             quantity: safeQuantity,
           });
 
+          // If update failed, reject promise with error message so it can be displayed
+          if (!updateResponse.success) {
+            // Revert local cart change on failure
+            setCart(prev => ({
+              ...prev,
+              [itemId]: {
+                ...prev[itemId],
+                quantity: item.quantity || 0,
+              },
+            }));
+            
+            const errorMessage = updateResponse.error || 'Failed to update cart item';
+            const error: any = new Error(errorMessage);
+            error.isCartUpdateError = true;
+            reject(error);
+            return;
+          }
+
           // Return cart_summary from update response
           resolve(updateResponse.cart_summary || null);
         } catch (error: any) {
+          // Revert local cart change on error
+          setCart(prev => ({
+            ...prev,
+            [itemId]: {
+              ...prev[itemId],
+              quantity: item.quantity || 0,
+            },
+          }));
+          
           // If request was aborted, don't treat as error
           if (error?.name === 'AbortError') {
             resolve(null);
             return;
           }
-          // Quantity already updated in local cart
+          
+          // Reject with cart update errors so they can be caught and displayed in the UI
+          if (error?.isCartUpdateError) {
+            reject(error);
+            return;
+          }
+          
+          // For other errors, just resolve with null (local cart already reverted)
           resolve(null);
         } finally {
           setSyncWithBackend(false);
@@ -528,7 +661,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   /**
-   * Clear entire cart (local + backend sync)
+   * Clear entire cart (local only - backend handles cart clearing for orders)
+   * Used for logout, manual cart deletion, restaurant conflicts, etc.
    */
   const clearCart = async () => {
     // Update local cart immediately
@@ -538,22 +672,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setRestaurantLogo(null);
     // Clear from storage
     await storageService.clearCartData();
-
-    // Sync with backend
-    try {
-      const token = await storageService.getAccessToken();
-      if (!token) {
-        return;
-      }
-
-      setSyncWithBackend(true);
-
-      await cartService.clearCart();
-    } catch (error) {
-      // Cart already cleared locally
-    } finally {
-      setSyncWithBackend(false);
-    }
+    // Note: Backend handles cart clearing for payment success/failure scenarios
   };
 
   const getTotalItems = () => {

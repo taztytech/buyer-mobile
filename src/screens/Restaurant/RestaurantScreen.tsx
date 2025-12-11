@@ -14,12 +14,14 @@ import {
   Modal,
   Platform,
   BackHandler,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { apiService } from '@/services/api.service';
 import { homeService } from '@/services/home.service';
+import { addressService } from '@/services/address.service';
 import { Shimmer } from '@/components/Shimmer';
 import { CustomizationModal } from '@/components/CustomizationModal';
 import { AppFooter } from '@/components/AppFooter';
@@ -197,6 +199,7 @@ interface RestaurantScreenProps {
   onNavigateToOrders?: (orderId?: number) => void;
   onNavigateToHome?: () => void;
   onNavigateToCheckout?: (restaurantId: number, restaurantName: string, restaurantAddress?: string, from?: 'home' | 'restaurant') => void;
+  selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
 }
 
 interface AddOn {
@@ -230,6 +233,15 @@ interface CustomizationGroup {
 // Use imported ItemTiming type
 type ItemTiming = ImportedItemTiming;
 
+interface PreorderCampaign {
+  id: string;
+  title: string;
+  available_slots: number;
+  delivery_date: string;
+  discount_amount: string;
+  free_delivery: boolean;
+}
+
 interface MenuItem {
   id: string;
   name: string;
@@ -244,6 +256,8 @@ interface MenuItem {
   addOns?: AddOn[];
   customizations?: CustomizationGroup[];
   timings?: ItemTiming[];
+  isPreorderAvailable?: boolean;
+  preorderCampaign?: PreorderCampaign;
 }
 
 interface MenuSection {
@@ -273,10 +287,45 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   onBack,
   onNavigateToDetails,
   onNavigateToCheckout,
+  selectedLocation,
 }) => {
   const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, reloadCart, checkRestaurantConflict, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName, restaurantLogo: cartRestaurantLogo } = useCart();
   const { vegMode, setVegMode } = useVegMode();
   const { showConfirmation } = useConfirmation();
+
+  // Helper function to handle addToCart errors
+  const handleAddToCartError = (error: any) => {
+    // Extract error message from various possible locations
+    let errorMessage = '';
+    
+    // Check if error has a message property
+    if (error?.message) {
+      errorMessage = error.message;
+    } 
+    // Check if error has response data with message
+    else if (error?.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    }
+    // Check if error has fullResponse with message (from apiService logging)
+    else if (error?.fullResponse?.message) {
+      errorMessage = error.fullResponse.message;
+    }
+    // Fallback to string representation
+    else {
+      errorMessage = error?.toString() || 'Failed to add item to cart';
+    }
+    
+    // Show error message popup when success is false (regardless of status code)
+    // The error is thrown when backend returns success: false
+    showConfirmation({
+      title: '', // No title
+      message: errorMessage,
+      confirmText: 'OK',
+      cancelText: '', // No cancel button (no close button)
+      confirmButtonColor: '#00B14F',
+      onConfirm: () => {},
+    });
+  };
   const insets = useSafeAreaInsets();
   const [menuSections, setMenuSections] = useState<MenuSection[]>([]);
   const [restaurantData, setRestaurantData] = useState<any>(null);
@@ -304,6 +353,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const [showOrderSuccess, setShowOrderSuccess] = useState(false);
   const [togglingFavoriteItemId, setTogglingFavoriteItemId] = useState<string | null>(null);
   const [showClosedModal, setShowClosedModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [defaultAddressCoords, setDefaultAddressCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const restaurantOpeningMessage = useMemo(
     () => (restaurantData?.timings ? homeService.getRestaurantOpeningMessage(restaurantData.timings) : null),
@@ -470,6 +521,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     if (!ensureRestaurantOpen()) {
       return;
     }
+
     const cartItemCount = Object.keys(cart).length;
     const hasConflict = cartItemCount > 0 && 
                        (cartRestaurantId === null || cartRestaurantId !== restaurantId);
@@ -493,7 +545,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             isVeg: item.isVeg,
             image: item.image,
             isCustomizable: false,
-          }, restaurantId);
+            isPreorder: item.isPreorderAvailable || false,
+            campaignId: item.preorderCampaign?.id,
+          }, restaurantId).catch((error) => {
+            handleAddToCartError(error);
+          });
         },
       });
       return;
@@ -509,7 +565,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       isVeg: item.isVeg,
       image: item.image,
       isCustomizable: false,
-    }, restaurantId);
+      isPreorder: item.isPreorderAvailable || false,
+      campaignId: item.preorderCampaign?.id,
+    }, restaurantId).catch((error) => {
+      handleAddToCartError(error);
+    });
   };
 
   // Sync itemQuantityRefs with cart state whenever cart changes
@@ -539,6 +599,27 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       return;
     }
     const cartItem = cart[itemId];
+
+    // Find the menu item to check if it's a preorder item
+    const menuItem = menuSections
+      .flatMap(section => section.items)
+      .find(i => i.id === itemId);
+
+    // Check if item is preorder - only allow quantity of 1
+    if (menuItem?.isPreorderAvailable) {
+      const currentQuantity = getItemQuantity(itemId);
+      if (currentQuantity >= 1) {
+        showConfirmation({
+          title: 'Preorder Limit',
+          message: 'Only one quantity is allowed for preorder items. You can add this item only once.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
+        return;
+      }
+    }
 
     // If item is customizable, open review modal instead
     if (cartItem?.isCustomizable) {
@@ -624,6 +705,41 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       .find(i => i.id === itemId);
 
     if (!item) return;
+
+    // Check if item is preorder and enforce quantity limit of 1
+    if (item.isPreorderAvailable) {
+      if (quantity > 1) {
+        showConfirmation({
+          title: 'Preorder Limit',
+          message: 'Only one quantity is allowed for preorder items. You can add this item only once.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
+        return;
+      }
+
+      // Check if preorder item is already in cart
+      const existingCartItem = cart[itemId];
+      if (existingCartItem && existingCartItem.isPreorder) {
+        const totalQuantity = existingCartItem.isCustomizable && existingCartItem.variants
+          ? existingCartItem.variants.reduce((sum, variant) => sum + variant.quantity, 0)
+          : existingCartItem.quantity || 0;
+        
+        if (totalQuantity >= 1) {
+          showConfirmation({
+            title: 'Preorder Limit',
+            message: 'Only one quantity is allowed for preorder items. You can add this item only once.',
+            confirmText: 'OK',
+            cancelText: '',
+            confirmButtonColor: '#00B14F',
+            onConfirm: () => {},
+          });
+          return;
+        }
+      }
+    }
 
     // Get all available options from customization groups
     const allOptions: Array<{ id: string; name: string; price: number }> = [];
@@ -713,6 +829,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       image: item.image,
       isCustomizable: true,
       variants: updatedVariants,
+      isPreorder: item.isPreorderAvailable || false,
+      campaignId: item.preorderCampaign?.id,
+    }).catch((error) => {
+      handleAddToCartError(error);
     });
 
     // Clear editing state
@@ -744,11 +864,29 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     const item = cart[reviewingItemId];
     if (!item?.variants) return;
 
+    // Check if item is preorder and enforce quantity limit of 1
+    if (item.isPreorder) {
+      const totalQuantity = item.variants.reduce((sum, variant) => sum + variant.quantity, 0);
+      if (totalQuantity >= 1) {
+        showConfirmation({
+          title: 'Preorder Limit',
+          message: 'Only one quantity is allowed for preorder items. You can add this item only once.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
+        return;
+      }
+    }
+
     addToCartContext({
       ...item,
       variants: item.variants.map(v =>
         v.id === variantId ? { ...v, quantity: v.quantity + 1 } : v
       ),
+    }).catch((error) => {
+      handleAddToCartError(error);
     });
   };
 
@@ -769,6 +907,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       addToCartContext({
         ...item,
         variants: updatedVariants,
+      }).catch((error) => {
+        handleAddToCartError(error);
       });
     }
   };
@@ -974,6 +1114,21 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
     if (!item) return;
 
+    // Check if item is preorder and enforce quantity limit of 1
+    if (item.isPreorderAvailable) {
+      if (quantity > 1) {
+        showConfirmation({
+          title: 'Preorder Limit',
+          message: 'Only one quantity is allowed for preorder items. You can add this item only once.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
+        return;
+      }
+    }
+
     const safeQuantity = Math.min(quantity, MAX_ITEM_QUANTITY);
     if (safeQuantity <= 0) {
       return;
@@ -982,7 +1137,33 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     // Check if item already exists in cart
     const existingCartItem = cart[itemId];
     
+    // Check if preorder item is already in cart
+    if (item.isPreorderAvailable && existingCartItem && existingCartItem.quantity && existingCartItem.quantity >= 1) {
+      showConfirmation({
+        title: 'Preorder Limit',
+        message: 'Only one quantity is allowed for preorder items. You can add this item only once.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+    
     if (existingCartItem) {
+      // For preorder items, don't allow updating quantity if already at 1
+      if (item.isPreorderAvailable && existingCartItem.quantity && existingCartItem.quantity >= 1) {
+        showConfirmation({
+          title: 'Preorder Limit',
+          message: 'Only one quantity is allowed for preorder items. You can add this item only once.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
+        return;
+      }
+
       // Mark item as being updated to prevent concurrent updates
       updatingItemsRef.current.add(itemId);
       
@@ -1023,7 +1204,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               isVeg: item.isVeg,
               image: item.image,
               isCustomizable: false,
-            }, restaurantId);
+              isPreorder: item.isPreorderAvailable || false,
+              campaignId: item.preorderCampaign?.id,
+            }, restaurantId).catch((error) => {
+              handleAddToCartError(error);
+            });
           },
         });
         return;
@@ -1043,7 +1228,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         isVeg: item.isVeg,
         image: item.image,
         isCustomizable: false,
-      }, restaurantId);
+        isPreorder: item.isPreorderAvailable || false,
+        campaignId: item.preorderCampaign?.id,
+      }, restaurantId).catch((error) => {
+        handleAddToCartError(error);
+      });
     }
   }, [cart, menuSections, updateQuantity, addToCartContext, checkRestaurantConflict, restaurantId, restaurantData, restaurantName, setRestaurantInfo, clearCart, showConfirmation, showMaxQuantityAlert, ensureRestaurantOpen]);
 
@@ -1060,13 +1249,52 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         cartReloadedRef.current = true;
       }
       
+      // Only fetch restaurant details if we have coordinates (either from default address or fallback)
+      // This ensures we use the correct coordinates
       fetchRestaurantDetails();
     } else if (!visible) {
       setRestaurantData(null);
       setMenuSections([]);
       cartReloadedRef.current = false;
     }
-  }, [visible, restaurantId]);
+  }, [visible, restaurantId, defaultAddressCoords]);
+
+  // Fetch default address coordinates only if selectedLocation is not provided
+  // Same pattern as CategoryResultsScreen - prioritize selectedLocation prop
+  useEffect(() => {
+    // If selectedLocation is provided, don't fetch address API
+    if (selectedLocation?.latitude && selectedLocation?.longitude) {
+      return;
+    }
+
+    const fetchDefaultAddress = async () => {
+      try {
+        const response = await addressService.getAddresses();
+        if (response.success && response.data) {
+          // Find the default address (is_default: true)
+          const defaultAddress = response.data.find(addr => addr.is_default);
+          if (defaultAddress) {
+            setDefaultAddressCoords({
+              latitude: defaultAddress.latitude,
+              longitude: defaultAddress.longitude,
+            });
+          } else {
+            // No default address found, set to null (will use fallback)
+            setDefaultAddressCoords(null);
+          }
+        } else {
+          // API failed, set to null (will use fallback)
+          setDefaultAddressCoords(null);
+        }
+      } catch (error) {
+        // Error fetching, set to null (will use fallback)
+        setDefaultAddressCoords(null);
+      }
+    };
+
+    // Fetch only once on mount - addressService handles caching internally
+    fetchDefaultAddress();
+  }, [selectedLocation]); // Only fetch if selectedLocation changes or is not provided
 
   // Initialize active category when menu sections load
   useEffect(() => {
@@ -1123,21 +1351,27 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
   }, [showDetailModal, showCustomizationModal, showCustomisationsReviewModal]);
 
-  const fetchRestaurantDetails = async () => {
+  const fetchRestaurantDetails = async (skipDelay: boolean = false) => {
     try {
       setIsLoading(true);
 
-      // Default location - you can make this dynamic later
-      const lat = 9.9352300;
-      const lng = 78.1304040;
+      // Use selectedLocation first, then defaultAddressCoords, then fallback to default location
+      // Same priority as CategoryResultsScreen
+      const lat = selectedLocation?.latitude || defaultAddressCoords?.latitude || 9.9352300;
+      const lng = selectedLocation?.longitude || defaultAddressCoords?.longitude || 78.1304040;
 
-      // Add minimum delay to show shimmer animation
-      const [response] = await Promise.all([
+      // Add minimum delay to show shimmer animation (skip during refresh)
+      const promises = [
         apiService.get(
           `/api/buyer/restaurants/${restaurantId}?lat=${lat}&lng=${lng}&include_items=true`
         ),
-        new Promise(resolve => setTimeout(resolve, 1500)) // 1.5 second delay
-      ]);
+      ];
+      
+      if (!skipDelay) {
+        promises.push(new Promise(resolve => setTimeout(resolve, 1500))); // 1.5 second delay
+      }
+      
+      const [response] = await Promise.all(promises);
 
       // Handle nested data structure: response.data.data.data
       const responseData = response.data as any;
@@ -1183,6 +1417,17 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 item.is_veg === true ||
                 item.is_veg === 1;
 
+              // Parse preorder data
+              const isPreorderAvailable = item.is_preorder_available === true;
+              const preorderCampaign = isPreorderAvailable && item.preorder_campaign ? {
+                id: item.preorder_campaign.id?.toString() || '',
+                title: item.preorder_campaign.title || '',
+                available_slots: item.preorder_campaign.available_slots || 0,
+                delivery_date: item.preorder_campaign.delivery_date || '',
+                discount_amount: item.preorder_campaign.discount_amount || '0',
+                free_delivery: item.preorder_campaign.free_delivery === true,
+              } : undefined;
+
               const menuItem: MenuItem = {
                 id: item.id.toString(),
                 name: item.name,
@@ -1199,6 +1444,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 addOns: addOns.length > 0 ? addOns : undefined,
                 customizations: item.customizations,
                 timings: item.timings || undefined, // Keep API format (1-7)
+                isPreorderAvailable: isPreorderAvailable,
+                preorderCampaign: preorderCampaign,
               };
               return menuItem;
             });
@@ -1301,9 +1548,23 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         onScroll={handleScroll}
         scrollEventThrottle={16}
         bounces={false}
+        alwaysBounceVertical={true}
         overScrollMode="never"
         removeClippedSubviews={false}
         decelerationRate="normal"
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={async () => {
+              setIsRefreshing(true);
+              await fetchRestaurantDetails(true); // Skip delay during refresh
+              setIsRefreshing(false);
+            }}
+            colors={['#00B14F']}
+            tintColor="#00B14F"
+            progressBackgroundColor="#FFFFFF"
+          />
+        }
       >
         {/* Header Image with Overlay */}
         {restaurantData?.logo_url ? (
@@ -1610,6 +1871,17 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               // Get next available time slot to check if available today
               const nextAvailableTime = getNextAvailableTime(item.timings);
 
+              // Format delivery date for display
+              const formatDeliveryDate = (dateString: string) => {
+                try {
+                  const date = new Date(dateString);
+                  const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+                  return date.toLocaleDateString('en-US', options);
+                } catch {
+                  return '';
+                }
+              };
+
               return (
               <View key={item.id}>
               <View style={styles.menuItem}>
@@ -1645,7 +1917,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   )}
 
                   {/* Price */}
-                  <Text style={styles.itemPrice}>₹ {item.price}</Text>
+                  <Text style={styles.itemPrice}>₹ {item.price.toFixed(2)}</Text>
 
                   {/* Description */}
                   <View style={styles.descriptionContainer}>
@@ -1703,6 +1975,21 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                           style={styles.itemGradientOverlayTop}
                         />
 
+                        {/* Preorder Badge Overlay on Image - Top Left */}
+                        {item.isPreorderAvailable && (
+                          <View style={styles.preorderImageBadge}>
+                            <LinearGradient
+                              colors={['#00B14F', '#00A048']}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={styles.preorderImageBadgeGradient}
+                            >
+                              <MaterialIcons name="schedule" size={12} color="#FFFFFF" />
+                              <Text style={styles.preorderImageBadgeText}>Preorder</Text>
+                            </LinearGradient>
+                          </View>
+                        )}
+
                         {/* Heart Button Overlay */}
                         <TouchableOpacity
                           style={styles.itemHeartButton}
@@ -1738,6 +2025,21 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                           <View style={styles.unavailableOverlay} />
                         )}
                         
+                        {/* Preorder Badge Overlay on No Image - Top Left */}
+                        {item.isPreorderAvailable && (
+                          <View style={styles.preorderImageBadge}>
+                            <LinearGradient
+                              colors={['#00B14F', '#00A048']}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={styles.preorderImageBadgeGradient}
+                            >
+                              <MaterialIcons name="schedule" size={12} color="#FFFFFF" />
+                              <Text style={styles.preorderImageBadgeText}>Preorder</Text>
+                            </LinearGradient>
+                          </View>
+                        )}
+
                         {/* Heart Button Overlay - Same as when image exists */}
                         <TouchableOpacity
                           style={styles.itemHeartButton}
@@ -1797,12 +2099,19 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                           </TouchableOpacity>
                           <Text style={styles.quantityText}>{getItemQuantity(item.id)}</Text>
                           <TouchableOpacity
-                            style={styles.quantityButton}
+                            style={[
+                              styles.quantityButton,
+                              item.isPreorderAvailable && getItemQuantity(item.id) >= 1 && styles.quantityButtonDisabled
+                            ]}
                             onPress={() => incrementItem(item.id)}
                             activeOpacity={0.7}
+                            disabled={item.isPreorderAvailable && getItemQuantity(item.id) >= 1}
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                           >
-                            <Text style={styles.quantityButtonText}>+</Text>
+                            <Text style={[
+                              styles.quantityButtonText,
+                              item.isPreorderAvailable && getItemQuantity(item.id) >= 1 && styles.quantityButtonTextDisabled
+                            ]}>+</Text>
                           </TouchableOpacity>
                         </View>
                       ) : (
@@ -2455,8 +2764,33 @@ const styles = StyleSheet.create({
   itemBadges: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 3,
+    flexWrap: 'wrap',
+    minHeight: 13,
+  },
+  itemBadgesLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  freeDeliveryTopBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    gap: 2,
     height: 13,
+    backgroundColor: 'rgba(0, 177, 79, 0.12)',
+    borderWidth: 0.5,
+    borderColor: '#00B14F',
+    borderRadius: 8,
+  },
+  freeDeliveryTopText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 7,
+    lineHeight: 10,
+    color: '#00B14F',
   },
   vegIconLarge: {
     width: 12,
@@ -2527,12 +2861,82 @@ const styles = StyleSheet.create({
     color: '#000000',
     opacity: 0.85,
   },
+  priceContainer: {
+    gap: 2,
+  },
   itemPrice: {
     fontFamily: 'Poppins_700Bold',
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
     opacity: 0.85,
+  },
+  preorderDiscountContainer: {
+    marginTop: 3,
+    marginBottom: 2,
+  },
+  preorderDiscountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  preorderDiscountAmount: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#00B14F',
+  },
+  preorderPriceContainer: {
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  originalPrice: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    lineHeight: 18,
+    color: 'rgba(0, 0, 0, 0.45)',
+    textDecorationLine: 'line-through',
+    textDecorationStyle: 'solid',
+  },
+  finalPrice: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#00B14F',
+  },
+  deliveryDateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+    flexWrap: 'wrap',
+  },
+  deliveryDateText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 10,
+    lineHeight: 14,
+    color: 'rgba(0, 0, 0, 0.6)',
+    opacity: 0.85,
+  },
+  availableSlotsText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 10,
+    lineHeight: 14,
+    color: 'rgba(0, 0, 0, 0.5)',
+    opacity: 0.85,
+  },
+  menuItemPreorder: {
+    borderLeftWidth: 2,
+    borderLeftColor: '#00B14F',
+    paddingLeft: 6,
+    backgroundColor: 'rgba(0, 177, 79, 0.02)',
+    borderRadius: 2,
   },
   descriptionContainer: {
     width: 150,
@@ -2609,6 +3013,32 @@ const styles = StyleSheet.create({
     right: 8,
     padding: 4,
     zIndex: 10,
+  },
+  preorderImageBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    zIndex: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  preorderImageBadgeGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  preorderImageBadgeText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 10,
+    lineHeight: 14,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
   unavailableOverlay: {
     position: 'absolute',
@@ -2718,6 +3148,9 @@ const styles = StyleSheet.create({
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  quantityButtonDisabled: {
+    opacity: 0.4,
   },
   quantityButtonText: {
     fontFamily: 'Poppins',

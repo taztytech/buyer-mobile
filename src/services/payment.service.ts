@@ -79,6 +79,8 @@ class PaymentService {
 
   /**
    * Initiate payment for an order
+   * @deprecated This method is no longer used. Payment details are now included in the order creation response.
+   * Use processPayment with payment_details from order response instead.
    */
   async initiatePayment(orderId: number, request: InitiatePaymentRequest): Promise<ApiResponse<InitiatePaymentResponse>> {
     try {
@@ -100,7 +102,10 @@ class PaymentService {
    */
   async openCheckout(options: RazorpayOptions): Promise<PaymentResult> {
     try {
-      if (!this.razorpayKeyId) {
+      // Use key from options (from API) with env as fallback
+      const razorpayKey = options.key || this.razorpayKeyId;
+      
+      if (!razorpayKey) {
         return {
           success: false,
           error: 'Razorpay configuration is missing. Please contact support.',
@@ -112,7 +117,7 @@ class PaymentService {
 
       const razorpayOptions = {
         ...options,
-        key: this.razorpayKeyId,
+        key: razorpayKey,
         amount: amountInPaise,
       };
 
@@ -171,34 +176,14 @@ class PaymentService {
 
   /**
    * Complete payment flow for an order
-   * This is a convenience method that handles the entire payment process
+   * This method uses payment_details directly from order creation response
    */
   async processPayment(
     orderId: number,
-    userDetails: {
-      name: string;
-      email?: string;
-      phone: string;
-    }
+    paymentDetails: PaymentDetails
   ): Promise<PaymentResult> {
     try {
-      // Step 1: Initiate payment on backend
-      const initiateResponse = await this.initiatePayment(orderId, {
-        name: userDetails.name,
-        email: userDetails.email,
-        phone: userDetails.phone,
-      });
-
-      if (!initiateResponse.success || !initiateResponse.data) {
-        return {
-          success: false,
-          error: initiateResponse.error || 'Failed to initiate payment',
-        };
-      }
-
-      const paymentDetails = initiateResponse.data.payment_details;
-
-      // Step 2: Open Razorpay checkout
+      // Step 1: Open Razorpay checkout using payment_details from order response
       const checkoutOptions: RazorpayOptions = {
         description: paymentDetails.description,
         currency: paymentDetails.currency,

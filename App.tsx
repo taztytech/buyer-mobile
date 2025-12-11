@@ -2084,6 +2084,7 @@ function AppContent() {
           >
             <ContentPage
               title="FAQ"
+              url="https://tazty.in/faqs"
               onBack={handleBackFromFaq}
             />
           </Animated.View>

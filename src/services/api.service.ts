@@ -20,6 +20,42 @@ export interface ApiError {
   code?: string;
 }
 
+const safeStringify = (obj: any, space: number = 2): string => {
+  const seen = new WeakSet();
+  try {
+    return JSON.stringify(obj, (key, value) => {
+      // Handle circular references
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) {
+          return '[Circular]';
+        }
+        seen.add(value);
+      }
+      // Handle undefined values
+      if (value === undefined) {
+        return '[undefined]';
+      }
+      // Handle functions
+      if (typeof value === 'function') {
+        return `[Function: ${value.name || 'anonymous'}]`;
+      }
+      return value;
+    }, space);
+  } catch (error) {
+    // Fallback if stringify fails
+    try {
+      return JSON.stringify({
+        error: 'Failed to stringify',
+        originalError: String(error),
+        objectType: typeof obj,
+        objectString: String(obj),
+      }, null, space);
+    } catch {
+      return String(obj);
+    }
+  }
+};
+
 class ApiService {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
@@ -141,13 +177,13 @@ class ApiService {
         refresh_token: refreshToken,
       };
 
-      console.log('[API Request]', {
+      console.log('[API Request]', safeStringify({
         method: 'POST',
         url,
         headers: API_CONFIG.HEADERS,
         body: requestBody,
         timestamp: new Date().toISOString(),
-      });
+      }));
 
       const response = await fetch(url, {
         method: 'POST',
@@ -157,14 +193,14 @@ class ApiService {
 
       const data = await response.json();
 
-      console.log('[API Response]', {
+      console.log('[API Response]', safeStringify({
         method: 'POST',
         url,
         status: response.status,
         statusText: response.statusText,
-        data,
+        data: data,
         timestamp: new Date().toISOString(),
-      });
+      }));
 
       if (response.ok && data.success) {
         // Validate that we received valid tokens (check both camelCase and snake_case)
@@ -280,12 +316,14 @@ class ApiService {
       }
 
       // Centralized request logging for debugging purposes
-      console.log('[apiService][request]', {
+      const requestBody = config.body ? JSON.parse(config.body as string) : undefined;
+      console.log('[apiService][request]', safeStringify({
         method,
         endpoint: url,
-        body: config.body? JSON.parse(config.body as string): undefined,
+        body: requestBody,
         hasBody: Boolean(config.body),
-      });
+        timestamp: new Date().toISOString(),
+      }));
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
@@ -339,19 +377,26 @@ class ApiService {
 
       const responseData = await response.json();
 
-      console.log('[apiService][response]', {
+      console.log('[apiService][response]', safeStringify({
         method,
         endpoint: url,
         status: response.status,
+        statusText: response.statusText,
         success: response.ok,
+        fullResponse: responseData,
         data: responseData?.data ?? responseData,
-      });
+        message: responseData?.message,
+        error: responseData?.error,
+        duration: `${duration}ms`,
+        timestamp: new Date().toISOString(),
+      }));
 
       if (!response.ok) {
         return {
           success: false,
           error: responseData.message || 'Request failed',
           message: responseData.message,
+          statusCode: response.status, // Preserve status code
         };
       }
 
@@ -361,11 +406,15 @@ class ApiService {
         message: responseData.message,
       };
     } catch (error: any) {
-      console.log('[apiService][response_error]', {
+      console.log('[apiService][response_error]', safeStringify({
         method,
         endpoint,
+        error: error,
         message: error?.message,
-      });
+        stack: error?.stack,
+        name: error?.name,
+        timestamp: new Date().toISOString(),
+      }));
       const apiError = this.handleError(error);
       return {
         success: false,
