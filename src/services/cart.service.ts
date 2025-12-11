@@ -33,6 +33,8 @@ export interface AddToCartRequest {
   customizations?: CartCustomization[];
   variants?: CartVariant[];
   special_instructions?: string;
+  is_preorder?: boolean;
+  campaign_id?: string;
 }
 
 export interface CartItemResponse {
@@ -50,6 +52,14 @@ export interface CartItemResponse {
   variants?: CartVariant[];
   special_instructions?: string | null;
   is_available: boolean;
+  is_preorder?: boolean;
+  preorder_campaign?: {
+    id: string;
+    title: string;
+    delivery_date: string;
+    available_slots: number;
+    free_delivery: boolean;
+  };
 }
 
 export interface CartSummary {
@@ -132,13 +142,28 @@ class CartService {
       }
 
       // Return the unwrapped data with success flag
-      return {
+      const result: AddToCartResponse & { statusCode?: number } = {
         success: response.success,
         message: responseData.message || response.message,
         cart_item_id: responseData.cart_item_id,
         cart_summary: responseData.cart_summary,
       };
-    } catch (error) {
+      
+      // Preserve status code if response failed
+      if (!response.success && (response as any).statusCode) {
+        result.statusCode = (response as any).statusCode;
+      } else if (!response.success && (response as any).status) {
+        result.statusCode = (response as any).status;
+      }
+      
+      return result;
+    } catch (error: any) {
+      // Preserve status code from error if available
+      if (error?.response?.status) {
+        const apiError: any = error;
+        apiError.statusCode = error.response.status;
+        throw apiError;
+      }
       throw error;
     }
   }
@@ -225,7 +250,7 @@ class CartService {
       variants?: CartVariant[];
       special_instructions?: string;
     }
-  ): Promise<{ success: boolean; cart_summary?: CartSummary }> {
+  ): Promise<{ success: boolean; cart_summary?: CartSummary; error?: string }> {
     if (updates.quantity && updates.quantity > MAX_ITEM_QUANTITY) {
       throw new Error(`Maximum quantity per item is ${MAX_ITEM_QUANTITY}`);
     }
@@ -238,7 +263,20 @@ class CartService {
         }
       );
 
-      // Handle potential double-nested response structure
+      // Extract error message from response if success is false
+      // Check response.message first (apiService extracts it to top level)
+      let errorMessage: string | undefined;
+      if (!response.success) {
+        // Try to get error message from various possible locations
+        // Priority: response.message (from apiService) > response.data.message > fullResponse.message
+        errorMessage = response.message || 
+                      (response as any).error ||
+                      (response.data as any)?.message ||
+                      (response as any).fullResponse?.message ||
+                      'Failed to update cart item';
+      }
+
+      // Handle potential double-nested response structure for cart_summary
       let responseData: any = response.data || response;
       if (responseData && typeof responseData === 'object' && 'data' in responseData) {
         responseData = responseData.data;
@@ -246,10 +284,21 @@ class CartService {
 
       return {
         success: response.success,
-        cart_summary: responseData.cart_summary,
+        cart_summary: responseData?.cart_summary,
+        error: errorMessage,
       };
-    } catch (error) {
-      throw error;
+    } catch (error: any) {
+      // Extract error message from caught error
+      const errorMessage = error?.message || 
+                          error?.response?.data?.message ||
+                          error?.fullResponse?.message ||
+                          'Failed to update cart item';
+      
+      // Throw error with message so it can be caught and displayed
+      const apiError: any = new Error(errorMessage);
+      apiError.response = error?.response;
+      apiError.fullResponse = error?.fullResponse;
+      throw apiError;
     }
   }
 

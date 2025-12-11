@@ -17,7 +17,6 @@ import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScr
 import { ordersService } from '@/services/orders.service';
 import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
 import { paymentService } from '@/services/payment.service';
-import { authService } from '@/services/auth.service';
 import { homeService } from '@/services/home.service';
 import { cartService, CartSummary } from '@/services/cart.service';
 import { restaurantService } from '@/services/restaurant.service';
@@ -168,10 +167,44 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const includePlatformFee = (cartSummary as any)?.include_platform_fee ?? false;
   const backendTipAmount = (cartSummary as any)?.tip_amount ?? 0;
   const totalAmount = cartSummary?.final_amount ?? 0;
-  const estimatedDeliveryTime = (cartSummary as any)?.estimated_delivery_time ?? null;
+  const estimatedDeliveryTimeRaw = (cartSummary as any)?.estimated_delivery_time ?? null;
+  
+  // Format estimated delivery time to user-friendly format
+  const formatEstimatedDeliveryTime = (dateString: string | null): string | null => {
+    if (!dateString) return null;
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return null;
+      
+      // Format as "Dec 12, 2025 at 12:00 PM"
+      const formattedDate = date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      const formattedTime = date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+      
+      return `${formattedDate} at ${formattedTime}`;
+    } catch (error) {
+      return null;
+    }
+  };
+  
+  const estimatedDeliveryTime = formatEstimatedDeliveryTime(estimatedDeliveryTimeRaw);
 
   // Determine if a coupon is currently applied based on discount amount
   const isCouponApplied = !!cartSummary && (cartSummary.discount_amount ?? 0) > 0;
+  
+  // Check if cart has any preorder items (used to hide promo code section and skip coupon removal)
+  const hasPreorderItems = cartData?.items?.some((item: any) => 
+    item.is_preorder === true && 
+    item.preorder_campaign && 
+    item.preorder_campaign.id
+  ) ?? false;
 
   const selectedAddress = addresses.find(addr => addr.id.toString() === selectedAddressId);
 
@@ -297,6 +330,18 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       return;
     }
 
+    // Check if cart has preorder items - if so, skip coupon removal logic
+    const hasPreorderItems = cartData?.items?.some((item: any) => 
+      item.is_preorder === true && 
+      item.preorder_campaign && 
+      item.preorder_campaign.id
+    );
+
+    // If cart has preorder items, don't remove coupon automatically
+    if (hasPreorderItems) {
+      return;
+    }
+
     // Check if coupon is applied and total is below ₹100
     const MINIMUM_ORDER_AMOUNT = 100;
     const shouldRemovePromo = isCouponApplied && totalAmount < MINIMUM_ORDER_AMOUNT;
@@ -351,7 +396,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       lastAutoRemovedTotalRef.current = null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalAmount, isCouponApplied, cartSummary]);
+  }, [totalAmount, isCouponApplied, cartSummary, cartData]);
 
   const fetchCartSummary = async () => {
     try {
@@ -432,19 +477,19 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         // User will need to manually select and set one as default
       } else {
         showConfirmation({
-          title: 'Error',
+          title: '',
           message: response.error || 'Failed to load addresses',
           confirmText: 'OK',
-          cancelText: 'Close',
+          cancelText: '',
           onConfirm: () => {},
         });
       }
     } catch (error: any) {
       showConfirmation({
-        title: 'Error',
+        title: '',
         message: error.message || 'Failed to load addresses',
         confirmText: 'OK',
-        cancelText: 'Close',
+        cancelText: '',
         onConfirm: () => {},
       });
     } finally {
@@ -647,7 +692,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         if (!orderId) {
           console.error('Order ID not found in response:', orderData);
           showConfirmation({
-            title: 'Error',
+            title: '',
             message: 'Order was created but order ID is missing. Please check My Orders.',
             confirmText: 'OK',
             cancelText: '',
@@ -661,22 +706,43 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           return;
         }
 
-        // Process online payment via Razorpay
-        // Get user details for payment
-        const user = await authService.getCurrentUser();
+        // Extract payment_details from order response
+        // Payment details are in responseData.payment_details
+        const paymentDetails = responseData.payment_details;
+        
+        // Check if payment is required
+        if (!paymentDetails) {
+          // If no payment_details, order might be COD or payment not required
+          // Clear local cart for COD orders (backend handles API clearing)
+          clearCart(false);
+          setNotes(''); // Reset notes for next order
+          setSelectedTip(null); // Reset tip selection
+          setCustomTipAmount(''); // Reset custom tip amount
+          
+          showConfirmation({
+            title: '',
+            message: 'Order created successfully. Payment details not found.',
+            confirmText: 'OK',
+            cancelText: '',
+            confirmButtonColor: '#00B14F',
+            onConfirm: () => {
+              if (onOrderSuccess && orderId) {
+                onOrderSuccess(orderId);
+              }
+            },
+          });
+          return;
+        }
 
+        // Process online payment via Razorpay using payment_details from order response
         const paymentResult = await paymentService.processPayment(
           orderId,
-          {
-            name: user?.name || 'User',
-            email: user?.email,
-            phone: user?.phoneNumber || '',
-          }
+          paymentDetails
         );
 
         if (paymentResult.success) {
-          // Payment successful - clear cart and reset form
-          clearCart();
+          // Payment successful - clear local cart and reset form (backend handles API clearing)
+          clearCart(false);
           setNotes(''); // Reset notes for next order
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount
@@ -724,8 +790,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             }
           }
 
-          // Clear cart after payment failure
-          clearCart();
+          // Reset form (cart will be cleared by backend after payment failure)
           setNotes(''); // Reset notes
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount
@@ -745,19 +810,19 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         }
       } else {
         showConfirmation({
-          title: 'Error',
+          title: '',
           message: orderResponse.error || 'Failed to place order',
           confirmText: 'OK',
-          cancelText: 'Close',
+          cancelText: '',
           onConfirm: () => {},
         });
       }
     } catch (error: any) {
       showConfirmation({
-        title: 'Error',
+        title: '',
         message: error.message || 'Failed to place order',
         confirmText: 'OK',
-        cancelText: 'Close',
+        cancelText: '',
         onConfirm: () => {},
       });
     } finally{
@@ -817,8 +882,33 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         // This can happen if the item doesn't have cartItemId yet
         fetchCartSummary();
       }
-    }).catch(() => {
-      // On error, still try to fetch cart summary if this was the latest update
+    }).catch((error: any) => {
+      // On error, check if it's a cart update error and show message
+      // Always show error if it has a message (cart update errors will have isCartUpdateError flag)
+      if (error?.isCartUpdateError || error?.message) {
+        // Revert local quantity change on error
+        setLocalCartItems(prev =>
+          prev.map(item => {
+            const matchesItem = variantId ? item.variantId === variantId : item.id === itemId;
+            return matchesItem
+              ? { ...item, quantity: currentItem.quantity }
+              : item;
+          })
+        );
+        
+        // Show error message from API
+        const errorMessage = error?.message || 'Failed to update cart item';
+        showConfirmation({
+          title: '',
+          message: errorMessage,
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
+      }
+      
+      // Still try to fetch cart summary if this was the latest update
       if (pendingUpdateRef.current?.sequence === currentSequence) {
         fetchCartSummary();
         pendingUpdateRef.current = null;
@@ -828,7 +918,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
     // This ensures discount is recalculated correctly when cart items change
     // Note: We don't await this - it will be handled when cart_summary updates
-    if (isCouponApplied && promoCode && promoCode.trim() !== '') {
+    // Skip applying coupon if cart has preorder items
+    if (isCouponApplied && promoCode && promoCode.trim() !== '' && !hasPreorderItems) {
       // Delay promo re-application slightly to let cart_summary update first
       setTimeout(async () => {
         try {
@@ -972,8 +1063,33 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           // Fallback: fetch cart summary if updateQuantity didn't return it
           fetchCartSummary();
         }
-      }).catch(() => {
-        // On error, still try to fetch cart summary if this was the latest update
+      }).catch((error: any) => {
+        // On error, check if it's a cart update error and show message
+        // Always show error if it has a message (cart update errors will have isCartUpdateError flag)
+        if (error?.isCartUpdateError || error?.message) {
+          // Revert local quantity change on error
+          setLocalCartItems(prev =>
+            prev.map(item => {
+              const matchesItem = variantId ? item.variantId === variantId : item.id === itemId;
+              return matchesItem
+                ? { ...item, quantity: currentItem.quantity }
+                : item;
+            })
+          );
+          
+          // Show error message from API
+          const errorMessage = error?.message || 'Failed to update cart item';
+          showConfirmation({
+            title: '',
+            message: errorMessage,
+            confirmText: 'OK',
+            cancelText: '',
+            confirmButtonColor: '#00B14F',
+            onConfirm: () => {},
+          });
+        }
+        
+        // Still try to fetch cart summary if this was the latest update
         if (pendingUpdateRef.current?.sequence === currentSequence) {
           fetchCartSummary();
           pendingUpdateRef.current = null;
@@ -982,7 +1098,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
       // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
       // This ensures discount is recalculated correctly when cart items change
-      if (isCouponApplied && promoCode && promoCode.trim() !== '') {
+      // Skip applying coupon if cart has preorder items
+      if (isCouponApplied && promoCode && promoCode.trim() !== '' && !hasPreorderItems) {
         // Delay promo re-application slightly to let cart_summary update first
         setTimeout(async () => {
           try {
@@ -1112,6 +1229,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const handleApplyPromoCode = async () => {
     // Clear previous error
     setPromoError('');
+
+    // Don't allow applying coupon if cart has preorder items
+    if (hasPreorderItems) {
+      setPromoError('Promo codes cannot be applied to preorder items.');
+      return;
+    }
 
     const trimmedCode = promoCode.trim();
 
@@ -1634,68 +1757,70 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             )}
           </View>
 
-          {/* Apply Promo Code Section */}
-          <View style={styles.section}>
-            <TouchableOpacity
-              style={styles.sectionHeader}
-              onPress={() => setPromoExpanded(!promoExpanded)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.sectionTitle}>Promo Code</Text>
-              <MaterialIcons
-                name={promoExpanded ? 'expand-less' : 'expand-more'}
-                size={24}
-                color="#000000"
-              />
-            </TouchableOpacity>
+          {/* Apply Promo Code Section - Hide if cart has preorder items */}
+          {!hasPreorderItems && (
+            <View style={styles.section}>
+              <TouchableOpacity
+                style={styles.sectionHeader}
+                onPress={() => setPromoExpanded(!promoExpanded)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.sectionTitle}>Promo Code</Text>
+                <MaterialIcons
+                  name={promoExpanded ? 'expand-less' : 'expand-more'}
+                  size={24}
+                  color="#000000"
+                />
+              </TouchableOpacity>
 
-            {promoExpanded && (
-              <View style={styles.sectionContent}>
-                <View style={styles.promoCodeContainer}>
-                  <TextInput
-                    style={styles.promoCodeInput}
-                    placeholder="Enter promo code"
-                    placeholderTextColor="rgba(0, 0, 0, 0.4)"
-                    value={promoCode}
-                    onChangeText={(text) => {
-                      // Normalize to uppercase and hard-limit to 15 characters
-                      const uppercased = text.toUpperCase();
-                      const limited = uppercased.slice(0, 15);
+              {promoExpanded && (
+                <View style={styles.sectionContent}>
+                  <View style={styles.promoCodeContainer}>
+                    <TextInput
+                      style={styles.promoCodeInput}
+                      placeholder="Enter promo code"
+                      placeholderTextColor="rgba(0, 0, 0, 0.4)"
+                      value={promoCode}
+                      onChangeText={(text) => {
+                        // Normalize to uppercase and hard-limit to 15 characters
+                        const uppercased = text.toUpperCase();
+                        const limited = uppercased.slice(0, 15);
 
-                      setPromoCode(limited);
+                        setPromoCode(limited);
 
-                      // Clear backend promo error when user edits the code
-                      if (promoError) {
-                        setPromoError('');
+                        // Clear backend promo error when user edits the code
+                        if (promoError) {
+                          setPromoError('');
+                        }
+                      }}
+                      autoCapitalize="characters"
+                    />
+                    <TouchableOpacity
+                      style={[
+                        styles.applyButton,
+                        (isApplyingPromo ||
+                          (!isCouponApplied && !promoCode.trim())) && styles.applyButtonDisabled,
+                      ]}
+                      onPress={isCouponApplied ? handleRemovePromoCode : handleApplyPromoCode}
+                      activeOpacity={0.8}
+                      disabled={
+                        isApplyingPromo ||
+                        (!isCouponApplied && !promoCode.trim())
                       }
-                    }}
-                    autoCapitalize="characters"
-                  />
-                  <TouchableOpacity
-                    style={[
-                      styles.applyButton,
-                      (isApplyingPromo ||
-                        (!isCouponApplied && !promoCode.trim())) && styles.applyButtonDisabled,
-                    ]}
-                    onPress={isCouponApplied ? handleRemovePromoCode : handleApplyPromoCode}
-                    activeOpacity={0.8}
-                    disabled={
-                      isApplyingPromo ||
-                      (!isCouponApplied && !promoCode.trim())
-                    }
-                  >
-                    {isApplyingPromo ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Text style={styles.applyButtonText}>
-                        {isCouponApplied ? 'Remove' : 'Apply'}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
+                    >
+                      {isApplyingPromo ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.applyButtonText}>
+                          {isCouponApplied ? 'Remove' : 'Apply'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            )}
-          </View>
+              )}
+            </View>
+          )}
 
           {/* Bill Details Section */}
           <View style={styles.section}>
@@ -1935,10 +2060,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             }
           } catch (error: any) {
             showConfirmation({
-              title: 'Error',
+              title: '',
               message: error.message || 'Failed to set default address',
               confirmText: 'OK',
-              cancelText: 'Close',
+              cancelText: '',
               onConfirm: () => {},
             });
           }
