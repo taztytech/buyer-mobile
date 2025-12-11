@@ -49,7 +49,7 @@ class SearchService {
       const endpoint = '/api/buyer/search/suggestions';
       const requestBody: any = {
         query: query,
-        limit: 10,
+        limit: 50,
       };
 
       // Add location object if provided (API expects nested location payload)

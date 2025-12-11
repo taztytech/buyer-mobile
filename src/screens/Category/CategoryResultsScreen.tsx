@@ -200,7 +200,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
       const radius = 10;
 
       const query = selectedCategory.toLowerCase();
-      let apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`;
+      let apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=50`;
 
       // Add veg mode parameter if active
       if (vegMode && vegMode !== 'off') {
@@ -284,7 +284,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
       const lng = defaultAddressCoords?.longitude || selectedLocation?.longitude || DEFAULT_LOCATION.longitude;
       const radius = 10;
 
-      let apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=20`;
+      let apiEndpoint = `/api/buyer/search?query=${query}&lat=${lat}&lng=${lng}&radius=${radius}&type=all&sort_by=distance&sort_order=asc&page=1&limit=50`;
 
       // Add veg mode parameter if active
       if (vegMode && vegMode !== 'off') {
