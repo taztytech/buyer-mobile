@@ -1917,7 +1917,16 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   )}
 
                   {/* Price */}
-                  <Text style={styles.itemPrice}>₹ {item.price.toFixed(2)}</Text>
+                  {item.isPreorderAvailable && item.preorderCampaign && parseFloat(item.preorderCampaign.discount_amount || '0') > 0 ? (
+                    <View style={styles.priceContainer}>
+                      <Text style={[styles.itemPrice, styles.strikethroughPrice]}>₹ {item.price.toFixed(2)}</Text>
+                      <Text style={[styles.itemPrice, styles.discountedPrice]}>
+                        ₹ {(item.price - parseFloat(item.preorderCampaign.discount_amount || '0')).toFixed(2)}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.itemPrice}>₹ {item.price.toFixed(2)}</Text>
+                  )}
 
                   {/* Description */}
                   <View style={styles.descriptionContainer}>
@@ -2862,7 +2871,9 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   priceContainer: {
-    gap: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   itemPrice: {
     fontFamily: 'Poppins_700Bold',
@@ -2870,6 +2881,14 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: '#000000',
     opacity: 0.85,
+  },
+  strikethroughPrice: {
+    textDecorationLine: 'line-through',
+    opacity: 0.5,
+  },
+  discountedPrice: {
+    color: '#00B14F',
+    opacity: 1,
   },
   preorderDiscountContainer: {
     marginTop: 3,
