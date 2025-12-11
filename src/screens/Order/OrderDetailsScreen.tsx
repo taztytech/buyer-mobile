@@ -713,8 +713,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         // Check if payment is required
         if (!paymentDetails) {
           // If no payment_details, order might be COD or payment not required
-          // Clear local cart for COD orders
-          clearCart();
+          // Clear local cart for COD orders (backend handles API clearing)
+          clearCart(false);
           setNotes(''); // Reset notes for next order
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount
@@ -741,8 +741,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         );
 
         if (paymentResult.success) {
-          // Payment successful - clear local cart and reset form
-          clearCart();
+          // Payment successful - clear local cart and reset form (backend handles API clearing)
+          clearCart(false);
           setNotes(''); // Reset notes for next order
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount

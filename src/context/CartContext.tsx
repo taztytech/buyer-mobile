@@ -34,7 +34,7 @@ interface CartContextType {
   addToCart: (item: CartItem, overrideRestaurantId?: number) => Promise<void>;
   removeFromCart: (itemId: string) => Promise<CartSummary | null>;
   updateQuantity: (itemId: string, quantity: number) => Promise<CartSummary | null>;
-  clearCart: () => Promise<void>;
+  clearCart: (syncWithBackend?: boolean) => Promise<void>;
   reloadCart: () => Promise<void>; // Reload cart from backend
   getTotalItems: () => number;
   getTotalPrice: () => number;
@@ -661,10 +661,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   /**
-   * Clear entire cart (local only - backend handles cart clearing for orders)
-   * Used for logout, manual cart deletion, restaurant conflicts, etc.
+   * Clear entire cart
+   * @param syncWithBackend - If true, calls CART_CLEAR API. Defaults to true for manual deletions.
+   *                          Set to false for payment success/failure (backend handles it).
    */
-  const clearCart = async () => {
+  const clearCart = async (syncWithBackend: boolean = true) => {
     // Update local cart immediately
     setCart({});
     setRestaurantId(null);
@@ -672,7 +673,24 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setRestaurantLogo(null);
     // Clear from storage
     await storageService.clearCartData();
-    // Note: Backend handles cart clearing for payment success/failure scenarios
+
+    // Sync with backend API if requested (for manual deletions, logout, restaurant conflicts)
+    if (syncWithBackend) {
+      try {
+        const token = await storageService.getAccessToken();
+        if (!token) {
+          return;
+        }
+
+        setSyncWithBackend(true);
+        await cartService.clearCart();
+      } catch (error) {
+        // Cart already cleared locally
+        console.error('[CartContext] Error clearing cart on backend:', error);
+      } finally {
+        setSyncWithBackend(false);
+      }
+    }
   };
 
   const getTotalItems = () => {
