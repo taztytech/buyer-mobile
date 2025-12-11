@@ -179,6 +179,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     // Check if we're returning to this screen (was hidden, now visible)
     const isReturning = !wasVisible && visible;
     prevVisibleRef.current = visible;
+    
+    console.log('👁️ OrdersScreen visibility changed:', { wasVisible, visible, isReturning });
 
     // Check if reset was called (hasPersistedData is false)
     // hasPersistedData is module-level, so we check it directly each time visible changes
@@ -219,6 +221,76 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       // Reset the restore flag when screen becomes visible with persisted data
       hasRestoredScroll.current = false;
       
+      // Always try to refresh when screen becomes visible (if enough time has passed)
+      // This ensures we get the latest data even if isReturning detection fails
+      if (!isRequestInProgress.current) {
+        const now = Date.now();
+        const timeSinceLastRefresh = now - (lastRefreshTimeRef.current || 0);
+        const MIN_REFRESH_INTERVAL = 1000; // 1 second
+        
+        // Refresh if enough time has passed (regardless of isReturning)
+        if (timeSinceLastRefresh >= MIN_REFRESH_INTERVAL) {
+          const refreshOrders = async () => {
+            try {
+              console.log('🔄 OrdersScreen: Auto-refreshing on visibility...');
+              isRequestInProgress.current = true;
+              lastRequestedPage.current = 0;
+              
+              const response = await ordersService.getOrders(5, 1);
+              
+              if (response.success && response.data) {
+                const responseData = response.data as any;
+                
+                const ordersArray =
+                  responseData.data ||
+                  responseData.orders ||
+                  (Array.isArray(responseData) ? responseData : []);
+
+                const total =
+                  responseData.total ||
+                  responseData.meta?.total ||
+                  responseData.data?.total ||
+                  responseData.pagination?.total ||
+                  responseData.metadata?.total ||
+                  ordersArray.length;
+                
+                console.log('🔄 OrdersScreen: Auto-refresh successful, orders count:', ordersArray.length);
+                
+                // Update persisted data
+                persistedOrders = ordersArray;
+                persistedCurrentPage = 1;
+                persistedTotalOrders = total;
+                hasPersistedData = true;
+                
+                // Update local state with new array reference to trigger re-render
+                setLocalOrders([...ordersArray]);
+                setCurrentPage(1);
+                setTotalOrders(total);
+                
+                // Update context
+                dispatch({
+                  type: 'BULK_SET_ORDERS',
+                  payload: ordersArray,
+                });
+                
+                lastRefreshTimeRef.current = now;
+              }
+            } catch (error) {
+              console.warn('🔄 OrdersScreen: Auto-refresh failed:', error);
+            } finally {
+              isRequestInProgress.current = false;
+            }
+          };
+          
+          // Delay refresh slightly
+          const refreshTimer = setTimeout(() => {
+            refreshOrders();
+          }, 500);
+          
+          return () => clearTimeout(refreshTimer);
+        }
+      }
+      
       // If returning from another screen (e.g., Order Details, Rate Order), refresh orders to get new ones
       // Only refresh if it's been at least 1 second since last refresh to avoid excessive API calls
       if (isReturning && !isRequestInProgress.current) {
@@ -226,11 +298,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         const timeSinceLastRefresh = now - (lastRefreshTimeRef.current || 0);
         const MIN_REFRESH_INTERVAL = 1000; // 1 second (reduced for faster updates after rating)
         
+        console.log('🔄 OrdersScreen: Returning detected, time since last refresh:', timeSinceLastRefresh);
+        
         if (timeSinceLastRefresh >= MIN_REFRESH_INTERVAL) {
           // Refresh first page in background to get any new orders
           // Don't show loading state - just silently update
           const refreshOrders = async () => {
             try {
+              console.log('🔄 OrdersScreen: Starting refresh...');
               isRequestInProgress.current = true;
               lastRequestedPage.current = 0; // Reset to allow fetching page 1
               
@@ -253,14 +328,16 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   responseData.metadata?.total ||
                   ordersArray.length;
                 
+                console.log('🔄 OrdersScreen: Refresh successful, orders count:', ordersArray.length);
+                
                 // Update persisted data
                 persistedOrders = ordersArray;
                 persistedCurrentPage = 1;
                 persistedTotalOrders = total;
                 hasPersistedData = true;
                 
-                // Update local state
-                setLocalOrders(ordersArray);
+                // Update local state - this will trigger re-render
+                setLocalOrders([...ordersArray]); // Use spread to ensure new array reference
                 setCurrentPage(1);
                 setTotalOrders(total);
                 
@@ -271,9 +348,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 });
                 
                 lastRefreshTimeRef.current = now;
+              } else {
+                console.warn('🔄 OrdersScreen: Refresh failed:', response.error);
               }
             } catch (error) {
-              console.warn('Failed to refresh orders on return:', error);
+              console.warn('🔄 OrdersScreen: Failed to refresh orders on return:', error);
             } finally {
               isRequestInProgress.current = false;
             }
@@ -285,6 +364,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           }, 300);
           
           return () => clearTimeout(refreshTimer);
+        } else {
+          console.log('🔄 OrdersScreen: Refresh skipped, too soon since last refresh');
         }
       }
     }
