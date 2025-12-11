@@ -169,13 +169,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // Handle screen visibility and reset state
   // This effect runs when visible changes or component mounts
   useEffect(() => {
+    const wasVisible = prevVisibleRef.current;
+    
     if (!visible) {
       prevVisibleRef.current = visible;
       return;
     }
 
     // Check if we're returning to this screen (was hidden, now visible)
-    const isReturning = !prevVisibleRef.current && visible;
+    const isReturning = !wasVisible && visible;
     prevVisibleRef.current = visible;
 
     // Check if reset was called (hasPersistedData is false)
@@ -217,12 +219,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       // Reset the restore flag when screen becomes visible with persisted data
       hasRestoredScroll.current = false;
       
-      // If returning from another screen (e.g., Order Details), refresh orders to get new ones
-      // Only refresh if it's been at least 2 seconds since last refresh to avoid excessive API calls
+      // If returning from another screen (e.g., Order Details, Rate Order), refresh orders to get new ones
+      // Only refresh if it's been at least 1 second since last refresh to avoid excessive API calls
       if (isReturning && !isRequestInProgress.current) {
         const now = Date.now();
-        const timeSinceLastRefresh = now - lastRefreshTimeRef.current;
-        const MIN_REFRESH_INTERVAL = 2000; // 2 seconds
+        const timeSinceLastRefresh = now - (lastRefreshTimeRef.current || 0);
+        const MIN_REFRESH_INTERVAL = 1000; // 1 second (reduced for faster updates after rating)
         
         if (timeSinceLastRefresh >= MIN_REFRESH_INTERVAL) {
           // Refresh first page in background to get any new orders

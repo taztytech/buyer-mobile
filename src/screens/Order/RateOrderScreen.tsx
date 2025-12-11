@@ -141,14 +141,25 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
 
     try {
       console.log('orderItems', orderItems);
+      console.log('foodRating:', foodRating);
+      console.log('itemRatings:', itemRatings);
+      
       // Prepare food ratings array with comments only if they exist
       const food_ratings = orderItems.map((item) => {
-        // const itemId = item.id || item.item_id || index;
         const itemId = item.item_id || 0;
         const itemRating = itemRatings[itemId];
+        
+        // For single item: use foodRating if itemRatings is empty
+        // For multiple items: use itemRatings[itemId]?.rating, fallback to foodRating
+        let rating = itemRating?.rating || 0;
+        if (rating === 0 && foodRating > 0) {
+          // If no item-specific rating but foodRating is set, use foodRating
+          rating = foodRating;
+        }
+        
         const foodItem: any = {
           item_id: itemId,
-          rating: itemRating?.rating || 0,
+          rating: rating,
         };
 
         // Only include comment if it exists and is not empty
@@ -458,6 +469,12 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
             />
           </View>
 
+          {/* Rate Restaurant */}
+          <View style={[styles.ratingSection, styles.rateRestaurantSection]}>
+            <Text style={styles.ratingLabel}>Rate Restaurant</Text>
+            {renderStars(restaurantRating, setRestaurantRating)}
+          </View>
+
           {/* Rate Delivery Partner */}
           <View style={[styles.ratingSection, styles.rateDeliveryPartnerSection]}>
             <Text style={styles.ratingLabel}>Rate Delivery Partner</Text>
@@ -710,6 +727,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 6,
+  },
+  rateRestaurantSection: {
+    marginTop: 25,
   },
   rateDeliveryPartnerSection: {
     marginTop: 25,
