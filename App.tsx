@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState, Linking } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
@@ -41,6 +41,7 @@ import CustomSplashScreen from '@/components/CustomSplashScreen';
 import { fcmNotificationService } from '@/services/fcmNotification.service';
 import { NetworkStatusScreen } from '@/components/NetworkStatusScreen';
 import { analyticsService, AnalyticsEvents, AnalyticsScreens } from '@/services/analytics.service';
+import { inAppUpdateService } from '@/services/inAppUpdate.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -238,6 +239,13 @@ function AppContent() {
           console.warn('⚠️  Failed to check initial notification:', error);
         });
         
+        // Check for app updates when app becomes active (but not on checkout)
+        if (currentScreen !== 'checkout') {
+          inAppUpdateService.checkForUpdate({ currentScreen }).catch((error) => {
+            console.error('In-app update check error:', error);
+          });
+        }
+        
         // Track app foreground
         analyticsService.logEvent(AnalyticsEvents.APP_FOREGROUND);
       } else if (nextAppState === 'background') {
@@ -254,7 +262,7 @@ function AppContent() {
     return () => {
       subscription.remove();
     };
-  }, []);
+  }, [currentScreen]);
 
   // Check if user is already logged in on app startup
   React.useEffect(() => {
@@ -271,6 +279,16 @@ function AppContent() {
         fcmNotificationService.initialize().catch((error) => {
           console.error('FCM initialization error:', error);
         });
+
+        // Check for app updates after a short delay (to ensure app is ready)
+        // Only check if not on checkout screen
+        setTimeout(() => {
+          if (currentScreen !== 'checkout') {
+            inAppUpdateService.checkForUpdate({ currentScreen }).catch((error) => {
+              console.error('In-app update check error:', error);
+            });
+          }
+        }, 2000);
 
         // Check if user is authenticated
         const isLoggedIn = await authService.isAuthenticated();
@@ -298,11 +316,13 @@ function AppContent() {
 
     checkAuth();
 
-    // Cleanup FCM listeners on unmount
+    // Cleanup FCM listeners and update service on unmount
     return () => {
       fcmNotificationService.cleanup();
+      inAppUpdateService.cleanup();
     };
   }, []);
+
 
   // const [animationComplete, setAnimationComplete] = React.useState(false);
 
