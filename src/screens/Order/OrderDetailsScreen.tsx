@@ -1616,15 +1616,15 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                       >
                         <View style={styles.deliveryAtContent}>
                           <MaterialIcons name="location-on" size={20} color="#00B14F" />
-                          <Text 
+                          <Text
                             style={[
                               styles.deliveryAtText,
-                              !selectedAddress && styles.deliveryAtTextPlaceholder
-                            ]} 
-                            numberOfLines={1}
+                              !selectedAddress && styles.deliveryAtTextPlaceholder,
+                            ]}
+                            numberOfLines={5}
                           >
-                            {selectedAddress 
-                              ? formatAddress(selectedAddress) 
+                            {selectedAddress
+                              ? formatAddress(selectedAddress)
                               : 'Select a default address before placing order'}
                           </Text>
                         </View>

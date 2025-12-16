@@ -166,6 +166,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Location serviceability state
   const [isLocationServiceable, setIsLocationServiceable] = React.useState(true);
+  const hasCartItems = totalCartItems > 0;
 
   /**
    * Ensure the restaurant associated with the current cart is open
@@ -1295,6 +1296,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [hasMoreRestaurants, isLoadingMore, isLoadingRestaurants, loadMoreRestaurants]);
 
+  const handleCartPress = React.useCallback(async () => {
+    if (!restaurantId || !onNavigateToCheckout || !hasCartItems) {
+      return;
+    }
+
+    const isOpen = await ensureCartRestaurantOpen();
+    if (!isOpen) {
+      return;
+    }
+
+    onNavigateToCheckout(restaurantId, restaurantName, 'home');
+  }, [restaurantId, restaurantName, hasCartItems, onNavigateToCheckout, ensureCartRestaurantOpen]);
+
   return (
     <View style={styles.outerContainer}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -1374,30 +1388,72 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             )}
           </TouchableOpacity>
 
-          {/* Profile Avatar */}
+          {/* Profile & Cart Actions */}
           {isLoadingLocation ? (
             <View style={styles.profileButton}>
               <Shimmer width={50} height={50} borderRadius={25} />
             </View>
           ) : (
-            <TouchableOpacity
-              style={styles.profileButton}
-              onPress={onNavigateToProfile}
-              activeOpacity={0.7}
-              disabled={!isLocationServiceable}
-              testID="profile-button"
-            >
-              <View style={[
-                styles.profileAvatar,
-                !isLocationServiceable && styles.profileAvatarDisabled
-              ]}>
-                <MaterialIcons 
-                  name="person" 
-                  size={22} 
-                  color={isLocationServiceable ? "#00B14F" : "rgba(0, 177, 79, 0.4)"} 
-                />
-              </View>
-            </TouchableOpacity>
+            <View style={styles.headerActionsRow}>
+              {/* Cart Icon - shown only when cart has items */}
+              {hasCartItems && (
+                <TouchableOpacity
+                  style={styles.cartButton}
+                  onPress={handleCartPress}
+                  activeOpacity={0.7}
+                  disabled={!isLocationServiceable}
+                  testID="cart-button"
+                >
+                  <View
+                    style={[
+                      styles.cartAvatar,
+                      !isLocationServiceable && styles.cartAvatarDisabled,
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="shopping-cart"
+                      size={22}
+                      color={
+                        isLocationServiceable
+                          ? '#00B14F'
+                          : 'rgba(0, 177, 79, 0.4)'
+                      }
+                    />
+                    <View style={styles.cartBadge}>
+                      <Text style={styles.cartBadgeText} numberOfLines={1}>
+                        {totalCartItems > 99 ? '99+' : totalCartItems}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Profile Avatar */}
+              <TouchableOpacity
+                style={styles.profileButton}
+                onPress={onNavigateToProfile}
+                activeOpacity={0.7}
+                disabled={!isLocationServiceable}
+                testID="profile-button"
+              >
+                <View
+                  style={[
+                    styles.profileAvatar,
+                    !isLocationServiceable && styles.profileAvatarDisabled,
+                  ]}
+                >
+                  <MaterialIcons
+                    name="person"
+                    size={22}
+                    color={
+                      isLocationServiceable
+                        ? '#00B14F'
+                        : 'rgba(0, 177, 79, 0.4)'
+                    }
+                  />
+                </View>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -1933,19 +1989,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* View Cart Bar - shows when cart has items and location is serviceable */}
       {isLocationServiceable && (
         <ViewCartBar
-          onPress={async () => {
-            // Navigate directly to checkout page, but only if restaurant is open
-            if (!restaurantId || !onNavigateToCheckout) {
-              return;
-            }
-
-            const isOpen = await ensureCartRestaurantOpen();
-            if (!isOpen) {
-              return;
-            }
-
-            onNavigateToCheckout(restaurantId, restaurantName, 'home');
-          }}
+          onPress={handleCartPress}
           onViewMenu={() => {
             // Navigate to restaurant menu
             if (restaurantId && onNavigateToRestaurant) {
@@ -2067,12 +2111,53 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#F7F7F7',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileAvatarDisabled: {
     opacity: 0.4,
+  },
+  headerActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  cartButton: {
+    width: 50,
+    height: 50,
+  },
+  cartAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  cartAvatarDisabled: {
+    opacity: 0.4,
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  cartBadgeText: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 10,
+    lineHeight: 14,
+    color: '#FFFFFF',
   },
   // Search section
   searchSection: {
