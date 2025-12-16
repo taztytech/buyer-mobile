@@ -888,7 +888,25 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // Find current item first to get proper quantity
     const currentItem = localCartItems.find(i => variantId ? i.variantId === variantId : i.id === itemId);
     if (!currentItem) return;
+
+    // If this is a preorder item, enforce quantity limit of 1 (same rule as CartContext / RestaurantScreen)
+    const baseCartItem = cart[itemId];
+    const isPreorderItem = baseCartItem?.isPreorder === true;
     const totalQuantityForItem = getLocalItemTotalQuantity(itemId);
+
+    if (isPreorderItem && totalQuantityForItem >= 1) {
+      // Don't allow increasing quantity beyond 1 for preorder items
+      showConfirmation({
+        title: '',
+        message: 'Only one quantity is allowed for preorder items. You can add this item only once.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
     if (totalQuantityForItem >= MAX_ITEM_QUANTITY) {
       showQuantityLimitAlert();
       return;

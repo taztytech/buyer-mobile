@@ -338,6 +338,29 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     }
   };
 
+  // Helper to show clear, OS-specific steps to enable location
+  const getLocationSettingsGuide = () => {
+    if (Platform.OS === 'android') {
+      return (
+        'How to turn on location for Tazty on Android:\n' +
+        '1. Tap "Open Settings" below (or open the Settings app).\n' +
+        '2. Go to "Apps" → "Tazty".\n' +
+        '3. Tap "Permissions" → "Location".\n' +
+        '4. Select "Allow only while using the app".\n' +
+        '5. Then go back and make sure "Location" is turned ON in the main Settings screen.'
+      );
+    }
+
+    return (
+      'How to turn on location for Tazty on iPhone:\n' +
+      '1. Tap "Open Settings" below (or open the Settings app).\n' +
+      '2. Scroll down and tap "Tazty".\n' +
+      '3. Tap "Location".\n' +
+      '4. Choose "While Using the App".\n' +
+      '5. Also ensure Location Services are ON in "Settings" → "Privacy & Security" → "Location Services".'
+    );
+  };
+
   const getCurrentLocation = async (): Promise<boolean> => {
     // Prevent multiple simultaneous requests
     if (isGettingLocation) {
@@ -363,7 +386,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           // Permission is blocked ("Don't ask again") – send user to settings
           Alert.alert(
             'Enable Location',
-            'To use your current location, please enable location access for Tazty in your device settings.',
+            'To use your current location, please enable location access for Tazty in your device settings.\n\n' +
+              getLocationSettingsGuide(),
             [
               { text: 'Not now', style: 'cancel' },
               {
@@ -382,7 +406,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           // Permission was denied but can be asked again – show a clear, actionable message
           Alert.alert(
             'Turn on location access',
-            'To fetch your current location, please turn on device location and allow Tazty to access your location (choose "While using this app" or "Allow all the time").'
+            'To fetch your current location, please turn on device location and allow Tazty to access your location (choose "While using this app" or "Allow all the time").\n\n' +
+              getLocationSettingsGuide()
           );
         }
 
@@ -450,7 +475,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       // Keep existing map state; show a helpful, actionable message
       Alert.alert(
         'Turn on location access',
-        'We could not fetch your current location. Please turn on device location and allow Tazty to access your location (choose "While using this app" or "Allow all the time"), then try again.'
+        'We could not fetch your current location. Please turn on device location and allow Tazty to access your location (choose "While using this app" or "Allow all the time"), then try again.\n\n' +
+          getLocationSettingsGuide()
       );
       success = false;
     } finally {
@@ -536,7 +562,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             // Permission is blocked ("Don't ask again") – send user to settings
             Alert.alert(
               'Enable Location Access',
-              'To get address details for this location, please enable location access for Tazty in your device settings. Alternatively, you can use the "Use Current Location" button if needed.',
+              'To get address details for this location, please enable location access for Tazty in your device settings. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
+                getLocationSettingsGuide(),
               [
                 { text: 'Not now', style: 'cancel' },
                 {
@@ -555,7 +582,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             // Permission was denied but can be asked again
             Alert.alert(
               'Location Permission Required',
-              'Please allow Tazty to access your location to get address details. Turn on device location and choose "While using this app" or "Allow all the time" when prompted. Alternatively, you can use the "Use Current Location" button if needed.'
+              'Please allow Tazty to access your location to get address details. Turn on device location and choose "While using this app" or "Allow all the time" when prompted. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
+                getLocationSettingsGuide()
             );
           }
           // Keep current location name and address, but don't update geocoding data
@@ -579,7 +607,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             // Location services still disabled - show alert to turn on location
             Alert.alert(
               'Turn on Location',
-              'Location permission is granted, but location services are turned off. Please turn on location services in your device settings to get address details. Alternatively, you can use the "Use Current Location" button if needed.',
+              'Location permission is granted, but location services are turned off. Please turn on location services in your device settings to get address details. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
+                getLocationSettingsGuide(),
               [
                 { text: 'OK', style: 'cancel' },
                 {
@@ -650,7 +679,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           // Permission is blocked ("Don't ask again") – send user to settings
           Alert.alert(
             'Enable Location Access',
-            'To use your current location, please enable location access for Tazty in your device settings. Alternatively, you can use the "Use Current Location" button if needed.',
+            'To use your current location, please enable location access for Tazty in your device settings. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
+              getLocationSettingsGuide(),
             [
               { text: 'Not now', style: 'cancel' },
               {
@@ -669,7 +699,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           // Permission was denied but can be asked again
           Alert.alert(
             'Location Permission Required',
-            'Please allow Tazty to access your location. Turn on device location and choose "While using this app" or "Allow all the time" when prompted. Alternatively, you can use the "Use Current Location" button if needed.'
+            'Please allow Tazty to access your location. Turn on device location and choose "While using this app" or "Allow all the time" when prompted. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
+              getLocationSettingsGuide()
           );
         }
         return;
@@ -692,7 +723,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           // Location services still disabled - show alert to turn on location
           Alert.alert(
             'Turn on Location',
-            'Location permission is granted, but location services are turned off. Please turn on location services in your device settings. Alternatively, you can use the "Use Current Location" button if needed.',
+            'Location permission is granted, but location services are turned off. Please turn on location services in your device settings. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
+              getLocationSettingsGuide(),
             [
               { text: 'Cancel', style: 'cancel' },
               {
@@ -724,7 +756,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       // Error checking permission or location services - show generic alert
       Alert.alert(
         'Location Error',
-        'Unable to access location. Please ensure location services are enabled and try again. Alternatively, you can use the "Use Current Location" button if needed.'
+        'Unable to access location. Please ensure location services are enabled and try again. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
+          getLocationSettingsGuide()
       );
     }
   };
@@ -943,7 +976,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
         {/* Center Pin Marker */}
         <View style={styles.centerMarker}>
-          <MaterialIcons name="location-on" size={40} color="#001E1F" />
+          <MaterialIcons name="location-on" size={40} color="#00B14F" />
           <View style={styles.pinShadow} />
         </View>
 

@@ -5,20 +5,18 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  StatusBar,
   ScrollView,
   Platform,
   Keyboard,
   Animated,
-  Alert,
   ActivityIndicator,
   Modal,
   KeyboardAvoidingView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { addressService, AddAddressRequest } from '@/services/address.service';
 import * as Location from 'expo-location';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface AddAddressFormScreenProps {
   visible: boolean;
@@ -77,8 +75,8 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [localityError, setLocalityError] = useState('');
   const [pincodeError, setPincodeError] = useState('');
   const [alternateMobileError, setAlternateMobileError] = useState('');
-  const [formError, setFormError] = useState('');
   const slideAnim = useRef(new Animated.Value(1000)).current;
+  const { showConfirmation } = useConfirmation();
   const hasInitializedRef = useRef(false);
   const previousVisibleRef = useRef(visible);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -93,13 +91,12 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
       // Reset initialization flag when modal opens
       hasInitializedRef.current = false;
 
-      // Clear any previous validation and form errors when the popup is opened
+      // Clear any previous validation errors when the popup is opened
       setHouseNoError('');
       setBuildingError('');
       setLocalityError('');
       setPincodeError('');
       setAlternateMobileError('');
-      setFormError('');
     }
 
     if (visible && !hasInitializedRef.current) {
@@ -254,7 +251,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     setLocalityError('');
     setPincodeError('');
     setAlternateMobileError('');
-    setFormError('');
 
     // Validation - collect all field errors at once
     let hasFieldError = false;
@@ -332,10 +328,27 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           }
         }, 50);
       } else {
-        setFormError(response.error || (editMode ? 'Failed to update address' : 'Failed to add address'));
+        // Show API error in popup
+        const errorMessage = response.error || response.message || (editMode ? 'Failed to update address' : 'Failed to add address');
+        showConfirmation({
+          title: '',
+          message: errorMessage,
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
       }
     } catch (error) {
-      setFormError('An unexpected error occurred. Please try again.');
+      // Show unexpected error in popup
+      showConfirmation({
+        title: '',
+        message: 'An unexpected error occurred. Please try again.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
     } finally {
       setLoading(false);
     }
@@ -421,7 +434,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                     setHouseNoError('');
                   }
                 }}
-                placeholder="House / flat / floor number"
+                placeholder="Flat / Floor number"
                 placeholderTextColor="#999"
                 maxLength={50}
                 onFocus={() => {
@@ -607,11 +620,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
 
         {/* Continue Button */}
         <View style={styles.footer}>
-          {formError ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{formError}</Text>
-            </View>
-          ) : null}
           <TouchableOpacity
             style={[styles.continueButton, loading && styles.continueButtonDisabled]}
             onPress={handleContinue}
@@ -849,9 +857,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
-  },
-  errorContainer: {
-    marginBottom: 8,
   },
   errorText: {
     fontFamily: 'Poppins',
