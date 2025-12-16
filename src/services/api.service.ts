@@ -3,6 +3,8 @@
  * Handles all HTTP requests with proper error handling and authentication
  */
 
+import Constants from 'expo-constants';
+import { APP_VERSION_CODE, APP_VERSION_NAME } from '@/config/appVersion.generated';
 import { API_CONFIG, buildApiUrl } from '@/config/api.config';
 import { storageService } from './storage.service';
 
@@ -62,6 +64,66 @@ class ApiService {
   private isRefreshing: boolean = false;
   private refreshPromise: Promise<boolean> | null = null;
   private isInitialized: boolean = false;
+
+  /**
+   * Build version headers using generated app version (single source of truth)
+   * with safe fallback to native/Expo config in dev or if file missing.
+   * These are sent with every API request and also logged.
+   */
+  private getVersionHeaders(): Record<string, string> {
+    // 1) Primary source: generated config (kept in sync with android/version.properties)
+    let versionName: string | undefined =
+      typeof APP_VERSION_NAME === 'string' && APP_VERSION_NAME.length > 0
+        ? APP_VERSION_NAME
+        : undefined;
+
+    let versionCode: string | undefined;
+
+    const appVersionCodeAny: any = APP_VERSION_CODE;
+    if (typeof appVersionCodeAny === 'number' && appVersionCodeAny > 0) {
+      versionCode = String(appVersionCodeAny);
+    } else if (typeof appVersionCodeAny === 'string' && appVersionCodeAny.length > 0) {
+      versionCode = appVersionCodeAny;
+    }
+
+    // 2) Fallback: native/Expo config (mainly for dev / Expo Go)
+    if (!versionName || !versionCode) {
+      const expoConfig: any = (Constants as any).expoConfig ?? {};
+
+      if (!versionName) {
+        const versionNameFallback =
+          Constants.nativeAppVersion ??
+          expoConfig.version ??
+          expoConfig.runtimeVersion ??
+          undefined;
+
+        if (versionNameFallback !== undefined) {
+          versionName = String(versionNameFallback);
+        }
+      }
+
+      if (!versionCode) {
+        const versionCodeFallback =
+          Constants.nativeBuildVersion ??
+          expoConfig.android?.versionCode ??
+          expoConfig.ios?.buildNumber ??
+          undefined;
+
+        if (versionCodeFallback !== undefined) {
+          versionCode = String(versionCodeFallback);
+        }
+      }
+    }
+
+    // 3) Final safety defaults
+    if (!versionName) versionName = 'unknown';
+    if (!versionCode) versionCode = '0';
+
+    return {
+      'X-App-Version-Name': versionName,
+      'X-App-Version-Code': versionCode,
+    };
+  }
 
   /**
    * Initialize API service - load tokens from storage
@@ -251,8 +313,11 @@ class ApiService {
    * Note: Assumes ensureTokensLoaded() was already called by the request method
    */
   private buildHeaders(customHeaders?: Record<string, string>): HeadersInit {
+    const versionHeaders = this.getVersionHeaders();
+
     const headers: Record<string, string> = {
       ...API_CONFIG.HEADERS,
+      ...versionHeaders,
       ...customHeaders,
     };
 
@@ -351,13 +416,20 @@ class ApiService {
 
       // Centralized request logging for debugging purposes
       const requestBody = config.body ? JSON.parse(config.body as string) : undefined;
-      console.log('[apiService][request]', safeStringify({
-        method,
-        endpoint: url,
-        body: requestBody,
-        hasBody: Boolean(config.body),
-        timestamp: new Date().toISOString(),
-      }));
+      console.log(
+        '[apiService][request]',
+        safeStringify({
+          method,
+          endpoint: url,
+          body: requestBody,
+          hasBody: Boolean(config.body),
+          headers: {
+            'X-App-Version-Name': (headers as Record<string, string>)['X-App-Version-Name'],
+            'X-App-Version-Code': (headers as Record<string, string>)['X-App-Version-Code'],
+          },
+          timestamp: new Date().toISOString(),
+        }),
+      );
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
@@ -430,7 +502,6 @@ class ApiService {
           success: false,
           error: responseData.message || 'Request failed',
           message: responseData.message,
-          statusCode: response.status, // Preserve status code
         };
       }
 
