@@ -8,6 +8,7 @@ import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/ho
 import { addressService } from '@/services/address.service';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { Shimmer } from '@/components/Shimmer';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { AppFooter } from '@/components/AppFooter';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -147,6 +148,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [_hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
   const isInitialVegModeLoad = React.useRef(true);
   const hasRedirectedToLocationMap = React.useRef(false); // Prevent multiple redirects
+  const hasHandledReturnFromLocationSelection = React.useRef(false); // Track if we've handled return from location selection
+  const isFetchingAddressRef = React.useRef(false); // Prevent concurrent address fetches
   const lastFetchedCoords = React.useRef<{ latitude: number; longitude: number } | null>(null);
 
   // Pagination states
@@ -258,7 +261,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Extract address fetching logic into a reusable function
   const fetchDefaultAddress = React.useCallback(
     async (options?: { overrideSelectedLocation?: boolean }) => {
+    // Prevent concurrent calls - return immediately if already fetching
+    if (isFetchingAddressRef.current) {
+      return;
+    }
+    
     try {
+      // Set flag immediately to prevent any other calls
+      isFetchingAddressRef.current = true;
       // Clear cache to ensure we get fresh data
       addressService.clearCache();
       const response = await addressService.getAddresses();
@@ -267,6 +277,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         // Reset redirect flag if user has addresses now (allows redirect again if they delete all addresses later)
         if (response.data.length > 0) {
           hasRedirectedToLocationMap.current = false;
+          // Also reset the handled flag since addresses now exist
+          hasHandledReturnFromLocationSelection.current = false;
         }
 
         // Check if user has no addresses - redirect to location map screen (only on homepage)
@@ -354,6 +366,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       await fetchHomeData(undefined, undefined);
     } finally {
       setIsLoadingLocation(false);
+      isFetchingAddressRef.current = false;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalSelectedLocation, isFocused, onNavigateToLocationSelection]);
@@ -1157,10 +1170,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <View style={[styles.adBanner, { width: BANNER_WIDTH, backgroundColor: item.backgroundColor || '#00BEC8' }]} testID={`banner-${item.id}`}>
           {/* Background Image - fills entire rectangle */}
           {item.imageUrl && (
-            <Image
-              source={{ uri: item.imageUrl }}
+            <OptimizedImage
+              source={item.imageUrl}
               style={styles.adBannerImage}
-              resizeMode="cover"
+              contentFit="cover"
+              shimmerWidth={BANNER_WIDTH}
+              shimmerHeight={200}
+              transition={300}
+              priority="high"
+              cachePolicy="memory-disk"
             />
           )}
           
@@ -1488,7 +1506,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           // Show closed banner when app is not open
           <View style={styles.closedBannerContainer}>
             <Image
-              source={require('@../../../assets/Closed Banner.png')}
+              source={require('@../../../assets/Closed Banner.webp')}
               style={styles.closedBannerImage}
               resizeMode="contain"
             />
@@ -1761,10 +1779,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               keyExtractor={(restaurant) => restaurant.id.toString()}
               scrollEnabled={false}
               removeClippedSubviews={true}
-              maxToRenderPerBatch={5}
-              windowSize={5}
-              initialNumToRender={3}
-              updateCellsBatchingPeriod={50}
+              maxToRenderPerBatch={3}
+              windowSize={3}
+              initialNumToRender={2}
+              updateCellsBatchingPeriod={100}
+              getItemLayout={(data, index) => ({
+                length: 166, // Approximate card height with margin
+                offset: 166 * index,
+                index,
+              })}
             />
           )}
 

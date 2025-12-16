@@ -265,6 +265,35 @@ class ApiService {
   }
 
   /**
+   * Recursively sanitize request payloads by removing null and undefined values.
+   * This ensures we don't send fields like `item_id: null` to the backend.
+   */
+  private sanitizePayload<T>(data: T): T {
+    if (data === null || data === undefined) {
+      return data;
+    }
+
+    if (Array.isArray(data)) {
+      return data
+        .map((item) => this.sanitizePayload(item))
+        .filter((item) => item !== null && item !== undefined) as any;
+    }
+
+    if (typeof data === 'object') {
+      const result: any = {};
+      Object.entries(data as any).forEach(([key, value]) => {
+        if (value === null || value === undefined) {
+          return;
+        }
+        result[key] = this.sanitizePayload(value as any);
+      });
+      return result;
+    }
+
+    return data;
+  }
+
+  /**
    * Handle API errors
    */
   private handleError(error: any): ApiError {
@@ -310,9 +339,14 @@ class ApiService {
         method,
         headers,
       };
+      
+      // Sanitize payload to avoid sending null/undefined values to the API
+      const shouldHaveBody =
+        method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
 
-      if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE')) {
-        config.body = JSON.stringify(data);
+      if (data && shouldHaveBody) {
+        const sanitizedData = this.sanitizePayload(data);
+        config.body = JSON.stringify(sanitizedData);
       }
 
       // Centralized request logging for debugging purposes

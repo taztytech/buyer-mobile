@@ -51,7 +51,41 @@ function incrementVersion(version, type = 'patch') {
   return v.toString();
 }
 
-// Read and update build.gradle
+// Read and update build.gradle - only bump versionCode
+function bumpAndroidVersionCode() {
+  if (!fs.existsSync(BUILD_GRADLE_PATH)) {
+    console.error('❌ build.gradle not found at:', BUILD_GRADLE_PATH);
+    process.exit(1);
+  }
+
+  let content = fs.readFileSync(BUILD_GRADLE_PATH, 'utf8');
+  
+  // Extract current versionCode
+  const versionCodeMatch = content.match(/versionCode\s+(\d+)/);
+  if (!versionCodeMatch) {
+    console.error('❌ Could not find versionCode in build.gradle');
+    process.exit(1);
+  }
+  
+  const currentVersionCode = parseInt(versionCodeMatch[1], 10);
+  const newVersionCode = currentVersionCode + 1;
+  
+  // Update versionCode only
+  content = content.replace(
+    /versionCode\s+\d+/,
+    `versionCode ${newVersionCode}`
+  );
+  
+  // Write back to file
+  fs.writeFileSync(BUILD_GRADLE_PATH, content, 'utf8');
+  
+  console.log('✅ Android versionCode bumped successfully!');
+  console.log(`   versionCode: ${currentVersionCode} → ${newVersionCode}`);
+  
+  return { versionCode: newVersionCode };
+}
+
+// Read and update build.gradle - bump both versionCode and versionName
 function bumpAndroidVersion(bumpType = 'patch') {
   if (!fs.existsSync(BUILD_GRADLE_PATH)) {
     console.error('❌ build.gradle not found at:', BUILD_GRADLE_PATH);
@@ -119,17 +153,30 @@ function updatePackageJsonVersion(newVersion) {
 
 // Main execution
 const bumpType = process.argv[2] || 'patch';
+const codeOnly = process.argv[2] === 'code-only' || process.argv.includes('--code-only');
 
-if (!['patch', 'minor', 'major'].includes(bumpType)) {
-  console.error('❌ Invalid bump type. Use: patch, minor, or major');
-  process.exit(1);
-}
+if (codeOnly) {
+  // Only bump versionCode (for Play Store builds)
+  try {
+    bumpAndroidVersionCode();
+    console.log('\n🎉 VersionCode bump complete!');
+  } catch (error) {
+    console.error('❌ Error bumping versionCode:', error.message);
+    process.exit(1);
+  }
+} else {
+  // Bump both versionCode and versionName
+  if (!['patch', 'minor', 'major'].includes(bumpType)) {
+    console.error('❌ Invalid bump type. Use: patch, minor, major, or code-only');
+    process.exit(1);
+  }
 
-try {
-  const { versionName } = bumpAndroidVersion(bumpType);
-  updatePackageJsonVersion(versionName);
-  console.log('\n🎉 Version bump complete!');
-} catch (error) {
-  console.error('❌ Error bumping version:', error.message);
-  process.exit(1);
+  try {
+    const { versionName } = bumpAndroidVersion(bumpType);
+    updatePackageJsonVersion(versionName);
+    console.log('\n🎉 Version bump complete!');
+  } catch (error) {
+    console.error('❌ Error bumping version:', error.message);
+    process.exit(1);
+  }
 }

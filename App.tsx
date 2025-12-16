@@ -42,6 +42,7 @@ import { fcmNotificationService } from '@/services/fcmNotification.service';
 import { NetworkStatusScreen } from '@/components/NetworkStatusScreen';
 import { analyticsService, AnalyticsEvents, AnalyticsScreens } from '@/services/analytics.service';
 import { inAppUpdateService } from '@/services/inAppUpdate.service';
+import { crashlyticsService } from '@/services/crashlytics.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -271,6 +272,9 @@ function AppContent() {
         // Initialize API service with stored tokens
         await apiService.initialize();
 
+        // Initialize Crashlytics
+        await crashlyticsService.initialize();
+
         // Initialize Analytics
         await analyticsService.initialize();
         await analyticsService.logEvent(AnalyticsEvents.APP_OPEN);
@@ -278,6 +282,7 @@ function AppContent() {
         // Initialize FCM notifications
         fcmNotificationService.initialize().catch((error) => {
           console.error('FCM initialization error:', error);
+          crashlyticsService.recordError(error, { source: 'fcm_initialize' });
         });
 
         // Check for app updates after a short delay (to ensure app is ready)
@@ -294,12 +299,14 @@ function AppContent() {
         const isLoggedIn = await authService.isAuthenticated();
 
         if (isLoggedIn) {
-          // Get current user and set analytics user ID
+          // Get current user and set analytics / crashlytics user ID
           const currentUser = await authService.getCurrentUser();
           if (currentUser?.id) {
-            await analyticsService.setUserId(currentUser.id.toString());
+            const idString = currentUser.id.toString();
+            await analyticsService.setUserId(idString);
+            await crashlyticsService.setUserId(idString);
           }
-          
+
           // User has valid session, navigate to home
           setCurrentScreen('home');
         } else {
@@ -506,8 +513,8 @@ function AppContent() {
   const handleLogout = async () => {
     // Log logout event
     await analyticsService.logEvent(AnalyticsEvents.LOGOUT);
-    
-    // Reset analytics data
+
+    // Reset analytics user data
     await analyticsService.resetAnalyticsData();
     
     // Clear authentication tokens and user data
@@ -735,6 +742,9 @@ function AppContent() {
         setAddressSelectionCameFrom('home');
         setLocationSelectionCameFrom('home');
         setSearchQuery('');
+        // Trigger refresh when returning from location selection to home
+        // This ensures home data is fetched if user added an address
+        setAddressRefreshTrigger(prev => prev + 1);
       });
     }
   };
@@ -1591,7 +1601,7 @@ function AppContent() {
 
       if (restaurantResponse.success && restaurantResponse.data) {
         // Handle both nested data structure and direct data structure
-        const restaurantData = (restaurantResponse.data && typeof restaurantResponse.data === 'object' && 'data' in restaurantResponse.data)
+        const restaurantData = (restaurantResponse.data && typeof restaurantResponse.data === 'object' && restaurantResponse.data !== null && 'data' in restaurantResponse.data)
           ? (restaurantResponse.data as { data: any }).data
           : restaurantResponse.data;
 
@@ -1878,7 +1888,7 @@ function AppContent() {
             pointerEvents={currentScreen === 'locationSelection' ? 'auto' : 'none'}
           >
             <LocationSelectionScreen
-              initialSearchQuery={searchQuery}
+              initialSearchQuery={''}
               editingAddress={editingAddress}
               initialLatitude={editingAddress?.latitude || initialLocationCoords?.latitude}
               initialLongitude={editingAddress?.longitude || initialLocationCoords?.longitude}

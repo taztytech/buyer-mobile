@@ -6,6 +6,31 @@ const [env = 'dev', artifact = 'apk', target = 'all'] = process.argv.slice(2);
 // Set ENV_FILE based on environment
 const envFile = env === 'prod' ? '.env.prod' : '.env.dev';
 
+// Auto-bump versionCode for all production builds (APK and bundle)
+const isProductionBuild = env === 'prod';
+
+if (isProductionBuild) {
+  const buildType = artifact === 'bundle' ? 'Play Store (AAB)' : 'Production (APK)';
+  console.log(`📦 ${buildType} build detected - bumping versionCode...`);
+  const bumpScript = path.resolve(__dirname, 'bump-android-version.js');
+  const bumpResult = spawnSync('node', [bumpScript, 'code-only'], {
+    stdio: 'inherit',
+    cwd: path.resolve(__dirname, '..'),
+  });
+  
+  if (bumpResult.error) {
+    console.error('❌ Failed to bump versionCode:', bumpResult.error.message);
+    process.exit(1);
+  }
+  
+  if (bumpResult.status !== 0) {
+    console.error('❌ Version bump failed');
+    process.exit(1);
+  }
+  
+  console.log('');
+}
+
 const isWindows = process.platform === 'win32';
 const scriptName = isWindows ? 'build-release.ps1' : 'build-release.sh';
 const buildScriptPath = path.resolve(__dirname, scriptName);

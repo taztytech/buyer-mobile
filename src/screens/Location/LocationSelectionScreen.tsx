@@ -81,6 +81,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [geocodingData, setGeocodingData] = useState<Location.LocationGeocodedAddress | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [isCurrentLocationSet, setIsCurrentLocationSet] = useState(false);
   const bottomPosition = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<any>(null);
   const isUpdatingFromCode = useRef(false);
@@ -110,6 +111,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     // Reset geocoding data when switching contexts
     setGeocodingData(null);
     setShowAddressForm(false);
+    setIsCurrentLocationSet(false);
   }, [editingAddress, initialLatitude, initialLongitude, initialSearchQuery]);
 
   // Update region and location info when editing address changes
@@ -211,6 +213,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
               );
               // Store geocoding data for pre-filling address form
               setGeocodingData(addr);
+              // Initial coordinates provided (from "Add address"), treat as current location
+              setIsCurrentLocationSet(true);
             }
           }
         } catch (error) {
@@ -250,6 +254,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       }
     }
   }, [editingAddress, initialLatitude, initialLongitude]);
+
+  // Clear search text when component mounts (ensures fresh state)
+  useEffect(() => {
+    setSearchText('');
+  }, []);
 
   // Update searchText and trigger search when initialSearchQuery changes
   useEffect(() => {
@@ -305,13 +314,38 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     };
   }, []);
 
-  const getCurrentLocation = async () => {
+  // Helper function to open location settings
+  const openLocationSettings = () => {
+    try {
+      if (Platform.OS === 'android') {
+        // Try to open Android location settings directly
+        // This may not work on all devices, so we have a fallback
+        Linking.openURL('android.settings.LOCATION_SOURCE_SETTINGS').catch(() => {
+          // Fallback to app settings if location settings can't be opened
+          Linking.openSettings();
+        });
+      } else {
+        // iOS - open app settings (location settings are within app settings)
+        Linking.openSettings();
+      }
+    } catch (error) {
+      // Fallback to app settings
+      try {
+        Linking.openSettings();
+      } catch {
+        // Ignore errors
+      }
+    }
+  };
+
+  const getCurrentLocation = async (): Promise<boolean> => {
     // Prevent multiple simultaneous requests
     if (isGettingLocation) {
-      return;
+      return false;
     }
 
     setIsGettingLocation(true);
+    let success = false;
 
     try {
       // First check existing permission
@@ -348,11 +382,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           // Permission was denied but can be asked again – show a clear, actionable message
           Alert.alert(
             'Turn on location access',
-            'To fetch your current location, please turn on device location and allow Tazty to access your location (choose “While using this app” or “Allow all the time”).'
+            'To fetch your current location, please turn on device location and allow Tazty to access your location (choose "While using this app" or "Allow all the time").'
           );
         }
 
-        return;
+        return false;
       }
 
       // Permission granted – fetch current location
@@ -400,20 +434,30 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           );
           // Store geocoding data for pre-filling address form
           setGeocodingData(addr);
+          setIsCurrentLocationSet(true);
+          success = true; // Successfully got geocoding data
+        } else {
+          setLocationName('Current Location');
+          setLocationAddress('Current Location');
+          success = false; // No geocoding data available
         }
       } catch (reverseGeoError) {
         setLocationName('Current Location');
         setLocationAddress('Current Location');
+        success = false; // Reverse geocoding failed
       }
     } catch (error) {
       // Keep existing map state; show a helpful, actionable message
       Alert.alert(
         'Turn on location access',
-        'We could not fetch your current location. Please turn on device location and allow Tazty to access your location (choose “While using this app” or “Allow all the time”), then try again.'
+        'We could not fetch your current location. Please turn on device location and allow Tazty to access your location (choose "While using this app" or "Allow all the time"), then try again.'
       );
+      success = false;
     } finally {
       setIsGettingLocation(false);
     }
+
+    return success;
   };
 
   const handleRegionChange = (newRegion: Region) => {
@@ -477,32 +521,104 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         // Mark geocoding as in progress
         isGeocodingRef.current = true;
 
-        // Only check if permission is already granted, don't request it
-        const { status } = await Location.getForegroundPermissionsAsync();
+        // Step 1: Check and request permission first
+        let permission = await Location.getForegroundPermissionsAsync();
 
-        if (status === 'granted') {
-          try {
-            const addresses = await Location.reverseGeocodeAsync({
-              latitude: newRegion.latitude,
-              longitude: newRegion.longitude,
-            });
+        // If permission is not granted, request it (this will show the system popup)
+        if (permission.status !== 'granted') {
+          permission = await Location.requestForegroundPermissionsAsync();
+        }
 
-            if (addresses.length > 0) {
-              const addr = addresses[0];
-              setLocationName(addr.name || addr.street || 'Location');
-              setLocationAddress(
-                `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
-              );
-              // Store geocoding data for pre-filling address form
-              setGeocodingData(addr);
-            }
-          } catch (reverseGeoError) {
-            // Keep the current location name and address
+        // Step 2: Handle permission response
+        if (permission.status !== 'granted') {
+          // Permission denied - show instructions but don't block the UI
+          if (!permission.canAskAgain) {
+            // Permission is blocked ("Don't ask again") – send user to settings
+            Alert.alert(
+              'Enable Location Access',
+              'To get address details for this location, please enable location access for Tazty in your device settings. Alternatively, you can use the "Use Current Location" button if needed.',
+              [
+                { text: 'Not now', style: 'cancel' },
+                {
+                  text: 'Open Settings',
+                  onPress: () => {
+                    try {
+                      Linking.openSettings();
+                    } catch {
+                      // Ignore Linking errors
+                    }
+                  },
+                },
+              ]
+            );
+          } else {
+            // Permission was denied but can be asked again
+            Alert.alert(
+              'Location Permission Required',
+              'Please allow Tazty to access your location to get address details. Turn on device location and choose "While using this app" or "Allow all the time" when prompted. Alternatively, you can use the "Use Current Location" button if needed.'
+            );
           }
-        } else {
-          // Permission not granted, keep default location name
+          // Keep current location name and address, but don't update geocoding data
+          return;
+        }
+
+        // Step 3: Permission is granted - check if location services are enabled
+        const isLocationEnabled = await Location.hasServicesEnabledAsync();
+        
+        if (!isLocationEnabled) {
+          // Permission granted but location services are disabled - try to get location (triggers system prompt)
+          try {
+            // Try to get location - this may trigger system to prompt to turn on location
+            await Location.getCurrentPositionAsync({
+              accuracy: Platform.OS === 'ios'
+                ? Location.Accuracy.Balanced
+                : Location.Accuracy.High,
+            });
+            // If successful, location services were turned on - proceed with geocoding
+          } catch (locationError) {
+            // Location services still disabled - show alert to turn on location
+            Alert.alert(
+              'Turn on Location',
+              'Location permission is granted, but location services are turned off. Please turn on location services in your device settings to get address details. Alternatively, you can use the "Use Current Location" button if needed.',
+              [
+                { text: 'OK', style: 'cancel' },
+                {
+                  text: 'Open Settings',
+                  onPress: () => {
+                    openLocationSettings();
+                  },
+                },
+              ]
+            );
+            // Keep current location name and address, but don't update geocoding data
+            return;
+          }
+        }
+
+        // Step 4: Both permission and location services are available - proceed with reverse geocoding
+        try {
+          const addresses = await Location.reverseGeocodeAsync({
+            latitude: newRegion.latitude,
+            longitude: newRegion.longitude,
+          });
+
+          if (addresses.length > 0) {
+            const addr = addresses[0];
+            setLocationName(addr.name || addr.street || 'Location');
+            setLocationAddress(
+              `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''}`
+            );
+            // Store geocoding data for pre-filling address form
+            setGeocodingData(addr);
+            // User manually moved the pin, so reset current location flag
+            setIsCurrentLocationSet(false);
+          }
+        } catch (reverseGeoError) {
+          // Keep the current location name and address if reverse geocoding fails
         }
       } catch (error) {
+        // Error checking permission or location services - silently fail
+        // User can still interact with the map
       } finally {
         // Mark geocoding as complete
         isGeocodingRef.current = false;
@@ -510,8 +626,107 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     }, 650); // Wait 650ms (150ms drag detection + 500ms debounce)
   };
 
-  const handleConfirm = () => {
-    setShowAddressForm(true);
+  const handleConfirm = async () => {
+    // If editing an address, allow proceeding (we have initialData)
+    if (editingAddress) {
+      setShowAddressForm(true);
+      return;
+    }
+
+    // For new addresses, check permission first, then location services
+    try {
+      // Step 1: Check and request permission first
+      let permission = await Location.getForegroundPermissionsAsync();
+
+      // If permission is not granted, request it (this will show the system popup)
+      if (permission.status !== 'granted') {
+        permission = await Location.requestForegroundPermissionsAsync();
+      }
+
+      // Step 2: Handle permission response
+      if (permission.status !== 'granted') {
+        // Permission denied - show instructions
+        if (!permission.canAskAgain) {
+          // Permission is blocked ("Don't ask again") – send user to settings
+          Alert.alert(
+            'Enable Location Access',
+            'To use your current location, please enable location access for Tazty in your device settings. Alternatively, you can use the "Use Current Location" button if needed.',
+            [
+              { text: 'Not now', style: 'cancel' },
+              {
+                text: 'Open Settings',
+                onPress: () => {
+                  try {
+                    Linking.openSettings();
+                  } catch {
+                    // Ignore Linking errors
+                  }
+                },
+              },
+            ]
+          );
+        } else {
+          // Permission was denied but can be asked again
+          Alert.alert(
+            'Location Permission Required',
+            'Please allow Tazty to access your location. Turn on device location and choose "While using this app" or "Allow all the time" when prompted. Alternatively, you can use the "Use Current Location" button if needed.'
+          );
+        }
+        return;
+      }
+
+      // Step 3: Permission is granted - check if location services are enabled
+      const isLocationEnabled = await Location.hasServicesEnabledAsync();
+      
+      if (!isLocationEnabled) {
+        // Permission granted but location services are disabled - try to get location (triggers system prompt) or open settings
+        try {
+          // Try to get location - this may trigger system to prompt to turn on location
+          await Location.getCurrentPositionAsync({
+            accuracy: Platform.OS === 'ios'
+              ? Location.Accuracy.Balanced
+              : Location.Accuracy.High,
+          });
+          // If successful, location services were turned on - proceed
+        } catch (locationError) {
+          // Location services still disabled - show alert to turn on location
+          Alert.alert(
+            'Turn on Location',
+            'Location permission is granted, but location services are turned off. Please turn on location services in your device settings. Alternatively, you can use the "Use Current Location" button if needed.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Open Settings',
+                onPress: () => {
+                  openLocationSettings();
+                },
+              },
+            ]
+          );
+          return;
+        }
+      }
+
+      // Step 4: Both permission and location services are available - check if we have geocoding data
+      if (geocodingData) {
+        // Both permission and geocoding data available - proceed to form
+        setShowAddressForm(true);
+        return;
+      }
+
+      // Permission granted but no geocoding data - user needs to get location first
+      Alert.alert(
+        'Location Required',
+        'Please use the "Use Current Location" button to fetch your current location before confirming.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      // Error checking permission or location services - show generic alert
+      Alert.alert(
+        'Location Error',
+        'Unable to access location. Please ensure location services are enabled and try again. Alternatively, you can use the "Use Current Location" button if needed.'
+      );
+    }
   };
 
   const handleBackPress = () => {
@@ -533,9 +748,10 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     isDraggingRef.current = false;
     isUpdatingFromCode.current = false;
     
-    // Clear cached data
+    // Clear cached data and search text
     setGeocodingData(null);
     setShowAddressForm(false);
+    setSearchText('');
     
     if (onBack) {
       onBack();
@@ -640,11 +856,14 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             );
             // Store geocoding data for pre-filling address form
             setGeocodingData(addr);
+            // User searched for location, so reset current location flag
+            setIsCurrentLocationSet(false);
           }
         } catch (reverseGeoError) {
           setLocationName(query);
           setLocationAddress(query);
           setGeocodingData(null);
+          setIsCurrentLocationSet(false);
         }
 
         // Dismiss keyboard
@@ -663,11 +882,31 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     <View style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* Back Button in Safe Area */}
+      {/* Header with Back Button and Search Bar */}
       <SafeAreaView style={styles.headerSafeArea} edges={['top']}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
-          <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
-        </TouchableOpacity>
+        <View style={styles.headerContainer}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
+            <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+          </TouchableOpacity>
+          
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <MaterialIcons name="search" size={24} color="#001E1F" />
+            <TextInput
+              style={styles.searchInput}
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholder="Search By Street, building,"
+              placeholderTextColor="#8E8E8E"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus={false}
+              returnKeyType="search"
+              underlineColorAndroid="transparent"
+              onSubmitEditing={handleSearch}
+            />
+          </View>
+        </View>
       </SafeAreaView>
 
       <View style={styles.container}>
@@ -710,7 +949,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
         {/* Tooltip */}
         <View style={styles.tooltip}>
-          <Text style={styles.tooltipText}>Move the pin to change location</Text>
+          <Text style={styles.tooltipText}>
+            {isCurrentLocationSet 
+              ? 'Current location set. Move the pin to adjust' 
+              : 'Move the pin to change location'}
+          </Text>
         </View>
 
         {/* Bottom Section */}
@@ -721,58 +964,46 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             paddingBottom: isKeyboardVisible ? 12 : 40,
           }
         ]}>
-          {/* Search Bar */}
-          <View style={styles.searchContainer}>
-            <MaterialIcons name="search" size={24} color="#001E1F" />
-            <TextInput
-              style={styles.searchInput}
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholder="Search By Street, building,"
-              placeholderTextColor="#8E8E8E"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus={false}
-              returnKeyType="search"
-              underlineColorAndroid="transparent"
-              onSubmitEditing={handleSearch}
-            />
-          </View>
-
           {/* Location Info Card - Hidden when keyboard is visible */}
           {!isKeyboardVisible && (
             <>
+              {/* Current Location Button */}
+              <TouchableOpacity 
+                style={[
+                  styles.currentLocationButton,
+                  isGettingLocation && styles.currentLocationButtonDisabled
+                ]} 
+                onPress={getCurrentLocation}
+                disabled={isGettingLocation}
+                activeOpacity={0.7}
+              >
+                {isGettingLocation ? (
+                  <>
+                    <ActivityIndicator size="small" color="#00B14F" />
+                    <Text style={styles.currentLocationButtonText}>Getting location...</Text>
+                  </>
+                ) : (
+                  <>
+                    <MaterialIcons name="my-location" size={16} color="#00B14F" />
+                    <Text style={styles.currentLocationButtonText}>Use current location</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
               <View style={styles.locationCard}>
                 <View style={styles.locationInfo}>
                   <View style={styles.locationHeader}>
-                    <MaterialIcons name="location-on" size={28} color="#00B14F" />
+                    <MaterialIcons name="location-on" size={24} color="#00B14F" />
                     <Text style={styles.locationName} numberOfLines={2} ellipsizeMode="tail">{locationName}</Text>
                   </View>
                   <Text style={styles.locationAddress}>{locationAddress}</Text>
                 </View>
-
-                {/* Current Location Button */}
-                <TouchableOpacity 
-                  style={[
-                    styles.currentLocationButton,
-                    isGettingLocation && styles.currentLocationButtonDisabled
-                  ]} 
-                  onPress={getCurrentLocation}
-                  disabled={isGettingLocation}
-                  activeOpacity={0.7}
-                >
-                  {isGettingLocation ? (
-                    <ActivityIndicator size="small" color="#00B14F" />
-                  ) : (
-                    <MaterialIcons name="my-location" size={24} color="#001E1F" />
-                  )}
-                </TouchableOpacity>
               </View>
 
               {/* Confirm Button */}
               <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
                 <Text style={styles.confirmButtonText}>Confirm</Text>
-                <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
+                <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
               </TouchableOpacity>
             </>
           )}
@@ -869,12 +1100,13 @@ const styles = StyleSheet.create({
   },
   tooltip: {
     position: 'absolute',
-    left: (SCREEN_WIDTH - 192) / 2,
+    left: (SCREEN_WIDTH - 240) / 2,
     top: (SCREEN_HEIGHT / 2) - 80,
     backgroundColor: '#001E1F',
     borderRadius: 13,
     paddingVertical: 4,
     paddingHorizontal: 15,
+    maxWidth: 240,
   },
   tooltipText: {
     fontFamily: 'Poppins',
@@ -890,8 +1122,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    paddingHorizontal: 20,
     paddingTop: 16,
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 20,
   },
   backButton: {
     width: 40,
@@ -908,10 +1145,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 20,
     right: 20,
-    gap: 21,
+    gap: 16,
     paddingBottom: 40,
   },
   searchContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 19,
@@ -921,7 +1159,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 10,
+    borderRadius: 30,
   },
   searchInput: {
     flex: 1,
@@ -937,18 +1175,14 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   locationCard: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    padding: 20,
-    gap: 24,
+    padding: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 16,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.05,
-    shadowRadius: 43,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
   },
   locationInfo: {
     flex: 1,
@@ -957,13 +1191,14 @@ const styles = StyleSheet.create({
   locationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    marginBottom: 4,
   },
   locationName: {
     fontFamily: 'Poppins',
     fontWeight: '700',
-    fontSize: 18,
-    lineHeight: 27,
+    fontSize: 16,
+    lineHeight: 24,
     color: '#001E1F',
     flex: 1,
     flexShrink: 1,
@@ -971,18 +1206,36 @@ const styles = StyleSheet.create({
   locationAddress: {
     fontFamily: 'Poppins',
     fontWeight: '400',
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 13,
+    lineHeight: 20,
     color: '#001E1F',
-    opacity: 0.85,
+    opacity: 0.75,
+    marginTop: 2,
   },
   currentLocationButton: {
-    width: 50,
-    height: 50,
-    backgroundColor: 'rgba(0, 128, 74, 0.2)',
-    borderRadius: 10,
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    alignSelf: 'flex-end',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  currentLocationButtonText: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 12,
+    color: '#001E1F',
+    lineHeight: 16,
   },
   currentLocationButtonDisabled: {
     opacity: 0.6,
@@ -991,11 +1244,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 19,
+    paddingVertical: 16,
     paddingHorizontal: 20,
-    gap: 10,
+    gap: 8,
     backgroundColor: '#00B14F',
-    borderRadius: 10,
+    borderRadius: 12,
+    shadowColor: '#00B14F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   confirmButtonText: {
     fontFamily: 'Poppins',
@@ -1005,3 +1263,4 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 });
+
