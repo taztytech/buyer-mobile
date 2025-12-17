@@ -796,18 +796,32 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getTotalItems = () => {
     return Object.values(cart).reduce((sum, item) => {
       if (item.isCustomizable && item.variants) {
-        return sum + item.variants.reduce((variantSum, variant) => variantSum + variant.quantity, 0);
+        const variantsTotal = item.variants.reduce((variantSum, variant) => {
+          const safeVariantQty = Number(variant.quantity) || 0;
+          return variantSum + safeVariantQty;
+        }, 0);
+        return sum + variantsTotal;
       }
-      return sum + (item.quantity || 0);
+      const safeQuantity = Number(item.quantity) || 0;
+      return sum + safeQuantity;
     }, 0);
   };
 
   const getTotalPrice = () => {
     return Object.values(cart).reduce((sum, item) => {
       if (item.isCustomizable && item.variants) {
-        return sum + item.variants.reduce((variantSum, variant) => variantSum + (variant.price * variant.quantity), 0);
+        const variantsTotal = item.variants.reduce((variantSum, variant) => {
+          const safePrice = Number(variant.price) || 0;
+          const safeQty = Number(variant.quantity) || 0;
+          const lineTotal = safePrice * safeQty;
+          return variantSum + (Number.isFinite(lineTotal) ? lineTotal : 0);
+        }, 0);
+        return sum + variantsTotal;
       }
-      return sum + (item.price * (item.quantity || 0));
+      const safePrice = Number(item.price) || 0;
+      const safeQty = Number(item.quantity) || 0;
+      const lineTotal = safePrice * safeQty;
+      return sum + (Number.isFinite(lineTotal) ? lineTotal : 0);
     }, 0);
   };
 

@@ -242,6 +242,13 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     ? preorderDeliveryTime
     : normalEstimatedDeliveryTime;
 
+  // Show estimated delivery time only for non-delivered/non-completed statuses
+  const shouldShowDeliveryTime =
+    !!deliveryTimeValue &&
+    !['delivered', 'completed'].includes(
+      (orderData?.status || '').toString().toLowerCase().trim()
+    );
+
   // Calculate bill details from items if summary is missing or zero
   const calculateBillFromItems = (orderData: any) => {
     
@@ -844,8 +851,8 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 {orderData.delivery_address?.alternate_phone_number || userPhoneNumber || 'N/A'}
               </Text>
             </View>
-            {/* Show delivery time - handle preorder vs normal orders */}
-            {deliveryTimeValue && (
+            {/* Show delivery time - handle preorder vs normal orders (hide for delivered/completed) */}
+            {shouldShowDeliveryTime && (
               <>
                 <View style={styles.dashedDivider} />
                 <View style={styles.addressRow}>
