@@ -31,6 +31,7 @@ interface AddAddressFormScreenProps {
   // Edit mode props
   editMode?: boolean;
   addressId?: string;
+  hasUserChangedLocation?: boolean; // Flag to indicate user changed location during editing
   initialData?: {
     houseNo?: string;
     building?: string;
@@ -56,6 +57,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   onClose,
   editMode = false,
   addressId,
+  hasUserChangedLocation = false,
   initialData,
 }) => {
   const [houseNo, setHouseNo] = useState('');
@@ -102,7 +104,9 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     if (visible && !hasInitializedRef.current) {
       hasInitializedRef.current = true;
 
-      if (editMode && initialData) {
+      // Priority: If user changed location during edit, use geocodingData; otherwise use initialData
+      if (editMode && initialData && !hasUserChangedLocation) {
+        // Edit mode with original location - use initial data
         setHouseNo(initialData.houseNo || '');
         setBuilding(initialData.building || '');
         setLocality(initialData.locality || '');
@@ -114,6 +118,96 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         if (initialData.tag) {
           const tagCapitalized = initialData.tag.charAt(0).toUpperCase() + initialData.tag.slice(1) as 'Home' | 'Work' | 'Other';
           setSelectedTag(tagCapitalized);
+        }
+      } else if (editMode && hasUserChangedLocation) {
+        // Edit mode but user changed location - use geocodingData for address fields, but keep tag, isDefault, alternateMobile from initialData
+        if (geocodingData) {
+          // Extract house/flat number from name or street (if it contains numbers at the start)
+          // Look for patterns like "123", "123A", "123-456", "Flat 123", etc.
+          const nameOrStreet = (geocodingData.name || geocodingData.street || '').trim();
+          let houseNoValue = '';
+          
+          // Try to extract house number from the beginning of the string
+          const houseNoPatterns = [
+            /^(\d+[A-Za-z]*(?:\s*[-/]\s*\d+[A-Za-z]*)?)/,  // "123", "123A", "123-456"
+            /^(?:Flat|Unit|Apt|Apartment|House|No\.?|#)\s*(\d+[A-Za-z]*(?:\s*[-/]\s*\d+[A-Za-z]*)?)/i,  // "Flat 123", "Unit 5A"
+          ];
+          
+          for (const pattern of houseNoPatterns) {
+            const match = nameOrStreet.match(pattern);
+            if (match) {
+              houseNoValue = match[1] || match[0];
+              break;
+            }
+          }
+          
+          // Building/Street name - use street, or name without house number
+          let buildingValue = geocodingData.street || '';
+          if (!buildingValue && geocodingData.name) {
+            // Remove house number from name if found
+            buildingValue = houseNoValue 
+              ? geocodingData.name.replace(new RegExp(`^${houseNoValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'), '').trim()
+              : geocodingData.name;
+          }
+          
+         
+          let localityValue = '';
+          
+          // Use district if available (most reliable for locality/area)
+          if (geocodingData.district) {
+            localityValue = geocodingData.district;
+          } 
+          // Use subregion as fallback (also reliable for area information)
+          else if (geocodingData.subregion) {
+            localityValue = geocodingData.subregion;
+          }
+          // If neither is available, leave empty rather than guessing from unreliable fields
+          // This ensures we only populate with accurate data
+          
+          // City - use city field
+          const cityValue = geocodingData.city || '';
+          
+          // State - use region field
+          const stateValue = geocodingData.region || '';
+          
+          // Pincode - use postalCode field
+          const pincodeValue = geocodingData.postalCode || '';
+          
+          // Set geocoded address fields
+          setHouseNo(houseNoValue);
+          setBuilding(buildingValue);
+          setLocality(localityValue);
+          setCity(cityValue);
+          setState(stateValue);
+          setPincode(pincodeValue);
+          
+          // Keep existing user preferences from initialData when editing
+          setAlternateMobile(initialData?.alternateMobile || '');
+          setIsDefault(initialData?.isDefault || false);
+          if (initialData?.tag) {
+            const tagCapitalized = initialData.tag.charAt(0).toUpperCase() + initialData.tag.slice(1) as 'Home' | 'Work' | 'Other';
+            setSelectedTag(tagCapitalized);
+          } else {
+            setSelectedTag('Home');
+          }
+        } else {
+          // No geocoding data but user changed location - reset address fields only
+          setHouseNo('');
+          setBuilding('');
+          setLocality('');
+          setCity('');
+          setState('');
+          setPincode('');
+          
+          // Keep existing user preferences from initialData when editing
+          setAlternateMobile(initialData?.alternateMobile || '');
+          setIsDefault(initialData?.isDefault || false);
+          if (initialData?.tag) {
+            const tagCapitalized = initialData.tag.charAt(0).toUpperCase() + initialData.tag.slice(1) as 'Home' | 'Work' | 'Other';
+            setSelectedTag(tagCapitalized);
+          } else {
+            setSelectedTag('Home');
+          }
         }
       } else if (!editMode) {
         // Pre-fill form with geocoding data if available
@@ -169,7 +263,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           // Pincode - use postalCode field
           const pincodeValue = geocodingData.postalCode || '';
           
-          // Only set values that are not empty to avoid showing empty fields
+          // Set form values
           setHouseNo(houseNoValue);
           setBuilding(buildingValue);
           setLocality(localityValue);
@@ -193,7 +287,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         }
       }
     }
-  }, [visible, editMode, initialData, geocodingData]);
+  }, [visible, editMode, initialData, geocodingData, hasUserChangedLocation]);
 
   useEffect(() => {
     if (visible) {

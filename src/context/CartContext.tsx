@@ -245,9 +245,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const localCart: { [key: string]: CartItem } = {};
 
           backendCart.items.forEach((item) => {
-            // Validate required fields
-            if (!item.item_id || !item.item_name) {
-              console.warn('[CartContext] Skipping invalid cart item:', item);
+            // Validate required fields - only require item_id
+            if (!item.item_id) {
+              console.warn('[CartContext] Skipping invalid cart item (missing item_id):', item);
               return;
             }
 

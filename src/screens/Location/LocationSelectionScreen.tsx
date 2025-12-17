@@ -96,6 +96,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const [hasSelectedLocation, setHasSelectedLocation] = useState(false);
   const [isCurrentLocationSet, setIsCurrentLocationSet] = useState(false);
   const [isGeocodingInProgress, setIsGeocodingInProgress] = useState(false);
+  const [hasUserChangedLocation, setHasUserChangedLocation] = useState(false); // Track if user manually changed location during editing
   const bottomPosition = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<any>(null);
   const isUpdatingFromCode = useRef(false);
@@ -107,6 +108,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const appState = useRef(AppState.currentState);
   const hasTriedAutoLocationOnResume = useRef(false);
   const previousPermissionStatus = useRef<string | null>(null);
+  const isRequestingPermission = useRef(false); // Guard to prevent multiple simultaneous permission requests
+  const hasUserManuallyMovedPin = useRef(false); // Track if user has ever manually dragged the pin
 
   // Reset all cached data when switching contexts (editing vs adding new address)
   useEffect(() => {
@@ -130,10 +133,13 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     setShowAddressForm(false);
     setIsCurrentLocationSet(false);
     setIsGeocodingInProgress(false);
+    setHasUserChangedLocation(false); // Reset location change flag
     
     // Reset permission tracking and auto-location flag
     hasTriedAutoLocationOnResume.current = false;
     previousPermissionStatus.current = null;
+    isRequestingPermission.current = false;
+    hasUserManuallyMovedPin.current = false; // Reset manual pin movement flag
   }, [editingAddress, initialLatitude, initialLongitude, initialSearchQuery]);
 
   // Update region and location info when editing address changes
@@ -250,7 +256,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     } else if (!initialLatitude && !initialLongitude) {
       // No initial coordinates and not editing: try to use current location as the default.
       // This is used both when user taps "Add address" and when home redirects due to no addresses.
-      getCurrentLocation();
+      getCurrentLocation(false); // Auto-triggered, not user-initiated
     }
   }, [editingAddress, initialLatitude, initialLongitude]);
 
@@ -271,12 +277,24 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   // When user returns from system settings (after turning on location/services),
   // automatically try to fetch current location once, for new address flows.
   useEffect(() => {
+    // Prevent AppState listener from triggering on initial mount
+    // by marking that we've already tried once (via the initial getCurrentLocation call)
+    const isInitialMount = !hasTriedAutoLocationOnResume.current;
+    if (isInitialMount && !editingAddress && !initialLatitude && !initialLongitude) {
+      hasTriedAutoLocationOnResume.current = true;
+    }
+
     const subscription = AppState.addEventListener('change', async (nextState) => {
       const prevState = appState.current;
       appState.current = nextState;
 
       // When app becomes active (user returns from background/settings)
       if (nextState === 'active' && prevState !== 'active') {
+        // Skip if we're in the middle of a permission request
+        if (isRequestingPermission.current) {
+          return;
+        }
+
         // Check current permission status
         const { status } = await Location.getForegroundPermissionsAsync();
         
@@ -288,20 +306,17 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         // Update previous permission status
         previousPermissionStatus.current = status;
 
-        // Auto-fetch location if:
-        // 1. Permission was just granted, OR
-        // 2. First time trying (for new address flows without initial coords)
+        // Auto-fetch location only if permission was just granted
+        // Don't auto-trigger on first app resume after initial mount
         if (
+          wasPermissionJustGranted &&
           !editingAddress &&
           !initialLatitude &&
           !initialLongitude &&
           !isCurrentLocationSet &&
           !hasSelectedLocation
         ) {
-          if (wasPermissionJustGranted || !hasTriedAutoLocationOnResume.current) {
-            hasTriedAutoLocationOnResume.current = true;
-            getCurrentLocation();
-          }
+          getCurrentLocation(false); // Auto-triggered, not user-initiated
         }
       }
     });
@@ -418,13 +433,14 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     );
   };
 
-  const getCurrentLocation = async (): Promise<boolean> => {
+  const getCurrentLocation = async (isUserInitiated: boolean = false): Promise<boolean> => {
     // Prevent multiple simultaneous requests
-    if (isGettingLocation) {
+    if (isGettingLocation || isRequestingPermission.current) {
       return false;
     }
 
     setIsGettingLocation(true);
+    isRequestingPermission.current = true; // Set guard to prevent concurrent permission requests
     let success = false;
 
     try {
@@ -439,33 +455,36 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
       if (permission.status !== 'granted') {
         // Still not granted – guide the user instead of silently falling back
-        if (!permission.canAskAgain) {
-          // Permission is blocked ("Don't ask again") – send user to settings
-          Alert.alert(
-            'Enable Location',
-            'To use your current location, please enable location access for Tazty in your device settings.\n\n' +
-              getLocationSettingsGuide(),
-            [
-              { text: 'Not now', style: 'cancel' },
-              {
-                text: 'Open Settings',
-                onPress: () => {
-                  try {
-                    Linking.openSettings();
-                  } catch {
-                    // Ignore Linking errors
-                  }
+        // Only show alert if user explicitly initiated this action
+        if (isUserInitiated) {
+          if (!permission.canAskAgain) {
+            // Permission is blocked ("Don't ask again") – send user to settings
+            Alert.alert(
+              'Enable Location',
+              'To use your current location, please enable location access for Tazty in your device settings.\n\n' +
+                getLocationSettingsGuide(),
+              [
+                { text: 'Not now', style: 'cancel' },
+                {
+                  text: 'Open Settings',
+                  onPress: () => {
+                    try {
+                      Linking.openSettings();
+                    } catch {
+                      // Ignore Linking errors
+                    }
+                  },
                 },
-              },
-            ]
-          );
-        } else {
-          // Permission was denied but can be asked again – show a clear, actionable message
-          Alert.alert(
-            'Turn on location access',
-            'To fetch your current location, please turn on device location and allow Tazty to access your location (choose "While using this app" or "Allow all the time").\n\n' +
-              getLocationSettingsGuide()
-          );
+              ]
+            );
+          } else {
+            // Permission was denied but can be asked again – show a clear, actionable message
+            Alert.alert(
+              'Turn on location access',
+              'To fetch your current location, please turn on device location and allow Tazty to access your location (choose "While using this app" or "Allow all the time").\n\n' +
+                getLocationSettingsGuide()
+            );
+          }
         }
 
         return false;
@@ -518,6 +537,10 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           setGeocodingData(addr);
           setIsCurrentLocationSet(true);
           setHasSelectedLocation(true);
+          // Mark that user has changed location (important for edit mode)
+          if (isEditing) {
+            setHasUserChangedLocation(true);
+          }
           success = true; // Successfully got geocoding data
         } else {
           setLocationName('Current Location');
@@ -531,14 +554,18 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       }
     } catch (error) {
       // Keep existing map state; show a helpful, actionable message
-      Alert.alert(
-        'Turn on location access',
-        'We could not fetch your current location. Please turn on device location and allow Tazty to access your location (choose "While using this app" or "Allow all the time"), then try again.\n\n' +
-          getLocationSettingsGuide()
-      );
+      // Only show alert if user explicitly initiated this action
+      if (isUserInitiated) {
+        Alert.alert(
+          'Turn on location access',
+          'We could not fetch your current location. Please turn on device location and allow Tazty to access your location (choose "While using this app" or "Allow all the time"), then try again.\n\n' +
+            getLocationSettingsGuide()
+        );
+      }
       success = false;
     } finally {
       setIsGettingLocation(false);
+      isRequestingPermission.current = false; // Reset guard
     }
 
     return success;
@@ -554,8 +581,9 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     // Track the current map position in the ref (without triggering re-render)
     currentMapRegion.current = newRegion;
 
-    // User is actively dragging the map
+    // User is actively dragging the map (this is manual interaction)
     isDraggingRef.current = true;
+    hasUserManuallyMovedPin.current = true; // Mark that user has manually interacted with the map
 
     // Clear the drag timeout if it exists
     if (dragTimeoutRef.current) {
@@ -615,44 +643,57 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         // as a confirmed location regardless of whether reverse geocoding succeeds.
         setHasSelectedLocation(true);
 
+        // Skip permission request if already in progress
+        if (isRequestingPermission.current) {
+          return;
+        }
+
         // Step 1: Check and request permission first
         let permission = await Location.getForegroundPermissionsAsync();
 
         // If permission is not granted, request it (this will show the system popup)
         if (permission.status !== 'granted') {
-          permission = await Location.requestForegroundPermissionsAsync();
+          isRequestingPermission.current = true;
+          try {
+            permission = await Location.requestForegroundPermissionsAsync();
+          } finally {
+            isRequestingPermission.current = false;
+          }
         }
 
         // Step 2: Handle permission response
         if (permission.status !== 'granted') {
           // Permission denied - show instructions but don't block the UI
-          if (!permission.canAskAgain) {
-            // Permission is blocked ("Don't ask again") – send user to settings
-            Alert.alert(
-              'Enable Location Access',
-              'To get address details for this location, please enable location access for Tazty in your device settings. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
-                getLocationSettingsGuide(),
-              [
-                { text: 'Not now', style: 'cancel' },
-                {
-                  text: 'Open Settings',
-                  onPress: () => {
-                    try {
-                      Linking.openSettings();
-                    } catch {
-                      // Ignore Linking errors
-                    }
+          // Only show alert if user has manually moved the pin (not during automatic startup/initialization)
+          if (hasUserManuallyMovedPin.current) {
+            if (!permission.canAskAgain) {
+              // Permission is blocked ("Don't ask again") – send user to settings
+              Alert.alert(
+                'Enable Location Access',
+                'To get address details for this location, please enable location access for Tazty in your device settings. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
+                  getLocationSettingsGuide(),
+                [
+                  { text: 'Not now', style: 'cancel' },
+                  {
+                    text: 'Open Settings',
+                    onPress: () => {
+                      try {
+                        Linking.openSettings();
+                      } catch {
+                        // Ignore Linking errors
+                      }
+                    },
                   },
-                },
-              ]
-            );
-          } else {
-            // Permission was denied but can be asked again
-            Alert.alert(
-              'Location Permission Required',
-              'Please allow Tazty to access your location to get address details. Turn on device location and choose "While using this app" or "Allow all the time" when prompted. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
-                getLocationSettingsGuide()
-            );
+                ]
+              );
+            } else {
+              // Permission was denied but can be asked again
+              Alert.alert(
+                'Location Permission Required',
+                'Please allow Tazty to access your location to get address details. Turn on device location and choose "While using this app" or "Allow all the time" when prompted. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
+                  getLocationSettingsGuide()
+              );
+            }
           }
           // Keep current location name and address, but don't update geocoding data
           return;
@@ -673,20 +714,23 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             // If successful, location services were turned on - proceed with geocoding
           } catch (locationError) {
             // Location services still disabled - show alert to turn on location
-            Alert.alert(
-              'Turn on Location',
-              'Location permission is granted, but location services are turned off. Please turn on location services in your device settings to get address details. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
-                getLocationSettingsGuide(),
-              [
-                { text: 'OK', style: 'cancel' },
-                {
-                  text: 'Open Settings',
-                  onPress: () => {
-                    openLocationSettings();
+            // Only show alert if user has manually moved the pin (not during automatic startup/initialization)
+            if (hasUserManuallyMovedPin.current) {
+              Alert.alert(
+                'Turn on Location',
+                'Location permission is granted, but location services are turned off. Please turn on location services in your device settings to get address details. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
+                  getLocationSettingsGuide(),
+                [
+                  { text: 'OK', style: 'cancel' },
+                  {
+                    text: 'Open Settings',
+                    onPress: () => {
+                      openLocationSettings();
+                    },
                   },
-                },
-              ]
-            );
+                ]
+              );
+            }
             // Keep current location name and address, but don't update geocoding data
             return;
           }
@@ -709,6 +753,10 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             setGeocodingData(addr);
             // User manually moved the pin, so reset current location flag
             setIsCurrentLocationSet(false);
+            // Mark that user has changed location (important for edit mode)
+            if (isEditing) {
+              setHasUserChangedLocation(true);
+            }
           }
         } catch (reverseGeoError) {
           // Keep the current location name and address if reverse geocoding fails
@@ -740,11 +788,21 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         !!editingAddress.latitude && !!editingAddress.longitude;
 
       try {
+        // Skip permission request if already in progress
+        if (isRequestingPermission.current) {
+          return;
+        }
+
         // Step 1: Check and request permission first
         let permission = await Location.getForegroundPermissionsAsync();
 
         if (permission.status !== 'granted') {
-          permission = await Location.requestForegroundPermissionsAsync();
+          isRequestingPermission.current = true;
+          try {
+            permission = await Location.requestForegroundPermissionsAsync();
+          } finally {
+            isRequestingPermission.current = false;
+          }
         }
 
         // If permission is still not granted, guide the user (same UX as add flow)
@@ -845,12 +903,22 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
     // For new addresses, check permission first, then location services
     try {
+      // Skip permission request if already in progress
+      if (isRequestingPermission.current) {
+        return;
+      }
+
       // Step 1: Check and request permission first
       let permission = await Location.getForegroundPermissionsAsync();
 
       // If permission is not granted, request it (this will show the system popup)
       if (permission.status !== 'granted') {
-        permission = await Location.requestForegroundPermissionsAsync();
+        isRequestingPermission.current = true;
+        try {
+          permission = await Location.requestForegroundPermissionsAsync();
+        } finally {
+          isRequestingPermission.current = false;
+        }
       }
 
       // Step 2: Handle permission response
@@ -972,12 +1040,15 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     isGeocodingRef.current = false;
     isDraggingRef.current = false;
     isUpdatingFromCode.current = false;
+    isRequestingPermission.current = false;
+    hasUserManuallyMovedPin.current = false;
     
     // Clear cached data and search text
     setGeocodingData(null);
     setShowAddressForm(false);
     setSearchText('');
     setIsGeocodingInProgress(false);
+    setHasUserChangedLocation(false);
     
     if (onBack) {
       onBack();
@@ -1099,6 +1170,10 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             setGeocodingData(addr);
             // User searched for location, so reset current location flag
             setIsCurrentLocationSet(false);
+            // Mark that user has changed location (important for edit mode)
+            if (isEditing) {
+              setHasUserChangedLocation(true);
+            }
           }
         } catch (reverseGeoError) {
           setLocationName(query);
@@ -1214,7 +1289,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
                   styles.currentLocationButton,
                   isGettingLocation && styles.currentLocationButtonDisabled
                 ]} 
-                onPress={getCurrentLocation}
+                onPress={() => getCurrentLocation(true)}
                 disabled={isGettingLocation}
                 activeOpacity={0.7}
               >
@@ -1272,6 +1347,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           visible={showAddressForm}
           editMode={!!editingAddress}
           addressId={editingAddress?.id?.toString()}
+          hasUserChangedLocation={hasUserChangedLocation}
           locationName={locationName}
           locationAddress={locationAddress}
           latitude={currentMapRegion.current.latitude}
