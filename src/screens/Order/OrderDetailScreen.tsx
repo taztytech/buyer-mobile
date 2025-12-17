@@ -573,6 +573,20 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               )}
           </View>
 
+          {/* Cancellation Reason Card - only show for cancelled orders */}
+          {orderData.status === 'cancelled' && orderData.cancel_reason && (
+            <View style={[styles.card, styles.cancellationCard]}>
+              <View style={styles.cancellationHeader}>
+                <MaterialIcons name="cancel" size={24} color="#DC2626" />
+                <Text style={styles.cancellationTitle}>Order Cancellation</Text>
+              </View>
+              
+              <Text style={styles.cancellationReason}>
+                {orderData.cancel_reason.reason || 'Order has been cancelled'}
+              </Text>
+            </View>
+          )}
+
           {/* Restaurant Info Card */}
           <View style={styles.card}>
             <View style={styles.orderHeaderContainer}>
@@ -1620,6 +1634,29 @@ const styles = StyleSheet.create({
   trackOrderContainer: {
     flex: 1,
     alignItems: 'center',
+  },
+  cancellationCard: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+  },
+  cancellationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  cancellationTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    color: '#DC2626',
+    lineHeight: 24,
+  },
+  cancellationReason: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#991B1B',
+    lineHeight: 21,
   },
 });
 

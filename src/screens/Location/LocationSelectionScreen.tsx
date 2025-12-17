@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -59,29 +60,42 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   initialLatitude,
   initialLongitude,
 }) => {
+  const isEditing = !!editingAddress;
+
   const [region, setRegion] = useState<Region>({
-    latitude: initialLatitude ? parseFloat(String(initialLatitude)) : 9.9252, // Use provided lat/lng or default to Madurai
-    longitude: initialLongitude ? parseFloat(String(initialLongitude)) : 78.1198,
+    // Use provided initial coordinates when available; otherwise start from a neutral placeholder.
+    // The actual region will be updated from current location or user interaction.
+    latitude: initialLatitude ? parseFloat(String(initialLatitude)) : 0,
+    longitude: initialLongitude ? parseFloat(String(initialLongitude)) : 0,
     latitudeDelta: 0.01,
     longitudeDelta: 0.01,
   });
 
   const [locationName, setLocationName] = useState(
-    editingAddress?.city || 'Madurai'
+    isEditing ? (editingAddress?.city || 'Location') : 'Set location'
   );
   const [locationAddress, setLocationAddress] = useState(
-    editingAddress ?
-      [editingAddress.address1, editingAddress.address2, editingAddress.address3, editingAddress.city, editingAddress.state, editingAddress.pincode]
-        .filter(Boolean)
-        .join(', ')
-      : 'Madurai, Tamil Nadu, India'
+    isEditing
+      ? [
+          editingAddress?.address1,
+          editingAddress?.address2,
+          editingAddress?.address3,
+          editingAddress?.city,
+          editingAddress?.state,
+          editingAddress?.pincode,
+        ]
+          .filter(Boolean)
+          .join(', ')
+      : 'Move the pin or use "Use current location"'
   );
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [searchText, setSearchText] = useState(initialSearchQuery);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [geocodingData, setGeocodingData] = useState<Location.LocationGeocodedAddress | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [hasSelectedLocation, setHasSelectedLocation] = useState(false);
   const [isCurrentLocationSet, setIsCurrentLocationSet] = useState(false);
+  const [isGeocodingInProgress, setIsGeocodingInProgress] = useState(false);
   const bottomPosition = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<any>(null);
   const isUpdatingFromCode = useRef(false);
@@ -90,6 +104,9 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const isDraggingRef = useRef(false);
   const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentMapRegion = useRef<Region>(region);
+  const appState = useRef(AppState.currentState);
+  const hasTriedAutoLocationOnResume = useRef(false);
+  const previousPermissionStatus = useRef<string | null>(null);
 
   // Reset all cached data when switching contexts (editing vs adding new address)
   useEffect(() => {
@@ -112,6 +129,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     setGeocodingData(null);
     setShowAddressForm(false);
     setIsCurrentLocationSet(false);
+    setIsGeocodingInProgress(false);
+    
+    // Reset permission tracking and auto-location flag
+    hasTriedAutoLocationOnResume.current = false;
+    previousPermissionStatus.current = null;
   }, [editingAddress, initialLatitude, initialLongitude, initialSearchQuery]);
 
   // Update region and location info when editing address changes
@@ -155,12 +177,15 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       setLocationAddress(fullAddress);
       // Clear geocoding data when editing (use address data instead)
       setGeocodingData(null);
+      // Existing address already has coordinates – treat as a confirmed location
+      setHasSelectedLocation(true);
     }
     // Note: Non-editing cases (adding new address) are handled by the next useEffect
   }, [editingAddress, initialLatitude, initialLongitude]);
 
   // Automatically get current location if initialLatitude and initialLongitude are provided (from "Add address" button)
-  // Also handles reset to defaults when not editing and no initial coordinates
+  // For new address creation (including redirect from home with no addresses), if there are no initial
+  // coordinates, we also try to use the user's current location instead of any hardcoded default.
   useEffect(() => {
     // Skip if editing an address (handled by previous useEffect)
     if (editingAddress) {
@@ -215,6 +240,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
               setGeocodingData(addr);
               // Initial coordinates provided (from "Add address"), treat as current location
               setIsCurrentLocationSet(true);
+              setHasSelectedLocation(true);
             }
           }
         } catch (error) {
@@ -222,38 +248,69 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         }
       })();
     } else if (!initialLatitude && !initialLongitude) {
-      // Reset to defaults when not editing and no initial coordinates
-      const maduraiRegion = {
-        latitude: 9.9252,
-        longitude: 78.1198,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      };
-      
-      isUpdatingFromCode.current = true;
-      setRegion(maduraiRegion);
-      currentMapRegion.current = maduraiRegion;
-      
-      // Reset location name and address to defaults
-      setLocationName('Madurai');
-      setLocationAddress('Madurai, Tamil Nadu, India');
-      setGeocodingData(null);
-      
-      // Animate map to Madurai if map is available
-      if (mapRef.current && isMapAvailable) {
-        setTimeout(() => {
-          mapRef.current?.animateToRegion(maduraiRegion, 300);
-          setTimeout(() => {
-            isUpdatingFromCode.current = false;
-          }, 400);
-        }, 100);
-      } else {
-        setTimeout(() => {
-          isUpdatingFromCode.current = false;
-        }, 100);
-      }
+      // No initial coordinates and not editing: try to use current location as the default.
+      // This is used both when user taps "Add address" and when home redirects due to no addresses.
+      getCurrentLocation();
     }
   }, [editingAddress, initialLatitude, initialLongitude]);
+
+  // Initialize permission status on mount
+  useEffect(() => {
+    const checkInitialPermission = async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        previousPermissionStatus.current = status;
+      } catch (error) {
+        // Silently fail - permission tracking is optional
+      }
+    };
+    
+    checkInitialPermission();
+  }, []);
+
+  // When user returns from system settings (after turning on location/services),
+  // automatically try to fetch current location once, for new address flows.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextState) => {
+      const prevState = appState.current;
+      appState.current = nextState;
+
+      // When app becomes active (user returns from background/settings)
+      if (nextState === 'active' && prevState !== 'active') {
+        // Check current permission status
+        const { status } = await Location.getForegroundPermissionsAsync();
+        
+        // If permission was just granted (changed from denied to granted)
+        const wasPermissionJustGranted = 
+          previousPermissionStatus.current !== 'granted' && 
+          status === 'granted';
+
+        // Update previous permission status
+        previousPermissionStatus.current = status;
+
+        // Auto-fetch location if:
+        // 1. Permission was just granted, OR
+        // 2. First time trying (for new address flows without initial coords)
+        if (
+          !editingAddress &&
+          !initialLatitude &&
+          !initialLongitude &&
+          !isCurrentLocationSet &&
+          !hasSelectedLocation
+        ) {
+          if (wasPermissionJustGranted || !hasTriedAutoLocationOnResume.current) {
+            hasTriedAutoLocationOnResume.current = true;
+            getCurrentLocation();
+          }
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingAddress, initialLatitude, initialLongitude, isCurrentLocationSet, hasSelectedLocation]);
 
   // Clear search text when component mounts (ensures fresh state)
   useEffect(() => {
@@ -460,6 +517,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           // Store geocoding data for pre-filling address form
           setGeocodingData(addr);
           setIsCurrentLocationSet(true);
+          setHasSelectedLocation(true);
           success = true; // Successfully got geocoding data
         } else {
           setLocationName('Current Location');
@@ -507,6 +565,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     // Clear any pending geocoding timeout while dragging
     if (geocodingTimeout.current) {
       clearTimeout(geocodingTimeout.current);
+      // Reset geocoding state if user starts dragging again
+      if (isGeocodingRef.current) {
+        isGeocodingRef.current = false;
+        setIsGeocodingInProgress(false);
+      }
     }
 
     // Set a timeout to mark dragging as complete
@@ -546,6 +609,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       try {
         // Mark geocoding as in progress
         isGeocodingRef.current = true;
+        setIsGeocodingInProgress(true);
+        
+        // User has stopped dragging and we have a pinned map position – treat this
+        // as a confirmed location regardless of whether reverse geocoding succeeds.
+        setHasSelectedLocation(true);
 
         // Step 1: Check and request permission first
         let permission = await Location.getForegroundPermissionsAsync();
@@ -651,15 +719,128 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       } finally {
         // Mark geocoding as complete
         isGeocodingRef.current = false;
+        setIsGeocodingInProgress(false);
       }
     }, 650); // Wait 650ms (150ms drag detection + 500ms debounce)
   };
 
   const handleConfirm = async () => {
-    // If editing an address, allow proceeding (we have initialData)
+    // Validate that we have actual coordinates (not hardcoded or default values)
+    const currentLat = currentMapRegion.current.latitude;
+    const currentLng = currentMapRegion.current.longitude;
+    const hasValidCoordinates = 
+      currentLat !== 0 && 
+      currentLng !== 0 && 
+      !isNaN(currentLat) && 
+      !isNaN(currentLng);
+
+    // If editing an address, ensure we have a confirmed map location first
     if (editingAddress) {
-      setShowAddressForm(true);
-      return;
+      const hasExistingCoords =
+        !!editingAddress.latitude && !!editingAddress.longitude;
+
+      try {
+        // Step 1: Check and request permission first
+        let permission = await Location.getForegroundPermissionsAsync();
+
+        if (permission.status !== 'granted') {
+          permission = await Location.requestForegroundPermissionsAsync();
+        }
+
+        // If permission is still not granted, guide the user (same UX as add flow)
+        if (permission.status !== 'granted') {
+          if (!permission.canAskAgain) {
+            Alert.alert(
+              'Enable Location Access',
+              'To update this address accurately, please enable location access for Tazty in your device settings.\n\n' +
+                getLocationSettingsGuide(),
+              [
+                { text: 'Not now', style: 'cancel' },
+                {
+                  text: 'Open Settings',
+                  onPress: () => {
+                    try {
+                      Linking.openSettings();
+                    } catch {
+                      // Ignore Linking errors
+                    }
+                  },
+                },
+              ]
+            );
+          } else {
+            Alert.alert(
+              'Location Permission Required',
+              'Please allow Tazty to access your location to update this address accurately. Turn on device location and choose "While using this app" or "Allow all the time" when prompted.\n\n' +
+                getLocationSettingsGuide()
+            );
+          }
+          return;
+        }
+
+        // Step 2: Ensure location services are enabled
+        const isLocationEnabled = await Location.hasServicesEnabledAsync();
+
+        if (!isLocationEnabled) {
+          Alert.alert(
+            'Turn on Location',
+            'Location permission is granted, but location services are turned off. Please turn on location services in your device settings to update this address accurately.\n\n' +
+              getLocationSettingsGuide(),
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Open Settings',
+                onPress: () => {
+                  openLocationSettings();
+                },
+              },
+            ]
+          );
+          return;
+        }
+
+        // Step 3: With permission + services ON, ensure user has selected a map location
+        if (!hasExistingCoords && !hasSelectedLocation) {
+          Alert.alert(
+            'Set location on map',
+            'Please move the pin on the map or use "Use current location" to set your exact location before editing this address.'
+          );
+          return;
+        }
+
+        // Step 4: Validate coordinates before opening form
+        if (!hasValidCoordinates && !hasExistingCoords) {
+          Alert.alert(
+            'Invalid location',
+            'Please select a valid location on the map or use "Use current location" before proceeding.'
+          );
+          return;
+        }
+
+        setShowAddressForm(true);
+        return;
+      } catch (error) {
+        // Fallback: if something goes wrong, still prevent editing without a confirmed location
+        if (!hasExistingCoords && !hasSelectedLocation) {
+          Alert.alert(
+            'Set location on map',
+            'Please move the pin on the map or use "Use current location" to set your exact location before editing this address.'
+          );
+          return;
+        }
+
+        // Also check for valid coordinates
+        if (!hasValidCoordinates && !hasExistingCoords) {
+          Alert.alert(
+            'Invalid location',
+            'Please select a valid location on the map or use "Use current location" before proceeding.'
+          );
+          return;
+        }
+
+        setShowAddressForm(true);
+        return;
+      }
     }
 
     // For new addresses, check permission first, then location services
@@ -739,17 +920,28 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         }
       }
 
-      // Step 4: Both permission and location services are available - check if we have geocoding data
+      // Step 4: Both permission and location services are available - validate coordinates
+      if (!hasValidCoordinates) {
+        Alert.alert(
+          'Invalid location',
+          'Please select a valid location on the map or use "Use current location" before confirming.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Step 5: Check if we have geocoding data
       if (geocodingData) {
         // Both permission and geocoding data available - proceed to form
         setShowAddressForm(true);
         return;
       }
 
-      // Permission granted but no geocoding data - user needs to get location first
+      // Permission granted and services enabled, but no geocoding data yet.
+      // Ask user to explicitly set their exact location via map or current location.
       Alert.alert(
-        'Location Required',
-        'Please use the "Use Current Location" button to fetch your current location before confirming.',
+        'Set location on map',
+        'Please move the pin on the map or use "Use current location" to set your exact location before confirming.',
         [{ text: 'OK' }]
       );
     } catch (error) {
@@ -785,6 +977,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     setGeocodingData(null);
     setShowAddressForm(false);
     setSearchText('');
+    setIsGeocodingInProgress(false);
     
     if (onBack) {
       onBack();
@@ -794,7 +987,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   // Callback when map is ready - ensure it's at the correct position
   const handleMapReady = () => {
     if (mapRef.current && isMapAvailable) {
-      // If no editing and no initial coords, ensure we're at Madurai
+      // If no editing and no initial coords, show Madurai for visual display only
+      // DO NOT update currentMapRegion.current to avoid sending hardcoded coords to API
       if (!editingAddress && !initialLatitude && !initialLongitude) {
         const maduraiRegion = {
           latitude: 9.9252,
@@ -802,7 +996,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         };
-        currentMapRegion.current = maduraiRegion;
+        // Only animate map to Madurai for visual display
+        // Do NOT update currentMapRegion.current
         setTimeout(() => {
           mapRef.current?.animateToRegion(maduraiRegion, 300);
         }, 100);
@@ -816,6 +1011,19 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   };
 
   const handleAddressSave = (addressData: any) => {
+    // Final validation: Ensure coordinates are valid before sending to API
+    const lat = currentMapRegion.current.latitude;
+    const lng = currentMapRegion.current.longitude;
+    
+    if (lat === 0 || lng === 0 || isNaN(lat) || isNaN(lng)) {
+      Alert.alert(
+        'Invalid location',
+        'Cannot save address with invalid coordinates. Please select a valid location and try again.'
+      );
+      setShowAddressForm(false);
+      return;
+    }
+    
     // Close the address form first
     setShowAddressForm(false);
     
@@ -829,8 +1037,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       onLocationConfirm({
         name: locationName,
         address: locationAddress,
-        latitude: currentMapRegion.current.latitude,
-        longitude: currentMapRegion.current.longitude,
+        latitude: lat,
+        longitude: lng,
         ...addressData,
       });
     }
@@ -1034,9 +1242,26 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
               </View>
 
               {/* Confirm Button */}
-              <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
-                <Text style={styles.confirmButtonText}>Confirm</Text>
-                <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+              <TouchableOpacity 
+                style={[
+                  styles.confirmButton,
+                  (isGeocodingInProgress || isGettingLocation) && styles.confirmButtonDisabled
+                ]} 
+                onPress={handleConfirm}
+                disabled={isGeocodingInProgress || isGettingLocation}
+                activeOpacity={0.7}
+              >
+                {isGeocodingInProgress ? (
+                  <>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.confirmButtonText}>Fetching location...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.confirmButtonText}>Confirm</Text>
+                    <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+                  </>
+                )}
               </TouchableOpacity>
             </>
           )}
@@ -1287,6 +1512,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
+  },
+  confirmButtonDisabled: {
+    backgroundColor: '#B3B3B3',
+    shadowColor: '#B3B3B3',
+    opacity: 0.7,
   },
   confirmButtonText: {
     fontFamily: 'Poppins',

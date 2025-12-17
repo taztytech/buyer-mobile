@@ -754,8 +754,10 @@ function AppContent() {
     setSelectedLocation({
       name: location.name || location.locationName,
       address: location.locationAddress || location.address,
-      latitude: location.latitude || location.lat || 9.9352300,
-      longitude: location.longitude || location.lng || 78.1304040,
+      // Do NOT silently fall back to hardcoded Madurai coordinates.
+      // Only use coordinates that were explicitly selected/confirmed.
+      latitude: location.latitude ?? location.lat,
+      longitude: location.longitude ?? location.lng,
     });
 
     // Trigger homepage refresh when address changes
@@ -1591,13 +1593,18 @@ function AppContent() {
       const restaurantLogo = orderData.restaurant.logo_url;
 
       // Check if restaurant is currently open
-      // Fetch restaurant details to get timing information
-      const lat = selectedLocation?.latitude || 9.9352300;
-      const lng = selectedLocation?.longitude || 78.1304040;
+      // Fetch restaurant details to get timing information.
+      // IMPORTANT: Do not silently fall back to hardcoded coordinates here.
+      // If we don't have a confirmed user/location coordinate, we skip distance-based checks.
+      const hasUserCoords =
+        typeof selectedLocation?.latitude === 'number' &&
+        typeof selectedLocation?.longitude === 'number';
 
-      const restaurantResponse = await apiService.get(
-        `/api/buyer/restaurants/${restaurantId}?lat=${lat}&lng=${lng}`
-      );
+      const restaurantResponse = hasUserCoords
+        ? await apiService.get(
+            `/api/buyer/restaurants/${restaurantId}?lat=${selectedLocation!.latitude}&lng=${selectedLocation!.longitude}`
+          )
+        : await apiService.get(`/api/buyer/restaurants/${restaurantId}`);
 
       if (restaurantResponse.success && restaurantResponse.data) {
         // Handle both nested data structure and direct data structure
@@ -1618,19 +1625,25 @@ function AppContent() {
           distance = distanceKm;
         }
 
-        // Check if restaurant location exists and calculate distance if not provided by API
-        if (distance === 0 && restaurantData.locations?.[0]) {
+        // Check if restaurant location exists and calculate distance if not provided by API.
+        // Only perform this calculation when we have a confirmed user coordinate.
+        if (
+          distance === 0 &&
+          restaurantData.locations?.[0] &&
+          typeof selectedLocation?.latitude === 'number' &&
+          typeof selectedLocation?.longitude === 'number'
+        ) {
           const restaurantLat = restaurantData.locations[0].latitude;
           const restaurantLng = restaurantData.locations[0].longitude;
 
           if (restaurantLat && restaurantLng) {
             // Calculate distance using Haversine formula
             const R = 6371; // Earth's radius in km
-            const dLat = (restaurantLat - lat) * Math.PI / 180;
-            const dLng = (restaurantLng - lng) * Math.PI / 180;
+            const dLat = (restaurantLat - selectedLocation.latitude) * Math.PI / 180;
+            const dLng = (restaurantLng - selectedLocation.longitude) * Math.PI / 180;
             const a =
               Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat * Math.PI / 180) * Math.cos(restaurantLat * Math.PI / 180) *
+              Math.cos(selectedLocation.latitude * Math.PI / 180) * Math.cos(restaurantLat * Math.PI / 180) *
               Math.sin(dLng / 2) * Math.sin(dLng / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             distance = R * c;
@@ -1867,8 +1880,10 @@ function AppContent() {
                 setSelectedLocation({
                   name: formattedType,
                   address: `${address.address}, ${address.city}`,
-                  latitude: address.latitude || 9.9352300,
-                  longitude: address.longitude || 78.1304040,
+                  // Do NOT silently fall back to hardcoded Madurai coordinates.
+                  // If an address has no coordinates yet, keep them undefined until user sets them.
+                  latitude: address.latitude,
+                  longitude: address.longitude,
                 });
                 // Trigger homepage refresh when address changes
                 handleAddressChange();
