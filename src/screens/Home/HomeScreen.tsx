@@ -8,7 +8,6 @@ import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/ho
 import { addressService } from '@/services/address.service';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { Shimmer } from '@/components/Shimmer';
-import { OptimizedImage } from '@/components/OptimizedImage';
 import { AppFooter } from '@/components/AppFooter';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -148,8 +147,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [_hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
   const isInitialVegModeLoad = React.useRef(true);
   const hasRedirectedToLocationMap = React.useRef(false); // Prevent multiple redirects
-  const hasHandledReturnFromLocationSelection = React.useRef(false); // Track if we've handled return from location selection
-  const isFetchingAddressRef = React.useRef(false); // Prevent concurrent address fetches
   const lastFetchedCoords = React.useRef<{ latitude: number; longitude: number } | null>(null);
 
   // Pagination states
@@ -166,7 +163,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Location serviceability state
   const [isLocationServiceable, setIsLocationServiceable] = React.useState(true);
-  const hasCartItems = totalCartItems > 0;
 
   /**
    * Ensure the restaurant associated with the current cart is open
@@ -262,14 +258,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Extract address fetching logic into a reusable function
   const fetchDefaultAddress = React.useCallback(
     async (options?: { overrideSelectedLocation?: boolean }) => {
-    // Prevent concurrent calls - return immediately if already fetching
-    if (isFetchingAddressRef.current) {
-      return;
-    }
-    
     try {
-      // Set flag immediately to prevent any other calls
-      isFetchingAddressRef.current = true;
       // Clear cache to ensure we get fresh data
       addressService.clearCache();
       const response = await addressService.getAddresses();
@@ -278,8 +267,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         // Reset redirect flag if user has addresses now (allows redirect again if they delete all addresses later)
         if (response.data.length > 0) {
           hasRedirectedToLocationMap.current = false;
-          // Also reset the handled flag since addresses now exist
-          hasHandledReturnFromLocationSelection.current = false;
         }
 
         // Check if user has no addresses - redirect to location map screen (only on homepage)
@@ -367,7 +354,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       await fetchHomeData(undefined, undefined);
     } finally {
       setIsLoadingLocation(false);
-      isFetchingAddressRef.current = false;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalSelectedLocation, isFocused, onNavigateToLocationSelection]);
@@ -1171,15 +1157,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <View style={[styles.adBanner, { width: BANNER_WIDTH, backgroundColor: item.backgroundColor || '#00BEC8' }]} testID={`banner-${item.id}`}>
           {/* Background Image - fills entire rectangle */}
           {item.imageUrl && (
-            <OptimizedImage
-              source={item.imageUrl}
+            <Image
+              source={{ uri: item.imageUrl }}
               style={styles.adBannerImage}
-              contentFit="cover"
-              shimmerWidth={BANNER_WIDTH}
-              shimmerHeight={200}
-              transition={300}
-              priority="high"
-              cachePolicy="memory-disk"
+              resizeMode="cover"
             />
           )}
           
@@ -1296,19 +1277,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [hasMoreRestaurants, isLoadingMore, isLoadingRestaurants, loadMoreRestaurants]);
 
-  const handleCartPress = React.useCallback(async () => {
-    if (!restaurantId || !onNavigateToCheckout || !hasCartItems) {
-      return;
-    }
-
-    const isOpen = await ensureCartRestaurantOpen();
-    if (!isOpen) {
-      return;
-    }
-
-    onNavigateToCheckout(restaurantId, restaurantName, 'home');
-  }, [restaurantId, restaurantName, hasCartItems, onNavigateToCheckout, ensureCartRestaurantOpen]);
-
   return (
     <View style={styles.outerContainer}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -1388,72 +1356,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             )}
           </TouchableOpacity>
 
-          {/* Profile & Cart Actions */}
+          {/* Profile Avatar */}
           {isLoadingLocation ? (
             <View style={styles.profileButton}>
               <Shimmer width={50} height={50} borderRadius={25} />
             </View>
           ) : (
-            <View style={styles.headerActionsRow}>
-              {/* Cart Icon - shown only when cart has items */}
-              {hasCartItems && (
-                <TouchableOpacity
-                  style={styles.cartButton}
-                  onPress={handleCartPress}
-                  activeOpacity={0.7}
-                  disabled={!isLocationServiceable}
-                  testID="cart-button"
-                >
-                  <View
-                    style={[
-                      styles.cartAvatar,
-                      !isLocationServiceable && styles.cartAvatarDisabled,
-                    ]}
-                  >
-                    <MaterialIcons
-                      name="shopping-cart"
-                      size={22}
-                      color={
-                        isLocationServiceable
-                          ? '#00B14F'
-                          : 'rgba(0, 177, 79, 0.4)'
-                      }
-                    />
-                    <View style={styles.cartBadge}>
-                      <Text style={styles.cartBadgeText} numberOfLines={1}>
-                        {totalCartItems > 99 ? '99+' : totalCartItems}
-                      </Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              )}
-
-              {/* Profile Avatar */}
-              <TouchableOpacity
-                style={styles.profileButton}
-                onPress={onNavigateToProfile}
-                activeOpacity={0.7}
-                disabled={!isLocationServiceable}
-                testID="profile-button"
-              >
-                <View
-                  style={[
-                    styles.profileAvatar,
-                    !isLocationServiceable && styles.profileAvatarDisabled,
-                  ]}
-                >
-                  <MaterialIcons
-                    name="person"
-                    size={22}
-                    color={
-                      isLocationServiceable
-                        ? '#00B14F'
-                        : 'rgba(0, 177, 79, 0.4)'
-                    }
-                  />
-                </View>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.profileButton}
+              onPress={onNavigateToProfile}
+              activeOpacity={0.7}
+              disabled={!isLocationServiceable}
+              testID="profile-button"
+            >
+              <View style={[
+                styles.profileAvatar,
+                !isLocationServiceable && styles.profileAvatarDisabled
+              ]}>
+                <MaterialIcons 
+                  name="person" 
+                  size={22} 
+                  color={isLocationServiceable ? "#00B14F" : "rgba(0, 177, 79, 0.4)"} 
+                />
+              </View>
+            </TouchableOpacity>
           )}
         </View>
 
@@ -1562,7 +1488,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           // Show closed banner when app is not open
           <View style={styles.closedBannerContainer}>
             <Image
-              source={require('@../../../assets/Closed Banner.webp')}
+              source={require('@../../../assets/Closed Banner.png')}
               style={styles.closedBannerImage}
               resizeMode="contain"
             />
@@ -1835,15 +1761,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               keyExtractor={(restaurant) => restaurant.id.toString()}
               scrollEnabled={false}
               removeClippedSubviews={true}
-              maxToRenderPerBatch={3}
-              windowSize={3}
-              initialNumToRender={2}
-              updateCellsBatchingPeriod={100}
-              getItemLayout={(data, index) => ({
-                length: 166, // Approximate card height with margin
-                offset: 166 * index,
-                index,
-              })}
+              maxToRenderPerBatch={5}
+              windowSize={5}
+              initialNumToRender={3}
+              updateCellsBatchingPeriod={50}
             />
           )}
 
@@ -1989,7 +1910,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* View Cart Bar - shows when cart has items and location is serviceable */}
       {isLocationServiceable && (
         <ViewCartBar
-          onPress={handleCartPress}
+          onPress={async () => {
+            // Navigate directly to checkout page, but only if restaurant is open
+            if (!restaurantId || !onNavigateToCheckout) {
+              return;
+            }
+
+            const isOpen = await ensureCartRestaurantOpen();
+            if (!isOpen) {
+              return;
+            }
+
+            onNavigateToCheckout(restaurantId, restaurantName, 'home');
+          }}
           onViewMenu={() => {
             // Navigate to restaurant menu
             if (restaurantId && onNavigateToRestaurant) {
@@ -2111,53 +2044,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F7F7F7',
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileAvatarDisabled: {
     opacity: 0.4,
-  },
-  headerActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 10,
-  },
-  cartButton: {
-    width: 50,
-    height: 50,
-  },
-  cartAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  cartAvatarDisabled: {
-    opacity: 0.4,
-  },
-  cartBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#FF3B30',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  cartBadgeText: {
-    fontFamily: 'Poppins',
-    fontWeight: '700',
-    fontSize: 10,
-    lineHeight: 14,
-    color: '#FFFFFF',
   },
   // Search section
   searchSection: {

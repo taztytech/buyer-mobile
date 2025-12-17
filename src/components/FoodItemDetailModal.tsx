@@ -12,18 +12,8 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { OptimizedImage } from '@/components/OptimizedImage';
 import { ItemTiming, formatItemTiming, isItemAvailable } from '@/utils/timing.utils';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
-
-interface PreorderCampaign {
-  id: string;
-  title: string;
-  available_slots: number;
-  delivery_date: string;
-  discount_amount: string;
-  free_delivery: boolean;
-}
 
 interface FoodItemDetailModalProps {
   visible: boolean;
@@ -38,8 +28,6 @@ interface FoodItemDetailModalProps {
     isBestSeller: boolean;
     isCustomizable: boolean;
     timings?: ItemTiming[];
-    isPreorderAvailable?: boolean;
-    preorderCampaign?: PreorderCampaign;
   } | null;
   initialQuantity?: number;
   isAvailable?: boolean;
@@ -62,7 +50,6 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
   const slideAnim = useRef(new Animated.Value(1000)).current;
   const resolvedMaxQuantity = Math.max(1, maxQuantity);
   const insets = useSafeAreaInsets();
-  const isUserInteractionRef = useRef(false);
 
   useEffect(() => {
     if (visible) {
@@ -75,10 +62,8 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
 
       // Initialize quantity from initialQuantity (e.g. current cart quantity)
       // Fallback to 1 when there is no existing quantity
-      // For preorder items, cap at 1
       if (typeof initialQuantity === 'number' && initialQuantity > 0) {
-        const maxQty = item?.isPreorderAvailable ? 1 : resolvedMaxQuantity;
-        setQuantity(Math.min(initialQuantity, maxQty));
+        setQuantity(Math.min(initialQuantity, resolvedMaxQuantity));
       } else {
         setQuantity(1);
       }
@@ -87,53 +72,16 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
       slideAnim.setValue(1000);
       setIsAdding(false);
     }
-  }, [visible, slideAnim, initialQuantity, resolvedMaxQuantity, item?.isPreorderAvailable]);
-
-  // Sync quantity when initialQuantity changes (cart updates from API)
-  // Only sync if the change came from outside (not from user interaction)
-  useEffect(() => {
-    if (visible && typeof initialQuantity === 'number' && initialQuantity >= 0) {
-      // Only sync if it wasn't a user interaction (to avoid resetting user's input)
-      if (!isUserInteractionRef.current) {
-        const maxQty = item?.isPreorderAvailable ? 1 : resolvedMaxQuantity;
-        const newQuantity = Math.min(initialQuantity, maxQty);
-        if (newQuantity !== quantity) {
-          setQuantity(newQuantity);
-        }
-      }
-      // Reset the flag after a short delay
-      setTimeout(() => {
-        isUserInteractionRef.current = false;
-      }, 100);
-    }
-  }, [initialQuantity, visible, item?.isPreorderAvailable, resolvedMaxQuantity]);
+  }, [visible, slideAnim, initialQuantity, resolvedMaxQuantity]);
 
   if (!item) return null;
 
   const handleIncrement = () => {
-    // For preorder items, limit quantity to 1
-    if (item.isPreorderAvailable) {
-      if (quantity >= 1) {
-        return; // Don't allow incrementing beyond 1 for preorder items
-      }
-      const next = 1;
-      // Mark as user interaction to prevent useEffect from resetting
-      isUserInteractionRef.current = true;
-      // Update local state first for immediate UI feedback
-      setQuantity(next);
-      // Then sync with cart / backend API
-      onAddToCart(item.id, next);
-      return;
-    }
-
     setQuantity(prev => {
       const next = Math.min(prev + 1, resolvedMaxQuantity);
 
-      // Only proceed if quantity actually changed
+      // Sync quantity with cart / backend on every increment
       if (next !== prev) {
-        // Mark as user interaction to prevent useEffect from resetting
-        isUserInteractionRef.current = true;
-        // Sync quantity with cart / backend API on every increment
         onAddToCart(item.id, next);
       }
 
@@ -148,9 +96,6 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
 
         // Sync quantity with cart / backend on every decrement
         if (next > 0 && next !== prev) {
-          // Mark as user interaction to prevent useEffect from resetting
-          isUserInteractionRef.current = true;
-          // Sync with backend API
           onAddToCart(item.id, next);
         }
 
@@ -185,17 +130,7 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
     }, 300);
   };
 
-  // Calculate total price with preorder discount if applicable
-  const calculateTotalPrice = () => {
-    const basePrice = item.price;
-    const discountAmount = item.isPreorderAvailable && item.preorderCampaign 
-      ? parseFloat(item.preorderCampaign.discount_amount || '0') 
-      : 0;
-    const finalPrice = basePrice - discountAmount;
-    return finalPrice * quantity;
-  };
-
-  const totalPrice = calculateTotalPrice();
+  const totalPrice = item.price * quantity;
 
   return (
     <Modal
@@ -240,16 +175,7 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
             {/* Food Image or No Image Available */}
             <View style={styles.imageContainer}>
               {item.image ? (
-                <OptimizedImage
-                  source={item.image}
-                  style={styles.foodImage}
-                  contentFit="cover"
-                  shimmerWidth="100%"
-                  shimmerHeight={300}
-                  transition={300}
-                  priority="high"
-                  cachePolicy="memory-disk"
-                />
+                <Image source={item.image} style={styles.foodImage} resizeMode="cover" />
               ) : (
                 <View style={styles.noImageContainer}>
                   <Text style={styles.noImageText}>No Image Available</Text>
@@ -290,25 +216,7 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
             {/* Item Name and Description */}
             <View style={styles.infoSection}>
               <Text style={styles.itemName}>{item.name}</Text>
-              {/* Preorder Badge */}
-              {item.isPreorderAvailable && (
-                <View style={styles.preorderBadge}>
-                  <MaterialIcons name="schedule" size={12} color="#FFFFFF" />
-                  <Text style={styles.preorderBadgeText}>Preorder</Text>
-                </View>
-              )}
               <Text style={styles.itemDescription}>{item.description}</Text>
-              {/* Price with discount if preorder */}
-              {item.isPreorderAvailable && item.preorderCampaign && parseFloat(item.preorderCampaign.discount_amount || '0') > 0 ? (
-                <View style={styles.priceContainer}>
-                  <Text style={styles.originalPrice}>₹ {item.price.toFixed(2)}</Text>
-                  <Text style={styles.discountedPrice}>
-                    ₹ {(item.price - parseFloat(item.preorderCampaign.discount_amount || '0')).toFixed(2)}
-                  </Text>
-                </View>
-              ) : (
-                <Text style={styles.itemPrice}>₹ {item.price.toFixed(2)}</Text>
-              )}
             </View>
 
             {/* Timing Information - Only show for unavailable items */}
@@ -360,12 +268,12 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
                   onPress={handleIncrement}
                   activeOpacity={0.7}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  disabled={!isAvailable || quantity >= resolvedMaxQuantity || (item.isPreorderAvailable && quantity >= 1)}
-                  style={(!isAvailable || quantity >= resolvedMaxQuantity || (item.isPreorderAvailable && quantity >= 1)) ? styles.quantityButtonDisabled : undefined}
+                  disabled={!isAvailable || quantity >= resolvedMaxQuantity}
+                  style={(!isAvailable || quantity >= resolvedMaxQuantity) ? styles.quantityButtonDisabled : undefined}
                 >
                   <Text style={[
                     styles.quantityButton,
-                    (!isAvailable || quantity >= resolvedMaxQuantity || (item.isPreorderAvailable && quantity >= 1)) && styles.quantityButtonTextDisabled
+                    (!isAvailable || quantity >= resolvedMaxQuantity) && styles.quantityButtonTextDisabled
                   ]}>+</Text>
                 </TouchableOpacity>
               </View>
@@ -546,52 +454,6 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.5)',
     opacity: 0.85,
     marginTop: 5,
-  },
-  preorderBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#00B14F',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-  },
-  preorderBadgeText: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 10,
-    lineHeight: 14,
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-  priceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-  },
-  itemPrice: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#000000',
-    opacity: 0.85,
-    marginTop: 8,
-  },
-  originalPrice: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 14,
-    lineHeight: 21,
-    color: 'rgba(0, 0, 0, 0.45)',
-    textDecorationLine: 'line-through',
-    textDecorationStyle: 'solid',
-  },
-  discountedPrice: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#00B14F',
   },
   closeButton: {
     position: 'absolute',
