@@ -219,35 +219,11 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     }
   };
 
-  // Get estimated delivery time (handle preorder vs normal orders)
-  const hasPreorderItems =
-    orderData?.has_preorder_items === true ||
-    (Array.isArray(orderData?.items) &&
-      orderData.items.some((item: any) => item.is_preorder === true));
-
-  const preorderDeliveryTimeRaw = hasPreorderItems
-    ? orderData?.preorder_delivery_date || orderData?.estimated_delivery_time
-    : null;
-
-  const normalEstimatedDeliveryTimeRaw = !hasPreorderItems
-    ? orderData?.estimated_delivery_time || orderData?.preorder_delivery_date
-    : null;
-
-  const preorderDeliveryTime = formatEstimatedDeliveryTime(preorderDeliveryTimeRaw);
-  const normalEstimatedDeliveryTime = formatEstimatedDeliveryTime(normalEstimatedDeliveryTimeRaw);
-
-  const deliveryTimeLabel = 'Estimated Delivery Time';
-
-  const deliveryTimeValue = hasPreorderItems
-    ? preorderDeliveryTime
-    : normalEstimatedDeliveryTime;
-
-  // Show estimated delivery time only for non-delivered/non-completed statuses
-  const shouldShowDeliveryTime =
-    !!deliveryTimeValue &&
-    !['delivered', 'completed'].includes(
-      (orderData?.status || '').toString().toLowerCase().trim()
-    );
+  // Get estimated delivery time
+  const estimatedDeliveryTime = formatEstimatedDeliveryTime(
+    orderData?.estimated_delivery_time || 
+    orderData?.preorder_delivery_date
+  );
 
   // Calculate bill details from items if summary is missing or zero
   const calculateBillFromItems = (orderData: any) => {
@@ -580,20 +556,6 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               )}
           </View>
 
-          {/* Cancellation Reason Card - only show for cancelled orders */}
-          {orderData.status === 'cancelled' && orderData.cancel_reason && (
-            <View style={[styles.card, styles.cancellationCard]}>
-              <View style={styles.cancellationHeader}>
-                <MaterialIcons name="cancel" size={24} color="#DC2626" />
-                <Text style={styles.cancellationTitle}>Order Cancellation</Text>
-              </View>
-              
-              <Text style={styles.cancellationReason}>
-                {orderData.cancel_reason.reason || 'Order has been cancelled'}
-              </Text>
-            </View>
-          )}
-
           {/* Restaurant Info Card */}
           <View style={styles.card}>
             <View style={styles.orderHeaderContainer}>
@@ -851,15 +813,15 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 {orderData.delivery_address?.alternate_phone_number || userPhoneNumber || 'N/A'}
               </Text>
             </View>
-            {/* Show delivery time - handle preorder vs normal orders (hide for delivered/completed) */}
-            {shouldShowDeliveryTime && (
+            {/* Show estimated delivery time for all items */}
+            {estimatedDeliveryTime && (
               <>
                 <View style={styles.dashedDivider} />
                 <View style={styles.addressRow}>
                   <MaterialIcons name="access-time" size={24} color="#00B14F" />
                   <View style={styles.estimatedDeliveryContainer}>
-                    <Text style={styles.estimatedDeliveryLabel}>{deliveryTimeLabel}</Text>
-                    <Text style={styles.estimatedDeliveryValue}>{deliveryTimeValue}</Text>
+                    <Text style={styles.estimatedDeliveryLabel}>Estimated Delivery Time</Text>
+                    <Text style={styles.estimatedDeliveryValue}>{estimatedDeliveryTime}</Text>
                   </View>
                 </View>
               </>
@@ -1641,29 +1603,6 @@ const styles = StyleSheet.create({
   trackOrderContainer: {
     flex: 1,
     alignItems: 'center',
-  },
-  cancellationCard: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-  },
-  cancellationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  cancellationTitle: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 16,
-    color: '#DC2626',
-    lineHeight: 24,
-  },
-  cancellationReason: {
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    color: '#991B1B',
-    lineHeight: 21,
   },
 });
 

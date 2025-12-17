@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState, Linking } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
@@ -41,8 +41,6 @@ import CustomSplashScreen from '@/components/CustomSplashScreen';
 import { fcmNotificationService } from '@/services/fcmNotification.service';
 import { NetworkStatusScreen } from '@/components/NetworkStatusScreen';
 import { analyticsService, AnalyticsEvents, AnalyticsScreens } from '@/services/analytics.service';
-import { inAppUpdateService } from '@/services/inAppUpdate.service';
-import { crashlyticsService } from '@/services/crashlytics.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -240,13 +238,6 @@ function AppContent() {
           console.warn('⚠️  Failed to check initial notification:', error);
         });
         
-        // Check for app updates when app becomes active (but not on checkout)
-        if (currentScreen !== 'checkout') {
-          inAppUpdateService.checkForUpdate({ currentScreen }).catch((error) => {
-            console.error('In-app update check error:', error);
-          });
-        }
-        
         // Track app foreground
         analyticsService.logEvent(AnalyticsEvents.APP_FOREGROUND);
       } else if (nextAppState === 'background') {
@@ -263,7 +254,7 @@ function AppContent() {
     return () => {
       subscription.remove();
     };
-  }, [currentScreen]);
+  }, []);
 
   // Check if user is already logged in on app startup
   React.useEffect(() => {
@@ -272,9 +263,6 @@ function AppContent() {
         // Initialize API service with stored tokens
         await apiService.initialize();
 
-        // Initialize Crashlytics
-        await crashlyticsService.initialize();
-
         // Initialize Analytics
         await analyticsService.initialize();
         await analyticsService.logEvent(AnalyticsEvents.APP_OPEN);
@@ -282,31 +270,18 @@ function AppContent() {
         // Initialize FCM notifications
         fcmNotificationService.initialize().catch((error) => {
           console.error('FCM initialization error:', error);
-          crashlyticsService.recordError(error, { source: 'fcm_initialize' });
         });
-
-        // Check for app updates after a short delay (to ensure app is ready)
-        // Only check if not on checkout screen
-        setTimeout(() => {
-          if (currentScreen !== 'checkout') {
-            inAppUpdateService.checkForUpdate({ currentScreen }).catch((error) => {
-              console.error('In-app update check error:', error);
-            });
-          }
-        }, 2000);
 
         // Check if user is authenticated
         const isLoggedIn = await authService.isAuthenticated();
 
         if (isLoggedIn) {
-          // Get current user and set analytics / crashlytics user ID
+          // Get current user and set analytics user ID
           const currentUser = await authService.getCurrentUser();
           if (currentUser?.id) {
-            const idString = currentUser.id.toString();
-            await analyticsService.setUserId(idString);
-            await crashlyticsService.setUserId(idString);
+            await analyticsService.setUserId(currentUser.id.toString());
           }
-
+          
           // User has valid session, navigate to home
           setCurrentScreen('home');
         } else {
@@ -323,13 +298,11 @@ function AppContent() {
 
     checkAuth();
 
-    // Cleanup FCM listeners and update service on unmount
+    // Cleanup FCM listeners on unmount
     return () => {
       fcmNotificationService.cleanup();
-      inAppUpdateService.cleanup();
     };
   }, []);
-
 
   // const [animationComplete, setAnimationComplete] = React.useState(false);
 
@@ -513,8 +486,8 @@ function AppContent() {
   const handleLogout = async () => {
     // Log logout event
     await analyticsService.logEvent(AnalyticsEvents.LOGOUT);
-
-    // Reset analytics user data
+    
+    // Reset analytics data
     await analyticsService.resetAnalyticsData();
     
     // Clear authentication tokens and user data
@@ -742,9 +715,6 @@ function AppContent() {
         setAddressSelectionCameFrom('home');
         setLocationSelectionCameFrom('home');
         setSearchQuery('');
-        // Trigger refresh when returning from location selection to home
-        // This ensures home data is fetched if user added an address
-        setAddressRefreshTrigger(prev => prev + 1);
       });
     }
   };
@@ -754,10 +724,8 @@ function AppContent() {
     setSelectedLocation({
       name: location.name || location.locationName,
       address: location.locationAddress || location.address,
-      // Do NOT silently fall back to hardcoded Madurai coordinates.
-      // Only use coordinates that were explicitly selected/confirmed.
-      latitude: location.latitude ?? location.lat,
-      longitude: location.longitude ?? location.lng,
+      latitude: location.latitude || location.lat || 9.9352300,
+      longitude: location.longitude || location.lng || 78.1304040,
     });
 
     // Trigger homepage refresh when address changes
@@ -1593,22 +1561,17 @@ function AppContent() {
       const restaurantLogo = orderData.restaurant.logo_url;
 
       // Check if restaurant is currently open
-      // Fetch restaurant details to get timing information.
-      // IMPORTANT: Do not silently fall back to hardcoded coordinates here.
-      // If we don't have a confirmed user/location coordinate, we skip distance-based checks.
-      const hasUserCoords =
-        typeof selectedLocation?.latitude === 'number' &&
-        typeof selectedLocation?.longitude === 'number';
+      // Fetch restaurant details to get timing information
+      const lat = selectedLocation?.latitude || 9.9352300;
+      const lng = selectedLocation?.longitude || 78.1304040;
 
-      const restaurantResponse = hasUserCoords
-        ? await apiService.get(
-            `/api/buyer/restaurants/${restaurantId}?lat=${selectedLocation!.latitude}&lng=${selectedLocation!.longitude}`
-          )
-        : await apiService.get(`/api/buyer/restaurants/${restaurantId}`);
+      const restaurantResponse = await apiService.get(
+        `/api/buyer/restaurants/${restaurantId}?lat=${lat}&lng=${lng}`
+      );
 
       if (restaurantResponse.success && restaurantResponse.data) {
         // Handle both nested data structure and direct data structure
-        const restaurantData = (restaurantResponse.data && typeof restaurantResponse.data === 'object' && restaurantResponse.data !== null && 'data' in restaurantResponse.data)
+        const restaurantData = (restaurantResponse.data && typeof restaurantResponse.data === 'object' && 'data' in restaurantResponse.data)
           ? (restaurantResponse.data as { data: any }).data
           : restaurantResponse.data;
 
@@ -1625,25 +1588,19 @@ function AppContent() {
           distance = distanceKm;
         }
 
-        // Check if restaurant location exists and calculate distance if not provided by API.
-        // Only perform this calculation when we have a confirmed user coordinate.
-        if (
-          distance === 0 &&
-          restaurantData.locations?.[0] &&
-          typeof selectedLocation?.latitude === 'number' &&
-          typeof selectedLocation?.longitude === 'number'
-        ) {
+        // Check if restaurant location exists and calculate distance if not provided by API
+        if (distance === 0 && restaurantData.locations?.[0]) {
           const restaurantLat = restaurantData.locations[0].latitude;
           const restaurantLng = restaurantData.locations[0].longitude;
 
           if (restaurantLat && restaurantLng) {
             // Calculate distance using Haversine formula
             const R = 6371; // Earth's radius in km
-            const dLat = (restaurantLat - selectedLocation.latitude) * Math.PI / 180;
-            const dLng = (restaurantLng - selectedLocation.longitude) * Math.PI / 180;
+            const dLat = (restaurantLat - lat) * Math.PI / 180;
+            const dLng = (restaurantLng - lng) * Math.PI / 180;
             const a =
               Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(selectedLocation.latitude * Math.PI / 180) * Math.cos(restaurantLat * Math.PI / 180) *
+              Math.cos(lat * Math.PI / 180) * Math.cos(restaurantLat * Math.PI / 180) *
               Math.sin(dLng / 2) * Math.sin(dLng / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             distance = R * c;
@@ -1880,10 +1837,8 @@ function AppContent() {
                 setSelectedLocation({
                   name: formattedType,
                   address: `${address.address}, ${address.city}`,
-                  // Do NOT silently fall back to hardcoded Madurai coordinates.
-                  // If an address has no coordinates yet, keep them undefined until user sets them.
-                  latitude: address.latitude,
-                  longitude: address.longitude,
+                  latitude: address.latitude || 9.9352300,
+                  longitude: address.longitude || 78.1304040,
                 });
                 // Trigger homepage refresh when address changes
                 handleAddressChange();
@@ -1903,7 +1858,7 @@ function AppContent() {
             pointerEvents={currentScreen === 'locationSelection' ? 'auto' : 'none'}
           >
             <LocationSelectionScreen
-              initialSearchQuery={''}
+              initialSearchQuery={searchQuery}
               editingAddress={editingAddress}
               initialLatitude={editingAddress?.latitude || initialLocationCoords?.latitude}
               initialLongitude={editingAddress?.longitude || initialLocationCoords?.longitude}

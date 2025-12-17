@@ -313,13 +313,9 @@ class PaymentService {
         if (
           paymentResult.errorType === PaymentErrorType.PAYMENT_FAILED
         ) {
-          const failureResponse = await this.handlePaymentFailure(orderId, {
+          await this.handlePaymentFailure(orderId, {
             reason: paymentResult.error || 'Payment could not be processed',
           });
-
-          if (!failureResponse.success) {
-            // Silently handle failure - don't block user flow
-          }
         }
         return paymentResult;
       }
@@ -333,14 +329,9 @@ class PaymentService {
 
       if (!verifyResponse.success) {
         // Verification failed - treat as payment failed
-        const failureResponse = await this.handlePaymentFailure(orderId, {
+        await this.handlePaymentFailure(orderId, {
           reason: 'Payment could not be confirmed',
         });
-
-        if (!failureResponse.success) {
-          // Silently handle failure - don't block user flow
-        }
-
         return {
           success: false,
           error: verifyResponse.error || 'Payment could not be processed. If money was deducted from your account, please contact support.',
