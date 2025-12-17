@@ -10,9 +10,160 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Shimmer } from '@/components/Shimmer';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { SearchBar } from '@/components/SearchBar';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
+import { ItemTiming, isItemAvailable, formatTime } from '@/utils/timing.utils';
+
+/**
+ * Format time difference in a user-friendly way
+ * @param minutes - Time difference in minutes
+ * @returns User-friendly time string (e.g., "in 1 min", "in 2 hrs 15 min", "in 3 days")
+ */
+const formatTimeDifference = (minutes: number): string => {
+  if (minutes < 60) {
+    return `in ${minutes} min`;
+  } else if (minutes < 1440) {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    
+    if (remainingMinutes === 0) {
+      return `in ${hours} ${hours === 1 ? 'hr' : 'hrs'}`;
+    } else {
+      return `in ${hours} ${hours === 1 ? 'hr' : 'hrs'} ${remainingMinutes} min`;
+    }
+  } else {
+    const days = Math.floor(minutes / 1440);
+    const remainingHours = Math.floor((minutes % 1440) / 60);
+    const remainingMinutes = minutes % 60;
+    
+    if (remainingHours === 0 && remainingMinutes === 0) {
+      return `in ${days} ${days === 1 ? 'day' : 'days'}`;
+    } else if (remainingMinutes === 0) {
+      return `in ${days} ${days === 1 ? 'day' : 'days'} ${remainingHours} ${remainingHours === 1 ? 'hr' : 'hrs'}`;
+    } else if (remainingHours === 0) {
+      return `in ${days} ${days === 1 ? 'day' : 'days'} ${remainingMinutes} min`;
+    } else {
+      return `in ${days} ${days === 1 ? 'day' : 'days'} ${remainingHours} ${remainingHours === 1 ? 'hr' : 'hrs'} ${remainingMinutes} min`;
+    }
+  }
+};
+
+/**
+ * Check if item has any timing slots for today (regardless of current time)
+ */
+const hasTimingForToday = (timings?: ItemTiming[]): boolean => {
+  if (!timings || timings.length === 0) return false;
+
+  const now = new Date();
+  const currentDay = now.getDay(); // 0 = Sunday, 6 = Saturday
+  const currentApiDay = currentDay === 0 ? 1 : currentDay + 1;
+
+  return timings.some(timing => {
+    if (timing.day_from <= timing.day_to) {
+      // Normal range (e.g., Mon-Fri)
+      return timing.day_from <= currentApiDay && currentApiDay <= timing.day_to;
+    } else {
+      // Wraps around week (e.g., Sat-Sun)
+      return currentApiDay >= timing.day_from || currentApiDay <= timing.day_to;
+    }
+  });
+};
+
+/**
+ * Get the next available time slot from item timings (only for today)
+ * Returns only today's upcoming time slot with time difference
+ */
+const getNextAvailableTime = (timings?: ItemTiming[]): { timeDifference?: string; availableTime?: string; hoursRemaining?: number; minutesRemaining?: number; hasTodaySlot: boolean } | null => {
+  if (!timings || timings.length === 0) return null;
+
+  const now = new Date();
+  const currentDay = now.getDay(); // 0 = Sunday, 6 = Saturday
+  const currentTime = now.getHours() * 100 + now.getMinutes(); // HHMM format
+
+  // Convert JS day (0-6) to API day format (1-7)
+  const currentApiDay = currentDay === 0 ? 1 : currentDay + 1;
+
+  // Check if item has any timing for today
+  const hasTodaySlot = hasTimingForToday(timings);
+
+  // Only find today's slots that haven't started yet
+  const todaySlots: Array<{ day: number; timeFrom: number; timeTo: number; originalTiming: ItemTiming }> = [];
+
+  timings.forEach(timing => {
+    const timeFrom = parseInt(timing.time_from, 10);
+    const timeTo = parseInt(timing.time_to, 10);
+
+    // Check if timing is for today
+    if (timing.day_from <= timing.day_to) {
+      // Normal range (e.g., Mon-Fri)
+      for (let day = timing.day_from; day <= timing.day_to; day++) {
+        const isToday = day === currentApiDay;
+        
+        if (isToday && timeFrom > currentTime) {
+          // Today, but time hasn't started yet
+          todaySlots.push({ day, timeFrom, timeTo, originalTiming: timing });
+        }
+      }
+    } else {
+      // Wraps around week (e.g., Sat-Sun)
+      for (let day = timing.day_from; day <= 7; day++) {
+        const isToday = day === currentApiDay;
+        
+        if (isToday && timeFrom > currentTime) {
+          todaySlots.push({ day, timeFrom, timeTo, originalTiming: timing });
+        }
+      }
+      for (let day = 1; day <= timing.day_to; day++) {
+        const isToday = day === currentApiDay;
+        
+        if (isToday && timeFrom > currentTime) {
+          todaySlots.push({ day, timeFrom, timeTo, originalTiming: timing });
+        }
+      }
+    }
+  });
+
+  // Sort today's slots by time
+  todaySlots.sort((a, b) => a.timeFrom - b.timeFrom);
+  
+  // If there's a next slot today, return it with time difference
+  const nextSlot = todaySlots.length > 0 ? todaySlots[0] : null;
+  
+  if (nextSlot) {
+    // Calculate time difference in minutes (only for today)
+    const hours = Math.floor(nextSlot.timeFrom / 100);
+    const minutes = nextSlot.timeFrom % 100;
+    const nextTime = new Date(now);
+    nextTime.setHours(hours, minutes, 0, 0);
+    const diffMs = nextTime.getTime() - now.getTime();
+    const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+    const timeDifference = formatTimeDifference(diffMinutes);
+
+    // Format time with AM/PM
+    const timeString = String(nextSlot.timeFrom).padStart(4, '0');
+    const availableTime = formatTime(timeString);
+
+    // Calculate hours and minutes remaining
+    const hoursRemaining = Math.floor(diffMinutes / 60);
+    const minutesRemaining = diffMinutes % 60;
+
+    return { timeDifference, availableTime, hoursRemaining, minutesRemaining, hasTodaySlot };
+  }
+
+  return { hasTodaySlot };
+};
+
+interface PreorderCampaign {
+  id: string;
+  title: string;
+  available_slots: number;
+  delivery_date: string;
+  discount_amount: string;
+  free_delivery: boolean;
+}
 
 interface MenuItem {
   id: string;
@@ -24,6 +175,9 @@ interface MenuItem {
   isSpicy: boolean;
   isBestSeller: boolean;
   isCustomizable: boolean;
+  isPreorderAvailable?: boolean;
+  preorderCampaign?: PreorderCampaign;
+  timings?: ItemTiming[];
 }
 
 interface MenuSection {
@@ -98,6 +252,30 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     setSearchQuery(query);
   };
 
+  // Clear search query when component mounts (ensures fresh state)
+  useEffect(() => {
+    setSearchQuery('');
+    setSearchResults([]);
+  }, []);
+
+  // Clear search query when component unmounts
+  useEffect(() => {
+    return () => {
+      // Cleanup: Clear search query when component unmounts
+      setSearchQuery('');
+      setSearchResults([]);
+    };
+  }, []);
+
+  // Handle back button - clear search before going back
+  const handleBack = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    if (onBack) {
+      onBack();
+    }
+  };
+
   // Re-compute search results whenever the query or menu items change
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -129,7 +307,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       <SafeAreaView edges={['top']} style={styles.safeArea}>
         {/* Header */}
         <SearchBar
-          onBack={onBack}
+          onBack={handleBack}
           value={searchQuery}
           onChangeText={handleSearch}
           placeholder="Search for dishes..."
@@ -147,6 +325,16 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
               {searchResults.map((item) => {
                 const currentQuantity = getItemQuantity(item.id);
                 const isAtQuantityLimit = currentQuantity >= MAX_ITEM_QUANTITY;
+                const isPreorderAtLimit = item.isPreorderAvailable && currentQuantity >= 1;
+
+                // Check if item is available based on its own timings
+                const isItemCurrentlyAvailable = isItemAvailable(item.timings);
+
+                // Item is only available if BOTH restaurant is open AND item timing is available
+                const itemAvailable = !isRestaurantClosed && isItemCurrentlyAvailable;
+
+                // Get next available time slot to check if available today
+                const nextAvailableTime = getNextAvailableTime(item.timings);
 
                 return (
                 <View key={item.id} style={styles.menuItem}>
@@ -182,7 +370,16 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     )}
 
                     {/* Price */}
-                    <Text style={styles.itemPrice}>₹ {item.price}</Text>
+                    {item.isPreorderAvailable && item.preorderCampaign && parseFloat(item.preorderCampaign.discount_amount || '0') > 0 ? (
+                      <View style={styles.priceContainer}>
+                        <Text style={[styles.itemPrice, styles.strikethroughPrice]}>₹ {item.price.toFixed(2)}</Text>
+                        <Text style={[styles.itemPrice, styles.discountedPrice]}>
+                          ₹ {(item.price - parseFloat(item.preorderCampaign.discount_amount || '0')).toFixed(2)}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.itemPrice}>₹ {item.price.toFixed(2)}</Text>
+                    )}
 
                     {/* Description */}
                     <View style={styles.descriptionContainer}>
@@ -199,32 +396,68 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     <TouchableOpacity
                       style={styles.itemImageContainer}
                       onPress={() => {
-                        if (!isRestaurantClosed && onImageClick) {
+                        if (itemAvailable && onImageClick) {
                           onImageClick(item);
                         }
                       }}
-                      disabled={isRestaurantClosed}
-                      activeOpacity={isRestaurantClosed ? 1 : 0.9}
+                      disabled={!itemAvailable}
+                      activeOpacity={itemAvailable ? 0.9 : 1}
                     >
-                      {!loadedImages.has(item.id) && (
-                        <Shimmer
-                          width={166}
-                          height={137}
-                          borderRadius={16}
-                          backgroundColor="#E8E8E8"
-                          style={styles.imageShimmer}
-                        />
-                      )}
-                      <Image
+                      <OptimizedImage
                         source={item.image}
                         style={styles.itemImage}
-                        resizeMode="cover"
+                        contentFit="cover"
                         onLoad={() => onImageLoad && onImageLoad(item.id)}
+                        shimmerWidth={166}
+                        shimmerHeight={137}
+                        shimmerBorderRadius={16}
+                        transition={200}
+                        priority="normal"
+                        cachePolicy="memory-disk"
                       />
+                      
+                      {/* Gray Overlay for Unavailable Items - Only on image */}
+                      {!itemAvailable && (
+                        <View style={styles.unavailableOverlay} />
+                      )}
+
+                      {/* Preorder Badge Overlay on Image - Top Left */}
+                      {item.isPreorderAvailable && (
+                        <View style={styles.preorderImageBadge}>
+                          <LinearGradient
+                            colors={['#00B14F', '#00A048']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.preorderImageBadgeGradient}
+                          >
+                            <MaterialIcons name="schedule" size={12} color="#FFFFFF" />
+                            <Text style={styles.preorderImageBadgeText}>Preorder</Text>
+                          </LinearGradient>
+                        </View>
+                      )}
+
+                      {/* Availability Badge - Bottom Left (like RestaurantScreen design) */}
+                      {!itemAvailable && (
+                        <View style={styles.availabilityBadge}>
+                          {nextAvailableTime?.availableTime ? (
+                            // Item will be available today - show timing with AM/PM and "today" on same line
+                            <Text style={styles.availabilityTimeTextMain}>
+                              Available at {nextAvailableTime.availableTime}
+                              <Text style={styles.availabilityTimeTextSub}> today</Text>
+                            </Text>
+                          ) : (
+                            // Not available today - show simple message
+                            <Text style={styles.availabilityTimeTextMain}>
+                              Not available
+                            </Text>
+                          )}
+                        </View>
+                      )}
                     </TouchableOpacity>
 
                     {/* Add Button or Increment/Decrement Controls */}
-                    {loadedImages.has(item.id) && !isRestaurantClosed && (
+                    {/* Only show when item is available and image is loaded (or no image) */}
+                    {itemAvailable && loadedImages.has(item.id) && (
                       <>
                         {cart[item.id] ? (
                           // Show increment/decrement controls if item is in cart
@@ -241,14 +474,17 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                             <TouchableOpacity
                               style={[
                                 styles.quantityButton,
-                                isAtQuantityLimit && styles.quantityButtonDisabled,
+                                (isAtQuantityLimit || isPreorderAtLimit) && styles.quantityButtonDisabled,
                               ]}
                               onPress={() => onIncrementItem && onIncrementItem(item.id)}
                               activeOpacity={0.7}
                               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                              disabled={isAtQuantityLimit}
+                              disabled={isAtQuantityLimit || isPreorderAtLimit}
                             >
-                              <Text style={styles.quantityButtonText}>+</Text>
+                              <Text style={[
+                                styles.quantityButtonText,
+                                (isAtQuantityLimit || isPreorderAtLimit) && styles.quantityButtonTextDisabled
+                              ]}>+</Text>
                             </TouchableOpacity>
                           </View>
                         ) : (
@@ -403,6 +639,11 @@ const styles = StyleSheet.create({
     color: '#000000',
     opacity: 0.85,
   },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   itemPrice: {
     fontFamily: 'Poppins',
     fontWeight: '500',
@@ -410,6 +651,14 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: '#000000',
     opacity: 0.85,
+  },
+  strikethroughPrice: {
+    textDecorationLine: 'line-through',
+    opacity: 0.5,
+  },
+  discountedPrice: {
+    color: '#00B14F',
+    opacity: 1,
   },
   descriptionContainer: {
     width: 165,
@@ -443,6 +692,32 @@ const styles = StyleSheet.create({
     width: 166,
     height: 137,
     borderRadius: 16,
+  },
+  preorderImageBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    zIndex: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  preorderImageBadgeGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  preorderImageBadgeText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 10,
+    lineHeight: 14,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
   addButton: {
     flexDirection: 'row',
@@ -509,6 +784,9 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     marginTop: -2,
   },
+  quantityButtonTextDisabled: {
+    opacity: 0.4,
+  },
   quantityText: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
@@ -526,6 +804,44 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.6)',
     opacity: 0.85,
     width: 181,
+  },
+  unavailableOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(120, 120, 120, 0.75)',
+    borderRadius: 16,
+    zIndex: 5,
+  },
+  availabilityBadge: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'transparent',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    zIndex: 6,
+  },
+  availabilityTimeTextMain: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  availabilityTimeTextSub: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   noResultsContainer: {
     flex: 1,

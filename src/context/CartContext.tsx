@@ -128,6 +128,62 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   /**
+   * Normalize cart items to ensure preorder items have quantity <= 1
+   */
+  const normalizeCartForPreorder = (cartToNormalize: { [key: string]: CartItem }): { [key: string]: CartItem } => {
+    const normalizedCart: { [key: string]: CartItem } = {};
+    
+    Object.keys(cartToNormalize).forEach(itemId => {
+      const item = cartToNormalize[itemId];
+      
+      if (item.isPreorder) {
+        // For preorder items, ensure total quantity is at most 1
+        if (item.isCustomizable && item.variants && item.variants.length > 0) {
+          // For customizable items, calculate total quantity from all variants
+          const totalVariantQuantity = item.variants.reduce((sum, v) => sum + (v.quantity || 0), 0);
+          
+          if (totalVariantQuantity > 1) {
+            // If total exceeds 1, keep only the first variant with quantity 1
+            const firstVariant = { ...item.variants[0], quantity: 1 };
+            normalizedCart[itemId] = {
+              ...item,
+              variants: [firstVariant],
+            };
+          } else if (totalVariantQuantity === 0) {
+            // If no quantity, set first variant to 1
+            const firstVariant = { ...item.variants[0], quantity: 1 };
+            normalizedCart[itemId] = {
+              ...item,
+              variants: [firstVariant],
+            };
+          } else {
+            // Total is exactly 1, keep as-is but ensure no variant exceeds 1
+            const normalizedVariants = item.variants.map(variant => ({
+              ...variant,
+              quantity: Math.min(variant.quantity || 0, 1),
+            }));
+            normalizedCart[itemId] = {
+              ...item,
+              variants: normalizedVariants.filter(v => v.quantity > 0),
+            };
+          }
+        } else {
+          // For non-customizable items, cap quantity at 1
+          normalizedCart[itemId] = {
+            ...item,
+            quantity: Math.min(item.quantity || 1, 1),
+          };
+        }
+      } else {
+        // Non-preorder items, keep as-is
+        normalizedCart[itemId] = item;
+      }
+    });
+    
+    return normalizedCart;
+  };
+
+  /**
    * Load cart from local storage
    */
   const loadCartFromStorage = async (): Promise<{
@@ -139,8 +195,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const storedData = await storageService.getCartData();
       if (storedData && storedData.cart && Object.keys(storedData.cart).length > 0) {
+        // Normalize cart to ensure preorder items have correct quantities
+        const normalizedCart = normalizeCartForPreorder(storedData.cart as { [key: string]: CartItem });
+        
         return {
-          cart: storedData.cart as { [key: string]: CartItem },
+          cart: normalizedCart,
           restaurantId: storedData.restaurantId,
           restaurantName: storedData.restaurantName,
           restaurantLogo: storedData.restaurantLogo,
@@ -186,14 +245,19 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const localCart: { [key: string]: CartItem } = {};
 
           backendCart.items.forEach((item) => {
-            // Validate required fields
-            if (!item.item_id || !item.item_name) {
-              console.warn('[CartContext] Skipping invalid cart item:', item);
+            // Validate required fields - only require item_id
+            if (!item.item_id) {
+              console.warn('[CartContext] Skipping invalid cart item (missing item_id):', item);
               return;
             }
 
             const isVeg = item.dietary_preference === 'veg' ||
                           item.dietary_preference === 'vegetarian';
+
+            const isPreorder = (item as any).is_preorder === true;
+            // For preorder items, enforce quantity limit of 1
+            const baseQuantity = item.quantity || 1;
+            const validatedQuantity = isPreorder ? Math.min(baseQuantity, 1) : baseQuantity;
 
             const cartItem: CartItem = {
               id: item.item_id.toString(),
@@ -201,23 +265,25 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               cartItemId: item.id,
               name: item.item_name,
               price: item.unit_price || 0,
-              quantity: item.quantity || 1,
+              quantity: validatedQuantity,
               isVeg: isVeg,
               image: item.item_images?.[0],
               specialInstructions: item.special_instructions || undefined,
               isCustomizable: item.has_customizations || (item.customizations && item.customizations.length > 0),
-              isPreorder: (item as any).is_preorder === true,
+              isPreorder: isPreorder,
               campaignId: (item as any).campaign_id?.toString(),
             };
 
             if (item.customizations && item.customizations.length > 0) {
+              // For customizable preorder items, ensure variant quantities don't exceed 1 total
+              const variantQuantity = isPreorder ? Math.min(item.quantity || 1, 1) : (item.quantity || 1);
               cartItem.variants = item.customizations.map((customization) => ({
                 id: `${item.item_id}-${customization.customization_group_id}`,
                 variantId: customization.customization_group_id.toString(),
                 variantName: customization.customization_group_name,
                 addOns: customization.selected_options.map((opt) => opt.id.toString()),
                 addOnNames: customization.selected_options.map((opt) => opt.name || ''),
-                quantity: item.quantity || 1,
+                quantity: variantQuantity,
                 price: item.unit_price || 0,
               }));
             }
@@ -225,9 +291,12 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             localCart[item.item_id.toString()] = cartItem;
           });
 
-          setCart(localCart);
-          // Save to storage after loading from backend
-          await saveCartToStorage(localCart, backendCart.restaurant_id, backendCart.restaurant_name || '', backendCart.restaurant_logo);
+          // Normalize cart to ensure preorder items have correct quantities
+          const normalizedCart = normalizeCartForPreorder(localCart);
+          
+          setCart(normalizedCart);
+          // Save to storage after loading from backend (with normalized quantities)
+          await saveCartToStorage(normalizedCart, backendCart.restaurant_id, backendCart.restaurant_name || '', backendCart.restaurant_logo);
           console.log('[CartContext] Cart loaded successfully:', {
             itemsCount: Object.keys(localCart).length,
             restaurantId: backendCart.restaurant_id,
@@ -242,6 +311,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // No valid cart response - try loading from storage as fallback
         const storedCart = await loadCartFromStorage();
         if (storedCart) {
+          // Cart is already normalized in loadCartFromStorage
           setCart(storedCart.cart);
           setRestaurantId(storedCart.restaurantId);
           setRestaurantName(storedCart.restaurantName);
@@ -473,18 +543,48 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     if (quantity <= 0) {
+      // If quantity is going to zero or below, cancel any pending debounced updates
+      if (updateQuantityTimeoutRef.current) {
+        clearTimeout(updateQuantityTimeoutRef.current);
+        updateQuantityTimeoutRef.current = null;
+      }
+
+      // Clear any pending update for this item
+      if (pendingUpdateRef.current && pendingUpdateRef.current.itemId === itemId) {
+        pendingUpdateRef.current = null;
+      }
+
+      // Abort any in-flight update request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+
       await removeFromCart(itemId);
       return null;
     }
 
+    // Check if item is preorder and enforce quantity limit of 1
+    if (item.isPreorder) {
+      if (quantity > 1) {
+        // Revert to previous quantity if trying to set > 1 for preorder item
+        console.warn(`Preorder items can only have quantity of 1. Item ${itemId} quantity reset to 1.`);
+        // Don't update, just return null
+        return null;
+      }
+    }
+
     const safeQuantity = clampQuantity(quantity);
 
-    if (quantity > MAX_ITEM_QUANTITY) {
+    // For preorder items, ensure quantity doesn't exceed 1
+    const finalQuantity = item.isPreorder ? Math.min(safeQuantity, 1) : safeQuantity;
+
+    if (quantity > MAX_ITEM_QUANTITY && !item.isPreorder) {
       console.warn(`Quantity for item ${itemId} capped at ${MAX_ITEM_QUANTITY}`);
     }
 
     // Avoid unnecessary updates
-    if ((item.quantity || 0) === safeQuantity) {
+    if ((item.quantity || 0) === finalQuantity) {
       return null;
     }
 
@@ -493,7 +593,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ...prev,
       [itemId]: {
         ...prev[itemId],
-        quantity: safeQuantity,
+        quantity: finalQuantity,
       },
     }));
 
@@ -509,7 +609,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     // Store pending update
-    pendingUpdateRef.current = { itemId, quantity: safeQuantity };
+    pendingUpdateRef.current = { itemId, quantity: finalQuantity };
 
     return new Promise<CartSummary | null>((resolve, reject) => {
       updateQuantityTimeoutRef.current = setTimeout(async () => {
@@ -536,7 +636,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const backendRequest: AddToCartRequest = {
               restaurant_id: restaurantId,
               item_id: item.itemId || parseInt(item.id, 10),
-              quantity: safeQuantity,
+              quantity: finalQuantity,
               special_instructions: item.specialInstructions,
             };
 
@@ -604,7 +704,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // These fields are only sent when adding new items via addToCart API
           const updateResponse = await cartService.updateCartItem(item.cartItemId, {
             restaurant_id: restaurantId,
-            quantity: safeQuantity,
+            quantity: finalQuantity,
           });
 
           // If update failed, reject promise with error message so it can be displayed
@@ -696,18 +796,32 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getTotalItems = () => {
     return Object.values(cart).reduce((sum, item) => {
       if (item.isCustomizable && item.variants) {
-        return sum + item.variants.reduce((variantSum, variant) => variantSum + variant.quantity, 0);
+        const variantsTotal = item.variants.reduce((variantSum, variant) => {
+          const safeVariantQty = Number(variant.quantity) || 0;
+          return variantSum + safeVariantQty;
+        }, 0);
+        return sum + variantsTotal;
       }
-      return sum + (item.quantity || 0);
+      const safeQuantity = Number(item.quantity) || 0;
+      return sum + safeQuantity;
     }, 0);
   };
 
   const getTotalPrice = () => {
     return Object.values(cart).reduce((sum, item) => {
       if (item.isCustomizable && item.variants) {
-        return sum + item.variants.reduce((variantSum, variant) => variantSum + (variant.price * variant.quantity), 0);
+        const variantsTotal = item.variants.reduce((variantSum, variant) => {
+          const safePrice = Number(variant.price) || 0;
+          const safeQty = Number(variant.quantity) || 0;
+          const lineTotal = safePrice * safeQty;
+          return variantSum + (Number.isFinite(lineTotal) ? lineTotal : 0);
+        }, 0);
+        return sum + variantsTotal;
       }
-      return sum + (item.price * (item.quantity || 0));
+      const safePrice = Number(item.price) || 0;
+      const safeQty = Number(item.quantity) || 0;
+      const lineTotal = safePrice * safeQty;
+      return sum + (Number.isFinite(lineTotal) ? lineTotal : 0);
     }, 0);
   };
 

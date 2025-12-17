@@ -137,7 +137,7 @@ class CartService {
       let responseData: any = response.data || response;
 
       // Check if data is double-nested
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 
@@ -278,7 +278,7 @@ class CartService {
 
       // Handle potential double-nested response structure for cart_summary
       let responseData: any = response.data || response;
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 
@@ -316,7 +316,7 @@ class CartService {
 
       // Handle potential double-nested response structure
       let responseData: any = response.data || response;
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 
@@ -340,7 +340,7 @@ class CartService {
 
       // Handle potential double-nested response structure
       let responseData: any = response.data || response;
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 
@@ -382,7 +382,7 @@ class CartService {
       let responseData: any = response.data || response;
       
       // Unwrap nested data structure if needed
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 
@@ -432,7 +432,7 @@ class CartService {
       // 3. { cart_summary: {...} } (direct)
       let responseData: any = response.data || response;
 
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 
@@ -473,7 +473,7 @@ class CartService {
       // Handle possible nested response structures
       let responseData: any = response.data || response;
 
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 

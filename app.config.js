@@ -164,10 +164,10 @@ module.exports = {
       backgroundColor: "#1a9656"
     },
 
-    // 👇 ADD THIS
     plugins: [
       "@react-native-firebase/app",
-      "@react-native-firebase/messaging"
+      "@react-native-firebase/messaging",
+      "@react-native-firebase/crashlytics"
     ],
 
     ios: {

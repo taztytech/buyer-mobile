@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { searchService, SearchSuggestion } from '@/services/search.service';
 import { SearchBar } from '@/components/SearchBar';
 import * as Location from 'expo-location';
@@ -205,10 +206,16 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       >
         <View style={styles.resultLeft}>
           {imageUrl ? (
-            <Image
-              source={{ uri: imageUrl }}
+            <OptimizedImage
+              source={imageUrl}
               style={styles.resultIcon}
-              defaultSource={require('@/assets/icon.png')}
+              contentFit="cover"
+              shimmerWidth={40}
+              shimmerHeight={40}
+              shimmerBorderRadius={8}
+              transition={200}
+              priority="normal"
+              cachePolicy="memory-disk"
             />
           ) : (
             <View style={[styles.resultIcon, styles.placeholderIcon]}>
@@ -264,6 +271,11 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                 showsVerticalScrollIndicator={false}
                 nestedScrollEnabled={true}
                 contentContainerStyle={styles.flatListContent}
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={10}
+                windowSize={10}
+                initialNumToRender={10}
+                updateCellsBatchingPeriod={50}
               />
             </View>
           )}
