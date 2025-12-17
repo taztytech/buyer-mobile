@@ -218,6 +218,10 @@ module.exports = {
       EXPO_PUBLIC_API_BASE_URL: apiConfig.apiBaseUrl,
       EXPO_PUBLIC_GOOGLE_MAPS_API_KEY:
         process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+      // Facebook Configuration
+      facebookAppId: "1793377224702906",
+      facebookClientToken: "2b2c11d8c7a01864118bcd2a17b28103",
+      facebookDisplayName: "Tazty Food Delivery",
       eas: {
         projectId: "7d65a380-eee0-49b0-9f39-a5cd6eaede5a"
       }

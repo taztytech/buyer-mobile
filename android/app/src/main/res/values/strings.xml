@@ -2,4 +2,8 @@
   <string name="app_name">Tazty</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">cover</string>
   <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <!-- Facebook App ID and Client Token for Marketing SDK -->
+  <string name="facebook_app_id">1793377224702906</string>
+  <string name="facebook_client_token">2b2c11d8c7a01864118bcd2a17b28103</string>
+  <string name="facebook_display_name">Tazty Food Delivery</string>
 </resources>
