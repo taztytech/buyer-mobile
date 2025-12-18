@@ -1547,33 +1547,32 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           },
         ]}
       >
-        {/* Scrollable Content with Sticky Filter */}
+        {/* Scrollable Content */}
         <ScrollView
-        ref={scrollViewRef}
-        style={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[1]} // Make the filter section (index 1) sticky
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        bounces={false}
-        alwaysBounceVertical={true}
-        overScrollMode="never"
-        removeClippedSubviews={true}
-        decelerationRate="normal"
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={async () => {
-              setIsRefreshing(true);
-              await fetchRestaurantDetails(true); // Skip delay during refresh
-              setIsRefreshing(false);
-            }}
-            colors={['#00B14F']}
-            tintColor="#00B14F"
-            progressBackgroundColor="#FFFFFF"
-          />
-        }
-      >
+          ref={scrollViewRef}
+          style={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          bounces={false}
+          alwaysBounceVertical={true}
+          overScrollMode="never"
+          removeClippedSubviews={true}
+          decelerationRate="normal"
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={async () => {
+                setIsRefreshing(true);
+                await fetchRestaurantDetails(true); // Skip delay during refresh
+                setIsRefreshing(false);
+              }}
+              colors={['#00B14F']}
+              tintColor="#00B14F"
+              progressBackgroundColor="#FFFFFF"
+            />
+          }
+        >
         {/* Header Image with Overlay */}
         {restaurantData?.logo_url ? (
           <ImageBackground
