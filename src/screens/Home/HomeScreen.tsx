@@ -160,6 +160,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // App operation status from API
   const [appOperationStatus, setAppOperationStatus] = React.useState<AppOperationStatus | null>(null);
 
+  // Restaurant card layout style from API (1 = horizontal, 2 = vertical)
+  const [restaurantCardStyle, setRestaurantCardStyle] = React.useState<1 | 2>(1);
+
   // Refresh trigger - increments to force data reload
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_refreshTrigger, _setRefreshTrigger] = React.useState(0);
@@ -722,10 +725,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           const nearbyRestaurants = actualData.nearby_restaurants;
           const pagination = actualData.pagination;
           const appOperationStatusData = actualData.app_operation_status;
+          const homeScreenRestaurantCardStyle = actualData.home_screen_restaurant_card_style;
 
           // Store app operation status
           if (appOperationStatusData) {
             setAppOperationStatus(appOperationStatusData);
+          }
+
+          // Store restaurant card style from API (convert string to number, default to 1)
+          if (homeScreenRestaurantCardStyle) {
+            const styleNumber = parseInt(homeScreenRestaurantCardStyle, 10);
+            if (styleNumber === 1 || styleNumber === 2) {
+              setRestaurantCardStyle(styleNumber as 1 | 2);
+            } else {
+              setRestaurantCardStyle(1); // Default to 1 if invalid value
+            }
+          } else {
+            setRestaurantCardStyle(1); // Default to 1 if not provided
           }
 
           // Handle promotional banners
@@ -1820,6 +1836,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <View style={styles.restaurantCardWrapper}>
                   <RestaurantCard
                     restaurant={restaurant}
+                    layoutMode={restaurantCardStyle}
                     onPress={() => {
                       if (onNavigateToRestaurant) {
                         const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;

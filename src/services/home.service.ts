@@ -81,6 +81,7 @@ export interface HomeData {
   nearby_restaurants?: Restaurant[];
   whats_on_your_mind?: CategoryItem[];
   pagination?: PaginationMetadata;
+  home_screen_restaurant_card_style?: string;
 }
 
 class HomeService {

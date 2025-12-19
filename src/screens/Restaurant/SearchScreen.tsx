@@ -408,6 +408,12 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                         style={styles.itemImage}
                         contentFit="cover"
                         onLoad={() => onImageLoad && onImageLoad(item.id)}
+                        onError={() => {
+                          // Mark image as loaded even on error so add to cart button can appear
+                          if (onImageLoad) {
+                            onImageLoad(item.id);
+                          }
+                        }}
                         shimmerWidth={166}
                         shimmerHeight={137}
                         shimmerBorderRadius={16}
@@ -457,7 +463,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
 
                     {/* Add Button or Increment/Decrement Controls */}
                     {/* Only show when item is available and image is loaded (or no image) */}
-                    {itemAvailable && loadedImages.has(item.id) && (
+                    {itemAvailable && (loadedImages.has(item.id) || !item.image) && (
                       <>
                         {cart[item.id] ? (
                           // Show increment/decrement controls if item is in cart
