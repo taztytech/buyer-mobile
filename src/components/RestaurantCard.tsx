@@ -36,7 +36,12 @@ interface RestaurantCardProps {
   onPress?: () => void;
   onFavoriteToggle?: () => void;
   onImageLoad?: () => void;
-  isVerticalLayout?: boolean; // true = vertical (style 2), false = horizontal (style 1)
+  /**
+   * Layout mode for the restaurant card.
+   * 1 = horizontal (style 1)
+   * 2 = vertical (style 2)
+   */
+  layoutMode?: 1 | 2;
 }
 
 export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
@@ -44,7 +49,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   onPress,
   onFavoriteToggle,
   onImageLoad,
-  isVerticalLayout = false,
+  layoutMode = 1,
 }) => {
   const [isFavorite, setIsFavorite] = useState(restaurant.isFavorite || false);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
@@ -185,9 +190,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   useEffect(() => {
     setImageLoaded(false);
     imageOpacity.setValue(0);
-  }, [isVerticalLayout, imageOpacity]);
+  }, [layoutMode, imageOpacity]);
 
-  if (!isVerticalLayout) {
+  // Layout mode 1 => Horizontal layout (style 1)
+  if (layoutMode === 1) {
     return (
       <TouchableOpacity
         key="horizontal"
@@ -367,6 +373,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   }
 
   return (
+    // Layout mode 2 => Vertical layout (style 2)
     <TouchableOpacity
       key="vertical"
       style={styles.cardVertical}
@@ -516,7 +523,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
     prevProps.restaurant.name === nextProps.restaurant.name &&
     prevProps.restaurant.isOpen === nextProps.restaurant.isOpen &&
     timingsEqual &&
-    prevProps.isVerticalLayout === nextProps.isVerticalLayout
+    prevProps.layoutMode === nextProps.layoutMode
   );
 });
 
