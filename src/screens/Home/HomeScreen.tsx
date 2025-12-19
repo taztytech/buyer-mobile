@@ -1411,8 +1411,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </View>
           ) : (
             <View style={styles.headerActionsRow}>
-              {/* Cart Icon - shown only when cart has items */}
-              {hasCartItems && (
+              {/* Cart Icon - hidden */}
+              {/* {hasCartItems && (
                 <TouchableOpacity
                   style={styles.cartButton}
                   onPress={handleCartPress}
@@ -1442,7 +1442,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     </View>
                   </View>
                 </TouchableOpacity>
-              )}
+              )} */}
 
               {/* Profile Avatar */}
               <TouchableOpacity
