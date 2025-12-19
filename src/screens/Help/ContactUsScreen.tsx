@@ -22,7 +22,7 @@ export const ContactUsScreen: React.FC<ContactUsScreenProps> = ({
   onBack,
 }) => {
   const [supportEmail, setSupportEmail] = useState<string>('');
-  const [supportNumber, setSupportNumber] = useState<string>('');
+  const [supportNumbers, setSupportNumbers] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -36,7 +36,13 @@ export const ContactUsScreen: React.FC<ContactUsScreenProps> = ({
         // Get support details from cache first, only call API if not cached
         const supportDetails = await authService.getSupportDetails(false);
         setSupportEmail(supportDetails.support_email);
-        setSupportNumber(supportDetails.support_number);
+        
+        // Parse support numbers - split by comma and trim whitespace
+        const numbers = supportDetails.support_number
+          .split(',')
+          .map((num: string) => num.trim())
+          .filter((num: string) => num.length > 0);
+        setSupportNumbers(numbers);
       } catch {
         // Silent fail – leave defaults
       } finally {
@@ -47,9 +53,9 @@ export const ContactUsScreen: React.FC<ContactUsScreenProps> = ({
     fetchSupportDetails();
   }, [visible]);
 
-  const handleCall = () => {
-    if (!supportNumber) return;
-    const telUrl = `tel:${supportNumber.replace(/\s+/g, '')}`;
+  const handleCall = (number: string) => {
+    if (!number) return;
+    const telUrl = `tel:${number.replace(/\s+/g, '')}`;
     Linking.openURL(telUrl).catch(() => {});
   };
 
@@ -106,13 +112,22 @@ export const ContactUsScreen: React.FC<ContactUsScreenProps> = ({
                     <MaterialIcons name="call" size={20} color="#00B14F" />
                     <Text style={styles.label}>Support Mobile</Text>
                   </View>
-                  <TouchableOpacity
-                    onPress={handleCall}
-                    activeOpacity={0.7}
-                    style={styles.valueContainer}
-                  >
-                    <Text style={styles.valueText}>{supportNumber || '-'}</Text>
-                  </TouchableOpacity>
+                  <View style={styles.numbersColumn}>
+                    {supportNumbers.length > 0 ? (
+                      supportNumbers.map((number, index) => (
+                        <TouchableOpacity
+                          key={index}
+                          onPress={() => handleCall(number)}
+                          activeOpacity={0.7}
+                          style={styles.numberButton}
+                        >
+                          <Text style={styles.valueText}>{number}</Text>
+                        </TouchableOpacity>
+                      ))
+                    ) : (
+                      <Text style={styles.valueText}>-</Text>
+                    )}
+                  </View>
                 </View>
 
                 <View style={styles.divider} />
@@ -243,7 +258,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingVertical: 6,
   },
   rowLeft: {
@@ -262,6 +277,14 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     alignItems: 'flex-end',
   },
+  numbersColumn: {
+    flexShrink: 1,
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  numberButton: {
+    alignItems: 'flex-end',
+  },
   valueText: {
     fontFamily: 'Poppins',
     fontWeight: '400',
@@ -277,5 +300,3 @@ const styles = StyleSheet.create({
 });
 
 export default ContactUsScreen;
-
-
