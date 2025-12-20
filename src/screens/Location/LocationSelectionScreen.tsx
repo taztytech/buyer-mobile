@@ -1314,6 +1314,12 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
                   </View>
                   <Text style={styles.locationAddress}>{locationAddress}</Text>
                 </View>
+                <View style={styles.warningNote}>
+                  <MaterialIcons name="info" size={14} color="#FF9800" />
+                  <Text style={styles.warningNoteText}>
+                    Note: Please check the map location and delivery address before placing your order to avoid delays, cancellations, or extra charges.
+                  </Text>
+                </View>
               </View>
 
               {/* Confirm Button */}
@@ -1545,6 +1551,24 @@ const styles = StyleSheet.create({
     color: '#001E1F',
     opacity: 0.75,
     marginTop: 2,
+  },
+  warningNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF9800',
+    gap: 6,
+  },
+  warningNoteText: {
+    flex: 1,
+    fontFamily: 'Poppins',
+    fontSize: 9,
+    lineHeight: 13,
+    color: '#E65100',
   },
   currentLocationButton: {
     flexDirection: 'row',

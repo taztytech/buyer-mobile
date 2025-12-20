@@ -84,6 +84,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [tipExpanded, setTipExpanded] = useState(true);
   const [promoExpanded, setPromoExpanded] = useState(true);
   const [billExpanded, setBillExpanded] = useState(true);
+  const [deliveryLocationExpanded, setDeliveryLocationExpanded] = useState(true);
   const [cancellationExpanded, setCancellationExpanded] = useState(true);
 
   const showQuantityLimitAlert = () => {
@@ -1954,6 +1955,30 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   <Text style={styles.billTotalLabel}>To Pay</Text>
                   <Text style={styles.billTotalValue}>₹{totalAmount.toFixed(2)}</Text>
                 </View>
+              </View>
+            )}
+          </View>
+
+          {/* Delivery Location Warning Section */}
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.sectionHeader}
+              onPress={() => setDeliveryLocationExpanded(!deliveryLocationExpanded)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.sectionTitle}>Delivery Policy</Text>
+              <MaterialIcons
+                name={deliveryLocationExpanded ? 'expand-less' : 'expand-more'}
+                size={24}
+                color="#000000"
+              />
+            </TouchableOpacity>
+
+            {deliveryLocationExpanded && (
+              <View style={styles.sectionContent}>
+                <Text style={styles.cancellationText}>
+                  Please ensure the delivery location is pinned correctly on the map. If the address is far from the pinned location, additional delivery charges may apply. Order cancellations due to incorrect location are non-refundable.
+                </Text>
               </View>
             )}
           </View>
