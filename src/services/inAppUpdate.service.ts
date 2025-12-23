@@ -8,22 +8,17 @@ import SpInAppUpdates, {
   IAUUpdateKind,
   StartUpdateOptions,
 } from 'sp-react-native-in-app-updates';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// Removed AsyncStorage to allow session-based resetting
 import { Platform, Alert } from 'react-native';
 import Constants from 'expo-constants';
 import NetInfo from '@react-native-community/netinfo';
 import { isExpoGo } from '@/utils/platform.util';
 
-const STORAGE_KEYS = {
-  UPDATE_SKIPPED_UNTIL: '@tazty_update_skipped_until',
-  UPDATE_LAST_CHECKED: '@tazty_update_last_checked',
-};
+// Minimum time between update checks (1 hour)
+const MIN_CHECK_INTERVAL = 1 * 60 * 60 * 1000;
 
-// Minimum time between update checks (24 hours)
-const MIN_CHECK_INTERVAL = 24 * 60 * 60 * 1000;
-
-// Time to wait before showing update again after skip (7 days)
-const SKIP_DURATION = 7 * 24 * 60 * 60 * 1000;
+// Time to wait before showing update again after skip (1 day) - Only applies if app stays open!
+const SKIP_DURATION = 1 * 24 * 60 * 60 * 1000;
 
 interface UpdateCheckOptions {
   currentScreen?: string;
@@ -36,23 +31,19 @@ class InAppUpdateService {
   private updateInfo: any = null;
   private statusUpdateListener: any = null;
   private inAppUpdates: SpInAppUpdates;
-  
+
   // Cache for network state to avoid repeated checks
   private cachedNetworkState: boolean | null = null;
   private networkStateCacheTime: number = 0;
   private networkStateCacheTTL: number = 30 * 1000; // 30 seconds cache
-  
-  // Cache for AsyncStorage values to reduce I/O
-  private cachedStorageData: {
-    skippedUntil?: number | null;
-    lastChecked?: number | null;
-    cacheTime?: number;
-  } = {};
-  private storageCacheTTL: number = 5 * 60 * 1000; // 5 minutes cache
-  
+
+  // In-memory state (resets on app kill)
+  private skippedUntil: number | null = null;
+  private lastChecked: number | null = null;
+
   // Request deduplication - share promise for concurrent calls
   private pendingCheckPromise: Promise<boolean> | null = null;
-  
+
   // Debounce timer for rapid calls
   private debounceTimer: NodeJS.Timeout | null = null;
   private readonly DEBOUNCE_DELAY = 1000; // 1 second debounce
@@ -61,7 +52,7 @@ class InAppUpdateService {
     // Initialize the SpInAppUpdates instance
     // false = not in debug mode
     this.inAppUpdates = new SpInAppUpdates(false);
-    
+
     // Setup network state listener once (shared across all checks)
     this.setupNetworkStateListener();
   }
@@ -81,92 +72,20 @@ class InAppUpdateService {
   }
 
   /**
-   * Get cached storage data or fetch from AsyncStorage
-   */
-  private async getStorageData(forceRefresh: boolean = false): Promise<{
-    skippedUntil: number | null;
-    lastChecked: number | null;
-  }> {
-    const now = Date.now();
-    const cacheValid = 
-      !forceRefresh && 
-      this.cachedStorageData.cacheTime && 
-      (now - this.cachedStorageData.cacheTime) < this.storageCacheTTL;
-
-    if (cacheValid) {
-      return {
-        skippedUntil: this.cachedStorageData.skippedUntil ?? null,
-        lastChecked: this.cachedStorageData.lastChecked ?? null,
-      };
-    }
-
-    try {
-      // Batch read both values in parallel
-      const [skippedUntil, lastChecked] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEYS.UPDATE_SKIPPED_UNTIL),
-        AsyncStorage.getItem(STORAGE_KEYS.UPDATE_LAST_CHECKED),
-      ]);
-
-      const skippedUntilTime = skippedUntil ? parseInt(skippedUntil, 10) : null;
-      const lastCheckedTime = lastChecked ? parseInt(lastChecked, 10) : null;
-
-      // Update cache
-      this.cachedStorageData = {
-        skippedUntil: skippedUntilTime,
-        lastChecked: lastCheckedTime,
-        cacheTime: now,
-      };
-
-      return {
-        skippedUntil: skippedUntilTime,
-        lastChecked: lastCheckedTime,
-      };
-    } catch (error) {
-      console.error('[InAppUpdate] Error reading storage:', error);
-      return { skippedUntil: null, lastChecked: null };
-    }
-  }
-
-  /**
-   * Invalidate storage cache (call after writes)
-   */
-  private invalidateStorageCache(): void {
-    this.cachedStorageData = {};
-  }
-
-
-  /**
    * Mark update as skipped
+   * Stores in memory only - resets if app is killed
    */
-  private async markUpdateSkipped(): Promise<void> {
-    try {
-      const skipUntilTime = Date.now() + SKIP_DURATION;
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.UPDATE_SKIPPED_UNTIL,
-        skipUntilTime.toString()
-      );
-      // Invalidate cache after write
-      this.invalidateStorageCache();
-    } catch (error) {
-      console.error('[InAppUpdate] Error marking update as skipped:', error);
-    }
+  private markUpdateSkipped(): void {
+    this.skippedUntil = Date.now() + SKIP_DURATION;
+    console.log('[InAppUpdate] Update skipped until:', new Date(this.skippedUntil).toISOString());
   }
-
 
   /**
    * Mark update check time
+   * Stores in memory only - resets if app is killed
    */
-  private async markUpdateChecked(): Promise<void> {
-    try {
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.UPDATE_LAST_CHECKED,
-        Date.now().toString()
-      );
-      // Invalidate cache after write
-      this.invalidateStorageCache();
-    } catch (error) {
-      console.error('[InAppUpdate] Error marking update check:', error);
-    }
+  private markUpdateChecked(): void {
+    this.lastChecked = Date.now();
   }
 
   /**
@@ -181,7 +100,7 @@ class InAppUpdateService {
    */
   private isNetworkAvailable(): boolean {
     const now = Date.now();
-    
+
     // Return cached value if still valid
     if (
       this.cachedNetworkState !== null &&
@@ -194,33 +113,6 @@ class InAppUpdateService {
     // (network listener will update cache asynchronously)
     // This prevents blocking on network checks
     return this.cachedNetworkState ?? true;
-  }
-
-  /**
-   * Show update dialog with skip option
-   */
-  private showUpdateDialog(): void {
-    Alert.alert(
-      'Update Available',
-      'A new version of the app is available. Would you like to update now?',
-      [
-        {
-          text: 'Skip',
-          style: 'cancel',
-          onPress: async () => {
-            await this.markUpdateSkipped();
-            console.log('[InAppUpdate] User skipped update');
-          },
-        },
-        {
-          text: 'Update',
-          onPress: () => {
-            this.startFlexibleUpdate();
-          },
-        },
-      ],
-      { cancelable: true }
-    );
   }
 
   /**
@@ -237,13 +129,10 @@ class InAppUpdateService {
 
       // Listen for update status changes
       this.setupStatusListener();
-    } catch (error) {
-      console.error('[InAppUpdate] Error starting update:', error);
-      Alert.alert(
-        'Update Error',
-        'Failed to start update. Please try updating from the Play Store.',
-        [{ text: 'OK' }]
-      );
+    } catch (error: any) {
+      // If user cancels or update fails, mark as skipped so we don't spam
+      console.log('[InAppUpdate] Update flow cancelled or failed:', error);
+      this.markUpdateSkipped();
     }
   }
 
@@ -298,11 +187,10 @@ class InAppUpdateService {
         } else if (status?.status === 5) {
           // Update failed
           console.error('[InAppUpdate] Update failed');
-          Alert.alert(
-            'Update Failed',
-            'The update could not be downloaded. Please try again later or update from the Play Store.',
-            [{ text: 'OK' }]
-          );
+          // Silently fail or log, don't nag user
+        } else if (status?.status === 6) {
+          // Update canceled by user
+          console.log('[InAppUpdate] Update canceled by user during download');
         }
       });
     } catch (error) {
@@ -335,7 +223,7 @@ class InAppUpdateService {
     // For Play Store apps, it should be 'standalone' or undefined
     // In Expo Go, it's 'expo'
     const appOwnership = Constants.appOwnership;
-    
+
     // If appOwnership is 'expo', it's Expo Go (not from Play Store)
     if (appOwnership === 'expo') {
       return false;
@@ -358,7 +246,7 @@ class InAppUpdateService {
   private isAppNotOwnedError(error: any): boolean {
     const errorMessage = error?.message || '';
     const errorCode = error?.code || error?.errorCode;
-    
+
     // Check for error code -10 or error message containing "not owned" or "ERROR_APP_NOT_OWNED"
     return (
       errorCode === -10 ||
@@ -400,7 +288,7 @@ class InAppUpdateService {
 
       this.debounceTimer = setTimeout(async () => {
         this.debounceTimer = null;
-        
+
         // Create the actual check promise
         this.pendingCheckPromise = this.performUpdateCheck(
           currentScreen,
@@ -443,19 +331,18 @@ class InAppUpdateService {
       return false;
     }
 
-    // Batch read storage data once
-    const storageData = await this.getStorageData();
-
     // Check if update was recently skipped
-    if (!forceCheck && storageData.skippedUntil !== null) {
-      if (Date.now() < storageData.skippedUntil) {
+    if (!forceCheck && this.skippedUntil !== null) {
+      if (Date.now() < this.skippedUntil) {
+        console.log('[InAppUpdate] Check skipped: User skipped recently (until ' + new Date(this.skippedUntil).toISOString() + ')');
         return false;
       }
     }
 
     // Check if enough time has passed since last check
-    if (!forceCheck && storageData.lastChecked !== null) {
-      if (Date.now() - storageData.lastChecked < MIN_CHECK_INTERVAL) {
+    if (!forceCheck && this.lastChecked !== null) {
+      if (Date.now() - this.lastChecked < MIN_CHECK_INTERVAL) {
+        console.log('[InAppUpdate] Check skipped: Recently checked (at ' + new Date(this.lastChecked).toISOString() + ')');
         return false;
       }
     }
@@ -466,18 +353,21 @@ class InAppUpdateService {
       // Check for update availability
       const checkResult = await this.inAppUpdates.checkNeedsUpdate();
 
-      // Mark that we checked
-      await this.markUpdateChecked();
+      // Mark that we checked (In-Memory!)
+      this.markUpdateChecked();
 
       if (checkResult.shouldUpdate) {
         this.updateInfo = checkResult;
-        console.log('[InAppUpdate] Update available');
+        console.log('[InAppUpdate] Update available:', JSON.stringify(checkResult, null, 2));
 
-        // Show update dialog
-        this.showUpdateDialog();
+        // Start flexible update directly (Native UI)
+        // This replaces the custom "Update Available" dialog
+        this.startFlexibleUpdate();
+
         this.isChecking = false;
         return true;
       } else {
+        console.log('[InAppUpdate] No update available. Store info:', JSON.stringify(checkResult, null, 2));
         // Clear stale update info when app is up to date
         this.updateInfo = null;
         this.isChecking = false;
@@ -520,13 +410,11 @@ class InAppUpdateService {
 
   /**
    * Clear skip status (for testing or force check)
+   * Resets in-memory state
    */
   async clearSkipStatus(): Promise<void> {
-    try {
-      await AsyncStorage.removeItem(STORAGE_KEYS.UPDATE_SKIPPED_UNTIL);
-    } catch (error) {
-      console.error('[InAppUpdate] Error clearing skip status:', error);
-    }
+    this.skippedUntil = null;
+    this.lastChecked = null;
   }
 
   /**
@@ -534,24 +422,27 @@ class InAppUpdateService {
    */
   cleanup(): void {
     this.cleanupStatusListener();
-    
+
     // Clear debounce timer
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
-    
+
     // Clear pending promise
     this.pendingCheckPromise = null;
-    
+
     // Clear update info on cleanup
     this.updateInfo = null;
     this.isChecking = false;
-    
+
     // Clear caches
-    this.cachedStorageData = {};
     this.cachedNetworkState = null;
     this.networkStateCacheTime = 0;
+
+    // Clear session state
+    this.skippedUntil = null;
+    this.lastChecked = null;
   }
 }
 
