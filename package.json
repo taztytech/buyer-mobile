@@ -1,6 +1,6 @@
 {
   "name": "tazty",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -23,6 +23,10 @@
     "version:bump:major": "node scripts/bump-version.js major",
     "version:bump:android": "node scripts/bump-android-version.js patch",
     "version:bump:ios": "node scripts/bump-ios-version.js patch",
+    "version:increment": "node scripts/increment-version.js patch",
+    "version:increment:patch": "node scripts/increment-version.js patch",
+    "version:increment:minor": "node scripts/increment-version.js minor",
+    "version:increment:major": "node scripts/increment-version.js major",
     "verify:release": "node scripts/verify-release-readiness.js",
     "build:ios": "eas build --platform ios",
     "build:android": "eas build --platform android",

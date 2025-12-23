@@ -91,7 +91,7 @@ android {
     namespace 'in.tazty.buyer'
 
     // Load app version from android/version.properties (single source of truth for Android)
-    def versionPropsFile = rootProject.file('android/version.properties')
+   def versionPropsFile = rootProject.file('version.properties')
     def versionProps = new Properties()
     if (versionPropsFile.exists()) {
         versionProps.load(new FileInputStream(versionPropsFile))
