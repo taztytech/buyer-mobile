@@ -698,53 +698,182 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  // Fetch order details for tracking bottom sheet
-  const fetchTrackingOrderData = useCallback(async (orderId: string) => {
+  // Fetch order details for tracking bottom sheet from API
+  // This gets the FULL order data (not just status from FCM)
+  // This is called initially and also when FCM updates arrive to get latest full data
+  const fetchTrackingOrderData = useCallback(async (orderId: string, silent: boolean = false) => {
     if (!orderId) return;
 
     try {
-      setIsLoadingTrackingData(true);
+      if (!silent) {
+        setIsLoadingTrackingData(true);
+      }
+      
       const response = await ordersService.getOrderById(Number(orderId));
 
       if (response.success && response.data) {
-        setTrackingOrderData(response.data);
+        console.log('📦 Tracking: API response received with updated status data', {
+          orderId,
+          status: response.data.status,
+          updatedAt: response.data.updated_at,
+          hasFullData: true,
+          silent,
+        });
+        
+        // Always update trackingOrderData when API response arrives
+        // This ensures bottom sheet reloads with latest data
+        setTrackingOrderData((prevData: any) => {
+          // Check if API response has newer data than what we have
+          if (!prevData || 
+              response.data.updated_at !== prevData.updated_at ||
+              response.data.status !== prevData.status) {
+            console.log('✅ Tracking: API response has updated data - Reloading bottom sheet', {
+              orderId,
+              oldStatus: prevData?.status,
+              newStatus: response.data.status,
+              oldUpdatedAt: prevData?.updated_at,
+              newUpdatedAt: response.data.updated_at,
+              source: 'API',
+              willReload: true,
+            });
+            // Return new data - this triggers bottom sheet reload
+            return response.data;
+          }
+          
+          // Even if status hasn't changed, update with latest API data to ensure we have full data
+          console.log('📦 Tracking: API response received - Updating with latest full data', {
+            orderId,
+            status: response.data.status,
+            source: 'API',
+          });
+          return response.data;
+        });
       }
     } catch (err: any) {
       console.error('Failed to fetch tracking order data:', err);
     } finally {
-      setIsLoadingTrackingData(false);
+      if (!silent) {
+        setIsLoadingTrackingData(false);
+      }
     }
   }, []);
 
+  // Handle closing the tracking WebView modal and refresh orders
+  const handleCloseTrackingWebView = useCallback(() => {
+    setShowTrackingWebView(false);
+    setSelectedOrderIdForTracking(null);
+    setTrackingOrderData(null);
+    setSelectedTrackingUrl(null);
+    
+    // Refresh orders when navigating back to My Orders page
+    console.log('🔄 Tracking: Closing modal, refreshing orders...');
+    fetchOrders(1, true).catch((err) => {
+      console.error('Failed to refresh orders after closing tracking:', err);
+    });
+  }, []);
+
   // Subscribe to FCM updates for tracking order
+  // Get the order directly from state.byId - this will update when FCM notifications arrive
   const trackingContextOrder = selectedOrderIdForTracking ? state.byId[selectedOrderIdForTracking] : undefined;
   
-  // Listen to FCM updates for the tracking order
+  // Get status and updated_at as separate values for reliable change detection
+  const contextStatus = trackingContextOrder?.status;
+  const contextUpdatedAt = trackingContextOrder?.updated_at;
+  
+  // Create a serialized key from status and updated_at to detect changes
+  const contextStatusKey = `${contextStatus}-${contextUpdatedAt}`;
+  
+  // WATCH BOTH: FCM updates AND API response data for the bottom sheet
+  // 1. FCM LISTENER: Watches context order (state.byId) for real-time FCM updates
+  // 2. API RESPONSE WATCHER: The initial API response is stored in trackingOrderData
+  // When either FCM or API data changes, the UI automatically updates
+  
+  // FCM LISTENER + API WATCHER: Listen to FCM updates AND watch API response data
+  // When FCM status update arrives:
+  // 1. Immediately update UI with FCM status (fast, real-time) - triggers bottom sheet reload
+  // 2. Then fetch full order data from API (complete data with all fields)
+  // 3. When API response arrives, it updates trackingOrderData which triggers bottom sheet reload
+  // This ensures we have both real-time updates AND complete order information
   useEffect(() => {
-    if (!selectedOrderIdForTracking || !trackingContextOrder) return;
+    if (!selectedOrderIdForTracking) return;
 
-    // Update status directly from FCM context without API call
-    setTrackingOrderData((prevData: any) => {
-      // If no previous data, use context order directly
-      if (!prevData) {
-        return trackingContextOrder;
-      }
+    // If context order exists (from FCM), sync it to local state AND fetch latest API data
+    if (trackingContextOrder) {
+      setTrackingOrderData((prevData: any) => {
+        // If no previous data, use context order directly
+        if (!prevData) {
+          console.log('📦 Tracking: Initializing from FCM context', {
+            orderId: selectedOrderIdForTracking,
+            status: trackingContextOrder.status,
+          });
+          return { ...trackingContextOrder };
+        }
 
-      // Check if status has changed
-      if (prevData.status !== trackingContextOrder.status ||
-          prevData.updated_at !== trackingContextOrder.updated_at) {
-        // Update only from FCM context data, no API call
-        return {
-          ...prevData,
-          status: trackingContextOrder.status,
-          updated_at: trackingContextOrder.updated_at,
-          ...(trackingContextOrder.restaurant && { restaurant: trackingContextOrder.restaurant }),
-        };
-      }
+        // Check if status or updated_at has changed
+        const statusChanged = prevData.status !== contextStatus;
+        const updatedAtChanged = prevData.updated_at !== contextUpdatedAt;
+        
+        if (statusChanged || updatedAtChanged) {
+          console.log('✅ Tracking: FCM update detected - Updating UI and fetching latest API data', {
+            orderId: selectedOrderIdForTracking,
+            oldStatus: prevData.status,
+            newStatus: contextStatus,
+            oldUpdatedAt: prevData.updated_at,
+            newUpdatedAt: contextUpdatedAt,
+            source: 'FCM',
+          });
+          
+          // Step 1: Immediately update UI with FCM data (fast, real-time)
+          // This triggers bottom sheet reload with FCM status
+          const updatedData = {
+            ...prevData,
+            ...trackingContextOrder,
+            // Preserve order_number if it exists in prevData but not in context
+            order_number: trackingContextOrder.order_number || prevData.order_number,
+            // Preserve restaurant details if they exist in prevData but not in context
+            restaurant: trackingContextOrder.restaurant || prevData.restaurant,
+          };
+          
+          // Step 2: Fetch latest full order data from API (silent fetch - no loading indicator)
+          // When API response arrives, it will update trackingOrderData which triggers bottom sheet reload
+          fetchTrackingOrderData(selectedOrderIdForTracking, true).catch((err) => {
+            console.error('Failed to fetch latest API data after FCM update:', err);
+          });
+          
+          return updatedData;
+        }
 
-      return prevData;
+        // No change detected, return previous data
+        return prevData;
+      });
+    }
+  }, [selectedOrderIdForTracking, contextStatusKey, trackingContextOrder, fetchTrackingOrderData]);
+  
+  // API RESPONSE WATCHER: Watch for changes in API response data and reload bottom sheet
+  // This ensures whenever the API response updates (status/timeline), the bottom sheet reflects changes
+  useEffect(() => {
+    if (!selectedOrderIdForTracking || !trackingOrderData) return;
+
+    // Watch for changes in status or updated_at from API response
+    const apiStatus = trackingOrderData.status;
+    const apiUpdatedAt = trackingOrderData.updated_at;
+
+    console.log('🔄 Tracking: API response data watched - Bottom sheet will reload on changes', {
+      orderId: selectedOrderIdForTracking,
+      status: apiStatus,
+      updatedAt: apiUpdatedAt,
+      source: 'API',
     });
-  }, [selectedOrderIdForTracking, trackingContextOrder?.status, trackingContextOrder?.updated_at]);
+
+    // The bottom sheet will automatically re-render when trackingOrderData changes
+    // This useEffect ensures we're watching the API response data
+    // The UI uses displayOrder = trackingContextOrder || trackingOrderData
+    // So when trackingOrderData updates, the bottom sheet reloads with new data
+  }, [selectedOrderIdForTracking, trackingOrderData?.status, trackingOrderData?.updated_at]);
+  
+  // API RESPONSE WATCHER: Also watch the trackingOrderData itself for any changes
+  // This ensures we catch updates from the initial API response or any subsequent API calls
+  // The displayOrder will use the latest data from either FCM (trackingContextOrder) or API (trackingOrderData)
 
   // Timeline steps configuration
   const timelineSteps = [
@@ -1242,9 +1371,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => {
-          setShowTrackingWebView(false);
-          setSelectedOrderIdForTracking(null);
-          setTrackingOrderData(null);
+          handleCloseTrackingWebView();
         }}
       >
         <View style={styles.webViewModalContainer}>
@@ -1252,9 +1379,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             <View style={styles.webViewHeader}>
               <TouchableOpacity
                 onPress={() => {
-                  setShowTrackingWebView(false);
-                  setSelectedOrderIdForTracking(null);
-                  setTrackingOrderData(null);
+                  handleCloseTrackingWebView();
                 }}
                 style={styles.webViewBackButton}
               >
@@ -1297,52 +1422,66 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
               </View>
             ) : trackingOrderData ? (
               <>
-                <View style={styles.trackingStatusContainer}>
-                  {(() => {
-                    const statusConfig = mapOrderStatusToUI(trackingOrderData.status);
-                    return (
-                      <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
-                        <MaterialIcons 
-                          name={statusConfig.iconName as any} 
-                          size={24} 
-                          color={statusConfig.color} 
-                        />
-                        <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
-                          {statusConfig.label}
-                        </Text>
+                {(() => {
+                  // WATCHING BOTH:
+                  // 1. trackingContextOrder = FCM updates (real-time status from notifications)
+                  // 2. trackingOrderData = API response (full order data with updated status from API)
+                  // Priority: FCM (real-time) > API (full data)
+                  // Both have the updated status - FCM is faster, API has complete data
+                  const displayOrder = trackingContextOrder || trackingOrderData;
+                  const displayStatus = displayOrder?.status;
+                  
+                  return (
+                    <>
+                      <View style={styles.trackingStatusContainer}>
+                        {(() => {
+                          const statusConfig = mapOrderStatusToUI(displayStatus);
+                          return (
+                            <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
+                              <MaterialIcons 
+                                name={statusConfig.iconName as any} 
+                                size={24} 
+                                color={statusConfig.color} 
+                              />
+                              <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
+                                {statusConfig.label}
+                              </Text>
+                            </View>
+                          );
+                        })()}
+                        {displayOrder.order_number && (
+                          <Text style={styles.trackingOrderNumber}>
+                            Order #{displayOrder.order_number}
+                          </Text>
+                        )}
                       </View>
-                    );
-                  })()}
-                  {trackingOrderData.order_number && (
-                    <Text style={styles.trackingOrderNumber}>
-                      Order #{trackingOrderData.order_number}
-                    </Text>
-                  )}
-                </View>
-                <View style={styles.trackingDivider} />
-                {trackingOrderData.restaurant && (
-                  <View style={styles.trackingRestaurantInfo}>
-                    <Text style={styles.trackingRestaurantLabel}>Restaurant</Text>
-                    <Text style={styles.trackingRestaurantName}>
-                      {trackingOrderData.restaurant.name || 'Unknown Restaurant'}
-                    </Text>
-                  </View>
-                )}
-                
-                {/* Tracking Timeline */}
-                <View style={styles.trackingTimelineContainer}>
-                  <Text style={styles.trackingTimelineTitle}>Order Status</Text>
-                  {renderTrackingTimeline(trackingOrderData.status)}
-                </View>
-                
-                {trackingOrderData.updated_at && (
-                  <View style={styles.trackingUpdatedContainer}>
-                    <Text style={styles.trackingUpdatedLabel}>Last Updated</Text>
-                    <Text style={styles.trackingUpdatedTime}>
-                      {new Date(trackingOrderData.updated_at).toLocaleString()}
-                    </Text>
-                  </View>
-                )}
+                      <View style={styles.trackingDivider} />
+                      {displayOrder.restaurant && (
+                        <View style={styles.trackingRestaurantInfo}>
+                          <Text style={styles.trackingRestaurantLabel}>Restaurant</Text>
+                          <Text style={styles.trackingRestaurantName}>
+                            {displayOrder.restaurant.name || 'Unknown Restaurant'}
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {/* Tracking Timeline */}
+                      <View style={styles.trackingTimelineContainer}>
+                        <Text style={styles.trackingTimelineTitle}>Order Status</Text>
+                        {renderTrackingTimeline(displayStatus)}
+                      </View>
+                      
+                      {displayOrder.updated_at && (
+                        <View style={styles.trackingUpdatedContainer}>
+                          <Text style={styles.trackingUpdatedLabel}>Last Updated</Text>
+                          <Text style={styles.trackingUpdatedTime}>
+                            {new Date(displayOrder.updated_at).toLocaleString()}
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             ) : null}
           </View>
