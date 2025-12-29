@@ -746,6 +746,116 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     });
   }, [selectedOrderIdForTracking, trackingContextOrder?.status, trackingContextOrder?.updated_at]);
 
+  // Timeline steps configuration
+  const timelineSteps = [
+    { id: 'order-placed', label: 'Order Placed', status: 'confirmed' },
+    { id: 'rider-assigned', label: 'Rider Assigned', status: 'agent-assigned' },
+    { id: 'rider-accepted', label: 'Rider Accepted', status: 'agent-assigned' },
+    { id: 'order-picked-up', label: 'Order Picked Up', status: 'picked' },
+    { id: 'in-transit', label: 'In Transit', status: 'out-for-delivery' },
+    { id: 'delivered', label: 'Delivered', status: 'delivered' },
+  ];
+
+  // Map backend status to the highest completed timeline step index
+  const getCurrentStepIndex = (status: string | null | undefined): number => {
+    if (!status) return 0;
+
+    const normalizedStatus = status.toLowerCase().trim();
+    
+    switch (normalizedStatus) {
+      case 'confirmed':
+        return 0; // Order Placed
+      case 'agent-assigned':
+      case 'agent_assigned':
+        return 2; // Rider Accepted (both assigned and accepted are at step 2)
+      case 'picked':
+        return 3; // Order Picked Up
+      case 'out-for-delivery':
+      case 'out_for_delivery':
+      case 'on-the-way':
+      case 'on_the_way':
+        return 4; // In Transit
+      case 'delivered':
+      case 'completed':
+        return 5; // Delivered
+      default:
+        return 0;
+    }
+  };
+
+  // Render tracking timeline
+  const renderTrackingTimeline = (currentStatus: string | null | undefined) => {
+    const currentStepIndex = getCurrentStepIndex(currentStatus);
+    const isDelivered = currentStatus?.toLowerCase().trim() === 'delivered' || 
+                        currentStatus?.toLowerCase().trim() === 'completed';
+    const normalizedStatus = currentStatus?.toLowerCase().trim();
+    const isAgentAssigned = normalizedStatus === 'agent-assigned' || normalizedStatus === 'agent_assigned';
+
+    return (
+      <View style={styles.timelineWrapper}>
+        {timelineSteps.map((step, index) => {
+          // Special handling: When status is agent-assigned, both "Rider Assigned" (index 1) and "Rider Accepted" (index 2) are completed
+          let isCompleted: boolean;
+          let isCurrent: boolean;
+          let isUpcoming: boolean;
+
+          if (isAgentAssigned && (index === 1 || index === 2)) {
+            // Both rider assigned and accepted are completed when status is agent-assigned
+            isCompleted = true;
+            isCurrent = false;
+            isUpcoming = false;
+          } else {
+            // Normal logic for other steps
+            isCompleted = index <= currentStepIndex;
+            isCurrent = index === currentStepIndex && !isDelivered && !isAgentAssigned;
+            isUpcoming = index > currentStepIndex;
+          }
+
+          return (
+            <View key={step.id} style={styles.timelineStepContainer}>
+              <View style={styles.timelineStepContent}>
+                {/* Icon */}
+                <View style={[
+                  styles.timelineIconContainer,
+                  isCompleted && styles.timelineIconCompleted,
+                  isCurrent && styles.timelineIconCurrent,
+                  isUpcoming && styles.timelineIconUpcoming,
+                ]}>
+                  {isCompleted ? (
+                    <MaterialIcons name="check" size={16} color="#FFFFFF" />
+                  ) : isCurrent ? (
+                    <ActivityIndicator size="small" color="#00B14F" />
+                  ) : (
+                    <MaterialIcons name="radio-button-unchecked" size={16} color="#D1D5DB" />
+                  )}
+                </View>
+                
+                {/* Label */}
+                <Text style={[
+                  styles.timelineLabel,
+                  isCompleted && styles.timelineLabelCompleted,
+                  isCurrent && styles.timelineLabelCurrent,
+                  isUpcoming && styles.timelineLabelUpcoming,
+                ]}>
+                  {step.label}
+                </Text>
+              </View>
+              
+              {/* Connector line (except for last item) */}
+              {index < timelineSteps.length - 1 && (
+                <View style={[
+                  styles.timelineConnector,
+                  isCompleted && styles.timelineConnectorCompleted,
+                  !isCompleted && styles.timelineConnectorUpcoming,
+                ]} />
+              )}
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   const handleCallSupportFromCancelled = async () => {
     // Get support number from cache first, only call API if not found
     const supportDetails = await authService.getSupportDetails(false);
@@ -1218,6 +1328,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                     </Text>
                   </View>
                 )}
+                
+                {/* Tracking Timeline */}
+                <View style={styles.trackingTimelineContainer}>
+                  <Text style={styles.trackingTimelineTitle}>Order Status</Text>
+                  {renderTrackingTimeline(trackingOrderData.status)}
+                </View>
+                
                 {trackingOrderData.updated_at && (
                   <View style={styles.trackingUpdatedContainer}>
                     <Text style={styles.trackingUpdatedLabel}>Last Updated</Text>
@@ -1723,5 +1840,83 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins',
     fontSize: 14,
     color: '#001E1F',
+  },
+  trackingTimelineContainer: {
+    marginTop: 20,
+    marginBottom: 16,
+  },
+  trackingTimelineTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    color: '#001E1F',
+    marginBottom: 16,
+  },
+  timelineWrapper: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  timelineStepContainer: {
+    flex: 1,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  timelineStepContent: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  timelineIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    borderWidth: 2,
+  },
+  timelineIconCompleted: {
+    backgroundColor: '#00B14F',
+    borderColor: '#00B14F',
+  },
+  timelineIconCurrent: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#00B14F',
+  },
+  timelineIconUpcoming: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#D1D5DB',
+  },
+  timelineLabel: {
+    fontFamily: 'Poppins',
+    fontSize: 10,
+    textAlign: 'center',
+    lineHeight: 14,
+    maxWidth: 60,
+  },
+  timelineLabelCompleted: {
+    color: '#00B14F',
+    fontFamily: 'Poppins_600SemiBold',
+  },
+  timelineLabelCurrent: {
+    color: '#00B14F',
+    fontFamily: 'Poppins_600SemiBold',
+  },
+  timelineLabelUpcoming: {
+    color: '#9CA3AF',
+  },
+  timelineConnector: {
+    position: 'absolute',
+    top: 16,
+    left: '50%',
+    width: '100%',
+    height: 2,
+    zIndex: -1,
+  },
+  timelineConnectorCompleted: {
+    backgroundColor: '#00B14F',
+  },
+  timelineConnectorUpcoming: {
+    backgroundColor: '#E5E7EB',
   },
 });
