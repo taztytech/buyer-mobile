@@ -13,6 +13,7 @@ import {
   NativeScrollEvent,
   Modal,
   RefreshControl,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -22,6 +23,8 @@ import { Shimmer } from '@/components/Shimmer';
 import { useOrders } from '@/context/OrdersContext';
 import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
 import { authService } from '@/services/auth.service';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Module-level state to persist across component remounts (for scroll position and pagination)
 let persistedOrders: OrderListItem[] = [];
@@ -87,7 +90,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   highlightOrderId,
 }) => {
   // Use Orders Context for global state
-  const { dispatch, getOrdersList } = useOrders();
+  const { dispatch, getOrdersList, state } = useOrders();
   
   // Get orders from context (live updates from FCM)
   const contextOrders = getOrdersList();
@@ -674,6 +677,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   const [showTrackingWebView, setShowTrackingWebView] = useState(false);
   const [selectedTrackingUrl, setSelectedTrackingUrl] = useState<string | null>(null);
+  const [selectedOrderIdForTracking, setSelectedOrderIdForTracking] = useState<string | null>(null);
+  const [trackingOrderData, setTrackingOrderData] = useState<any>(null);
+  const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
 
   const handleTrackOrder = (orderId: string, order?: OrderListItem) => {
     // Check if order has tracking_url
@@ -682,12 +688,63 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     if (trackingUrl && trackingUrl !== null) {
       // Open WebView with tracking URL
       setSelectedTrackingUrl(trackingUrl);
+      setSelectedOrderIdForTracking(orderId);
       setShowTrackingWebView(true);
+      // Fetch order details for bottom sheet
+      fetchTrackingOrderData(orderId);
     } else if (onTrackOrder) {
       // Fallback to parent handler if no tracking URL
       onTrackOrder(orderId);
     }
   };
+
+  // Fetch order details for tracking bottom sheet
+  const fetchTrackingOrderData = useCallback(async (orderId: string) => {
+    if (!orderId) return;
+
+    try {
+      setIsLoadingTrackingData(true);
+      const response = await ordersService.getOrderById(Number(orderId));
+
+      if (response.success && response.data) {
+        setTrackingOrderData(response.data);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch tracking order data:', err);
+    } finally {
+      setIsLoadingTrackingData(false);
+    }
+  }, []);
+
+  // Subscribe to FCM updates for tracking order
+  const trackingContextOrder = selectedOrderIdForTracking ? state.byId[selectedOrderIdForTracking] : undefined;
+  
+  // Listen to FCM updates for the tracking order
+  useEffect(() => {
+    if (!selectedOrderIdForTracking || !trackingContextOrder) return;
+
+    // Update status directly from FCM context without API call
+    setTrackingOrderData((prevData: any) => {
+      // If no previous data, use context order directly
+      if (!prevData) {
+        return trackingContextOrder;
+      }
+
+      // Check if status has changed
+      if (prevData.status !== trackingContextOrder.status ||
+          prevData.updated_at !== trackingContextOrder.updated_at) {
+        // Update only from FCM context data, no API call
+        return {
+          ...prevData,
+          status: trackingContextOrder.status,
+          updated_at: trackingContextOrder.updated_at,
+          ...(trackingContextOrder.restaurant && { restaurant: trackingContextOrder.restaurant }),
+        };
+      }
+
+      return prevData;
+    });
+  }, [selectedOrderIdForTracking, trackingContextOrder?.status, trackingContextOrder?.updated_at]);
 
   const handleCallSupportFromCancelled = async () => {
     // Get support number from cache first, only call API if not found
@@ -1074,43 +1131,105 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         visible={showTrackingWebView}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowTrackingWebView(false)}
+        onRequestClose={() => {
+          setShowTrackingWebView(false);
+          setSelectedOrderIdForTracking(null);
+          setTrackingOrderData(null);
+        }}
       >
-        <SafeAreaView style={styles.webViewContainer} edges={['top']}>
-          <View style={styles.webViewHeader}>
-            <TouchableOpacity
-              onPress={() => setShowTrackingWebView(false)}
-              style={styles.webViewBackButton}
-            >
-              <MaterialIcons name="close" size={24} color="#001E1F" />
-            </TouchableOpacity>
-            <Text style={styles.webViewHeaderTitle}>Track Order</Text>
-            <View style={styles.webViewBackButton} />
-          </View>
-          {selectedTrackingUrl && (
-            <WebView
-              source={{ uri: selectedTrackingUrl }}
-              style={styles.webView}
-              startInLoadingState={true}
-              renderLoading={() => (
-                <View style={styles.webViewLoadingContainer}>
-                  <ActivityIndicator size="large" color="#00B14F" />
+        <View style={styles.webViewModalContainer}>
+          <SafeAreaView style={styles.webViewContainer} edges={['top']}>
+            <View style={styles.webViewHeader}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowTrackingWebView(false);
+                  setSelectedOrderIdForTracking(null);
+                  setTrackingOrderData(null);
+                }}
+                style={styles.webViewBackButton}
+              >
+                <MaterialIcons name="close" size={24} color="#001E1F" />
+              </TouchableOpacity>
+              <Text style={styles.webViewHeaderTitle}>Track Order</Text>
+              <View style={styles.webViewBackButton} />
+            </View>
+            {selectedTrackingUrl && (
+              <WebView
+                source={{ uri: selectedTrackingUrl }}
+                style={styles.webView}
+                startInLoadingState={true}
+                renderLoading={() => (
+                  <View style={styles.webViewLoadingContainer}>
+                    <ActivityIndicator size="large" color="#00B14F" />
+                  </View>
+                )}
+                onError={(syntheticEvent) => {
+                  const { nativeEvent } = syntheticEvent;
+                  console.error('WebView error:', nativeEvent);
+                }}
+                onHttpError={(syntheticEvent) => {
+                  const { nativeEvent } = syntheticEvent;
+                  console.error('WebView HTTP error:', nativeEvent.statusCode, nativeEvent.description);
+                }}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                mixedContentMode="always"
+              />
+            )}
+          </SafeAreaView>
+          
+          {/* Bottom Sheet Overlay */}
+          <View style={styles.trackingBottomSheet}>
+            {isLoadingTrackingData ? (
+              <View style={styles.trackingLoadingContainer}>
+                <ActivityIndicator size="large" color="#00B14F" />
+                <Text style={styles.trackingLoadingText}>Loading order status...</Text>
+              </View>
+            ) : trackingOrderData ? (
+              <>
+                <View style={styles.trackingStatusContainer}>
+                  {(() => {
+                    const statusConfig = mapOrderStatusToUI(trackingOrderData.status);
+                    return (
+                      <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
+                        <MaterialIcons 
+                          name={statusConfig.iconName as any} 
+                          size={24} 
+                          color={statusConfig.color} 
+                        />
+                        <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
+                          {statusConfig.label}
+                        </Text>
+                      </View>
+                    );
+                  })()}
+                  {trackingOrderData.order_number && (
+                    <Text style={styles.trackingOrderNumber}>
+                      Order #{trackingOrderData.order_number}
+                    </Text>
+                  )}
                 </View>
-              )}
-              onError={(syntheticEvent) => {
-                const { nativeEvent } = syntheticEvent;
-                console.error('WebView error:', nativeEvent);
-              }}
-              onHttpError={(syntheticEvent) => {
-                const { nativeEvent } = syntheticEvent;
-                console.error('WebView HTTP error:', nativeEvent.statusCode, nativeEvent.description);
-              }}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              mixedContentMode="always"
-            />
-          )}
-        </SafeAreaView>
+                <View style={styles.trackingDivider} />
+                {trackingOrderData.restaurant && (
+                  <View style={styles.trackingRestaurantInfo}>
+                    <Text style={styles.trackingRestaurantLabel}>Restaurant</Text>
+                    <Text style={styles.trackingRestaurantName}>
+                      {trackingOrderData.restaurant.name || 'Unknown Restaurant'}
+                    </Text>
+                  </View>
+                )}
+                {trackingOrderData.updated_at && (
+                  <View style={styles.trackingUpdatedContainer}>
+                    <Text style={styles.trackingUpdatedLabel}>Last Updated</Text>
+                    <Text style={styles.trackingUpdatedTime}>
+                      {new Date(trackingOrderData.updated_at).toLocaleString()}
+                    </Text>
+                  </View>
+                )}
+              </>
+            ) : null}
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -1506,5 +1625,103 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
+  },
+  webViewModalContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  trackingBottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: SCREEN_HEIGHT * 0.5,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 20,
+    paddingTop: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  trackingLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  trackingLoadingText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginTop: 8,
+  },
+  trackingStatusContainer: {
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  trackingStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 100,
+    gap: 8,
+  },
+  trackingStatusText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  trackingOrderNumber: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginTop: 4,
+  },
+  trackingDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    marginVertical: 20,
+  },
+  trackingRestaurantInfo: {
+    marginBottom: 16,
+  },
+  trackingRestaurantLabel: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  trackingRestaurantName: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    color: '#001E1F',
+    lineHeight: 24,
+  },
+  trackingUpdatedContainer: {
+    marginTop: 'auto',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  trackingUpdatedLabel: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  trackingUpdatedTime: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#001E1F',
   },
 });
