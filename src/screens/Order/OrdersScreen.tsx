@@ -129,6 +129,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // Merge context orders (with FCM updates) with local orders from API
   // Priority: Context orders (have latest FCM updates) > Local orders
   // Fallback: If context is empty but we have persisted localOrders, use localOrders
+  // IMPORTANT: Include state.byId in dependencies to ensure FCM updates trigger re-render
   const orders = React.useMemo(() => {
     // If context is empty but we have localOrders, use localOrders directly
     // This handles the case where context was cleared but localOrders persisted
@@ -139,12 +140,32 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     const contextOrderMap = new Map(contextOrders.map(o => [o.id.toString(), o]));
     const merged = [...localOrders];
     
-    // Update local orders with context updates
+    // Update local orders with context updates (FCM updates)
     for (let i = 0; i < merged.length; i++) {
-      const contextOrder = contextOrderMap.get(merged[i].id.toString());
+      const orderId = merged[i].id.toString();
+      const contextOrder = contextOrderMap.get(orderId);
       if (contextOrder) {
+        // Check if status changed via FCM
+        if (merged[i].status !== contextOrder.status) {
+          console.log('✅ OrdersScreen: FCM status update detected', {
+            orderId,
+            oldStatus: merged[i].status,
+            newStatus: contextOrder.status,
+          });
+        }
         merged[i] = contextOrder; // Use context order (has latest FCM updates)
-        contextOrderMap.delete(merged[i].id.toString()); // Remove from map
+        contextOrderMap.delete(orderId); // Remove from map
+      } else {
+        // Also check state.byId directly for any updates we might have missed
+        const directUpdate = state.byId[orderId];
+        if (directUpdate && directUpdate.status !== merged[i].status) {
+          console.log('✅ OrdersScreen: Direct FCM update from state.byId', {
+            orderId,
+            oldStatus: merged[i].status,
+            newStatus: directUpdate.status,
+          });
+          merged[i] = directUpdate;
+        }
       }
     }
     
@@ -154,7 +175,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     });
     
     return merged;
-  }, [contextOrders, localOrders]);
+  }, [contextOrders, localOrders, state.byId]);
 
   // Sync localOrders to context store after state updates
   useEffect(() => {
@@ -783,6 +804,22 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // Create a serialized key from status and updated_at to detect changes
   const contextStatusKey = `${contextStatus}-${contextUpdatedAt}`;
   
+  // LOG: Track order status watching - log current status values
+  useEffect(() => {
+    if (!selectedOrderIdForTracking) return;
+    
+    console.log('📊 TRACK ORDER STATUS WATCH:', {
+      orderId: selectedOrderIdForTracking,
+      fcmStatus: contextStatus || 'N/A',
+      fcmUpdatedAt: contextUpdatedAt || 'N/A',
+      apiStatus: trackingOrderData?.status || 'N/A',
+      apiUpdatedAt: trackingOrderData?.updated_at || 'N/A',
+      displayStatus: (trackingContextOrder || trackingOrderData)?.status || 'N/A',
+      hasFCMData: !!trackingContextOrder,
+      hasAPIData: !!trackingOrderData,
+    });
+  }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, trackingOrderData?.status, trackingOrderData?.updated_at]);
+  
   // WATCH BOTH: FCM updates AND API response data for the bottom sheet
   // 1. FCM LISTENER: Watches context order (state.byId) for real-time FCM updates
   // 2. API RESPONSE WATCHER: The initial API response is stored in trackingOrderData
@@ -794,44 +831,63 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // 2. Then fetch full order data from API (complete data with all fields)
   // 3. When API response arrives, it updates trackingOrderData which triggers bottom sheet reload
   // This ensures we have both real-time updates AND complete order information
+  // CRITICAL: Watch state.byId[orderId] status and updated_at directly to catch FCM updates immediately
+  // Get the latest order from state.byId inside useEffect to ensure we always have the latest
   useEffect(() => {
     if (!selectedOrderIdForTracking) return;
 
+    // Get the latest order from state.byId (this updates when FCM arrives)
+    const latestContextOrder = state.byId[selectedOrderIdForTracking];
+    
     // If context order exists (from FCM), sync it to local state AND fetch latest API data
-    if (trackingContextOrder) {
+    if (latestContextOrder) {
       setTrackingOrderData((prevData: any) => {
         // If no previous data, use context order directly
         if (!prevData) {
           console.log('📦 Tracking: Initializing from FCM context', {
             orderId: selectedOrderIdForTracking,
-            status: trackingContextOrder.status,
+            status: latestContextOrder.status,
           });
-          return { ...trackingContextOrder };
+          return { ...latestContextOrder };
         }
 
         // Check if status or updated_at has changed
-        const statusChanged = prevData.status !== contextStatus;
-        const updatedAtChanged = prevData.updated_at !== contextUpdatedAt;
+        // IMPORTANT: This works for ANY status change (confirmed, packed, picked, out-for-delivery, delivered, cancelled, etc.)
+        // No status is restricted - any status update from FCM will automatically update the UI
+        const statusChanged = prevData.status !== latestContextOrder.status;
+        const updatedAtChanged = prevData.updated_at !== latestContextOrder.updated_at;
         
         if (statusChanged || updatedAtChanged) {
           console.log('✅ Tracking: FCM update detected - Updating UI and fetching latest API data', {
             orderId: selectedOrderIdForTracking,
             oldStatus: prevData.status,
-            newStatus: contextStatus,
+            newStatus: latestContextOrder.status,
             oldUpdatedAt: prevData.updated_at,
-            newUpdatedAt: contextUpdatedAt,
+            newUpdatedAt: latestContextOrder.updated_at,
             source: 'FCM',
+            note: 'This handles ANY status update automatically',
+          });
+          
+          // LOG: Status change detected - works for ALL status types
+          console.log('📊 TRACK ORDER STATUS CHANGE:', {
+            orderId: selectedOrderIdForTracking,
+            previousStatus: prevData.status || 'N/A',
+            newStatus: latestContextOrder.status || 'N/A',
+            statusChanged: statusChanged,
+            updatedAtChanged: updatedAtChanged,
+            statusType: 'ANY_STATUS_UPDATE', // Confirms we handle all status types
+            timestamp: new Date().toISOString(),
           });
           
           // Step 1: Immediately update UI with FCM data (fast, real-time)
           // This triggers bottom sheet reload with FCM status
           const updatedData = {
             ...prevData,
-            ...trackingContextOrder,
+            ...latestContextOrder,
             // Preserve order_number if it exists in prevData but not in context
-            order_number: trackingContextOrder.order_number || prevData.order_number,
+            order_number: latestContextOrder.order_number || prevData.order_number,
             // Preserve restaurant details if they exist in prevData but not in context
-            restaurant: trackingContextOrder.restaurant || prevData.restaurant,
+            restaurant: latestContextOrder.restaurant || prevData.restaurant,
           };
           
           // Step 2: Fetch latest full order data from API (silent fetch - no loading indicator)
@@ -847,7 +903,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         return prevData;
       });
     }
-  }, [selectedOrderIdForTracking, contextStatusKey, trackingContextOrder, fetchTrackingOrderData]);
+  }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, state.byId, fetchTrackingOrderData]);
   
   // API RESPONSE WATCHER: Watch for changes in API response data and reload bottom sheet
   // This ensures whenever the API response updates (status/timeline), the bottom sheet reflects changes
@@ -863,6 +919,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       status: apiStatus,
       updatedAt: apiUpdatedAt,
       source: 'API',
+    });
+    
+    // LOG: API status update
+    console.log('📊 TRACK ORDER API STATUS UPDATE:', {
+      orderId: selectedOrderIdForTracking,
+      apiStatus: apiStatus || 'N/A',
+      apiUpdatedAt: apiUpdatedAt || 'N/A',
+      fcmStatus: contextStatus || 'N/A',
+      timestamp: new Date().toISOString(),
     });
 
     // The bottom sheet will automatically re-render when trackingOrderData changes
@@ -1430,6 +1495,16 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   // Both have the updated status - FCM is faster, API has complete data
                   const displayOrder = trackingContextOrder || trackingOrderData;
                   const displayStatus = displayOrder?.status;
+                  
+                  // LOG: Current status being displayed in bottom sheet
+                  console.log('📊 TRACK ORDER BOTTOM SHEET - Current Display Status:', {
+                    orderId: selectedOrderIdForTracking,
+                    displayStatus: displayStatus || 'N/A',
+                    fcmStatus: trackingContextOrder?.status || 'N/A',
+                    apiStatus: trackingOrderData?.status || 'N/A',
+                    statusSource: trackingContextOrder ? 'FCM' : 'API',
+                    timestamp: new Date().toISOString(),
+                  });
                   
                   return (
                     <>

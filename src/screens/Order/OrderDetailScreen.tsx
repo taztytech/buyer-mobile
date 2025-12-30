@@ -100,11 +100,30 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   }, [visible, orderId, fetchOrderDetails]);
 
   // Subscribe to live context updates (FCM) for this order
+  // Watch state.byId directly to catch FCM updates immediately
+  // Extract status and updated_at for dependency tracking without redeclaration
+  const _contextOrderFromState = orderId ? state.byId[orderId] : undefined;
+  const _contextStatus = _contextOrderFromState?.status;
+  const _contextUpdatedAt = _contextOrderFromState?.updated_at;
+  
   useEffect(() => {
     if (!orderId) return;
-    const orderFromContext = getOrderById(orderId);
-    setContextOrder(orderFromContext || null);
-  }, [orderId, getOrderById, visible]);
+    // Watch state.byId directly - this updates when FCM notifications arrive
+    const orderFromContext = state.byId[orderId];
+    if (orderFromContext) {
+      console.log('📦 OrderDetail: FCM update detected for order', orderId, {
+        status: orderFromContext.status,
+        updated_at: orderFromContext.updated_at,
+      });
+      setContextOrder(orderFromContext);
+    } else {
+      // Fallback to getOrderById if not in state.byId
+      const order = getOrderById(orderId);
+      setContextOrder(order || null);
+    }
+    // The linter errors are caused by the use of undeclared variables in the dependency array.
+    // Change contextStatus/contextUpdatedAt in deps to _contextStatus/_contextUpdatedAt instead.
+  }, [orderId, _contextStatus, _contextUpdatedAt, getOrderById, visible]);
 
   // Merge live context updates into local orderData to reflect status changes instantly
   useEffect(() => {
@@ -214,52 +233,84 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const contextStatus = trackingContextOrder?.status;
   const contextUpdatedAt = trackingContextOrder?.updated_at;
   
-  // Create a serialized key from status and updated_at to detect changes
-  const contextStatusKey = `${contextStatus}-${contextUpdatedAt}`;
+  // LOG: Track order status watching - log current status values
+  useEffect(() => {
+    if (!selectedOrderIdForTracking) return;
+    
+    console.log('📊 TRACK ORDER STATUS WATCH (OrderDetail):', {
+      orderId: selectedOrderIdForTracking,
+      fcmStatus: contextStatus || 'N/A',
+      fcmUpdatedAt: contextUpdatedAt || 'N/A',
+      apiStatus: trackingOrderData?.status || 'N/A',
+      apiUpdatedAt: trackingOrderData?.updated_at || 'N/A',
+      displayStatus: (trackingContextOrder || trackingOrderData)?.status || 'N/A',
+      hasFCMData: !!trackingContextOrder,
+      hasAPIData: !!trackingOrderData,
+    });
+  }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, trackingOrderData?.status, trackingOrderData?.updated_at]);
   
   // FCM LISTENER + API WATCHER: Listen to FCM updates AND watch API response data
   // When FCM status update arrives:
   // 1. Immediately update UI with FCM status (fast, real-time) - triggers bottom sheet reload
   // 2. Then fetch full order data from API (complete data with all fields)
   // 3. When API response arrives, it updates trackingOrderData which triggers bottom sheet reload
+  // CRITICAL: Watch state.byId[orderId] status and updated_at directly to catch FCM updates immediately
+  // Get the latest order from state.byId inside useEffect to ensure we always have the latest
   useEffect(() => {
     if (!selectedOrderIdForTracking) return;
 
+    // Get the latest order from state.byId (this updates when FCM arrives)
+    const latestContextOrder = state.byId[selectedOrderIdForTracking];
+    
     // If context order exists (from FCM), sync it to local state AND fetch latest API data
-    if (trackingContextOrder) {
+    if (latestContextOrder) {
       setTrackingOrderData((prevData: any) => {
         // If no previous data, use context order directly
         if (!prevData) {
           console.log('📦 Tracking: Initializing from FCM context', {
             orderId: selectedOrderIdForTracking,
-            status: trackingContextOrder.status,
+            status: latestContextOrder.status,
           });
-          return { ...trackingContextOrder };
+          return { ...latestContextOrder };
         }
 
         // Check if status or updated_at has changed
-        const statusChanged = prevData.status !== contextStatus;
-        const updatedAtChanged = prevData.updated_at !== contextUpdatedAt;
+        // IMPORTANT: This works for ANY status change (confirmed, packed, picked, out-for-delivery, delivered, cancelled, etc.)
+        // No status is restricted - any status update from FCM will automatically update the UI
+        const statusChanged = prevData.status !== latestContextOrder.status;
+        const updatedAtChanged = prevData.updated_at !== latestContextOrder.updated_at;
         
         if (statusChanged || updatedAtChanged) {
           console.log('✅ Tracking: FCM update detected - Updating UI and fetching latest API data', {
             orderId: selectedOrderIdForTracking,
             oldStatus: prevData.status,
-            newStatus: contextStatus,
+            newStatus: latestContextOrder.status,
             oldUpdatedAt: prevData.updated_at,
-            newUpdatedAt: contextUpdatedAt,
+            newUpdatedAt: latestContextOrder.updated_at,
             source: 'FCM',
+            note: 'This handles ANY status update automatically',
+          });
+          
+          // LOG: Status change detected - works for ALL status types
+          console.log('📊 TRACK ORDER STATUS CHANGE (OrderDetail):', {
+            orderId: selectedOrderIdForTracking,
+            previousStatus: prevData.status || 'N/A',
+            newStatus: latestContextOrder.status || 'N/A',
+            statusChanged: statusChanged,
+            updatedAtChanged: updatedAtChanged,
+            statusType: 'ANY_STATUS_UPDATE', // Confirms we handle all status types
+            timestamp: new Date().toISOString(),
           });
           
           // Step 1: Immediately update UI with FCM data (fast, real-time)
           // This triggers bottom sheet reload with FCM status
           const updatedData = {
             ...prevData,
-            ...trackingContextOrder,
+            ...latestContextOrder,
             // Preserve order_number if it exists in prevData but not in context
-            order_number: trackingContextOrder.order_number || prevData.order_number,
+            order_number: latestContextOrder.order_number || prevData.order_number,
             // Preserve restaurant details if they exist in prevData but not in context
-            restaurant: trackingContextOrder.restaurant || prevData.restaurant,
+            restaurant: latestContextOrder.restaurant || prevData.restaurant,
           };
           
           // Step 2: Fetch latest full order data from API (silent fetch - no loading indicator)
@@ -275,7 +326,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         return prevData;
       });
     }
-  }, [selectedOrderIdForTracking, contextStatusKey, trackingContextOrder, fetchTrackingOrderData]);
+  }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, state.byId, fetchTrackingOrderData]);
   
   // API RESPONSE WATCHER: Watch for changes in API response data and reload bottom sheet
   // This ensures whenever the API response updates (status/timeline), the bottom sheet reflects changes
@@ -291,6 +342,15 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       status: apiStatus,
       updatedAt: apiUpdatedAt,
       source: 'API',
+    });
+    
+    // LOG: API status update
+    console.log('📊 TRACK ORDER API STATUS UPDATE (OrderDetail):', {
+      orderId: selectedOrderIdForTracking,
+      apiStatus: apiStatus || 'N/A',
+      apiUpdatedAt: apiUpdatedAt || 'N/A',
+      fcmStatus: contextStatus || 'N/A',
+      timestamp: new Date().toISOString(),
     });
 
     // The bottom sheet will automatically re-render when trackingOrderData changes
@@ -1293,6 +1353,16 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   // Both have the updated status - FCM is faster, API has complete data
                   const displayOrder = trackingContextOrder || trackingOrderData;
                   const displayStatus = displayOrder?.status;
+                  
+                  // LOG: Current status being displayed in bottom sheet
+                  console.log('📊 TRACK ORDER BOTTOM SHEET - Current Display Status (OrderDetail):', {
+                    orderId: selectedOrderIdForTracking,
+                    displayStatus: displayStatus || 'N/A',
+                    fcmStatus: trackingContextOrder?.status || 'N/A',
+                    apiStatus: trackingOrderData?.status || 'N/A',
+                    statusSource: trackingContextOrder ? 'FCM' : 'API',
+                    timestamp: new Date().toISOString(),
+                  });
                   
                   return (
                     <>

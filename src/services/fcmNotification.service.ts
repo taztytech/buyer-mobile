@@ -412,8 +412,14 @@ class FCMNotificationService {
 
       // Handle order notification updates if dispatch is available
       if (this.ordersDispatch && remoteMessage.data?.type === 'order') {
+        console.log('✅ FCM: Processing order notification update - Status will be updated in all screens');
         handleOrderNotification(remoteMessage, this.ordersDispatch, false).catch((error) => {
           console.warn('⚠️  FCM: Failed to handle order notification:', error);
+        });
+      } else {
+        console.log('⚠️  FCM: Not processing as order notification', {
+          hasDispatch: !!this.ordersDispatch,
+          notificationType: remoteMessage.data?.type,
         });
       }
 
@@ -433,12 +439,13 @@ class FCMNotificationService {
         notificationId: remoteMessage.messageId,
       };
 
-      // Handle order notification updates if dispatch is available
-      if (this.ordersDispatch && remoteMessage.data?.type === 'order') {
-        handleOrderNotification(remoteMessage, this.ordersDispatch, true).catch((error) => {
-          console.warn('⚠️  FCM: Failed to handle order notification:', error);
-        });
-      }
+        // Handle order notification updates if dispatch is available
+        if (this.ordersDispatch && remoteMessage.data?.type === 'order') {
+          console.log('✅ FCM: Processing order notification (initial) - Status will be updated');
+          handleOrderNotification(remoteMessage, this.ordersDispatch, true).catch((error) => {
+            console.warn('⚠️  FCM: Failed to handle order notification:', error);
+          });
+        }
 
       this.onNotificationOpened(payload);
     });
@@ -489,6 +496,7 @@ class FCMNotificationService {
 
         // Handle order notification updates if dispatch is available
         if (this.ordersDispatch && remoteMessage.data?.type === 'order') {
+          console.log('✅ FCM: Processing order notification (opened) - Status will be updated');
           handleOrderNotification(remoteMessage, this.ordersDispatch, true).catch((error) => {
             console.warn('⚠️  FCM: Failed to handle order notification:', error);
           });
