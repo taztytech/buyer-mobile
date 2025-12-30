@@ -30,6 +30,7 @@ interface OrderDetailScreenProps {
   onReorder?: () => void;
   onTrackOrder?: () => void;
   onDownloadInvoice?: () => void;
+  onHelp?: () => void;
 }
 
 export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
@@ -41,6 +42,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   onReorder,
   onTrackOrder,
   onDownloadInvoice,
+  onHelp,
 }) => {
   const { getOrderById } = useOrders();
   const [contextOrder, setContextOrder] = useState<any>(null);
@@ -429,14 +431,26 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           <MaterialIcons name="chevron-left" size={24} color="#000000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Order Details</Text>
-        <TouchableOpacity
-          style={styles.chatButton}
-          onPress={handleCallSupport}
-          activeOpacity={0.7}
-        >
-          <MaterialIcons name="phone" size={20} color="#FFFFFF" />
-          <Text style={styles.chatButtonText}>Support</Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          {onHelp && (
+            <TouchableOpacity
+              style={styles.helpButton}
+              onPress={onHelp}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="help-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.helpButtonText}>Help</Text>
+            </TouchableOpacity>
+          )}
+          {/* <TouchableOpacity
+            style={styles.chatButton}
+            onPress={handleCallSupport}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="phone" size={20} color="#FFFFFF" />
+            <Text style={styles.chatButtonText}>Support</Text>
+          </TouchableOpacity> */}
+        </View>
       </View>
 
       <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -1038,12 +1052,32 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 8,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  helpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    gap: 6,
+  },
   chatButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   chatButtonText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#FFFFFF',
+    lineHeight: 21,
+  },
+  helpButtonText: {
     fontFamily: 'Poppins',
     fontSize: 14,
     color: '#FFFFFF',

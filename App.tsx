@@ -24,6 +24,7 @@ import { ExploreDishesScreen } from '@/screens/Favorites/ExploreDishesScreen';
 import { ContentPage } from '@/screens/Legal/ContentPage';
 import { HelpScreen } from '@/screens/Help/HelpScreen';
 import { ContactUsScreen } from '@/screens/Help/ContactUsScreen';
+import { ChatScreen } from '@/screens/Help/ChatScreen';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -62,7 +63,7 @@ function AppContent() {
   } = useCart();
   const { showConfirmation } = useConfirmation();
 
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -109,6 +110,9 @@ function AppContent() {
   const faqScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const restaurantScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const checkoutScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  // Chat screen state
+  const [chatHelpOptionId, setChatHelpOptionId] = React.useState<string>('');
+  const [chatHelpOptionTitle, setChatHelpOptionTitle] = React.useState<string>('');
 
   const [fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
@@ -194,6 +198,8 @@ function AppContent() {
       help: AnalyticsScreens.HELP,
       contactUs: AnalyticsScreens.CONTACT_US,
       faq: AnalyticsScreens.FAQ,
+      orderHelp: 'Order Help',
+      chat: 'Chat',
     };
     
     const screenName = screenNameMap[currentScreen];
@@ -353,6 +359,13 @@ function AppContent() {
           return true;
         case 'orderDetail':
           handleBackFromOrderDetail();
+          return true;
+        case 'chat':
+          handleBackFromChat();
+          return true;
+        case 'orderHelp':
+          // OrderHelp is no longer used, redirect to chat back handler
+          handleBackFromChat();
           return true;
         case 'rateOrder':
           handleBackFromRateOrder();
@@ -1108,6 +1121,23 @@ function AppContent() {
     // Use requestAnimationFrame to ensure smooth transition
     requestAnimationFrame(() => {
       setCurrentScreen('orders');
+    });
+  };
+
+  // Order Help Navigation - Now goes directly to Chat
+  const handleNavigateToOrderHelp = () => {
+    setChatHelpOptionId('');
+    setChatHelpOptionTitle('');
+    setCurrentScreen('chat');
+  };
+
+  // Chat Navigation
+  const handleBackFromChat = () => {
+    // Use requestAnimationFrame to ensure smooth transition
+    requestAnimationFrame(() => {
+      setChatHelpOptionId('');
+      setChatHelpOptionTitle('');
+      setCurrentScreen('orderDetail');
     });
   };
 
@@ -1942,6 +1972,20 @@ function AppContent() {
                 onReorder={() => handleReorder(selectedOrderId)}
                 onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId, 'orderDetail')}
                 onDownloadInvoice={() => {}}
+                onHelp={handleNavigateToOrderHelp}
+              />
+            </View>
+          )}
+
+          {/* Conditionally render ChatScreen */}
+          {currentScreen === 'chat' && (
+            <View style={styles.chatOverlay}>
+              <ChatScreen
+                visible={true}
+                onBack={handleBackFromChat}
+                helpOptionId={chatHelpOptionId}
+                helpOptionTitle={chatHelpOptionTitle}
+                orderId={selectedOrderId}
               />
             </View>
           )}
@@ -2376,6 +2420,24 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 8,
     backgroundColor: '#F3F4F6',
+  },
+  orderHelpOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9,
+    backgroundColor: '#F5F5F5',
+  },
+  chatOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+    backgroundColor: '#FFFFFF',
   },
   rateOrderOverlay: {
     position: 'absolute',
