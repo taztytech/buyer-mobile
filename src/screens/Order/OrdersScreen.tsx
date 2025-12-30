@@ -1545,15 +1545,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                         <Text style={styles.trackingTimelineTitle}>Order Status</Text>
                         {renderTrackingTimeline(displayStatus)}
                       </View>
-                      
-                      {displayOrder.updated_at && (
-                        <View style={styles.trackingUpdatedContainer}>
-                          <Text style={styles.trackingUpdatedLabel}>Last Updated</Text>
-                          <Text style={styles.trackingUpdatedTime}>
-                            {new Date(displayOrder.updated_at).toLocaleString()}
-                          </Text>
-                        </View>
-                      )}
                     </>
                   );
                 })()}
