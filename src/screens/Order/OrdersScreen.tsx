@@ -71,6 +71,7 @@ interface OrdersScreenProps {
   onTrackOrder?: (orderId: string) => void;
   onHelp?: (order: OrderListItem) => void;
   onViewMore?: () => void; // Unused but kept for API compatibility
+  onContactUs?: () => void; // Navigate to Contact Us page
   // Optional: orderId to highlight when navigating from notification
   highlightOrderId?: string | null;
 }
@@ -84,6 +85,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   onTrackOrder,
   onHelp: _onHelp, // Unused but kept for API compatibility
   onViewMore: _onViewMore, // Unused but kept for API compatibility
+  onContactUs,
   highlightOrderId,
 }) => {
   // Use Orders Context for global state
@@ -689,14 +691,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   };
 
-  const handleCallSupportFromCancelled = async () => {
-    // Get support number from cache first, only call API if not found
-    const supportDetails = await authService.getSupportDetails(false);
-    const numberToCall = supportDetails.support_number;
-    
-    if (!numberToCall) return;
-    const telUrl = `tel:${numberToCall.replace(/\s+/g, '')}`;
-    Linking.openURL(telUrl).catch(() => {});
+  const handleCallSupportFromCancelled = () => {
+    // Navigate to Contact Us page instead of directly calling
+    if (onContactUs) {
+      onContactUs();
+    }
   };
 
   const handleOrderPress = (orderId: string) => {

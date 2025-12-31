@@ -30,6 +30,7 @@ interface OrderDetailScreenProps {
   onReorder?: () => void;
   onTrackOrder?: () => void;
   onDownloadInvoice?: () => void;
+  onContactUs?: () => void;
 }
 
 export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
@@ -41,6 +42,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   onReorder,
   onTrackOrder,
   onDownloadInvoice,
+  onContactUs,
 }) => {
   const { getOrderById } = useOrders();
   const [contextOrder, setContextOrder] = useState<any>(null);
@@ -171,14 +173,11 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     fetchSupportDetails();
   }, [visible]);
 
-  const handleCallSupport = async () => {
-    // Get support number from cache first, only call API if not found
-    const supportDetails = await authService.getSupportDetails(false);
-    const numberToCall = supportDetails.support_number;
-    
-    if (!numberToCall) return;
-    const telUrl = `tel:${numberToCall.replace(/\s+/g, '')}`;
-    Linking.openURL(telUrl).catch(() => {});
+  const handleCallSupport = () => {
+    // Navigate to Contact Us page instead of directly calling
+    if (onContactUs) {
+      onContactUs();
+    }
   };
 
   // Helper function to format date

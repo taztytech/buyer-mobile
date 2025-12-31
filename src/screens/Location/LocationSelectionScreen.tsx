@@ -1120,10 +1120,34 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
 
     try {
-      // Only check if permission is already granted, don't request it
+      // Check if permission is granted
       const { status } = await Location.getForegroundPermissionsAsync();
 
       if (status !== 'granted') {
+        // Show alert asking user to enable location to search
+        if (!status || status === 'denied') {
+          Alert.alert(
+            'Enable Location to Search',
+            'To search for locations, please enable location access for Tazty.\n\n' +
+              getLocationSettingsGuide(),
+            [
+              { text: 'Not now', style: 'cancel' },
+              {
+                text: 'Open Settings',
+                onPress: () => {
+                  openLocationSettings();
+                },
+              },
+            ]
+          );
+        } else if (status === 'undetermined') {
+          // First time asking - request permission directly
+          const result = await Location.requestForegroundPermissionsAsync();
+          if (result.status === 'granted') {
+            // If permission granted, perform the search
+            performSearch(query);
+          }
+        }
         return;
       }
 
