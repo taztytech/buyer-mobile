@@ -14,6 +14,7 @@ import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ViewCartBar } from '@/components/ViewCartBar';
 import { CategoryModal } from '@/components/CategoryModal';
+import { LottieHeaderAnimation } from '@/components/LottieHeaderAnimation';
 import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
@@ -1362,6 +1363,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         imageStyle={styles.headerBackgroundImage}
         testID="header-background"
       >
+        {/* Lottie Animation Overlay - Display when API call is successful */}
+        <LottieHeaderAnimation 
+          isActive={
+            // Show animation when API call is successful (has data and not loading)
+            !isLoadingBanners && 
+            !isLoadingCategories && 
+            !isLoadingRestaurants && 
+            !hasNetworkError && 
+            isLocationServiceable &&
+            (carouselData.length > 0 || categoryData.length > 0 || restaurantData.length > 0)
+          } 
+        />
+        
         {/* Location Section */}
         <View style={styles.locationSection} testID="location-section">
           <TouchableOpacity

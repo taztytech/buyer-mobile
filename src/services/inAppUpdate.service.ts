@@ -4,10 +4,39 @@
  * Allows users to skip updates and excludes checkout page
  */
 
-import SpInAppUpdates, {
-  IAUUpdateKind,
-  StartUpdateOptions,
-} from 'sp-react-native-in-app-updates';
+// Lazy import to prevent crash if native module is not available
+// We'll load the module only when it's actually needed, not during module initialization
+let SpInAppUpdates: any = null;
+let IAUUpdateKind: any = null;
+let StartUpdateOptions: any = null;
+let moduleLoadAttempted = false;
+
+/**
+ * Lazy load the sp-react-native-in-app-updates module
+ * This is called only when the service is actually used, not during module initialization
+ */
+function loadInAppUpdatesModule(): boolean {
+  if (moduleLoadAttempted) {
+    return SpInAppUpdates !== null;
+  }
+  
+  moduleLoadAttempted = true;
+  
+  try {
+    const inAppUpdatesModule = require('sp-react-native-in-app-updates');
+    SpInAppUpdates = inAppUpdatesModule.default || inAppUpdatesModule;
+    IAUUpdateKind = inAppUpdatesModule.IAUUpdateKind;
+    StartUpdateOptions = inAppUpdatesModule.StartUpdateOptions;
+    return true;
+  } catch (error) {
+    console.warn('[InAppUpdate] sp-react-native-in-app-updates not available. In-app updates will be disabled.');
+    console.warn('[InAppUpdate] This is normal in Expo Go or if native modules are not linked.');
+    SpInAppUpdates = null;
+    IAUUpdateKind = null;
+    StartUpdateOptions = null;
+    return false;
+  }
+}
 // Removed AsyncStorage to allow session-based resetting
 import { Platform, Alert } from 'react-native';
 import Constants from 'expo-constants';
@@ -30,7 +59,7 @@ class InAppUpdateService {
   private isChecking = false;
   private updateInfo: any = null;
   private statusUpdateListener: any = null;
-  private inAppUpdates: SpInAppUpdates;
+  private inAppUpdates: any = null;
 
   // Cache for network state to avoid repeated checks
   private cachedNetworkState: boolean | null = null;
@@ -49,12 +78,42 @@ class InAppUpdateService {
   private readonly DEBOUNCE_DELAY = 1000; // 1 second debounce
 
   constructor() {
-    // Initialize the SpInAppUpdates instance
-    // false = not in debug mode
-    this.inAppUpdates = new SpInAppUpdates(false);
+    // Don't load the module in constructor - load it lazily when needed
+    // This prevents the module from being loaded during App.tsx import
+    this.inAppUpdates = null;
 
     // Setup network state listener once (shared across all checks)
     this.setupNetworkStateListener();
+  }
+
+  /**
+   * Ensure the in-app updates module is loaded
+   * Called before any method that needs the module
+   */
+  private ensureModuleLoaded(): boolean {
+    if (this.inAppUpdates !== null) {
+      return true;
+    }
+
+    // Try to load the module
+    if (!loadInAppUpdatesModule()) {
+      return false;
+    }
+
+    // Initialize the SpInAppUpdates instance
+    // false = not in debug mode
+    if (SpInAppUpdates) {
+      try {
+        this.inAppUpdates = new SpInAppUpdates(false);
+        return true;
+      } catch (error) {
+        console.warn('[InAppUpdate] Failed to initialize SpInAppUpdates:', error);
+        this.inAppUpdates = null;
+        return false;
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -119,8 +178,13 @@ class InAppUpdateService {
    * Start flexible (non-forced) update
    */
   private async startFlexibleUpdate(): Promise<void> {
+    if (!this.ensureModuleLoaded() || !IAUUpdateKind) {
+      console.warn('[InAppUpdate] Cannot start update: Native module not available');
+      return;
+    }
+
     try {
-      const updateOptions: StartUpdateOptions = {
+      const updateOptions = {
         updateType: IAUUpdateKind.FLEXIBLE,
       };
 
@@ -140,6 +204,11 @@ class InAppUpdateService {
    * Setup listener for flexible update status
    */
   private setupStatusListener(): void {
+    if (!this.ensureModuleLoaded()) {
+      console.warn('[InAppUpdate] Cannot setup status listener: Native module not available');
+      return;
+    }
+
     // Remove existing listener if any
     if (this.statusUpdateListener) {
       try {
@@ -349,6 +418,12 @@ class InAppUpdateService {
 
     this.isChecking = true;
 
+    if (!this.ensureModuleLoaded()) {
+      console.warn('[InAppUpdate] Cannot check for updates: Native module not available');
+      this.isChecking = false;
+      return false;
+    }
+
     try {
       // Check for update availability
       const checkResult = await this.inAppUpdates.checkNeedsUpdate();
@@ -391,6 +466,11 @@ class InAppUpdateService {
    * Complete flexible update (call after download completes)
    */
   async completeUpdate(): Promise<void> {
+    if (!this.ensureModuleLoaded()) {
+      console.warn('[InAppUpdate] Cannot complete update: Native module not available');
+      return;
+    }
+
     try {
       await this.inAppUpdates.installUpdate();
       console.log('[InAppUpdate] Update installation completed');
