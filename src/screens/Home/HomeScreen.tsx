@@ -1365,6 +1365,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <ScrollView
           ref={scrollViewRef}
           style={styles.container}
+          contentContainerStyle={styles.scrollViewContent}
           stickyHeaderIndices={[3]}
           testID="home-screen"
           bounces={false}
@@ -2140,6 +2141,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  scrollViewContent: {
+    flexGrow: 1,
+    paddingBottom: 20, // Add padding at bottom to ensure last item is scrollable
   },
   // Header styles
   headerBackground: {
