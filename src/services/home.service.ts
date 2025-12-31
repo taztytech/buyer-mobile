@@ -76,12 +76,18 @@ export interface PaginationMetadata {
   has_more: boolean;
 }
 
+export interface HomeScreenRestaurantCardStyle {
+  default?: string;
+  image?: string;
+  css?: string;
+}
+
 export interface HomeData {
   promotional_banner?: BannerItem | BannerItem[];
   nearby_restaurants?: Restaurant[];
   whats_on_your_mind?: CategoryItem[];
   pagination?: PaginationMetadata;
-  home_screen_restaurant_card_style?: string;
+  home_screen_restaurant_card_style?: string | HomeScreenRestaurantCardStyle;
 }
 
 class HomeService {

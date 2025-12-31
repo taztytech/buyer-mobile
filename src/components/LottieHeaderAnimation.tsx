@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Dimensions, Image } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const HEADER_HEIGHT = 240; // Header background image height
+const HEADER_HEIGHT = 325; // Header background image height
 
 interface LottieHeaderAnimationProps {
   isActive: boolean;
@@ -10,8 +10,9 @@ interface LottieHeaderAnimationProps {
 }
 
 /**
- * Lottie/GIF Header Animation Component
+ * New Year Lottie/GIF Header Animation Component
  * Displays a Lottie animation or GIF overlay on the header background
+ * Controlled by API response - shows when new_year header image is active
  * 
  * Supports:
  * - GIF files (using React Native Image component)
