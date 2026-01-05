@@ -22,7 +22,7 @@ import { restaurantService } from '@/services/restaurant.service';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BANNER_WIDTH = SCREEN_WIDTH - 40; // Fixed banner width with 20px padding on each side
-const HALF_SCREEN_HEIGHT = SCREEN_HEIGHT / 2; // Half screen height for new_year image
+const HALF_SCREEN_HEIGHT = SCREEN_HEIGHT / 2; // Half screen height for dynamic background image
 
 interface HomeScreenProps {
   onLogout?: () => void;
@@ -164,7 +164,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Restaurant card layout style from API (1 = horizontal, 2 = vertical)
   const [restaurantCardStyle, setRestaurantCardStyle] = React.useState<1 | 2>(1);
-  const [headerImageStyle, setHeaderImageStyle] = React.useState<'default' | 'new_year'>('new_year');
+  const [headerImageStyle, setHeaderImageStyle] = React.useState<'default' | 'dynamic'>('default');
+  const [headerImageUrl, setHeaderImageUrl] = React.useState<string | null>(null);
 
   // Refresh trigger - increments to force data reload
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -718,7 +719,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         return;
       }
 
+      console.log('📱 HomeScreen: Calling getHomeData API', {
+        latitude: lat,
+        longitude: lng,
+        vegMode: vegMode,
+        page: 1,
+      });
+      
       const response = await homeService.getHomeData(lat, lng, vegMode, 1);
+      
+      console.log('📱 HomeScreen: getHomeData API Response received', {
+        success: response.success,
+        hasData: !!response.data,
+        error: response.error,
+      });
 
         if (response.success && response.data) {
           // The API returns data nested as: { data: { data: { promotional_banner: {...} } } }
@@ -746,10 +760,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               } else {
                 setRestaurantCardStyle(1);
               }
-              setHeaderImageStyle('new_year'); // Default header image for old format
+              setHeaderImageStyle('default'); // Default header image for old format
+              setHeaderImageUrl(null);
             } else {
-              // New format: object with default, image, css properties
-              const styleObj = homeScreenRestaurantCardStyle as { default?: string; image?: string; css?: string };
+              // New format: object with default, image, css properties, and optional image_url
+              const styleObj = homeScreenRestaurantCardStyle as { default?: string; image?: string; css?: string; image_url?: string };
               
               // Set restaurant card style from default value
               if (styleObj.default) {
@@ -763,18 +778,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 setRestaurantCardStyle(1);
               }
               
-              // Set header image style based on image value
-              if (styleObj.image && styleObj.image === '2') {
-                console.log('✅ Setting header image to new_year.jpg (image value is 2)');
-                setHeaderImageStyle('new_year'); // Show new_year.jpg when image value is "2"
+              // Set header image style based on image value and URL
+              if (styleObj.image && styleObj.image_url) {
+                // Image key has value and URL is present - use dynamic image from API
+                console.log('✅ Setting header image to dynamic API image:', styleObj.image_url);
+                setHeaderImageStyle('dynamic');
+                setHeaderImageUrl(styleObj.image_url);
+              } else if (styleObj.image) {
+                // Image key has value but no URL - fallback to default
+                console.log('ℹ️ Image key present but no URL, using default image. Image value:', styleObj.image);
+                setHeaderImageStyle('default');
+                setHeaderImageUrl(null);
               } else {
-                console.log('ℹ️ Setting header image to default (image value is not 2):', styleObj.image);
-                setHeaderImageStyle('default'); // Show default image otherwise
+                // No image key - use default
+                console.log('ℹ️ No image key, using default image');
+                setHeaderImageStyle('default');
+                setHeaderImageUrl(null);
               }
             }
           } else {
             setRestaurantCardStyle(1);
             setHeaderImageStyle('default');
+            setHeaderImageUrl(null);
           }
 
           // Handle promotional banners
@@ -1392,38 +1417,34 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Header with Background Image */}
       <ImageBackground
         source={
-          (() => {
-            const imageSource = headerImageStyle === 'new_year' 
-              ? require('@/assets/new_year.jpg')
-              : require('@/assets/home_app_bar.png');
-            console.log('🖼️ Header image source:', headerImageStyle === 'new_year' ? 'new_year.jpg' : 'home_app_bar.png', '| headerImageStyle:', headerImageStyle);
-            return imageSource;
-          })()
+          headerImageStyle === 'dynamic' && headerImageUrl
+            ? { uri: headerImageUrl }
+            : require('@/assets/home_app_bar.png')
         }
         style={[
           styles.headerBackground, 
           { paddingTop: insets.top + 20 },
-          headerImageStyle === 'new_year' && {
+          headerImageStyle === 'dynamic' && {
             minHeight: HALF_SCREEN_HEIGHT,
             height: HALF_SCREEN_HEIGHT,
           }
         ]}
         imageStyle={[
           styles.headerBackgroundImage,
-          headerImageStyle === 'new_year' && styles.headerBackgroundImageNewYear
+          headerImageStyle === 'dynamic' && styles.headerBackgroundImageDynamic
         ]}
         testID="header-background"
       >
-        {/* Black overlay with multiply opacity for new_year image */}
-        {headerImageStyle === 'new_year' && (
+        {/* Black overlay with multiply opacity for dynamic background image */}
+        {headerImageStyle === 'dynamic' && (
           <View 
             style={styles.headerBlackOverlay}
             pointerEvents="none"
           />
         )}
         
-        {/* Gradient overlay when showing new_year image - starts at half screen height */}
-        {headerImageStyle === 'new_year' && (
+        {/* Gradient overlay when showing dynamic background image - starts at half screen height */}
+        {headerImageStyle === 'dynamic' && (
           <LinearGradient
             colors={['transparent', 'rgba(255, 255, 255, 0.7)', '#FFFFFF']}
             locations={[0, 0.7, 1]}
@@ -1438,11 +1459,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           />
         )}
         
-        {/* Lottie Animation Overlay - Display when new_year header is active and API call is successful */}
+        {/* Lottie Animation Overlay - Display when dynamic background is active and API call is successful */}
         <LottieHeaderAnimation 
           isActive={
-            // Show animation when new_year header is active and API call is successful
-            headerImageStyle === 'new_year' &&
+            // Show animation when dynamic background is active and API call is successful
+            headerImageStyle === 'dynamic' &&
             !isLoadingBanners && 
             !isLoadingCategories && 
             !isLoadingRestaurants && 
@@ -1663,7 +1684,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Ad Banner Carousel or Closed Banner */}
       {isLocationServiceable && (
       <>
-      <View style={styles.carouselContainer}>
+      <View style={[
+        styles.carouselContainer,
+        headerImageStyle === 'dynamic' && styles.carouselContainerDynamic
+      ]}>
         {appOperationStatus && !appOperationStatus.is_open ? (
           // Show closed banner when app is not open
           <View style={styles.closedBannerContainer}>
@@ -2177,15 +2201,11 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
   },
-  headerBackgroundImageNewYear: {
-    width: '130%',
-    // minHeight: 240,
-    // width: '100%', // Fit mobile screen width
-    height: '125%',
-
-    // height: 300, // Cover half screen height
-    // resizeMode: 'cover',
-    left: -25,
+  headerBackgroundImageDynamic: {
+    width: '100%', // Fit mobile screen width
+    height: '100%', // Cover half screen height
+    resizeMode: 'cover',
+    left: 0,
     top: 0,
   },
   // Location section
@@ -2384,9 +2404,9 @@ const styles = StyleSheet.create({
     marginTop: -35,
     marginBottom: 16,
   },
-  // carouselContainerNewYear: {
-  //   marginTop: -5, // Remove negative margin, carousel will be pushed down naturally by increased header height
-  // },
+  carouselContainerDynamic: {
+    marginTop: 0, // Remove negative margin, carousel will be pushed down naturally by increased header height
+  },
   closedBannerContainer: {
     width: '100%',
     paddingHorizontal: 20,

@@ -80,6 +80,7 @@ export interface HomeScreenRestaurantCardStyle {
   default?: string;
   image?: string;
   css?: string;
+  image_url?: string; // URL for dynamic background image when image value is present
 }
 
 export interface HomeData {
@@ -347,7 +348,27 @@ class HomeService {
         ? `${API_CONFIG.ENDPOINTS.BUYER.HOME}?${queryString}`
         : API_CONFIG.ENDPOINTS.BUYER.HOME;
 
+      console.log('🏠 HOME API CALL:', {
+        endpoint: endpoint,
+        fullUrl: `${API_CONFIG.BASE_URL}${endpoint}`,
+        params: {
+          latitude,
+          longitude,
+          vegMode,
+          page,
+        },
+        timestamp: new Date().toISOString(),
+      });
+
       const response = await apiService.get<HomeData>(endpoint);
+
+      console.log('🏠 HOME API RESPONSE:', {
+        success: response.success,
+        hasData: !!response.data,
+        dataKeys: response.data ? Object.keys(response.data) : [],
+        homeScreenRestaurantCardStyle: response.data?.home_screen_restaurant_card_style,
+        timestamp: new Date().toISOString(),
+      });
 
       return response;
     } catch (error: any) {
