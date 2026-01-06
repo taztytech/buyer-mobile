@@ -359,115 +359,6 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     // So when trackingOrderData updates, the bottom sheet reloads with new data
   }, [selectedOrderIdForTracking, trackingOrderData?.status, trackingOrderData?.updated_at]);
 
-  // Timeline steps configuration
-  const timelineSteps = [
-    { id: 'order-placed', label: 'Order Placed', status: 'confirmed' },
-    { id: 'rider-assigned', label: 'Rider Assigned', status: 'agent-assigned' },
-    { id: 'rider-accepted', label: 'Rider Accepted', status: 'agent-assigned' },
-    { id: 'order-picked-up', label: 'Order Picked Up', status: 'picked' },
-    { id: 'in-transit', label: 'In Transit', status: 'out-for-delivery' },
-    { id: 'delivered', label: 'Delivered', status: 'delivered' },
-  ];
-
-  // Map backend status to the highest completed timeline step index
-  const getCurrentStepIndex = (status: string | null | undefined): number => {
-    if (!status) return 0;
-
-    const normalizedStatus = status.toLowerCase().trim();
-    
-    switch (normalizedStatus) {
-      case 'confirmed':
-        return 0; // Order Placed
-      case 'agent-assigned':
-      case 'agent_assigned':
-        return 2; // Rider Accepted (both assigned and accepted are at step 2)
-      case 'picked':
-        return 3; // Order Picked Up
-      case 'out-for-delivery':
-      case 'out_for_delivery':
-      case 'on-the-way':
-      case 'on_the_way':
-        return 4; // In Transit
-      case 'delivered':
-      case 'completed':
-        return 5; // Delivered
-      default:
-        return 0;
-    }
-  };
-
-  // Render tracking timeline
-  const renderTrackingTimeline = (currentStatus: string | null | undefined) => {
-    const currentStepIndex = getCurrentStepIndex(currentStatus);
-    const isDelivered = currentStatus?.toLowerCase().trim() === 'delivered' || 
-                        currentStatus?.toLowerCase().trim() === 'completed';
-    const normalizedStatus = currentStatus?.toLowerCase().trim();
-    const isAgentAssigned = normalizedStatus === 'agent-assigned' || normalizedStatus === 'agent_assigned';
-
-    return (
-      <View style={styles.timelineWrapper}>
-        {timelineSteps.map((step, index) => {
-          // Special handling: When status is agent-assigned, both "Rider Assigned" (index 1) and "Rider Accepted" (index 2) are completed
-          let isCompleted: boolean;
-          let isCurrent: boolean;
-          let isUpcoming: boolean;
-
-          if (isAgentAssigned && (index === 1 || index === 2)) {
-            // Both rider assigned and accepted are completed when status is agent-assigned
-            isCompleted = true;
-            isCurrent = false;
-            isUpcoming = false;
-          } else {
-            // Normal logic for other steps
-            isCompleted = index <= currentStepIndex;
-            isCurrent = index === currentStepIndex && !isDelivered && !isAgentAssigned;
-            isUpcoming = index > currentStepIndex;
-          }
-
-          return (
-            <View key={step.id} style={styles.timelineStepContainer}>
-              <View style={styles.timelineStepContent}>
-                {/* Icon */}
-                <View style={[
-                  styles.timelineIconContainer,
-                  isCompleted && styles.timelineIconCompleted,
-                  isCurrent && styles.timelineIconCurrent,
-                  isUpcoming && styles.timelineIconUpcoming,
-                ]}>
-                  {isCompleted ? (
-                    <MaterialIcons name="check" size={16} color="#FFFFFF" />
-                  ) : isCurrent ? (
-                    <ActivityIndicator size="small" color="#00B14F" />
-                  ) : (
-                    <MaterialIcons name="radio-button-unchecked" size={16} color="#D1D5DB" />
-                  )}
-                </View>
-                
-                {/* Label */}
-                <Text style={[
-                  styles.timelineLabel,
-                  isCompleted && styles.timelineLabelCompleted,
-                  isCurrent && styles.timelineLabelCurrent,
-                  isUpcoming && styles.timelineLabelUpcoming,
-                ]}>
-                  {step.label}
-                </Text>
-              </View>
-              
-              {/* Connector line (except for last item) */}
-              {index < timelineSteps.length - 1 && (
-                <View style={[
-                  styles.timelineConnector,
-                  isCompleted && styles.timelineConnectorCompleted,
-                  !isCompleted && styles.timelineConnectorUpcoming,
-                ]} />
-              )}
-            </View>
-          );
-        })}
-      </View>
-    );
-  };
 
   // Fetch user's phone number on mount
   useEffect(() => {
@@ -1354,54 +1245,218 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   const displayOrder = trackingContextOrder || trackingOrderData;
                   const displayStatus = displayOrder?.status;
                   
-                  // LOG: Current status being displayed in bottom sheet
-                  console.log('📊 TRACK ORDER BOTTOM SHEET - Current Display Status (OrderDetail):', {
-                    orderId: selectedOrderIdForTracking,
-                    displayStatus: displayStatus || 'N/A',
-                    fcmStatus: trackingContextOrder?.status || 'N/A',
-                    apiStatus: trackingOrderData?.status || 'N/A',
-                    statusSource: trackingContextOrder ? 'FCM' : 'API',
-                    timestamp: new Date().toISOString(),
-                  });
+                  // Get agent info from tracking array - find latest entry with agent details
+                  const trackingArray = displayOrder?.tracking || [];
+                  let agentName: string | null = null;
+                  let agentPhone: string | null = null;
+                  
+                  // Find the latest tracking entry with agent_name and agent_phone
+                  for (let i = trackingArray.length - 1; i >= 0; i--) {
+                    const trackingEntry = trackingArray[i];
+                    if (trackingEntry?.agent_name || trackingEntry?.agent_phone) {
+                      agentName = trackingEntry.agent_name || null;
+                      agentPhone = trackingEntry.agent_phone || null;
+                      break;
+                    }
+                  }
+                  
+                  // Format estimated delivery time - extract only time from ISO string
+                  const formatDeliveryTime = (dateString: string | null | undefined): string => {
+                    if (!dateString) return '';
+                    try {
+                      const date = new Date(dateString);
+                      if (isNaN(date.getTime())) return '';
+                      return date.toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true,
+                      });
+                    } catch {
+                      return '';
+                    }
+                  };
+                  
+                  const deliveryTime = formatDeliveryTime(displayOrder?.estimated_delivery_time);
+                  
+                  // Get status config
+                  const statusConfig = mapOrderStatusToUI(displayStatus);
+                  
+                  // Timeline statuses based on image
+                  const timelineStatuses = [
+                    { 
+                      id: 'received', 
+                      label: 'Your order has been received', 
+                      apiStatuses: ['confirmed', 'created', 'paid']
+                    },
+                    { 
+                      id: 'preparing', 
+                      label: 'The restaurant is preparing your food', 
+                      apiStatuses: ['billed', 'packed']
+                    },
+                    { 
+                      id: 'picked', 
+                      label: 'Your order has been picked up for delivery', 
+                      apiStatuses: ['picked', 'agent-assigned', 'agent_assigned']
+                    },
+                    { 
+                      id: 'arriving', 
+                      label: 'Order arriving soon!', 
+                      apiStatuses: ['out-for-delivery', 'out_for_delivery', 'on-the-way', 'on_the_way', 'delivered', 'completed']
+                    },
+                  ];
+                  
+                  // Determine timeline state
+                  const getTimelineState = (timelineItem: typeof timelineStatuses[0], currentStatus: string) => {
+                    const normalizedStatus = (currentStatus || '').toLowerCase().trim();
+                    const normalizedStatusHyphen = normalizedStatus.replace(/_/g, '-');
+                    
+                    // Find current timeline item index
+                    const currentIndex = timelineStatuses.findIndex(item => 
+                      item.apiStatuses.some(apiStatus => {
+                        const normalizedApiStatus = apiStatus.toLowerCase().trim();
+                        return normalizedStatus === normalizedApiStatus || normalizedStatusHyphen === normalizedApiStatus;
+                      })
+                    );
+                    
+                    const itemIndex = timelineStatuses.findIndex(item => item.id === timelineItem.id);
+                    
+                    if (currentIndex === -1) {
+                      // Status not in timeline, show first as completed
+                      return itemIndex === 0 ? 'completed' : 'upcoming';
+                    }
+                    
+                    if (itemIndex < currentIndex) {
+                      return 'completed';
+                    } else if (itemIndex === currentIndex) {
+                      return 'current';
+                    } else {
+                      return 'upcoming';
+                    }
+                  };
                   
                   return (
                     <>
-                      <View style={styles.trackingStatusContainer}>
-                        {(() => {
-                          const statusConfig = mapOrderStatusToUI(displayStatus);
-                          return (
-                            <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
-                              <MaterialIcons 
-                                name={statusConfig.iconName as any} 
-                                size={24} 
-                                color={statusConfig.color} 
-                              />
-                              <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
-                                {statusConfig.label}
-                              </Text>
+                      {/* Top Section: Restaurant Info + Status */}
+                      <View style={styles.trackingTopSection}>
+                        <View style={styles.trackingRestaurantLeft}>
+                          {displayOrder.restaurant?.logo_url ? (
+                            <Image
+                              source={{ uri: displayOrder.restaurant.logo_url }}
+                              style={styles.trackingRestaurantLogo}
+                              defaultSource={require('@/assets/dummy-restaurent.png')}
+                            />
+                          ) : (
+                            <View style={styles.trackingRestaurantLogoPlaceholder}>
+                              <MaterialIcons name="restaurant" size={20} color="#999" />
                             </View>
-                          );
-                        })()}
-                        {displayOrder.order_number && (
-                          <Text style={styles.trackingOrderNumber}>
-                            Order #{displayOrder.order_number}
+                          )}
+                          <View style={styles.trackingRestaurantDetails}>
+                            <Text style={styles.trackingRestaurantName}>
+                              {displayOrder.restaurant?.name || 'Unknown Restaurant'}
+                            </Text>
+                            {displayOrder.delivery_address?.address3 && (
+                              <Text style={styles.trackingRestaurantAddress}>
+                                {displayOrder.delivery_address.address3}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                        <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
+                          <MaterialIcons 
+                            name={statusConfig.iconName as any} 
+                            size={16} 
+                            color={statusConfig.color} 
+                          />
+                          <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
+                            {statusConfig.label}
                           </Text>
-                        )}
+                        </View>
                       </View>
-                      <View style={styles.trackingDivider} />
-                      {displayOrder.restaurant && (
-                        <View style={styles.trackingRestaurantInfo}>
-                          <Text style={styles.trackingRestaurantLabel}>Restaurant</Text>
-                          <Text style={styles.trackingRestaurantName}>
-                            {displayOrder.restaurant.name || 'Unknown Restaurant'}
-                          </Text>
+                      
+                      {/* Items List */}
+                      {displayOrder.items && displayOrder.items.length > 0 && (
+                        <View style={styles.trackingItemsContainer}>
+                          {displayOrder.items.map((item: any, index: number) => (
+                            <Text key={index} style={styles.trackingItemText}>
+                              {item.quantity || 1}× {item.item_name || 'Item'}
+                            </Text>
+                          ))}
                         </View>
                       )}
                       
-                      {/* Tracking Timeline */}
-                      <View style={styles.trackingTimelineContainer}>
-                        <Text style={styles.trackingTimelineTitle}>Order Status</Text>
-                        {renderTrackingTimeline(displayStatus)}
+                      {/* Divider */}
+                      <View style={styles.trackingDivider} />
+                      
+                      {/* Estimated Delivery Time */}
+                      {deliveryTime && (
+                        <View style={styles.trackingDeliveryTimeContainer}>
+                          <Text style={styles.trackingDeliveryTimeValue}>{deliveryTime}</Text>
+                          <Text style={styles.trackingDeliveryTimeLabel}>ESTIMATED DELIVERY TIME</Text>
+                        </View>
+                      )}
+                      
+                      {/* Horizontal Timeline */}
+                      <View style={styles.trackingTimelineHorizontalContainer}>
+                        {timelineStatuses.map((timelineItem, index) => {
+                          const state = getTimelineState(timelineItem, displayStatus || '');
+                          const isCompleted = state === 'completed';
+                          const isCurrent = state === 'current';
+                          const isUpcoming = state === 'upcoming';
+                          
+                          return (
+                            <View key={timelineItem.id} style={styles.trackingTimelineItem}>
+                              <View style={styles.trackingTimelineItemContent}>
+                                {/* Icon */}
+                                <View style={[
+                                  styles.trackingTimelineIcon,
+                                  isCompleted && styles.trackingTimelineIconCompleted,
+                                  isCurrent && styles.trackingTimelineIconCurrent,
+                                  isUpcoming && styles.trackingTimelineIconUpcoming,
+                                ]}>
+                                  {isCompleted ? (
+                                    <MaterialIcons name="check" size={8} color="#FFFFFF" />
+                                  ) : isCurrent ? (
+                                    <ActivityIndicator size="small" color="#3B82F6" />
+                                  ) : (
+                                    <MaterialIcons name="radio-button-unchecked" size={8} color="#BFBCBA" />
+                                  )}
+                                </View>
+                                
+                                {/* Label */}
+                                <Text style={[
+                                  styles.trackingTimelineLabel,
+                                  isCompleted && styles.trackingTimelineLabelCompleted,
+                                  isCurrent && styles.trackingTimelineLabelCurrent,
+                                  isUpcoming && styles.trackingTimelineLabelUpcoming,
+                                ]}>
+                                  {timelineItem.label}
+                                </Text>
+                              </View>
+                              
+                              {/* Connector line (except for last item) */}
+                              {index < timelineStatuses.length - 1 && (
+                                <View style={[
+                                  styles.trackingTimelineConnector,
+                                  isCompleted && styles.trackingTimelineConnectorCompleted,
+                                  !isCompleted && styles.trackingTimelineConnectorUpcoming,
+                                ]} />
+                              )}
+                            </View>
+                          );
+                        })}
+                      </View>
+                      
+                      {/* Divider */}
+                      <View style={styles.trackingDivider} />
+                      
+                      {/* Delivery Partner Info */}
+                      <View style={styles.trackingPartnerRow}>
+                        <Text style={styles.trackingPartnerName}>
+                          {agentName || 'No Delivery Partner available'}
+                        </Text>
+                        <Text style={styles.trackingPartnerPhone}>
+                          {agentPhone || ''}
+                        </Text>
                       </View>
                     </>
                   );
@@ -2109,148 +2164,194 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 30, 31, 0.6)',
     marginTop: 8,
   },
-  trackingStatusContainer: {
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  trackingStatusBadge: {
+  trackingTopSection: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  trackingRestaurantLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+    marginRight: 12,
+  },
+  trackingRestaurantLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    marginRight: 10,
+    backgroundColor: 'rgba(185, 185, 185, 0.2)',
+  },
+  trackingRestaurantLogoPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    marginRight: 10,
+    backgroundColor: 'rgba(185, 185, 185, 0.2)',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 100,
-    gap: 8,
   },
-  trackingStatusText: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 18,
-    lineHeight: 24,
-  },
-  trackingOrderNumber: {
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    color: 'rgba(0, 30, 31, 0.6)',
-    marginTop: 4,
-  },
-  trackingDivider: {
-    height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    marginVertical: 20,
-  },
-  trackingRestaurantInfo: {
-    marginBottom: 16,
-  },
-  trackingRestaurantLabel: {
-    fontFamily: 'Poppins',
-    fontSize: 12,
-    color: 'rgba(0, 30, 31, 0.6)',
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  trackingRestaurantDetails: {
+    flex: 1,
+    gap: 0,
   },
   trackingRestaurantName: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
-    color: '#001E1F',
-    lineHeight: 24,
+    lineHeight: 22,
+    color: '#000000',
+    marginBottom: 2,
   },
-  trackingTimelineContainer: {
-    marginTop: 20,
-    marginBottom: 16,
+  trackingRestaurantAddress: {
+    fontFamily: 'Poppins',
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#000000',
+    opacity: 0.85,
   },
-  trackingTimelineTitle: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 16,
-    color: '#001E1F',
-    marginBottom: 16,
+  trackingStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 100,
+    gap: 4,
+    height: 26,
+    justifyContent: 'center',
   },
-  timelineWrapper: {
+  trackingStatusText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  trackingItemsContainer: {
+    marginBottom: 12,
+    gap: 4,
+  },
+  trackingItemText: {
+    fontFamily: 'Poppins',
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#000000',
+    opacity: 0.85,
+  },
+  trackingDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    marginVertical: 12,
+  },
+  trackingDeliveryTimeContainer: {
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  trackingDeliveryTimeValue: {
+    fontFamily: 'Poppins',
+    fontWeight: '800',
+    fontSize: 26,
+    lineHeight: 36,
+    textAlign: 'center',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  trackingDeliveryTimeLabel: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    color: '#000000',
+  },
+  trackingTimelineHorizontalContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
+    marginVertical: 12,
     paddingHorizontal: 4,
   },
-  timelineStepContainer: {
+  trackingTimelineItem: {
     flex: 1,
     alignItems: 'center',
     position: 'relative',
   },
-  timelineStepContent: {
+  trackingTimelineItemContent: {
     alignItems: 'center',
     width: '100%',
   },
-  timelineIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  trackingTimelineIcon: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
-    borderWidth: 2,
+    marginBottom: 6,
+    borderWidth: 0,
   },
-  timelineIconCompleted: {
-    backgroundColor: '#00B14F',
-    borderColor: '#00B14F',
-  },
-  timelineIconCurrent: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#00B14F',
-  },
-  timelineIconUpcoming: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#D1D5DB',
-  },
-  timelineLabel: {
-    fontFamily: 'Poppins',
-    fontSize: 10,
-    textAlign: 'center',
-    lineHeight: 14,
-    maxWidth: 60,
-  },
-  timelineLabelCompleted: {
-    color: '#00B14F',
-    fontFamily: 'Poppins_600SemiBold',
-  },
-  timelineLabelCurrent: {
-    color: '#00B14F',
-    fontFamily: 'Poppins_600SemiBold',
-  },
-  timelineLabelUpcoming: {
-    color: '#9CA3AF',
-  },
-  timelineConnector: {
-    position: 'absolute',
-    top: 16,
-    left: '50%',
-    width: '100%',
-    height: 2,
-    zIndex: -1,
-  },
-  timelineConnectorCompleted: {
+  trackingTimelineIconCompleted: {
     backgroundColor: '#00B14F',
   },
-  timelineConnectorUpcoming: {
-    backgroundColor: '#E5E7EB',
+  trackingTimelineIconCurrent: {
+    backgroundColor: '#3B82F6',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
   },
-  trackingUpdatedContainer: {
-    marginTop: 'auto',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.05)',
+  trackingTimelineIconUpcoming: {
+    backgroundColor: '#BFBCBA',
   },
-  trackingUpdatedLabel: {
+  trackingTimelineLabel: {
     fontFamily: 'Poppins',
     fontSize: 12,
-    color: 'rgba(0, 30, 31, 0.6)',
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    lineHeight: 18,
+    textAlign: 'center',
+    color: '#B1B1B1',
+    paddingHorizontal: 2,
   },
-  trackingUpdatedTime: {
+  trackingTimelineLabelCompleted: {
+    color: '#00B14F',
+    fontFamily: 'Poppins_600SemiBold',
+  },
+  trackingTimelineLabelCurrent: {
+    color: '#3B82F6',
+    fontFamily: 'Poppins_600SemiBold',
+  },
+  trackingTimelineLabelUpcoming: {
+    color: '#B1B1B1',
+  },
+  trackingTimelineConnector: {
+    position: 'absolute',
+    top: 7,
+    left: '50%',
+    width: '100%',
+    height: 1,
+    zIndex: -1,
+  },
+  trackingTimelineConnectorCompleted: {
+    backgroundColor: '#00B14F',
+  },
+  trackingTimelineConnectorUpcoming: {
+    backgroundColor: '#B1B1B1',
+  },
+  trackingPartnerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  trackingPartnerName: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 17,
+    lineHeight: 24,
+    textTransform: 'capitalize',
+    color: '#181C2E',
+    flex: 1,
+  },
+  trackingPartnerPhone: {
     fontFamily: 'Poppins',
-    fontSize: 14,
-    color: '#001E1F',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#888888',
+    textAlign: 'right',
   },
 });
 
