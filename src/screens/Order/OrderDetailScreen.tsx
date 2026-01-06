@@ -1395,8 +1395,8 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                         </View>
                       )}
                       
-                      {/* Horizontal Timeline */}
-                      <View style={styles.trackingTimelineHorizontalContainer}>
+                      {/* Vertical Timeline */}
+                      <View style={styles.trackingTimelineVerticalContainer}>
                         {timelineStatuses.map((timelineItem, index) => {
                           const state = getTimelineState(timelineItem, displayStatus || '');
                           const isCompleted = state === 'completed';
@@ -1422,25 +1422,25 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                                   )}
                                 </View>
                                 
-                                {/* Label */}
-                                <Text style={[
-                                  styles.trackingTimelineLabel,
-                                  isCompleted && styles.trackingTimelineLabelCompleted,
-                                  isCurrent && styles.trackingTimelineLabelCurrent,
-                                  isUpcoming && styles.trackingTimelineLabelUpcoming,
-                                ]}>
-                                  {timelineItem.label}
-                                </Text>
+                                {/* Connector line (except for last item) */}
+                                {index < timelineStatuses.length - 1 && (
+                                  <View style={[
+                                    styles.trackingTimelineConnector,
+                                    isCompleted && styles.trackingTimelineConnectorCompleted,
+                                    !isCompleted && styles.trackingTimelineConnectorUpcoming,
+                                  ]} />
+                                )}
                               </View>
                               
-                              {/* Connector line (except for last item) */}
-                              {index < timelineStatuses.length - 1 && (
-                                <View style={[
-                                  styles.trackingTimelineConnector,
-                                  isCompleted && styles.trackingTimelineConnectorCompleted,
-                                  !isCompleted && styles.trackingTimelineConnectorUpcoming,
-                                ]} />
-                              )}
+                              {/* Label */}
+                              <Text style={[
+                                styles.trackingTimelineLabel,
+                                isCompleted && styles.trackingTimelineLabelCompleted,
+                                isCurrent && styles.trackingTimelineLabelCurrent,
+                                isUpcoming && styles.trackingTimelineLabelUpcoming,
+                              ]}>
+                                {timelineItem.label}
+                              </Text>
                             </View>
                           );
                         })}
@@ -2262,21 +2262,21 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: '#000000',
   },
-  trackingTimelineHorizontalContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+  trackingTimelineVerticalContainer: {
+    flexDirection: 'column',
     marginVertical: 12,
-    paddingHorizontal: 4,
+    paddingLeft: 4,
   },
   trackingTimelineItem: {
-    flex: 1,
-    alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
     position: 'relative',
   },
   trackingTimelineItemContent: {
     alignItems: 'center',
-    width: '100%',
+    marginRight: 12,
+    position: 'relative',
   },
   trackingTimelineIcon: {
     width: 14,
@@ -2284,8 +2284,8 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
     borderWidth: 0,
+    zIndex: 1,
   },
   trackingTimelineIconCompleted: {
     backgroundColor: '#00B14F',
@@ -2303,9 +2303,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins',
     fontSize: 12,
     lineHeight: 18,
-    textAlign: 'center',
+    textAlign: 'left',
     color: '#B1B1B1',
-    paddingHorizontal: 2,
+    flex: 1,
+    paddingTop: 2,
   },
   trackingTimelineLabelCompleted: {
     color: '#00B14F',
@@ -2320,11 +2321,11 @@ const styles = StyleSheet.create({
   },
   trackingTimelineConnector: {
     position: 'absolute',
-    top: 7,
-    left: '50%',
-    width: '100%',
-    height: 1,
-    zIndex: -1,
+    top: 14,
+    left: 7,
+    width: 1,
+    height: '100%',
+    zIndex: 0,
   },
   trackingTimelineConnectorCompleted: {
     backgroundColor: '#00B14F',
