@@ -1377,7 +1377,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 <Text style={styles.trackingLoadingText}>Loading order status...</Text>
               </View>
             ) : trackingOrderData ? (
-              <>
+              <ScrollView
+                style={styles.trackingBottomSheetContent}
+                contentContainerStyle={styles.trackingBottomSheetContentContainer}
+                showsVerticalScrollIndicator={true}
+              >
                 {(() => {
                   // WATCHING BOTH:
                   // 1. trackingContextOrder = FCM updates (real-time status from notifications)
@@ -1392,13 +1396,22 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   let agentName: string | null = null;
                   let agentPhone: string | null = null;
                   
-                  // Find the latest tracking entry with agent_name and agent_phone
+                  // Find the latest tracking entry with agent_name or agent_phone
+                  // Iterate from the end to get the most recent agent assignment
                   for (let i = trackingArray.length - 1; i >= 0; i--) {
                     const trackingEntry = trackingArray[i];
-                    if (trackingEntry?.agent_name || trackingEntry?.agent_phone) {
-                      agentName = trackingEntry.agent_name || null;
-                      agentPhone = trackingEntry.agent_phone || null;
-                      break;
+                    if (trackingEntry) {
+                      // If we find an entry with agent_name, use it
+                      if (trackingEntry.agent_name) {
+                        agentName = trackingEntry.agent_name;
+                        agentPhone = trackingEntry.agent_phone || null;
+                        break;
+                      }
+                      // If we find an entry with agent_phone but no name, still use it
+                      if (trackingEntry.agent_phone && !agentName) {
+                        agentName = null;
+                        agentPhone = trackingEntry.agent_phone;
+                      }
                     }
                   }
                   
@@ -1423,56 +1436,37 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   // Get status config
                   const statusConfig = mapOrderStatusToUI(displayStatus);
                   
-                  // Timeline statuses based on image
-                  const timelineStatuses = [
-                    { 
-                      id: 'received', 
-                      label: 'Your order has been received', 
-                      apiStatuses: ['confirmed', 'created', 'paid']
-                    },
-                    { 
-                      id: 'preparing', 
-                      label: 'The restaurant is preparing your food', 
-                      apiStatuses: ['billed', 'packed']
-                    },
-                    { 
-                      id: 'picked', 
-                      label: 'Your order has been picked up for delivery', 
-                      apiStatuses: ['picked', 'agent-assigned', 'agent_assigned']
-                    },
-                    { 
-                      id: 'arriving', 
-                      label: 'Order arriving soon!', 
-                      apiStatuses: ['out-for-delivery', 'out_for_delivery', 'on-the-way', 'on_the_way', 'delivered', 'completed']
-                    },
-                  ];
+                  // Check if order is delivered
+                  const isDelivered = (displayStatus || '').toLowerCase().trim() === 'delivered' || 
+                                      (displayStatus || '').toLowerCase().trim() === 'completed';
                   
-                  // Determine timeline state
-                  const getTimelineState = (timelineItem: typeof timelineStatuses[0], currentStatus: string) => {
-                    const normalizedStatus = (currentStatus || '').toLowerCase().trim();
-                    const normalizedStatusHyphen = normalizedStatus.replace(/_/g, '-');
-                    
-                    // Find current timeline item index
-                    const currentIndex = timelineStatuses.findIndex(item => 
-                      item.apiStatuses.some(apiStatus => {
-                        const normalizedApiStatus = apiStatus.toLowerCase().trim();
-                        return normalizedStatus === normalizedApiStatus || normalizedStatusHyphen === normalizedApiStatus;
-                      })
-                    );
-                    
-                    const itemIndex = timelineStatuses.findIndex(item => item.id === timelineItem.id);
-                    
-                    if (currentIndex === -1) {
-                      // Status not in timeline, show first as completed
-                      return itemIndex === 0 ? 'completed' : 'upcoming';
+                  // Format timestamp to show only time
+                  const formatTimestamp = (timestamp: string | null | undefined): string => {
+                    if (!timestamp) return '';
+                    try {
+                      const date = new Date(timestamp);
+                      if (isNaN(date.getTime())) return '';
+                      return date.toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true,
+                      });
+                    } catch {
+                      return '';
                     }
-                    
-                    if (itemIndex < currentIndex) {
+                  };
+                  
+                  // Determine timeline state for each tracking entry
+                  // If delivered, all items are completed. Otherwise, last entry is current
+                  const getTimelineState = (index: number, totalItems: number) => {
+                    if (isDelivered) {
+                      // If delivered, all items are completed
                       return 'completed';
-                    } else if (itemIndex === currentIndex) {
-                      return 'current';
+                    }
+                    if (index < totalItems - 1) {
+                      return 'completed'; // All previous items are completed
                     } else {
-                      return 'upcoming';
+                      return 'current'; // Last item is current
                     }
                   };
                   
@@ -1529,33 +1523,37 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                       {/* Divider */}
                       <View style={styles.trackingDivider} />
                       
-                      {/* Estimated Delivery Time */}
-                      {deliveryTime && (
+                      {/* Estimated Delivery Time or Completed Status */}
+                      {isDelivered ? (
+                        <View style={styles.trackingCompletedContainer}>
+                          <MaterialIcons name="check-circle" size={64} color="#00B14F" />
+                          <Text style={styles.trackingCompletedText}>Completed</Text>
+                        </View>
+                      ) : deliveryTime ? (
                         <View style={styles.trackingDeliveryTimeContainer}>
                           <Text style={styles.trackingDeliveryTimeValue}>{deliveryTime}</Text>
                           <Text style={styles.trackingDeliveryTimeLabel}>ESTIMATED DELIVERY TIME</Text>
                         </View>
-                      )}
+                      ) : null}
                       
                       {/* Vertical Timeline */}
                       <View style={styles.trackingTimelineVerticalContainer}>
-                        {timelineStatuses.map((timelineItem, index) => {
-                          const state = getTimelineState(timelineItem, displayStatus || '');
+                        {trackingArray.map((trackingEntry: any, index: number) => {
+                          const state = getTimelineState(index, trackingArray.length);
                           const isCompleted = state === 'completed';
                           const isCurrent = state === 'current';
-                          const isUpcoming = state === 'upcoming';
                           
                           return (
-                            <View key={timelineItem.id} style={styles.trackingTimelineItem}>
+                            <View key={trackingEntry.id || index} style={styles.trackingTimelineItem}>
                               <View style={styles.trackingTimelineItemContent}>
                                 {/* Icon */}
                                 <View style={[
                                   styles.trackingTimelineIcon,
                                   isCompleted && styles.trackingTimelineIconCompleted,
-                                  isCurrent && styles.trackingTimelineIconCurrent,
-                                  isUpcoming && styles.trackingTimelineIconUpcoming,
+                                  isCurrent && !isDelivered && styles.trackingTimelineIconCurrent,
+                                  !isCompleted && !isCurrent && styles.trackingTimelineIconUpcoming,
                                 ]}>
-                                  {isCompleted ? (
+                                  {isCompleted || isDelivered ? (
                                     <MaterialIcons name="check" size={8} color="#FFFFFF" />
                                   ) : isCurrent ? (
                                     <ActivityIndicator size="small" color="#3B82F6" />
@@ -1565,7 +1563,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                                 </View>
                                 
                                 {/* Connector line (except for last item) */}
-                                {index < timelineStatuses.length - 1 && (
+                                {index < trackingArray.length - 1 && (
                                   <View style={[
                                     styles.trackingTimelineConnector,
                                     isCompleted && styles.trackingTimelineConnectorCompleted,
@@ -1574,15 +1572,22 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                                 )}
                               </View>
                               
-                              {/* Label */}
-                              <Text style={[
-                                styles.trackingTimelineLabel,
-                                isCompleted && styles.trackingTimelineLabelCompleted,
-                                isCurrent && styles.trackingTimelineLabelCurrent,
-                                isUpcoming && styles.trackingTimelineLabelUpcoming,
-                              ]}>
-                                {timelineItem.label}
-                              </Text>
+                              {/* Label - Display message from tracking array */}
+                              <View style={styles.trackingTimelineLabelContainer}>
+                                <Text style={[
+                                  styles.trackingTimelineLabel,
+                                  isCurrent && !isDelivered && styles.trackingTimelineLabelCurrent,
+                                  !isCurrent && styles.trackingTimelineLabelDefault,
+                                ]}>
+                                  {trackingEntry.message || 'Status update'}
+                                </Text>
+                                {/* Timestamp below message */}
+                                {trackingEntry.timestamp && (
+                                  <Text style={styles.trackingTimelineTimestamp}>
+                                    {formatTimestamp(trackingEntry.timestamp)}
+                                  </Text>
+                                )}
+                              </View>
                             </View>
                           );
                         })}
@@ -1591,19 +1596,22 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                       {/* Divider */}
                       <View style={styles.trackingDivider} />
                       
-                      {/* Delivery Partner Info */}
+                      {/* Agent Details */}
                       <View style={styles.trackingPartnerRow}>
                         <Text style={styles.trackingPartnerName}>
-                          {agentName || 'No Delivery Partner available'}
+                          {agentName || 'No Delivery Agent Assigned'}
                         </Text>
                         <Text style={styles.trackingPartnerPhone}>
-                          {agentPhone || ''}
+                          {agentPhone || ' '}
                         </Text>
                       </View>
+                      
+                      {/* Bottom spacing - two lines */}
+                      <View style={styles.trackingBottomSpacing} />
                     </>
                   );
                 })()}
-              </>
+              </ScrollView>
             ) : null}
           </View>
         </View>
@@ -2016,14 +2024,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    padding: 20,
-    paddingTop: 24,
+    overflow: 'hidden',
     // Enhanced shadow for better visibility
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 15, // Android shadow
+  },
+  trackingBottomSheetContent: {
+    flex: 1,
+  },
+  trackingBottomSheetContentContainer: {
+    padding: 20,
+    paddingTop: 20,
+    paddingBottom: 40, // Two lines worth of space at the bottom
   },
   trackingLoadingContainer: {
     flex: 1,
@@ -2172,25 +2187,31 @@ const styles = StyleSheet.create({
   trackingTimelineIconUpcoming: {
     backgroundColor: '#BFBCBA',
   },
+  trackingTimelineLabelContainer: {
+    flex: 1,
+    paddingTop: 2,
+  },
   trackingTimelineLabel: {
     fontFamily: 'Poppins',
     fontSize: 12,
     lineHeight: 18,
     textAlign: 'left',
-    color: '#B1B1B1',
-    flex: 1,
-    paddingTop: 2,
+    color: '#000000',
   },
-  trackingTimelineLabelCompleted: {
-    color: '#00B14F',
-    fontFamily: 'Poppins_600SemiBold',
+  trackingTimelineLabelDefault: {
+    color: '#000000',
   },
   trackingTimelineLabelCurrent: {
     color: '#3B82F6',
     fontFamily: 'Poppins_600SemiBold',
   },
-  trackingTimelineLabelUpcoming: {
-    color: '#B1B1B1',
+  trackingTimelineTimestamp: {
+    fontFamily: 'Poppins',
+    fontSize: 10,
+    lineHeight: 14,
+    textAlign: 'left',
+    color: '#888888',
+    marginTop: 4,
   },
   trackingTimelineConnector: {
     position: 'absolute',
@@ -2210,7 +2231,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 12,
   },
   trackingPartnerName: {
     fontFamily: 'Poppins_700Bold',
@@ -2226,5 +2247,20 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#888888',
     textAlign: 'right',
+  },
+  trackingBottomSpacing: {
+    height: 32, // Two lines worth of space (16px per line)
+  },
+  trackingCompletedContainer: {
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  trackingCompletedText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    lineHeight: 24,
+    textAlign: 'center',
+    color: '#00B14F',
+    marginTop: 8,
   },
 });
