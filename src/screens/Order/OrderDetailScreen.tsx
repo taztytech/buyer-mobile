@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
   Modal,
   RefreshControl,
   Dimensions,
+  Animated,
+  PanResponder,
 } from 'react-native';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -21,7 +23,6 @@ import { WebView } from 'react-native-webview';
 import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
 import { useOrders } from '@/context/OrdersContext';
-import { useRef } from 'react';
 import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
 
 interface OrderDetailScreenProps {
@@ -57,6 +58,16 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [trackingOrderData, setTrackingOrderData] = useState<any>(null);
   const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
   const lastFetchedStatusRef = useRef<string | null>(null);
+  
+  // Bottom sheet drag state
+  const HALF_SCREEN = SCREEN_HEIGHT * 0.5;
+  const DRAG_HANDLE_HEIGHT = 40; // Height of drag handle
+  const TOP_SECTION_HEIGHT = 100; // Height to show restaurant info section (logo, name, status, address3)
+  const CLOSED_HEIGHT = DRAG_HANDLE_HEIGHT + TOP_SECTION_HEIGHT; // Height when closed - shows drag handle + top section (140px total)
+  const OPEN_HEIGHT = HALF_SCREEN;
+  // Use height animation instead of translateY - CLOSED_HEIGHT = closed, OPEN_HEIGHT = open
+  const bottomSheetHeight = useRef(new Animated.Value(OPEN_HEIGHT)).current; // Start open
+  const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(true); // Start open
   const lastFetchedAtRef = useRef<number>(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -224,6 +235,62 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       }
     }
   }, []);
+
+  // PanResponder for bottom sheet drag - on drag handle and top section when closed
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Only respond to vertical drags
+        return Math.abs(gestureState.dy) > 5;
+      },
+      onPanResponderGrant: () => {
+        // Set offset to current value
+        bottomSheetHeight.setOffset((bottomSheetHeight as any)._value);
+        bottomSheetHeight.setValue(0);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const currentOffset = (bottomSheetHeight as any)._offset || 0;
+        // When dragging down (positive dy), reduce height (negative change)
+        // When dragging up (negative dy), increase height (positive change)
+        const heightChange = -gestureState.dy;
+        const newHeight = currentOffset + heightChange;
+        
+        // Restrict movement: can't go below CLOSED_HEIGHT or above OPEN_HEIGHT
+        const minHeight = CLOSED_HEIGHT;
+        const maxHeight = OPEN_HEIGHT;
+        const clampedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
+        bottomSheetHeight.setValue(clampedHeight - currentOffset);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        bottomSheetHeight.flattenOffset();
+        const currentValue = (bottomSheetHeight as any)._value;
+        const currentOffset = (bottomSheetHeight as any)._offset || 0;
+        const totalHeight = currentValue + currentOffset;
+        
+        // Threshold: if height is more than halfway between closed and open, snap to open
+        const threshold = (CLOSED_HEIGHT + OPEN_HEIGHT) / 2;
+        
+        let targetHeight: number;
+        if (totalHeight > threshold) {
+          // Snap to open (OPEN_HEIGHT)
+          targetHeight = OPEN_HEIGHT;
+          setIsBottomSheetOpen(true);
+        } else {
+          // Snap to closed (CLOSED_HEIGHT)
+          targetHeight = CLOSED_HEIGHT;
+          setIsBottomSheetOpen(false);
+        }
+        
+        Animated.spring(bottomSheetHeight, {
+          toValue: targetHeight,
+          useNativeDriver: false, // Height animation doesn't support native driver
+          tension: 100, // Increased for more responsiveness
+          friction: 8, // Increased for smoother, less bouncy animation
+        }).start();
+      },
+    })
+  ).current;
 
   // Subscribe to FCM updates for tracking order
   // Get the order directly from state.byId - this will update when FCM notifications arrive
@@ -1228,8 +1295,74 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           </SafeAreaView>
           
           {/* Bottom Sheet Overlay */}
-          <View style={styles.trackingBottomSheet}>
-            {isLoadingTrackingData ? (
+          <Animated.View 
+            style={[
+              styles.trackingBottomSheet,
+              {
+                height: bottomSheetHeight,
+              }
+            ]}
+          >
+            {/* Drag handle at top - always visible, controls open/close */}
+            <View 
+              style={styles.trackingDragHandleContainer} 
+              {...(isBottomSheetOpen ? panResponder.panHandlers : {})}
+            >
+              <View style={styles.trackingDragHandleBar} />
+            </View>
+            
+            {/* Top Section: Always visible (restaurant info, status, address3) - draggable when closed */}
+            {trackingOrderData && !isLoadingTrackingData && (() => {
+              const displayOrder = trackingContextOrder || trackingOrderData;
+              const displayStatus = displayOrder?.status;
+              const statusConfig = mapOrderStatusToUI(displayStatus);
+              
+              return (
+                <View 
+                  style={styles.trackingTopSection}
+                  {...(!isBottomSheetOpen ? panResponder.panHandlers : {})}
+                >
+                  <View style={styles.trackingRestaurantLeft}>
+                    {displayOrder.restaurant?.logo_url ? (
+                      <Image
+                        source={{ uri: displayOrder.restaurant.logo_url }}
+                        style={styles.trackingRestaurantLogo}
+                        defaultSource={require('@/assets/dummy-restaurent.png')}
+                      />
+                    ) : (
+                      <View style={styles.trackingRestaurantLogoPlaceholder}>
+                        <MaterialIcons name="restaurant" size={20} color="#999" />
+                      </View>
+                    )}
+                    <View style={styles.trackingRestaurantDetails}>
+                      <Text style={styles.trackingRestaurantName}>
+                        {displayOrder.restaurant?.name || 'Unknown Restaurant'}
+                      </Text>
+                      {displayOrder.delivery_address?.address3 && (
+                        <Text style={styles.trackingRestaurantAddress}>
+                          {displayOrder.delivery_address.address3}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
+                    <MaterialIcons 
+                      name={statusConfig.iconName as any} 
+                      size={16} 
+                      color={statusConfig.color} 
+                    />
+                    <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
+                      {statusConfig.label}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()}
+            
+            {/* Scrollable content - only shown when open */}
+            {isBottomSheetOpen && (
+              <>
+              {isLoadingTrackingData ? (
               <View style={styles.trackingLoadingContainer}>
                 <ActivityIndicator size="large" color="#00B14F" />
                 <Text style={styles.trackingLoadingText}>Loading order status...</Text>
@@ -1239,6 +1372,8 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 style={styles.trackingBottomSheetContent}
                 contentContainerStyle={styles.trackingBottomSheetContentContainer}
                 showsVerticalScrollIndicator={true}
+                scrollEnabled={isBottomSheetOpen}
+                nestedScrollEnabled={true}
               >
                 {(() => {
                   // WATCHING BOTH:
@@ -1330,45 +1465,8 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   
                   return (
                     <>
-                      {/* Top Section: Restaurant Info + Status */}
-                      <View style={styles.trackingTopSection}>
-                        <View style={styles.trackingRestaurantLeft}>
-                          {displayOrder.restaurant?.logo_url ? (
-                            <Image
-                              source={{ uri: displayOrder.restaurant.logo_url }}
-                              style={styles.trackingRestaurantLogo}
-                              defaultSource={require('@/assets/dummy-restaurent.png')}
-                            />
-                          ) : (
-                            <View style={styles.trackingRestaurantLogoPlaceholder}>
-                              <MaterialIcons name="restaurant" size={20} color="#999" />
-                            </View>
-                          )}
-                          <View style={styles.trackingRestaurantDetails}>
-                            <Text style={styles.trackingRestaurantName}>
-                              {displayOrder.restaurant?.name || 'Unknown Restaurant'}
-                            </Text>
-                            {displayOrder.delivery_address?.address3 && (
-                              <Text style={styles.trackingRestaurantAddress}>
-                                {displayOrder.delivery_address.address3}
-                              </Text>
-                            )}
-                          </View>
-                        </View>
-                        <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
-                          <MaterialIcons 
-                            name={statusConfig.iconName as any} 
-                            size={16} 
-                            color={statusConfig.color} 
-                          />
-                          <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
-                            {statusConfig.label}
-                          </Text>
-                        </View>
-                      </View>
-                      
-                      {/* Items List */}
-                      {displayOrder.items && displayOrder.items.length > 0 && (
+                      {/* Items List - Commented out per requirements */}
+                      {/* {displayOrder.items && displayOrder.items.length > 0 && (
                         <View style={styles.trackingItemsContainer}>
                           {displayOrder.items.map((item: any, index: number) => (
                             <Text key={index} style={styles.trackingItemText}>
@@ -1376,7 +1474,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                             </Text>
                           ))}
                         </View>
-                      )}
+                      )} */}
                       
                       {/* Divider */}
                       <View style={styles.trackingDivider} />
@@ -1471,7 +1569,10 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 })()}
               </ScrollView>
             ) : null}
-          </View>
+              </>
+            )}
+            
+          </Animated.View>
         </View>
       </Modal>
     </View>
@@ -2147,7 +2248,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: SCREEN_HEIGHT * 0.5,
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
@@ -2159,8 +2259,24 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 15, // Android shadow
   },
+  trackingDragHandleContainer: {
+    width: '100%',
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 8,
+    zIndex: 10,
+  },
+  trackingDragHandleBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D1D5DB',
+  },
   trackingBottomSheetContent: {
     flex: 1,
+    marginTop: 0,
   },
   trackingBottomSheetContentContainer: {
     padding: 20,
@@ -2183,6 +2299,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    paddingTop: 16,
+    paddingRight: 20,
+    paddingLeft: 20,
+    paddingBottom: 16,
     marginBottom: 12,
   },
   trackingRestaurantLeft: {
