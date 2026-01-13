@@ -930,7 +930,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <Text style={styles.reorderButtonText}>Reorder</Text>
                 </TouchableOpacity>
               ) : ( */}
-                <View style={styles.trackOrderContainer}>
+                { orderData.status !== 'delivered' && <View style={styles.trackOrderContainer}>
                   {(() => {
                     // Track Order is enabled ONLY for: picked, out-for-delivery, on-the-way, delivered
                     // Disabled for: confirmed (order placed), billed (order accepted), packed (order ready), agent-assigned
@@ -1021,7 +1021,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       </>
                     );
                   })()}
-                </View>
+                </View>}
               {/* )} */}
             </View>
           </View>
