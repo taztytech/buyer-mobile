@@ -1137,7 +1137,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               </Text>
             </View>
             {/* Show delivery time - handle preorder vs normal orders */}
-            {deliveryTimeValue && (
+            {deliveryTimeValue && orderData.status !== 'delivered' && (
               <>
                 <View style={styles.dashedDivider} />
                 <View style={styles.addressRow}>
