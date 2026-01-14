@@ -911,14 +911,16 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <Text style={styles.ratingText}>{orderData.overall_rating.toFixed(1)}</Text>
                 </View>
               ) : orderData.status === 'delivered' ? (
-                <TouchableOpacity
-                  style={styles.rateButton}
-                  onPress={() => onRateOrder && onRateOrder(orderId || '', orderData)}
-                  activeOpacity={0.7}
-                >
-                  <MaterialIcons name="star-outline" size={20} color="#001E1F" />
-                  <Text style={styles.rateButtonText}>Rate Order</Text>
-                </TouchableOpacity>
+                <>
+                </>
+                // <TouchableOpacity
+                //   style={styles.rateButton}
+                //   onPress={() => onRateOrder && onRateOrder(orderId || '', orderData)}
+                //   activeOpacity={0.7}
+                // >
+                //   <MaterialIcons name="star-outline" size={20} color="#001E1F" />
+                //   <Text style={styles.rateButtonText}>Rate Order</Text>
+                // </TouchableOpacity>
               ) : null}
               {/* {orderData.status === 'delivered' || orderData.status === 'cancelled' ? (
                 <TouchableOpacity
