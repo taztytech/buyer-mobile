@@ -16,6 +16,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { restaurantService, RestaurantDetails } from '@/services/restaurant.service';
 import { isExpoGo } from '@/utils/platform.util';
+import { exotelService } from '@/services/exotel.service';
+import { authService } from '@/services/auth.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 // Conditionally import MapView only for standalone builds
 let MapView: any;
@@ -56,6 +59,8 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isTimingsExpanded, setIsTimingsExpanded] = useState(false);
+  const [isInitiatingCall, setIsInitiatingCall] = useState(false);
+  const { showConfirmation } = useConfirmation();
 
   useEffect(() => {
     fetchRestaurantDetails();
@@ -84,11 +89,92 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
     }
   };
 
-  const handleCall = () => {
+  const handleCall = async () => {
     // Check if phone number is available in restaurant data
     const phoneNumber = (restaurantData as any)?.phone_number || (restaurantData as any)?.contact_number;
-    if (phoneNumber) {
-      Linking.openURL(`tel:${phoneNumber}`);
+    
+    if (!phoneNumber) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Restaurant phone number is not available.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Get user's phone number
+    const currentUser = await authService.getCurrentUser();
+    if (!currentUser || !currentUser.phoneNumber) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Unable to get your phone number. Please ensure you are logged in.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Clean phone numbers (remove spaces, dashes, etc.)
+    const userPhone = currentUser.phoneNumber.replace(/\D/g, '');
+    const restaurantPhoneClean = phoneNumber.replace(/\D/g, '');
+
+    if (!userPhone || !restaurantPhoneClean) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Invalid phone number format. Please check your phone number.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    try {
+      setIsInitiatingCall(true);
+
+      // Call Exotel API without order_id (general restaurant call)
+      const response = await exotelService.initiateCall({
+        from: userPhone,
+        to: restaurantPhoneClean,
+        // No order_id - this is a general restaurant call, not order-specific
+      });
+
+      if (response.success) {
+        showConfirmation({
+          title: 'Call Initiated',
+          message: 'Your call to the restaurant is being connected. Please wait for the call.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
+      } else {
+        showConfirmation({
+          title: 'Call Failed',
+          message: response.error || 'Failed to initiate call. Please try again later.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#DC2626',
+          onConfirm: () => {},
+        });
+      }
+    } catch (error: any) {
+      showConfirmation({
+        title: 'Error',
+        message: error.message || 'An unexpected error occurred. Please try again.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#DC2626',
+        onConfirm: () => {},
+      });
+    } finally {
+      setIsInitiatingCall(false);
     }
   };
 
@@ -123,7 +209,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
       }
 
       if (restaurantData.min_order_value) {
-        message += `💰 Min order ₹${parseFloat(restaurantData.min_order_value).toFixed(0)}\n`;
+        message += `💰 Min order ₹${Number(restaurantData.min_order_value).toFixed(0)}\n`;
       }
 
       // Add address
@@ -304,8 +390,8 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                       provider={PROVIDER_GOOGLE}
                       style={styles.map}
                       initialRegion={{
-                        latitude: parseFloat(restaurantData.locations[0].lat),
-                        longitude: parseFloat(restaurantData.locations[0].lng),
+                        latitude: Number(restaurantData.locations[0].lat),
+                        longitude: Number(restaurantData.locations[0].lng),
                         latitudeDelta: 0.01,
                         longitudeDelta: 0.01,
                       }}
@@ -316,8 +402,8 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                     >
                       <Marker
                         coordinate={{
-                          latitude: parseFloat(restaurantData.locations[0].lat),
-                          longitude: parseFloat(restaurantData.locations[0].lng),
+                          latitude: Number(restaurantData.locations[0].lat),
+                          longitude: Number(restaurantData.locations[0].lng),
                         }}
                       />
                     </MapView>
@@ -353,10 +439,16 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                 </View>
                 <View style={styles.actionButtons}>
                   <TouchableOpacity
-                    style={styles.actionButton}
+                    style={[styles.actionButton, isInitiatingCall && styles.actionButtonDisabled]}
                     onPress={handleCall}
+                    disabled={isInitiatingCall}
+                    activeOpacity={0.7}
                   >
-                    <MaterialIcons name="call" size={18} color="#00B14F" />
+                    {isInitiatingCall ? (
+                      <ActivityIndicator size="small" color="#00B14F" />
+                    ) : (
+                      <MaterialIcons name="call" size={18} color="#00B14F" />
+                    )}
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.actionButton}
@@ -733,6 +825,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F0F0',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  actionButtonDisabled: {
+    opacity: 0.6,
   },
   infoRow: {
     flexDirection: 'row',
