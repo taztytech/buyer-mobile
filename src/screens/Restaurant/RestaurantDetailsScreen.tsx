@@ -19,6 +19,7 @@ import { isExpoGo } from '@/utils/platform.util';
 import { exotelService } from '@/services/exotel.service';
 import { authService } from '@/services/auth.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { useSnackbar } from '@/context/SnackbarContext';
 
 // Conditionally import MapView only for standalone builds
 let MapView: any;
@@ -61,6 +62,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
   const [isTimingsExpanded, setIsTimingsExpanded] = useState(false);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
   const { showConfirmation } = useConfirmation();
+  const { showSnackbar } = useSnackbar();
 
   useEffect(() => {
     fetchRestaurantDetails();
@@ -146,13 +148,10 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
       });
 
       if (response.success) {
-        showConfirmation({
-          title: 'Call Initiated',
+        showSnackbar({
           message: 'Your call to the restaurant is being connected. Please wait for the call.',
-          confirmText: 'OK',
-          cancelText: '',
-          confirmButtonColor: '#00B14F',
-          onConfirm: () => {},
+          type: 'success',
+          duration: 4000,
         });
       } else {
         showConfirmation({
