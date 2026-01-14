@@ -34,6 +34,7 @@ import { homeService } from '@/services/home.service';
 import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
 import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
+import { SnackbarProvider } from '@/context/SnackbarContext';
 import { OrdersProvider, useOrders } from '@/context/OrdersContext';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import { SearchSuggestion } from '@/services/search.service';
@@ -2365,9 +2366,11 @@ export default function App() {
       <VegModeProvider>
         <CartProvider>
           <ConfirmationProvider>
-            <OrdersProvider>
-              <AppContent />
-            </OrdersProvider>
+            <SnackbarProvider>
+              <OrdersProvider>
+                <AppContent />
+              </OrdersProvider>
+            </SnackbarProvider>
           </ConfirmationProvider>
         </CartProvider>
       </VegModeProvider>
