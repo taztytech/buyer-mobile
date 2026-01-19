@@ -1103,18 +1103,21 @@ function AppContent() {
     // Animate orders screen out
     Animated.timing(ordersScreenSlide, {
       toValue: SCREEN_WIDTH,
-      duration: 0,  // Instant
+      duration: 200,  // Small duration for smooth transition
       useNativeDriver: true,
     }).start(() => {
       // If we came from orderDetail (which came from checkout), go to home
       // Otherwise, go to profile (normal flow from profile screen)
       if (ordersCameFrom === 'orderDetail') {
-        // Ensure home screen is visible by resetting its position
-        homeScreenSlide.setValue(0);
-        // Ensure other screens are hidden
+        // Batch all screen position resets together before state update
+        orderDetailScreenSlide.setValue(SCREEN_WIDTH);
+        ordersScreenSlide.setValue(SCREEN_WIDTH);
         profileScreenSlide.setValue(SCREEN_WIDTH);
         restaurantScreenSlide.setValue(SCREEN_WIDTH);
         checkoutScreenSlide.setValue(SCREEN_WIDTH);
+        homeScreenSlide.setValue(0);
+        
+        // Update state after all positions are set
         setCurrentScreen('home');
         setOrdersCameFrom('profile'); // Reset for next time
       } else {
