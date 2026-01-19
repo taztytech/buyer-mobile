@@ -65,6 +65,9 @@ export interface CartItemResponse {
 export interface CartSummary {
   subtotal: number;
   delivery_fee: number;
+  delivery_fee_tax: number;
+  platform_fee_tax: number;
+  total_tax_amount: number;
   tax_amount: number;
   discount_amount: number;
   tip_amount?: number;
