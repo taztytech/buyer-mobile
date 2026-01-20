@@ -108,6 +108,15 @@ export interface OrderListItem {
   };
 }
 
+// Cancel Reason Interface
+export interface CancelReason {
+  code: string;
+  reason: string;
+  is_rto: boolean;
+  is_part_cancel: boolean;
+  cancelled_by: string;
+}
+
 class OrdersService {
   /**
    * Add item to cart
@@ -251,12 +260,35 @@ class OrdersService {
   }
 
   /**
+   * Get cancel reasons
+   */
+  async getCancelReasons(): Promise<ApiResponse<CancelReason[]>> {
+    try {
+      const response = await apiService.get<CancelReason[]>('/cancel-reason');
+      return response;
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch cancel reasons',
+      };
+    }
+  }
+
+  /**
    * Cancel order
    */
-  async cancelOrder(orderId: number, reason?: string): Promise<ApiResponse<any>> {
+  async cancelOrder(
+    orderNumber: string,
+    code: string,
+    reason: string,
+    cancelledBy: string = 'buyer'
+  ): Promise<ApiResponse<any>> {
     try {
-      const response = await apiService.post(`/api/buyer/orders/${orderId}/cancel`, {
+      const response = await apiService.post('/api/buyer/orders/cancel', {
+        order_number: orderNumber,
+        code,
         reason,
+        cancelled_by: cancelledBy,
       });
       return response;
     } catch (error: any) {

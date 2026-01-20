@@ -18,6 +18,120 @@ interface ContentPageProps {
 }
 
 export const ContentPage: React.FC<ContentPageProps> = ({ title, url, onBack }) => {
+  // JavaScript to hide only logo elements
+  const hideLogoScript = `
+    (function() {
+      // Create and inject CSS to hide logos
+      const style = document.createElement('style');
+      style.innerHTML = \`
+        /* Hide logo images */
+        img[alt*="Tazty"],
+        img[alt*="tazty"],
+        img[alt*="TAZTY"],
+        img[src*="logo"],
+        img[src*="Logo"],
+        img[src*="LOGO"],
+        /* Hide logo links */
+        a[href="/"] img,
+        /* Hide header logo containers */
+        header img,
+        nav img,
+        /* Hide specific logo classes/IDs */
+        .logo,
+        #logo,
+        [class*="logo" i],
+        [id*="logo" i],
+        /* Hide any image in the header/nav area */
+        header a img,
+        nav a img
+        {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          height: 0 !important;
+          width: 0 !important;
+        }
+      \`;
+      
+      if (document.head) {
+        document.head.appendChild(style);
+      } else {
+        document.addEventListener('DOMContentLoaded', function() {
+          if (document.head) {
+            document.head.appendChild(style);
+          }
+        });
+      }
+      
+      // Function to hide logo elements
+      function hideLogos() {
+        const logoSelectors = [
+          'img[alt*="Tazty" i]',
+          'img[alt*="tazty" i]',
+          'img[src*="logo" i]',
+          '.logo',
+          '#logo',
+          'header img',
+          'nav img',
+          '[class*="logo" i]',
+          '[id*="logo" i]',
+          'a[href="/"] img'
+        ];
+        
+        logoSelectors.forEach(function(selector) {
+          try {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(function(el) {
+              if (el && el.parentNode) {
+                el.style.display = 'none';
+                el.style.visibility = 'hidden';
+                el.style.opacity = '0';
+                el.style.height = '0';
+                el.style.width = '0';
+              }
+            });
+          } catch(e) {}
+        });
+      }
+      
+      // Hide logos immediately
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', hideLogos);
+      } else {
+        hideLogos();
+      }
+      
+      // Hide logos after delays (for dynamically loaded content)
+      setTimeout(hideLogos, 500);
+      setTimeout(hideLogos, 1000);
+      setTimeout(hideLogos, 2000);
+      
+      // Use MutationObserver to hide logos that are added dynamically
+      if (typeof MutationObserver !== 'undefined') {
+        const observer = new MutationObserver(function(mutations) {
+          hideLogos();
+        });
+        
+        if (document.body) {
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true
+          });
+        } else {
+          document.addEventListener('DOMContentLoaded', function() {
+            if (document.body) {
+              observer.observe(document.body, {
+                childList: true,
+                subtree: true
+              });
+            }
+          });
+        }
+      }
+    })();
+    true;
+  `;
+
   return (
     <View style={styles.outerContainer}>
       <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
@@ -38,6 +152,8 @@ export const ContentPage: React.FC<ContentPageProps> = ({ title, url, onBack }) 
             source={{ uri: url }}
             style={styles.webView}
             startInLoadingState
+            injectedJavaScript={hideLogoScript}
+            injectedJavaScriptBeforeContentLoaded={hideLogoScript}
           />
         ) : (
           <ScrollView

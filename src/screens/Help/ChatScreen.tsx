@@ -21,7 +21,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
 import { colors } from '@/theme/colors';
 import { useOrders } from '@/context/OrdersContext';
-import { ordersService } from '@/services/orders.service';
+import { ordersService, CancelReason } from '@/services/orders.service';
+import { exotelService } from '@/services/exotel.service';
+import { authService } from '@/services/auth.service';
 
 interface ChatScreenProps {
   visible?: boolean;
@@ -62,7 +64,14 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
   const [selectedVideoUri, setSelectedVideoUri] = useState<string | null>(null);
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
   const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
+  const [cancelReasons, setCancelReasons] = useState<CancelReason[]>([]);
+  const [selectedCancelReason, setSelectedCancelReason] = useState<CancelReason | null>(null);
+  const [showCancelReasonDropdown, setShowCancelReasonDropdown] = useState(false);
+  const [loadingCancelReasons, setLoadingCancelReasons] = useState(false);
+  const [orderNumber, setOrderNumber] = useState<string>('');
+  const [supportPhoneNumber, setSupportPhoneNumber] = useState<string>('');
+  const [isInitiatingCall, setIsInitiatingCall] = useState(false);
+  const [showSupportCallButton, setShowSupportCallButton] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Determine if order is before delivery (pending, confirmed) or after (accepted, billed, delivered, etc.)
@@ -133,6 +142,26 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       fetchOrderStatus();
     }
   }, [visible, orderId, getOrderById]);
+
+  // Fetch support phone number
+  useEffect(() => {
+    const fetchSupportDetails = async () => {
+      if (!visible) return;
+      
+      try {
+        const supportDetails = await authService.getSupportDetails(false);
+        if (supportDetails.support_number) {
+          // Get first number if multiple numbers are comma-separated
+          const numbers = supportDetails.support_number.split(',').map(n => n.trim());
+          setSupportPhoneNumber(numbers[0] || '');
+        }
+      } catch (error) {
+        console.error('Failed to fetch support details:', error);
+      }
+    };
+
+    fetchSupportDetails();
+  }, [visible]);
 
   useEffect(() => {
     if (visible) {
@@ -547,25 +576,140 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     }, 1000);
   };
 
-  const handleCancelOrder = async () => {
-    if (!orderId) {
-      Alert.alert('Error', 'Order ID is missing');
-      setShowCancelReasonModal(false);
-      setCancelReason('');
-      setShowOptions(true);
+  // Fetch cancel reasons when modal opens
+  useEffect(() => {
+    const fetchCancelReasons = async () => {
+      if (showCancelReasonModal && cancelReasons.length === 0) {
+        setLoadingCancelReasons(true);
+        try {
+          const response = await ordersService.getCancelReasons();
+          if (response.success && response.data) {
+            setCancelReasons(response.data);
+          } else {
+            Alert.alert('Error', response.error || 'Failed to load cancel reasons');
+          }
+        } catch (error: any) {
+          Alert.alert('Error', 'Failed to load cancel reasons. Please try again.');
+        } finally {
+          setLoadingCancelReasons(false);
+        }
+      }
+    };
+
+    // Also fetch order number when modal opens
+    const fetchOrderNumber = async () => {
+      if (showCancelReasonModal && orderId && !orderNumber) {
+        try {
+          const contextOrder = getOrderById(orderId);
+          if (contextOrder?.order_number) {
+            setOrderNumber(contextOrder.order_number);
+          } else {
+            const response = await ordersService.getOrderById(Number(orderId));
+            if (response.success && response.data?.order_number) {
+              setOrderNumber(response.data.order_number);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch order number:', error);
+        }
+      }
+    };
+
+    if (showCancelReasonModal) {
+      fetchCancelReasons();
+      fetchOrderNumber();
+    }
+  }, [showCancelReasonModal, orderId, getOrderById]);
+
+  const handleCallSupport = async () => {
+    if (!supportPhoneNumber) {
+      Alert.alert('Error', 'Support phone number is not available. Please try again later.');
       return;
     }
 
-    if (!cancelReason.trim()) {
-      Alert.alert('Required', 'Please provide a cancellation reason');
+    // Get user's phone number
+    const currentUser = await authService.getCurrentUser();
+    if (!currentUser || !currentUser.phoneNumber) {
+      Alert.alert('Error', 'Unable to get your phone number. Please ensure you are logged in.');
+      return;
+    }
+
+    // Clean phone numbers (remove spaces, dashes, etc.)
+    const userPhone = currentUser.phoneNumber.replace(/\D/g, '');
+    const supportPhoneClean = supportPhoneNumber.replace(/\D/g, '');
+
+    if (!userPhone || !supportPhoneClean) {
+      Alert.alert('Error', 'Invalid phone number format. Please check your phone number.');
       return;
     }
 
     try {
-      const response = await ordersService.cancelOrder(Number(orderId), cancelReason.trim());
+      setIsInitiatingCall(true);
+
+      // Call Exotel API with order_id if available
+      const response = await exotelService.initiateCall({
+        order_id: orderNumber || undefined,
+        from: userPhone,
+        to: supportPhoneClean,
+      });
+
+      if (response.success) {
+        Alert.alert(
+          'Call Initiated',
+          'Your call to support is being connected. Please wait for the call.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setShowSupportCallButton(false);
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Call Failed',
+          response.error || 'Failed to initiate call. Please try again later.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error: any) {
+      Alert.alert(
+        'Error',
+        error.message || 'An unexpected error occurred. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsInitiatingCall(false);
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!orderNumber) {
+      Alert.alert('Error', 'Order number is missing');
+      setShowCancelReasonModal(false);
+      setSelectedCancelReason(null);
+      setShowOptions(true);
+      return;
+    }
+
+    if (!selectedCancelReason) {
+      Alert.alert('Required', 'Please select a cancellation reason');
+      return;
+    }
+
+    try {
+      const response = await ordersService.cancelOrder(
+        orderNumber,
+        selectedCancelReason.code,
+        selectedCancelReason.reason,
+        selectedCancelReason.cancelled_by
+      );
       
       setShowCancelReasonModal(false);
-      setCancelReason('');
+      setSelectedCancelReason(null);
+      setOrderNumber('');
+      setShowSupportCallButton(false);
 
       if (response.success) {
         const botMessage: Message = {
@@ -576,6 +720,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
         };
         setMessages((prev) => [...prev, botMessage]);
       } else {
+        // Show support call button on API failure
+        setShowSupportCallButton(true);
         const botMessage: Message = {
           id: (Date.now() + 1).toString(),
           text: response.error || 'Failed to cancel order. Please try again or contact support.',
@@ -586,7 +732,10 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       }
     } catch (error: any) {
       setShowCancelReasonModal(false);
-      setCancelReason('');
+      setSelectedCancelReason(null);
+      setOrderNumber('');
+      // Show support call button on error
+      setShowSupportCallButton(true);
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: 'An error occurred while canceling your order. Please try again or contact support.',
@@ -610,6 +759,9 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
 
     // Handle cancel order separately - show modal for reason
     if (option.id === 'cancel_order') {
+      setSelectedCancelReason(null);
+      setOrderNumber('');
+      setShowSupportCallButton(false);
       setShowCancelReasonModal(true);
       return;
     }
@@ -748,6 +900,35 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
                 </View>
               </View>
             ))}
+
+            {/* Support Call Button - shown when cancel order fails */}
+            {showSupportCallButton && (
+              <View style={styles.supportCallContainer}>
+                <View style={styles.supportCallBubble}>
+                  <Text style={styles.supportCallText}>
+                    Need immediate assistance? Call our support team.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.supportCallButton, isInitiatingCall && styles.supportCallButtonDisabled]}
+                    onPress={handleCallSupport}
+                    disabled={isInitiatingCall}
+                    activeOpacity={0.7}
+                  >
+                    {isInitiatingCall ? (
+                      <Text style={styles.supportCallButtonText}>Connecting...</Text>
+                    ) : (
+                      <>
+                        <MaterialIcons name="phone" size={18} color="#FFFFFF" />
+                        <Text style={styles.supportCallButtonText}>Call Support</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.supportCallTime}>
+                  {formatTime(new Date())}
+                </Text>
+              </View>
+            )}
 
             {/* Chat Options */}
             {showOptions && chatOptions.length > 0 && (
@@ -906,7 +1087,10 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
             animationType="fade"
             onRequestClose={() => {
               setShowCancelReasonModal(false);
-              setCancelReason('');
+              setSelectedCancelReason(null);
+              setOrderNumber('');
+              setShowCancelReasonDropdown(false);
+              setShowSupportCallButton(false);
               setShowOptions(true);
             }}
           >
@@ -921,30 +1105,106 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
                   activeOpacity={1}
                   onPress={() => {
                     setShowCancelReasonModal(false);
-                    setCancelReason('');
+                    setSelectedCancelReason(null);
+                    setOrderNumber('');
+                    setShowCancelReasonDropdown(false);
+                    setShowSupportCallButton(false);
                     setShowOptions(true);
                   }}
                 />
-                <View style={styles.cancelReasonModal}>
-                  <Text style={styles.cancelReasonTitle}>Cancel Order</Text>
-                  <Text style={styles.cancelReasonSubtitle}>
-                    Please provide a reason for cancellation:
-                  </Text>
-                  <TextInput
-                    style={styles.cancelReasonInput}
-                    placeholder="Enter cancellation reason..."
-                    value={cancelReason}
-                    onChangeText={setCancelReason}
-                    multiline
-                    numberOfLines={4}
-                    textAlignVertical="top"
-                  />
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={() => setShowCancelReasonDropdown(false)}
+                >
+                  <View style={styles.cancelReasonModal}>
+                    <Text style={styles.cancelReasonTitle}>Cancel Order</Text>
+                    <Text style={styles.cancelReasonSubtitle}>
+                      Please select a reason for cancellation:
+                    </Text>
+                    
+                    {/* Dropdown */}
+                    <TouchableOpacity
+                      style={styles.cancelReasonDropdown}
+                      onPress={() => setShowCancelReasonDropdown(!showCancelReasonDropdown)}
+                      activeOpacity={0.7}
+                    >
+                    <Text
+                      style={[
+                        styles.cancelReasonDropdownText,
+                        !selectedCancelReason && styles.cancelReasonDropdownPlaceholder,
+                      ]}
+                    >
+                      {selectedCancelReason
+                        ? selectedCancelReason.reason
+                        : 'Select cancellation reason...'}
+                    </Text>
+                    <MaterialIcons
+                      name={showCancelReasonDropdown ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                      size={24}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+
+                  {/* Dropdown Options */}
+                  {showCancelReasonDropdown && (
+                    <View style={styles.cancelReasonDropdownOptions}>
+                      <ScrollView
+                        style={styles.cancelReasonDropdownScroll}
+                        nestedScrollEnabled
+                        showsVerticalScrollIndicator={false}
+                      >
+                        {loadingCancelReasons ? (
+                          <View style={styles.cancelReasonLoadingContainer}>
+                            <Text style={styles.cancelReasonLoadingText}>Loading reasons...</Text>
+                          </View>
+                        ) : cancelReasons.length > 0 ? (
+                          cancelReasons.map((reason) => (
+                            <TouchableOpacity
+                              key={reason.code}
+                              style={[
+                                styles.cancelReasonOption,
+                                selectedCancelReason?.code === reason.code &&
+                                  styles.cancelReasonOptionSelected,
+                              ]}
+                              onPress={() => {
+                                setSelectedCancelReason(reason);
+                                setShowCancelReasonDropdown(false);
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Text
+                                style={[
+                                  styles.cancelReasonOptionText,
+                                  selectedCancelReason?.code === reason.code &&
+                                    styles.cancelReasonOptionTextSelected,
+                                ]}
+                              >
+                                {reason.reason}
+                              </Text>
+                              {selectedCancelReason?.code === reason.code && (
+                                <MaterialIcons name="check" size={20} color={colors.primary} />
+                              )}
+                            </TouchableOpacity>
+                          ))
+                        ) : (
+                          <View style={styles.cancelReasonLoadingContainer}>
+                            <Text style={styles.cancelReasonLoadingText}>
+                              No reasons available
+                            </Text>
+                          </View>
+                        )}
+                      </ScrollView>
+                    </View>
+                  )}
+
                   <View style={styles.cancelReasonButtons}>
                     <TouchableOpacity
                       style={[styles.cancelReasonButton, styles.cancelReasonButtonSecondary]}
                       onPress={() => {
                         setShowCancelReasonModal(false);
-                        setCancelReason('');
+                        setSelectedCancelReason(null);
+                        setOrderNumber('');
+                        setShowCancelReasonDropdown(false);
                         setShowOptions(true);
                       }}
                       activeOpacity={0.7}
@@ -952,14 +1212,20 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
                       <Text style={styles.cancelReasonButtonTextSecondary}>Cancel</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.cancelReasonButton, styles.cancelReasonButtonPrimary]}
+                      style={[
+                        styles.cancelReasonButton,
+                        styles.cancelReasonButtonPrimary,
+                        !selectedCancelReason && styles.cancelReasonButtonDisabled,
+                      ]}
                       onPress={handleCancelOrder}
+                      disabled={!selectedCancelReason}
                       activeOpacity={0.7}
                     >
                       <Text style={styles.cancelReasonButtonTextPrimary}>Submit</Text>
                     </TouchableOpacity>
                   </View>
-                </View>
+                  </View>
+                </TouchableOpacity>
               </View>
             </KeyboardAvoidingView>
           </Modal>
@@ -1348,6 +1614,126 @@ const styles = StyleSheet.create({
     minHeight: 100,
     borderWidth: 1,
     borderColor: '#E4E4E4',
+  },
+  cancelReasonDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E4E4E4',
+    minHeight: 48,
+  },
+  cancelReasonDropdownText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#000000',
+    flex: 1,
+  },
+  cancelReasonDropdownPlaceholder: {
+    color: colors.textSecondary,
+  },
+  cancelReasonDropdownOptions: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E4E4E4',
+    marginBottom: 20,
+    maxHeight: 200,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cancelReasonDropdownScroll: {
+    maxHeight: 200,
+  },
+  cancelReasonOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+  },
+  cancelReasonOptionSelected: {
+    backgroundColor: '#F0F9F4',
+  },
+  cancelReasonOptionText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#000000',
+    flex: 1,
+  },
+  cancelReasonOptionTextSelected: {
+    fontFamily: 'Poppins_500Medium',
+    color: colors.primary,
+  },
+  cancelReasonLoadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  cancelReasonLoadingText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  cancelReasonButtonDisabled: {
+    opacity: 0.5,
+  },
+  supportCallContainer: {
+    alignItems: 'flex-start',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  supportCallBubble: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 16,
+    borderBottomLeftRadius: 4,
+    padding: 16,
+    maxWidth: '85%',
+    borderWidth: 1,
+    borderColor: '#FFB74D',
+  },
+  supportCallText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#000000',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  supportCallButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 8,
+  },
+  supportCallButtonDisabled: {
+    opacity: 0.6,
+  },
+  supportCallButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  supportCallTime: {
+    fontFamily: 'Poppins',
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 4,
+    marginLeft: 8,
   },
   cancelReasonButtons: {
     flexDirection: 'row',

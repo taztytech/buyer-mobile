@@ -35,6 +35,7 @@ import { homeService } from '@/services/home.service';
 import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
 import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
+import { SnackbarProvider } from '@/context/SnackbarContext';
 import { OrdersProvider, useOrders } from '@/context/OrdersContext';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import { SearchSuggestion } from '@/services/search.service';
@@ -105,14 +106,16 @@ function AppContent() {
   const termsConditionsScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const addressScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const ordersScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const orderDetailScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const helpScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const contactUsScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const faqScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const restaurantScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const checkoutScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   // Chat screen state
-  const [chatHelpOptionId, setChatHelpOptionId] = React.useState<string>('');
-  const [chatHelpOptionTitle, setChatHelpOptionTitle] = React.useState<string>('');
+  const [chatHelpOptionId] = React.useState<string>('');
+  const [chatHelpOptionTitle] = React.useState<string>('');
 
   const [fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
@@ -1013,6 +1016,8 @@ function AppContent() {
 
     // Set order ID immediately to ensure it's available
     setSelectedOrderId(orderId.toString());
+    // Reset order detail screen position to show it
+    orderDetailScreenSlide.setValue(0);
 
     // Close checkout screen with animation first, then navigate to order detail
     Animated.timing(checkoutScreenSlide, {
@@ -1027,7 +1032,7 @@ function AppContent() {
         setCurrentScreen('orderDetail');
       });
     });
-  }, [checkoutScreenSlide, restaurantScreenSlide]);
+  }, [checkoutScreenSlide, restaurantScreenSlide, orderDetailScreenSlide]);
 
   // Handle order cancel from checkout - OK button after payment failure
   const handleOrderCancelFromCheckout = useCallback(() => {
@@ -1101,12 +1106,18 @@ function AppContent() {
   // Orders Navigation
   const handleNavigateToOrders = () => {
     setCurrentScreen('orders');
+    // Reset orders screen position to show it
+    ordersScreenSlide.setValue(0);
     analyticsService.logEvent(AnalyticsEvents.ORDER_VIEW);
   };
 
   const handleBackFromOrders = () => {
-    // Use requestAnimationFrame to ensure smooth transition and proper pointer events update
-    requestAnimationFrame(() => {
+    // Animate orders screen out
+    Animated.timing(ordersScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 0,  // Instant
+      useNativeDriver: true,
+    }).start(() => {
       setCurrentScreen('profile');
     });
   };
@@ -1115,29 +1126,19 @@ function AppContent() {
   const handleNavigateToOrderDetail = (orderId: string) => {
     setSelectedOrderId(orderId);
     setCurrentScreen('orderDetail');
+    // Reset order detail screen position to show it
+    orderDetailScreenSlide.setValue(0);
   };
 
   const handleBackFromOrderDetail = () => {
-    // Use requestAnimationFrame to ensure smooth transition
-    requestAnimationFrame(() => {
+    // Animate order detail screen out
+    Animated.timing(orderDetailScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 0,  // Instant
+      useNativeDriver: true,
+    }).start(() => {
       setCurrentScreen('orders');
-    });
-  };
-
-  // Order Help Navigation - Now goes directly to Chat
-  const handleNavigateToOrderHelp = () => {
-    setChatHelpOptionId('');
-    setChatHelpOptionTitle('');
-    setCurrentScreen('chat');
-  };
-
-  // Chat Navigation
-  const handleBackFromChat = () => {
-    // Use requestAnimationFrame to ensure smooth transition
-    requestAnimationFrame(() => {
-      setChatHelpOptionId('');
-      setChatHelpOptionTitle('');
-      setCurrentScreen('orderDetail');
+      ordersScreenSlide.setValue(0);
     });
   };
 
@@ -1394,40 +1395,61 @@ function AppContent() {
   // Help Navigation
   const [helpCameFrom, setHelpCameFrom] = React.useState<'profile' | 'orders'>('profile');
   const [isHelpClosing, setIsHelpClosing] = React.useState(false);
+  const [chatCameFrom, setChatCameFrom] = React.useState<'help' | 'orderDetail' | null>(null);
 
   // Contact Us Navigation
-  const handleNavigateToContactUs = () => {
+  const [contactUsCameFrom, setContactUsCameFrom] = React.useState<'profile' | 'orders' | 'orderDetail'>('profile');
+  
+  const handleNavigateToContactUs = (from: 'profile' | 'orders' | 'orderDetail' = 'profile') => {
+    setContactUsCameFrom(from);
     setCurrentScreen('contactUs');
 
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(contactUsScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    if (from === 'profile') {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: -SCREEN_WIDTH,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(contactUsScreenSlide, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // From orders or orderDetail screen - no animation, instant transition
+      contactUsScreenSlide.setValue(0);
+    }
   };
 
   const handleBackFromContactUs = () => {
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(contactUsScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('profile');
-    });
+    if (contactUsCameFrom === 'profile') {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(contactUsScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('profile');
+      });
+    } else if (contactUsCameFrom === 'orderDetail') {
+      // Back to order detail screen - instant, no animation
+      contactUsScreenSlide.setValue(SCREEN_WIDTH);
+      orderDetailScreenSlide.setValue(0);
+      setCurrentScreen('orderDetail');
+    } else {
+      // Back to orders screen - instant, no animation
+      contactUsScreenSlide.setValue(SCREEN_WIDTH);
+      ordersScreenSlide.setValue(0);
+      setCurrentScreen('orders');
+    }
   };
 
   const handleNavigateToHelp = (from: 'profile' | 'orders' = 'profile', order?: OrderListItem) => {
@@ -1553,6 +1575,37 @@ function AppContent() {
     } else {
       // If came from orders, go back to orders
       setCurrentScreen('orders');
+    }
+  };
+
+  // Chat Navigation
+  const handleNavigateToOrderHelp = () => {
+    setChatCameFrom('orderDetail');
+    setCurrentScreen('chat');
+  };
+
+  const handleBackFromChat = () => {
+    // Navigate back based on where we came from
+    if (chatCameFrom === 'orderDetail') {
+      setCurrentScreen('orderDetail');
+      setChatCameFrom(null);
+    } else if (chatCameFrom === 'help') {
+      setCurrentScreen('help');
+      setChatCameFrom(null);
+    } else {
+      // Fallback: if chatCameFrom is not set, try to determine from context
+      // Priority: orderDetail (if we have selectedOrderId) > help > orders
+      if (selectedOrderId) {
+        // If we have a selected order, likely came from orderDetail
+        setCurrentScreen('orderDetail');
+      } else if (helpCameFrom === 'orders' || helpCameFrom === 'profile') {
+        // If help screen was accessed, go back to help
+        setCurrentScreen('help');
+      } else {
+        // Ultimate fallback: go to orders screen (safe default)
+        setCurrentScreen('orders');
+      }
+      setChatCameFrom(null);
     }
   };
 
@@ -1882,7 +1935,7 @@ function AppContent() {
               onMyOrders={handleNavigateToOrders}
               onMyAddresses={handleNavigateToMyAddresses}
               onFavorites={handleNavigateToExploreDishes}
-              onContactUs={handleNavigateToContactUs}
+              onContactUs={() => handleNavigateToContactUs('profile')}
               onPrivacyPolicy={handleNavigateToPrivacyPolicy}
               onTermsConditions={handleNavigateToTermsConditions}
               onFaq={handleNavigateToFaq}
@@ -1933,7 +1986,7 @@ function AppContent() {
             pointerEvents={currentScreen === 'locationSelection' ? 'auto' : 'none'}
           >
             <LocationSelectionScreen
-              initialSearchQuery={''}
+              initialSearchQuery={searchQuery}
               editingAddress={editingAddress}
               initialLatitude={editingAddress?.latitude || initialLocationCoords?.latitude}
               initialLongitude={editingAddress?.longitude || initialLocationCoords?.longitude}
@@ -1942,40 +1995,54 @@ function AppContent() {
             />
           </Animated.View>
 
-          {/* Conditionally render OrdersScreen only when needed */}
-          {currentScreen === 'orders' && (
-            <View style={styles.ordersOverlay}>
-              <OrdersScreen
-                visible={true}
-                onBack={handleBackFromOrders}
-                onOrderDetails={handleNavigateToOrderDetail}
-                onReorder={handleReorder}
-                onRateOrder={handleNavigateToRateOrder}
-                highlightOrderId={highlightOrderId}
-                onTrackOrder={handleNavigateToOrderTracking}
-                onHelp={(order) => handleNavigateToHelp('orders', order)}
-                onViewMore={() => {}}
-              />
-            </View>
-          )}
+          {/* Always render OrdersScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.ordersOverlay,
+              {
+                transform: [{ translateX: ordersScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'orders' ? 'auto' : 'none'}
+          >
+            <OrdersScreen
+              visible={currentScreen === 'orders'}
+              onBack={handleBackFromOrders}
+              onOrderDetails={handleNavigateToOrderDetail}
+              onReorder={handleReorder}
+              onRateOrder={handleNavigateToRateOrder}
+              highlightOrderId={highlightOrderId}
+              onTrackOrder={handleNavigateToOrderTracking}
+              onHelp={(order) => handleNavigateToHelp('orders', order)}
+              onContactUs={() => handleNavigateToContactUs('orders')}
+              onViewMore={() => {}}
+            />
+          </Animated.View>
 
-          {/* Conditionally render OrderDetailScreen only when needed */}
-          {currentScreen === 'orderDetail' && (
-            <View style={styles.orderDetailOverlay}>
-              <OrderDetailScreen
-                key={selectedOrderId}
-                orderId={selectedOrderId}
-                visible={true}
-                onBack={handleBackFromOrderDetail}
-                onThankDriver={() => {}}
-                onRateOrder={handleNavigateToRateOrder}
-                onReorder={() => handleReorder(selectedOrderId)}
-                onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId, 'orderDetail')}
-                onDownloadInvoice={() => {}}
-                onHelp={handleNavigateToOrderHelp}
-              />
-            </View>
-          )}
+          {/* Always render OrderDetailScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.orderDetailOverlay,
+              {
+                transform: [{ translateX: orderDetailScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'orderDetail' ? 'auto' : 'none'}
+          >
+            <OrderDetailScreen
+              key={selectedOrderId}
+              orderId={selectedOrderId}
+              visible={currentScreen === 'orderDetail'}
+              onBack={handleBackFromOrderDetail}
+              onThankDriver={() => {}}
+              onRateOrder={handleNavigateToRateOrder}
+              onReorder={() => handleReorder(selectedOrderId)}
+              onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId, 'orderDetail')}
+              onDownloadInvoice={() => {}}
+              onContactUs={() => handleNavigateToContactUs('orderDetail')}
+              onHelp={handleNavigateToOrderHelp}
+            />
+          </Animated.View>
 
           {/* Conditionally render ChatScreen */}
           {currentScreen === 'chat' && (
@@ -2358,9 +2425,11 @@ export default function App() {
       <VegModeProvider>
         <CartProvider>
           <ConfirmationProvider>
-            <OrdersProvider>
-              <AppContent />
-            </OrdersProvider>
+            <SnackbarProvider>
+              <OrdersProvider>
+                <AppContent />
+              </OrdersProvider>
+            </SnackbarProvider>
           </ConfirmationProvider>
         </CartProvider>
       </VegModeProvider>
@@ -2526,7 +2595,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 8,
+    zIndex: 9,
     backgroundColor: '#FFFFFF',
   },
   editProfileOverlay: {

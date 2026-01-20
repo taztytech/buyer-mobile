@@ -9,6 +9,7 @@ import {
   StatusBar,
   Animated,
   ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -153,6 +154,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [tipError, setTipError] = useState('');
   const [promoError, setPromoError] = useState('');
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
+  const [showTaxTooltip, setShowTaxTooltip] = useState(false);
   const lastAutoRemovedTotalRef = useRef<number | null>(null);
 
   // Track latest update sequence to ensure we only apply cart_summary from the most recent update
@@ -169,7 +171,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const backendTipAmount = (cartSummary as any)?.tip_amount ?? 0;
   const totalAmount = cartSummary?.final_amount ?? 0;
   const estimatedDeliveryTimeRaw = (cartSummary as any)?.estimated_delivery_time ?? null;
-
+  const deliveryFeeTax = (cartSummary as any)?.delivery_fee_tax ?? 0;
+  const platformFeeTax = (cartSummary as any)?.platform_fee_tax ?? 0;
+  console.log('📦 OrderDetails: cartSummary', cartSummary);
   // Format estimated delivery time to user-friendly format
   // Handles two formats:
   // 1. ISO date string: "2025-12-12T12:00:00.000Z" - format it
@@ -842,13 +846,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 reason: errorMessage,
               });
             } catch (failureError) {
-              // If payment failure endpoint fails, try cancel order as fallback
-              try {
-                await ordersService.cancelOrder(orderId, `Payment failed: ${errorMessage}`);
-              } catch (cancelError) {
-                // If both fail, log but don't block user flow
-                console.error('Failed to mark order as payment failed:', failureError, cancelError);
-              }
+              // If payment failure endpoint fails, just log the error
+              // Don't try to cancel order as fallback - let the order remain in its current state
+              console.error('Failed to mark order as payment failed:', failureError);
             }
           }
 
@@ -1461,7 +1461,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         </View>
 
         {/* Main Content */}
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.scrollView} 
+          showsVerticalScrollIndicator={false}
+          onScrollBeginDrag={() => setShowTaxTooltip(false)}
+        >
           <View style={styles.content}>
 
             {/* Your Order Section */}
@@ -1952,7 +1956,37 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                     </View>
                   )}
                   <View style={styles.billRow}>
-                    <Text style={styles.billLabel}>Taxes and Charges</Text>
+                    <View style={styles.billLabelContainer}>
+                      <Text style={styles.billLabel}>Taxes and Charges</Text>
+                      <View style={styles.infoIconWrapper}>
+                        <TouchableOpacity
+                          onPress={() => setShowTaxTooltip(!showTaxTooltip)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <MaterialIcons name="info" size={16} color="rgba(0, 0, 0, 0.6)" />
+                        </TouchableOpacity>
+                        {showTaxTooltip && (
+                          <View style={styles.taxTooltip}>
+                            <View style={styles.taxTooltipContent}>
+                              <View style={styles.taxTooltipRow}>
+                                <Text style={styles.taxTooltipLabel}>Delivery Fee Tax</Text>
+                                <Text style={styles.taxTooltipValue}>
+                                  ₹{deliveryFeeTax.toFixed(2)}
+                                </Text>
+                              </View>
+                              <View style={styles.taxTooltipRow}>
+                                <Text style={styles.taxTooltipLabel}>Platform Fee Tax</Text>
+                                <Text style={styles.taxTooltipValue}>
+                                  ₹{platformFeeTax.toFixed(2)}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={styles.taxTooltipArrow} />
+                          </View>
+                        )}
+                      </View>
+                    </View>
                     <Text style={styles.billValue}>₹{gstAndCharges?.toFixed(2) ?? '0.00'}</Text>
                   </View>
                   {discountAmount > 0 && (
@@ -2179,6 +2213,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           }
         }}
       />
+
+      {/* Click outside overlay to close tooltip */}
+      {showTaxTooltip && (
+        <Pressable
+          style={styles.tooltipOverlay}
+          onPress={() => setShowTaxTooltip(false)}
+        />
+      )}
     </View>
   );
 };
@@ -2840,5 +2882,93 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#FFFFFF',
     textAlign: 'center',
+  },
+  billLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  infoIconWrapper: {
+    position: 'relative',
+  },
+  tooltipOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+  },
+  taxTooltip: {
+    position: 'absolute',
+    bottom: '100%',
+    left: '50%',
+    marginBottom: 8,
+    marginLeft: -120,
+    width: 240,
+    zIndex: 1000,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  taxTooltipContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  taxTooltipRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  taxTooltipLabel: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    color: 'rgba(0, 0, 0, 0.6)',
+  },
+  taxTooltipValue: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#000000',
+  },
+  taxTooltipDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    marginVertical: 8,
+  },
+  taxTooltipTotalLabel: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#000000',
+  },
+  taxTooltipTotalValue: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#00B14F',
+  },
+  taxTooltipArrow: {
+    position: 'absolute',
+    bottom: -6,
+    left: '50%',
+    marginLeft: -6,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#FFFFFF',
   },
 });
