@@ -164,7 +164,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   // Convenience accessors for backend-calculated amounts (no client-side recomputation)
   const itemTotal = cartSummary?.subtotal ?? 0;
   const deliveryFee = cartSummary?.delivery_fee ?? 0;
-  const gstAndCharges = cartSummary?.tax_amount ?? 0;
+  const gstAndCharges = cartSummary?.total_tax_amount ?? 0;
   const discountAmount = cartSummary?.discount_amount ?? 0;
   const platformFee = (cartSummary as any)?.platform_fee ?? 0;
   const includePlatformFee = (cartSummary as any)?.include_platform_fee ?? false;
@@ -173,6 +173,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const estimatedDeliveryTimeRaw = (cartSummary as any)?.estimated_delivery_time ?? null;
   const deliveryFeeTax = (cartSummary as any)?.delivery_fee_tax ?? 0;
   const platformFeeTax = (cartSummary as any)?.platform_fee_tax ?? 0;
+  const taxAmount = (cartSummary as any)?.tax_amount ?? 0;
   console.log('📦 OrderDetails: cartSummary', cartSummary);
   // Format estimated delivery time to user-friendly format
   // Handles two formats:
@@ -1979,6 +1980,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                                 <Text style={styles.taxTooltipLabel}>Platform Fee Tax</Text>
                                 <Text style={styles.taxTooltipValue}>
                                   ₹{platformFeeTax.toFixed(2)}
+                                </Text>
+                              </View>
+                              <View style={styles.taxTooltipRow}>
+                                <Text style={styles.taxTooltipLabel}>Tax Amount</Text>
+                                <Text style={styles.taxTooltipValue}>
+                                  ₹{taxAmount.toFixed(2)}
                                 </Text>
                               </View>
                             </View>

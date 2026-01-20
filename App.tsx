@@ -89,6 +89,7 @@ function AppContent() {
   const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses' | 'registration'>('home');
   const [locationSelectionCameFrom, setLocationSelectionCameFrom] = React.useState<'home' | 'addressSelection' | 'myAddresses'>('home');
   const [orderTrackingCameFrom, setOrderTrackingCameFrom] = React.useState<'orders' | 'checkout' | 'orderDetail'>('orders');
+  const [ordersCameFrom, setOrdersCameFrom] = React.useState<'profile' | 'orderDetail'>('profile');
   const [editingAddress, setEditingAddress] = React.useState<any>(null);
   const [helpOrderData, setHelpOrderData] = React.useState<OrderListItem | null>(null);
   const [_isRegistrationFlow, setIsRegistrationFlow] = React.useState(false);
@@ -1105,6 +1106,7 @@ function AppContent() {
 
   // Orders Navigation
   const handleNavigateToOrders = () => {
+    setOrdersCameFrom('profile'); // Track that we're coming from profile
     setCurrentScreen('orders');
     // Reset orders screen position to show it
     ordersScreenSlide.setValue(0);
@@ -1115,10 +1117,26 @@ function AppContent() {
     // Animate orders screen out
     Animated.timing(ordersScreenSlide, {
       toValue: SCREEN_WIDTH,
-      duration: 0,  // Instant
+      duration: 200,  // Small duration for smooth transition
       useNativeDriver: true,
     }).start(() => {
-      setCurrentScreen('profile');
+      // If we came from orderDetail (which came from checkout), go to home
+      // Otherwise, go to profile (normal flow from profile screen)
+      if (ordersCameFrom === 'orderDetail') {
+        // Batch all screen position resets together before state update
+        orderDetailScreenSlide.setValue(SCREEN_WIDTH);
+        ordersScreenSlide.setValue(SCREEN_WIDTH);
+        profileScreenSlide.setValue(SCREEN_WIDTH);
+        restaurantScreenSlide.setValue(SCREEN_WIDTH);
+        checkoutScreenSlide.setValue(SCREEN_WIDTH);
+        homeScreenSlide.setValue(0);
+        
+        // Update state after all positions are set
+        setCurrentScreen('home');
+        setOrdersCameFrom('profile'); // Reset for next time
+      } else {
+        setCurrentScreen('profile');
+      }
     });
   };
 
@@ -1131,6 +1149,11 @@ function AppContent() {
   };
 
   const handleBackFromOrderDetail = () => {
+    // Track that we're going to orders from orderDetail
+    // If we came from checkout (orderDetail was accessed via handleOrderSuccessFromCheckout),
+    // we need to track this so orders can go back to home
+    setOrdersCameFrom('orderDetail');
+    
     // Animate order detail screen out
     Animated.timing(orderDetailScreenSlide, {
       toValue: SCREEN_WIDTH,
