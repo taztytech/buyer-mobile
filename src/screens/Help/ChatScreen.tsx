@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-  Alert,
   Modal,
   ActionSheetIOS,
   Linking,
@@ -24,6 +23,7 @@ import { useOrders } from '@/context/OrdersContext';
 import { ordersService, CancelReason } from '@/services/orders.service';
 import { exotelService } from '@/services/exotel.service';
 import { authService } from '@/services/auth.service';
+import { ConfirmationModal } from '@/components/ConfirmationModal';
 
 interface ChatScreenProps {
   visible?: boolean;
@@ -70,8 +70,27 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
   const [loadingCancelReasons, setLoadingCancelReasons] = useState(false);
   const [orderNumber, setOrderNumber] = useState<string>('');
   const [supportPhoneNumber, setSupportPhoneNumber] = useState<string>('');
+  const [supportPhoneNumbers, setSupportPhoneNumbers] = useState<string[]>([]);
+  const [currentSupportPhoneIndex, setCurrentSupportPhoneIndex] = useState<number>(0);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
   const [showSupportCallButton, setShowSupportCallButton] = useState(false);
+  const [confirmationModal, setConfirmationModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    confirmText: 'OK',
+    cancelText: '',
+    onConfirm: () => {},
+    onCancel: () => {},
+  });
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Determine if order is before delivery (pending, confirmed) or after (accepted, billed, delivered, etc.)
@@ -85,6 +104,13 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
 
   // Get relevant options based on order status
   const getChatOptions = (): ChatOption[] => {
+    const statusLower = orderStatus?.toLowerCase() || '';
+    
+    // For cancelled or delivered orders, don't show any options (will show call support button instead)
+    if (statusLower === 'cancelled' || statusLower === 'delivered') {
+      return [];
+    }
+
     const isBeforeDelivery = isOrderBeforeDelivery(orderStatus);
 
     if (isBeforeDelivery) {
@@ -95,7 +121,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
         { id: 'payment_billing', text: 'Payment and billing related issue' },
       ];
     } else {
-      // Options for after order is delivered
+      // Options for after order is delivered (but not cancelled or delivered)
       return [
         { id: 'order_not_received', text: "I'm not receiving order" },
         { id: 'incorrect_items', text: 'Items delivered are incorrect or wrong' },
@@ -143,7 +169,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     }
   }, [visible, orderId, getOrderById]);
 
-  // Fetch support phone number
+  // Fetch support phone numbers
   useEffect(() => {
     const fetchSupportDetails = async () => {
       if (!visible) return;
@@ -151,9 +177,15 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       try {
         const supportDetails = await authService.getSupportDetails(false);
         if (supportDetails.support_number) {
-          // Get first number if multiple numbers are comma-separated
-          const numbers = supportDetails.support_number.split(',').map(n => n.trim());
-          setSupportPhoneNumber(numbers[0] || '');
+          // Get all numbers if multiple numbers are comma-separated
+          const numbers = supportDetails.support_number.split(',').map(n => n.trim()).filter(n => n.length > 0);
+          if (numbers.length > 0) {
+            setSupportPhoneNumbers(numbers);
+            // Set initial random number
+            const randomIndex = Math.floor(Math.random() * numbers.length);
+            setCurrentSupportPhoneIndex(randomIndex);
+            setSupportPhoneNumber(numbers[randomIndex]);
+          }
         }
       } catch (error) {
         console.error('Failed to fetch support details:', error);
@@ -168,29 +200,61 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       // Reset messages and options when screen becomes visible
       setMessages([]);
       setShowOptions(false);
+      setShowSupportCallButton(false);
       
-      // First, show greeting message
-      const greetingMessage: Message = {
-        id: Date.now().toString(),
-        text: "Hi there! I'm here to help you with your order. How can I assist you today?",
-        sender: 'bot',
-        timestamp: new Date(),
-      };
+      const statusLower = orderStatus?.toLowerCase() || '';
+      
+      // For cancelled or delivered orders, show call support button directly
+      if (statusLower === 'cancelled' || statusLower === 'delivered') {
+        // Show greeting message for cancelled/delivered orders
+        const greetingMessage: Message = {
+          id: Date.now().toString(),
+          text: "Hi there! I'm here to help you with your order. How can I assist you today?",
+          sender: 'bot',
+          timestamp: new Date(),
+        };
+        setMessages([greetingMessage]);
+        
+        // Show call support button after a short delay
+        setTimeout(() => {
+          setShowSupportCallButton(true);
+        }, 1000);
+      } else {
+        // For other orders, show greeting and options
+        const greetingMessage: Message = {
+          id: Date.now().toString(),
+          text: "Hi there! I'm here to help you with your order. How can I assist you today?",
+          sender: 'bot',
+          timestamp: new Date(),
+        };
 
-      setMessages([greetingMessage]);
+        setMessages([greetingMessage]);
 
-      // After a short delay, show the options
-      setTimeout(() => {
-        setShowOptions(true);
-      }, 1000); // Show options after 1 second
+        // After a short delay, show the options
+        setTimeout(() => {
+          setShowOptions(true);
+        }, 1000); // Show options after 1 second
+      }
     }
-  }, [visible]);
+  }, [visible, orderStatus]);
 
   const handlePickImage = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please grant permission to access photos');
+        setConfirmationModal({
+          visible: true,
+          title: 'Permission needed',
+          message: 'Please grant permission to access photos',
+          confirmText: 'OK',
+          cancelText: '',
+          onConfirm: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+          onCancel: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+        });
         return;
       }
 
@@ -224,7 +288,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
         }, 1000);
       }
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to pick image');
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: error?.message || 'Failed to pick image',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
     }
   };
 
@@ -239,23 +315,24 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       
       if (permissionResult.status !== 'granted') {
-        Alert.alert(
-          'Permission needed',
-          'Camera permission is required to take photos. Please enable it in your device settings.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Open Settings',
-              onPress: () => {
-                if (Platform.OS === 'ios') {
-                  Linking.openURL('app-settings:');
-                } else {
-                  Linking.openSettings();
-                }
-              },
-            },
-          ]
-        );
+        setConfirmationModal({
+          visible: true,
+          title: 'Permission needed',
+          message: 'Camera permission is required to take photos. Please enable it in your device settings.',
+          confirmText: 'Open Settings',
+          cancelText: 'Cancel',
+          onConfirm: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+            if (Platform.OS === 'ios') {
+              Linking.openURL('app-settings:');
+            } else {
+              Linking.openSettings();
+            }
+          },
+          onCancel: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+        });
         return;
       }
 
@@ -295,7 +372,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
         }, 1000);
       }
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to take photo');
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: error?.message || 'Failed to take photo',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
     }
   };
 
@@ -310,23 +399,24 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       
       if (permissionResult.status !== 'granted') {
-        Alert.alert(
-          'Permission needed',
-          'Camera permission is required to record videos. Please enable it in your device settings.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Open Settings',
-              onPress: () => {
-                if (Platform.OS === 'ios') {
-                  Linking.openURL('app-settings:');
-                } else {
-                  Linking.openSettings();
-                }
-              },
-            },
-          ]
-        );
+        setConfirmationModal({
+          visible: true,
+          title: 'Permission needed',
+          message: 'Camera permission is required to record videos. Please enable it in your device settings.',
+          confirmText: 'Open Settings',
+          cancelText: 'Cancel',
+          onConfirm: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+            if (Platform.OS === 'ios') {
+              Linking.openURL('app-settings:');
+            } else {
+              Linking.openSettings();
+            }
+          },
+          onCancel: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+        });
         return;
       }
 
@@ -367,7 +457,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
         }, 1000);
       }
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to record video');
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: error?.message || 'Failed to record video',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
     }
   };
 
@@ -379,23 +481,24 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission needed',
-          'Media library permission is required to select videos. Please enable it in your device settings.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Open Settings',
-              onPress: () => {
-                if (Platform.OS === 'ios') {
-                  Linking.openURL('app-settings:');
-                } else {
-                  Linking.openSettings();
-                }
-              },
-            },
-          ]
-        );
+        setConfirmationModal({
+          visible: true,
+          title: 'Permission needed',
+          message: 'Media library permission is required to select videos. Please enable it in your device settings.',
+          confirmText: 'Open Settings',
+          cancelText: 'Cancel',
+          onConfirm: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+            if (Platform.OS === 'ios') {
+              Linking.openURL('app-settings:');
+            } else {
+              Linking.openSettings();
+            }
+          },
+          onCancel: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+        });
         return;
       }
 
@@ -430,7 +533,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
         }, 1000);
       }
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to pick video');
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: error?.message || 'Failed to pick video',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
     }
   };
 
@@ -442,23 +557,24 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission needed',
-          'Media library permission is required to select files. Please enable it in your device settings.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Open Settings',
-              onPress: () => {
-                if (Platform.OS === 'ios') {
-                  Linking.openURL('app-settings:');
-                } else {
-                  Linking.openSettings();
-                }
-              },
-            },
-          ]
-        );
+        setConfirmationModal({
+          visible: true,
+          title: 'Permission needed',
+          message: 'Media library permission is required to select files. Please enable it in your device settings.',
+          confirmText: 'Open Settings',
+          cancelText: 'Cancel',
+          onConfirm: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+            if (Platform.OS === 'ios') {
+              Linking.openURL('app-settings:');
+            } else {
+              Linking.openSettings();
+            }
+          },
+          onCancel: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+        });
         return;
       }
 
@@ -497,7 +613,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
         }, 1000);
       }
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to pick file');
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: error?.message || 'Failed to pick file',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
     }
   };
 
@@ -539,7 +667,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
           return;
         } catch (error) {
           // If native player fails, fall back to WebView modal
-          console.log('Native player failed, using WebView fallback');
         }
       }
       // Fallback to WebView modal
@@ -586,10 +713,34 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
           if (response.success && response.data) {
             setCancelReasons(response.data);
           } else {
-            Alert.alert('Error', response.error || 'Failed to load cancel reasons');
+            setConfirmationModal({
+              visible: true,
+              title: 'Error',
+              message: response.error || 'Failed to load cancel reasons',
+              confirmText: 'OK',
+              cancelText: '',
+              onConfirm: () => {
+                setConfirmationModal(prev => ({ ...prev, visible: false }));
+              },
+              onCancel: () => {
+                setConfirmationModal(prev => ({ ...prev, visible: false }));
+              },
+            });
           }
         } catch (error: any) {
-          Alert.alert('Error', 'Failed to load cancel reasons. Please try again.');
+          setConfirmationModal({
+            visible: true,
+            title: 'Error',
+            message: 'Failed to load cancel reasons. Please try again.',
+            confirmText: 'OK',
+            cancelText: '',
+            onConfirm: () => {
+              setConfirmationModal(prev => ({ ...prev, visible: false }));
+            },
+            onCancel: () => {
+              setConfirmationModal(prev => ({ ...prev, visible: false }));
+            },
+          });
         } finally {
           setLoadingCancelReasons(false);
         }
@@ -622,63 +773,200 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
   }, [showCancelReasonModal, orderId, getOrderById]);
 
   const handleCallSupport = async () => {
-    if (!supportPhoneNumber) {
-      Alert.alert('Error', 'Support phone number is not available. Please try again later.');
+    // Get support phone numbers - try to fetch if not available
+    let availableNumbers = supportPhoneNumbers;
+    let currentIndex = currentSupportPhoneIndex;
+    
+    if (availableNumbers.length === 0) {
+      try {
+        const supportDetails = await authService.getSupportDetails(false);
+        if (supportDetails.support_number) {
+          const numbers = supportDetails.support_number.split(',').map(n => n.trim()).filter(n => n.length > 0);
+          if (numbers.length > 0) {
+            availableNumbers = numbers;
+            setSupportPhoneNumbers(numbers);
+            currentIndex = Math.floor(Math.random() * numbers.length);
+            setCurrentSupportPhoneIndex(currentIndex);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch support details:', error);
+      }
+    }
+
+    // Switch to next number (rotate through available numbers)
+    let supportPhone: string;
+    if (availableNumbers.length > 0) {
+      // Move to next index (circular rotation)
+      const nextIndex = (currentIndex + 1) % availableNumbers.length;
+      supportPhone = availableNumbers[nextIndex];
+      
+      setCurrentSupportPhoneIndex(nextIndex);
+      setSupportPhoneNumber(supportPhone);
+    } else {
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: 'Support phone number is not available. Please try again later.',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
+      return;
+    }
+
+    if (!supportPhone) {
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: 'Support phone number is not available. Please try again later.',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
       return;
     }
 
     // Get user's phone number
     const currentUser = await authService.getCurrentUser();
     if (!currentUser || !currentUser.phoneNumber) {
-      Alert.alert('Error', 'Unable to get your phone number. Please ensure you are logged in.');
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: 'Unable to get your phone number. Please ensure you are logged in.',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
       return;
     }
 
     // Clean phone numbers (remove spaces, dashes, etc.)
-    const userPhone = currentUser.phoneNumber.replace(/\D/g, '');
-    const supportPhoneClean = supportPhoneNumber.replace(/\D/g, '');
+    let userPhone = currentUser.phoneNumber.replace(/\D/g, '');
+    let supportPhoneClean = supportPhone.replace(/\D/g, '');
+
+    // Remove "91" prefix from support phone if it starts with 91 and length is greater than 10
+    if (supportPhoneClean.startsWith('91') && supportPhoneClean.length > 10) {
+      supportPhoneClean = supportPhoneClean.substring(2);
+    }
+
+    // Remove "91" prefix from user phone if it starts with 91 and length is greater than 10
+    if (userPhone.startsWith('91') && userPhone.length > 10) {
+      userPhone = userPhone.substring(2);
+    }
 
     if (!userPhone || !supportPhoneClean) {
-      Alert.alert('Error', 'Invalid phone number format. Please check your phone number.');
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: 'Invalid phone number format. Please check your phone number.',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
+      return;
+    }
+
+    // Validate phone numbers are numeric only
+    const phoneRegex = /^\d+$/;
+    if (!phoneRegex.test(userPhone) || !phoneRegex.test(supportPhoneClean)) {
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: 'Invalid phone number format. Phone numbers must contain only digits.',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
       return;
     }
 
     try {
       setIsInitiatingCall(true);
 
-      // Call Exotel API with order_id if available
-      const response = await exotelService.initiateCall({
-        order_id: orderNumber || undefined,
+      // Prepare Exotel call request
+      const callRequest: any = {
         from: userPhone,
         to: supportPhoneClean,
-      });
+      };
+
+      // Only include order_id if orderNumber is available
+      if (orderNumber) {
+        callRequest.order_id = orderNumber;
+      }
+
+      // Call Exotel API
+      const response = await exotelService.initiateCall(callRequest);
 
       if (response.success) {
-        Alert.alert(
-          'Call Initiated',
-          'Your call to support is being connected. Please wait for the call.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                setShowSupportCallButton(false);
-              },
-            },
-          ]
-        );
+        setConfirmationModal({
+          visible: true,
+          title: 'Call Initiated',
+          message: 'Your call to support is being connected. Please wait for the call.',
+          confirmText: 'OK',
+          cancelText: '',
+          onConfirm: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+          onCancel: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+        });
+        // Don't hide the button - keep it visible so user can call again if needed
       } else {
-        Alert.alert(
-          'Call Failed',
-          response.error || 'Failed to initiate call. Please try again later.',
-          [{ text: 'OK' }]
-        );
+        setConfirmationModal({
+          visible: true,
+          title: 'Call Failed',
+          message: response.error || 'Failed to initiate call. Please try again later.',
+          confirmText: 'OK',
+          cancelText: '',
+          onConfirm: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+          onCancel: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+        });
       }
     } catch (error: any) {
-      Alert.alert(
-        'Error',
-        error.message || 'An unexpected error occurred. Please try again.',
-        [{ text: 'OK' }]
-      );
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: error.message || 'An unexpected error occurred. Please try again.',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
     } finally {
       setIsInitiatingCall(false);
     }
@@ -686,7 +974,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
 
   const handleCancelOrder = async () => {
     if (!orderNumber) {
-      Alert.alert('Error', 'Order number is missing');
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: 'Order number is missing',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
       setShowCancelReasonModal(false);
       setSelectedCancelReason(null);
       setShowOptions(true);
@@ -694,7 +994,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     }
 
     if (!selectedCancelReason) {
-      Alert.alert('Required', 'Please select a cancellation reason');
+      setConfirmationModal({
+        visible: true,
+        title: 'Required',
+        message: 'Please select a cancellation reason',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
       return;
     }
 
@@ -766,7 +1078,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       return;
     }
 
-    // Simulate bot response for other options
+    // Simulate bot response for other options and show call support button
     setTimeout(() => {
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -775,6 +1087,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, botMessage]);
+      // Show call support button after bot message for non-cancel options
+      setShowSupportCallButton(true);
     }, 1000);
   };
 
@@ -1259,6 +1573,17 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
               )}
             </SafeAreaView>
           </Modal>
+
+          {/* Confirmation Modal for Alerts */}
+          <ConfirmationModal
+            visible={confirmationModal.visible}
+            title={confirmationModal.title}
+            message={confirmationModal.message}
+            confirmText={confirmationModal.confirmText}
+            cancelText={confirmationModal.cancelText}
+            onConfirm={confirmationModal.onConfirm}
+            onCancel={confirmationModal.onCancel}
+          />
         </SafeAreaView>
       </KeyboardAvoidingView>
     </View>

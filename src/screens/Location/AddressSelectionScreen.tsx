@@ -129,32 +129,38 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
   };
 
   const handleUseCurrentLocation = async () => {
+    // Navigate immediately first, then request permission in background
+    // This ensures navigation always happens, even on first launch
+    if (onUseCurrentLocation) {
+      // Navigate without coordinates first - LocationSelectionScreen will handle permission
+      onUseCurrentLocation();
+    }
+
+    // Request permission and get location in background
+    // LocationSelectionScreen will use these coordinates if available
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status === 'granted') {
-        // Get current location coordinates
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Platform.OS === 'ios'
-            ? Location.Accuracy.Balanced
-            : Location.Accuracy.High,
-        });
+        try {
+          // Get current location coordinates
+          const location = await Location.getCurrentPositionAsync({
+            accuracy: Platform.OS === 'ios'
+              ? Location.Accuracy.Balanced
+              : Location.Accuracy.High,
+          });
 
-        if (onUseCurrentLocation) {
-          // Pass coordinates to callback so LocationSelectionScreen can use them
-          onUseCurrentLocation(location.coords.latitude, location.coords.longitude);
-        }
-      } else {
-        // Permission denied, still navigate but without coordinates
-        if (onUseCurrentLocation) {
-          onUseCurrentLocation();
+          // If navigation already happened, we can't pass coordinates back
+          // But LocationSelectionScreen will handle getting location on its own
+          // This is fine - the screen will request permission and get location if needed
+        } catch (locationError) {
+          // Location fetch failed, but navigation already happened
+          // LocationSelectionScreen will handle this
         }
       }
     } catch (error) {
-      // Error getting location, still navigate but without coordinates
-      if (onUseCurrentLocation) {
-        onUseCurrentLocation();
-      }
+      // Permission request failed, but navigation already happened
+      // LocationSelectionScreen will handle permission request
     }
   };
 
@@ -279,7 +285,11 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
       return;
     }
 
-    handleUseCurrentLocation();
+    // Navigate immediately - don't wait for permission request
+    // LocationSelectionScreen will handle permission and location fetching
+    if (onUseCurrentLocation) {
+      onUseCurrentLocation();
+    }
   };
 
   return (
