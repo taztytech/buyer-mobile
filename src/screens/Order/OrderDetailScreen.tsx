@@ -14,6 +14,7 @@ import {
   Dimensions,
   Animated,
   PanResponder,
+  Pressable,
 } from 'react-native';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -35,6 +36,7 @@ interface OrderDetailScreenProps {
   onTrackOrder?: () => void;
   onDownloadInvoice?: () => void;
   onContactUs?: () => void;
+  onHelp?: () => void;
 }
 
 export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
@@ -47,6 +49,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   onTrackOrder,
   onDownloadInvoice,
   onContactUs,
+  onHelp,
 }) => {
   const { getOrderById, state } = useOrders();
   const [contextOrder, setContextOrder] = useState<any>(null);
@@ -60,6 +63,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [trackingOrderData, setTrackingOrderData] = useState<any>(null);
   const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
   const lastFetchedStatusRef = useRef<string | null>(null);
+  const [showTaxTooltip, setShowTaxTooltip] = useState(false);
   
   // Bottom sheet drag state
   const HALF_SCREEN = SCREEN_HEIGHT * 0.5;
@@ -723,14 +727,26 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           <MaterialIcons name="chevron-left" size={24} color="#000000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Order Details</Text>
-        <TouchableOpacity
-          style={styles.chatButton}
-          onPress={handleCallSupport}
-          activeOpacity={0.7}
-        >
-          <MaterialIcons name="phone" size={20} color="#FFFFFF" />
-          <Text style={styles.chatButtonText}>Support</Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          {onHelp && (
+            <TouchableOpacity
+              style={styles.helpButton}
+              onPress={onHelp}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="help-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.helpButtonText}>Help</Text>
+            </TouchableOpacity>
+          )}
+          {/* <TouchableOpacity
+            style={styles.chatButton}
+            onPress={handleCallSupport}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="phone" size={20} color="#FFFFFF" />
+            <Text style={styles.chatButtonText}>Support</Text>
+          </TouchableOpacity> */}
+        </View>
       </View>
 
       <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -762,6 +778,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            onScrollBeginDrag={() => setShowTaxTooltip(false)}
             refreshControl={
               <RefreshControl
                 refreshing={isRefreshing}
@@ -1209,7 +1226,43 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       <Text style={styles.billValue}>₹{bill.tax_amount.toFixed(2)}</Text>
                     </View> */}
                     <View style={styles.billRow}>
-                      <Text style={styles.billLabel}>Tax And Charges</Text>
+                      <View style={styles.billLabelContainer}>
+                        <Text style={styles.billLabel}>Tax And Charges</Text>
+                        <View style={styles.infoIconWrapper}>
+                          <TouchableOpacity
+                            onPress={() => setShowTaxTooltip(!showTaxTooltip)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          >
+                            <MaterialIcons name="info" size={16} color="rgba(0, 0, 0, 0.6)" />
+                          </TouchableOpacity>
+                          {showTaxTooltip && (
+                            <View style={styles.taxTooltip}>
+                              <View style={styles.taxTooltipContent}>
+                                <View style={styles.taxTooltipRow}>
+                                  <Text style={styles.taxTooltipLabel}>Delivery Fee Tax</Text>
+                                  <Text style={styles.taxTooltipValue}>
+                                    ₹{bill.delivery_fee_tax.toFixed(2)}
+                                  </Text>
+                                </View>
+                                <View style={styles.taxTooltipRow}>
+                                  <Text style={styles.taxTooltipLabel}>Platform Fee Tax</Text>
+                                  <Text style={styles.taxTooltipValue}>
+                                    ₹{bill.platform_fee_tax.toFixed(2)}
+                                  </Text>
+                                </View>
+                                <View style={styles.taxTooltipRow}>
+                                  <Text style={styles.taxTooltipLabel}>Tax Amount</Text>
+                                  <Text style={styles.taxTooltipValue}>
+                                    ₹{bill.tax_amount.toFixed(2)}
+                                  </Text>
+                                </View>
+                              </View>
+                              <View style={styles.taxTooltipArrow} />
+                            </View>
+                          )}
+                        </View>
+                      </View>
                       <Text style={styles.billValue}>₹{bill?.total_tax_amount?.toFixed(2)}</Text>
                     </View>
                     {bill.discount_amount > 0 && (
@@ -1256,6 +1309,14 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         </ScrollView>
         )}
       </SafeAreaView>
+
+      {/* Click outside overlay to close tooltip */}
+      {showTaxTooltip && (
+        <Pressable
+          style={styles.tooltipOverlay}
+          onPress={() => setShowTaxTooltip(false)}
+        />
+      )}
 
       {/* Tracking WebView Modal */}
       <Modal
@@ -1634,12 +1695,32 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 8,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  helpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    gap: 6,
+  },
   chatButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   chatButtonText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#FFFFFF',
+    lineHeight: 21,
+  },
+  helpButtonText: {
     fontFamily: 'Poppins',
     fontSize: 14,
     color: '#FFFFFF',
@@ -2524,6 +2605,77 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#00B14F',
     marginTop: 8,
+  },
+  billLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  infoIconWrapper: {
+    position: 'relative',
+  },
+  tooltipOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+  },
+  taxTooltip: {
+    position: 'absolute',
+    bottom: '100%',
+    left: '50%',
+    marginBottom: 8,
+    marginLeft: -120,
+    width: 240,
+    zIndex: 1000,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  taxTooltipContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  taxTooltipRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  taxTooltipLabel: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    color: 'rgba(0, 0, 0, 0.6)',
+  },
+  taxTooltipValue: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#000000',
+  },
+  taxTooltipArrow: {
+    position: 'absolute',
+    bottom: -6,
+    left: '50%',
+    marginLeft: -6,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#FFFFFF',
   },
 });
 
