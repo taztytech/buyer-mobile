@@ -67,11 +67,20 @@ function extractOrderNumber(data: { [key: string]: string | object }): string | 
 
 /**
  * Extract status from FCM notification data
- * Prefers 'status' field, falls back to 'new_status'
+ * Tries multiple possible field names to ensure we catch all status updates
  */
 function extractStatus(data: { [key: string]: string | object }): string | null {
-  const status = data.status || data.new_status;
-  return typeof status === 'string' ? status : null;
+  // Try multiple possible field names for status
+  const status = data.status || data.new_status || data.order_status || data.current_status;
+  const statusValue = typeof status === 'string' ? status : null;
+  
+  if (statusValue) {
+    console.log('📦 Order Handler: Extracted status from FCM:', statusValue);
+  } else {
+    console.warn('⚠️  Order Handler: No status found in FCM data. Available fields:', Object.keys(data));
+  }
+  
+  return statusValue;
 }
 
 /**
@@ -188,14 +197,30 @@ export async function handleOrderNotification(
     }
 
     // Quick update: Dispatch to store immediately
+    // This ensures status updates are reflected instantly in all screens
+    // IMPORTANT: This handles ALL status updates (confirmed, packed, picked, out-for-delivery, delivered, cancelled, etc.)
+    // No status is restricted - any status change from FCM will automatically update the UI
     console.log('📦 Order Handler: Dispatching quick update to store', {
       orderId,
       orderNumber,
       status,
+      statusType: 'ANY_STATUS_UPDATE', // Confirms we handle all status types
+      timestamp: new Date().toISOString(),
     });
     dispatch({
       type: 'UPSERT_ORDER_FROM_FCM',
-      payload: orderUpdate,
+      payload: {
+        ...orderUpdate,
+        // Explicitly ensure status is always included and updated
+        // This works for ANY status: confirmed, packed, picked, out-for-delivery, delivered, cancelled, etc.
+        status: status,
+        // Always update timestamp to trigger re-renders
+        updated_at: new Date().toISOString(),
+      },
+    });
+    console.log('✅ Order Handler: Status update dispatched to OrdersContext - Will update ALL screens automatically', {
+      status,
+      willUpdate: ['My Orders Screen', 'Order Details Screen', 'Track Order Bottom Sheet'],
     });
 
     // Optional: Fetch full order details from API

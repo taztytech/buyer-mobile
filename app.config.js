@@ -153,7 +153,7 @@ module.exports = {
   expo: {
     name: "Tazty",
     slug: "Tazty",
-    version: "1.0.0",
+    version: "1.0.1",
     orientation: "portrait",
     icon: "./src/assets/icon.png",
     userInterfaceStyle: "light",
@@ -164,10 +164,10 @@ module.exports = {
       backgroundColor: "#1a9656"
     },
 
-    // 👇 ADD THIS
     plugins: [
       "@react-native-firebase/app",
-      "@react-native-firebase/messaging"
+      "@react-native-firebase/messaging",
+      "@react-native-firebase/crashlytics"
     ],
 
     ios: {

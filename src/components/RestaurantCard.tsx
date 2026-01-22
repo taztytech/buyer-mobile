@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Animated }
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { favoritesService } from '@/services/favorites.service';
-import { Shimmer } from '@/components/Shimmer';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { homeService } from '@/services/home.service';
 import { formatTime } from '@/utils/timing.utils';
 
@@ -36,7 +36,12 @@ interface RestaurantCardProps {
   onPress?: () => void;
   onFavoriteToggle?: () => void;
   onImageLoad?: () => void;
-  isVerticalLayout?: boolean; // true = vertical (style 2), false = horizontal (style 1)
+  /**
+   * Layout mode for the restaurant card.
+   * 1 = horizontal (style 1)
+   * 2 = vertical (style 2)
+   */
+  layoutMode?: 1 | 2;
 }
 
 export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
@@ -44,7 +49,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   onPress,
   onFavoriteToggle,
   onImageLoad,
-  isVerticalLayout = false,
+  layoutMode = 1,
 }) => {
   const [isFavorite, setIsFavorite] = useState(restaurant.isFavorite || false);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
@@ -151,19 +156,6 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
 
   const nextOpeningInfo = getNextOpeningTimeMessage();
 
-  // Handle image source - support both local and remote images
-  const getImageSource = () => {
-    if (typeof restaurant.image === 'string') {
-      // Remote URL
-      return { uri: restaurant.image };
-    } else if (typeof restaurant.image === 'number') {
-      // Local require()
-      return restaurant.image;
-    } else {
-      // Default fallback
-      return restaurant.image;
-    }
-  };
 
   // Handle favorite toggle with API call
   const handleFavoriteToggle = async () => {
@@ -198,9 +190,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   useEffect(() => {
     setImageLoaded(false);
     imageOpacity.setValue(0);
-  }, [isVerticalLayout, imageOpacity]);
+  }, [layoutMode, imageOpacity]);
 
-  if (!isVerticalLayout) {
+  // Layout mode 1 => Horizontal layout (style 1)
+  if (layoutMode === 1) {
     return (
       <TouchableOpacity
         key="horizontal"
@@ -211,49 +204,34 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
       >
         {/* Left Side - Image with Heart Button */}
         <View style={styles.imageContainer}>
-          {/* Shimmer shown while image loads */}
-          {!imageLoaded && (
-            <View style={styles.imageShimmerContainer}>
-              <Shimmer width={130} height={160} borderRadius={16} backgroundColor="#E8E8E8" />
-            </View>
-          )}
-
-          {/* Actual image with fade-in animation */}
-          <Animated.Image
-            source={getImageSource()}
+          {/* Optimized image with built-in shimmer and caching */}
+          <OptimizedImage
+            source={restaurant.image}
             style={[
               styles.image,
               !isRestaurantOpen && styles.imageClosed,
-              { opacity: imageOpacity }
             ]}
-            resizeMode="cover"
-            testID={`restaurant-image-${restaurant.id}`}
-            onError={() => {
-              // Mark as loaded even on error
-              setImageLoaded(true);
-              Animated.timing(imageOpacity, {
-                toValue: 1,
-                duration: 300,
-                useNativeDriver: true,
-              }).start();
-              if (onImageLoad) {
-                onImageLoad();
-              }
-            }}
+            contentFit="cover"
+            animatedOpacity={imageOpacity}
             onLoad={() => {
-              // Fade in the image
               setImageLoaded(true);
-              Animated.timing(imageOpacity, {
-                toValue: 1,
-                duration: 300,
-                useNativeDriver: true,
-              }).start();
               if (onImageLoad) {
                 onImageLoad();
               }
             }}
-            fadeDuration={0}
-            progressiveRenderingEnabled={true}
+            onError={() => {
+              setImageLoaded(true);
+              if (onImageLoad) {
+                onImageLoad();
+              }
+            }}
+            shimmerWidth={130}
+            shimmerHeight={160}
+            shimmerBorderRadius={16}
+            transition={300}
+            priority="high"
+            cachePolicy="memory-disk"
+            testID={`restaurant-image-${restaurant.id}`}
           />
 
           {/* Top Gradient Overlay */}
@@ -395,6 +373,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   }
 
   return (
+    // Layout mode 2 => Vertical layout (style 2)
     <TouchableOpacity
       key="vertical"
       style={styles.cardVertical}
@@ -404,49 +383,34 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
     >
       {/* Top - Image Container */}
       <View style={styles.imageContainerVertical}>
-        {/* Shimmer shown while image loads */}
-        {!imageLoaded && (
-          <View style={styles.imageShimmerContainerVertical}>
-            <Shimmer width="100%" height={200} borderRadius={10} backgroundColor="#E8E8E8" />
-          </View>
-        )}
-
-        {/* Actual image with fade-in animation */}
-        <Animated.Image
-          source={getImageSource()}
+        {/* Optimized image with built-in shimmer and caching */}
+        <OptimizedImage
+          source={restaurant.image}
           style={[
             styles.imageVertical,
             !isRestaurantOpen && styles.imageClosed,
-            { opacity: imageOpacity }
           ]}
-          resizeMode="cover"
-          testID={`restaurant-image-${restaurant.id}`}
-          onError={() => {
-            // Mark as loaded even on error
-            setImageLoaded(true);
-            Animated.timing(imageOpacity, {
-              toValue: 1,
-              duration: 300,
-              useNativeDriver: true,
-            }).start();
-            if (onImageLoad) {
-              onImageLoad();
-            }
-          }}
+          contentFit="cover"
+          animatedOpacity={imageOpacity}
           onLoad={() => {
-            // Fade in the image
             setImageLoaded(true);
-            Animated.timing(imageOpacity, {
-              toValue: 1,
-              duration: 300,
-              useNativeDriver: true,
-            }).start();
             if (onImageLoad) {
               onImageLoad();
             }
           }}
-          fadeDuration={0}
-          progressiveRenderingEnabled={true}
+          onError={() => {
+            setImageLoaded(true);
+            if (onImageLoad) {
+              onImageLoad();
+            }
+          }}
+          shimmerWidth="100%"
+          shimmerHeight={200}
+          shimmerBorderRadius={10}
+          transition={300}
+          priority="high"
+          cachePolicy="memory-disk"
+          testID={`restaurant-image-${restaurant.id}`}
         />
 
         {/* Top Gradient Overlay */}
@@ -559,7 +523,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
     prevProps.restaurant.name === nextProps.restaurant.name &&
     prevProps.restaurant.isOpen === nextProps.restaurant.isOpen &&
     timingsEqual &&
-    prevProps.isVerticalLayout === nextProps.isVerticalLayout
+    prevProps.layoutMode === nextProps.layoutMode
   );
 });
 

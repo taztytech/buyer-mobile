@@ -23,6 +23,7 @@ import { apiService } from '@/services/api.service';
 import { homeService } from '@/services/home.service';
 import { addressService } from '@/services/address.service';
 import { Shimmer } from '@/components/Shimmer';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { CustomizationModal } from '@/components/CustomizationModal';
 import { AppFooter } from '@/components/AppFooter';
 import { CustomisationsReviewModal } from '@/components/CustomisationsReviewModal';
@@ -1164,23 +1165,30 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         return;
       }
 
-      // Mark item as being updated to prevent concurrent updates
-      updatingItemsRef.current.add(itemId);
-      
       // Get current quantity and calculate new total quantity (set, not incremental)
       const currentQuantity = existingCartItem.quantity || 0;
       const newQuantity = Math.min(safeQuantity, MAX_ITEM_QUANTITY);
       
       // Only update if the new quantity is different
       if (newQuantity !== currentQuantity) {
-        updateQuantity(itemId, newQuantity).finally(() => {
-          // Remove from updating set after update completes
-          updatingItemsRef.current.delete(itemId);
-        });
-      } else {
-        // Remove from updating set if no update needed
-        updatingItemsRef.current.delete(itemId);
+        // Mark item as being updated to prevent concurrent updates
+        updatingItemsRef.current.add(itemId);
+        
+        // Call API to update quantity
+        updateQuantity(itemId, newQuantity)
+          .then(() => {
+            // Update successful
+          })
+          .catch((error) => {
+            // Handle error - quantity update failed
+            console.error('[RestaurantScreen] Error updating quantity:', error);
+          })
+          .finally(() => {
+            // Remove from updating set after update completes (success or failure)
+            updatingItemsRef.current.delete(itemId);
+          });
       }
+      // If quantity is same, no API call needed
     } else {
       // Add new item to cart
       // Current flow: Check if there's a restaurant conflict using checkRestaurantConflict
@@ -1539,33 +1547,32 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           },
         ]}
       >
-        {/* Scrollable Content with Sticky Filter */}
+        {/* Scrollable Content */}
         <ScrollView
-        ref={scrollViewRef}
-        style={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[1]} // Make the filter section (index 1) sticky
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        bounces={false}
-        alwaysBounceVertical={true}
-        overScrollMode="never"
-        removeClippedSubviews={false}
-        decelerationRate="normal"
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={async () => {
-              setIsRefreshing(true);
-              await fetchRestaurantDetails(true); // Skip delay during refresh
-              setIsRefreshing(false);
-            }}
-            colors={['#00B14F']}
-            tintColor="#00B14F"
-            progressBackgroundColor="#FFFFFF"
-          />
-        }
-      >
+          ref={scrollViewRef}
+          style={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          bounces={false}
+          alwaysBounceVertical={true}
+          overScrollMode="never"
+          removeClippedSubviews={true}
+          decelerationRate="normal"
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={async () => {
+                setIsRefreshing(true);
+                await fetchRestaurantDetails(true); // Skip delay during refresh
+                setIsRefreshing(false);
+              }}
+              colors={['#00B14F']}
+              tintColor="#00B14F"
+              progressBackgroundColor="#FFFFFF"
+            />
+          }
+        >
         {/* Header Image with Overlay */}
         {restaurantData?.logo_url ? (
           <ImageBackground
@@ -1958,22 +1965,17 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   >
                     {item.image ? (
                       <>
-                        {!loadedImages.has(item.id) && (
-                          <Shimmer
-                            width={166}
-                            height={137}
-                            borderRadius={16}
-                            backgroundColor="#E8E8E8"
-                            style={styles.imageShimmer}
-                          />
-                        )}
-                        <Image
+                        <OptimizedImage
                           source={item.image}
                           style={styles.itemImage}
-                          resizeMode="cover"
+                          contentFit="cover"
                           onLoad={() => handleImageLoad(item.id)}
-                          fadeDuration={0}
-                          progressiveRenderingEnabled={true}
+                          shimmerWidth={166}
+                          shimmerHeight={137}
+                          shimmerBorderRadius={16}
+                          transition={200}
+                          priority="normal"
+                          cachePolicy="memory-disk"
                         />
 
                         {/* Top Gradient Overlay */}

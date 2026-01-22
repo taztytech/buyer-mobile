@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,19 +7,17 @@ import {
   StyleSheet,
   StatusBar,
   Image,
-  Dimensions,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Keyboard,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors } from '@/theme';
 import { authService } from '@/services/auth.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface WelcomeScreenProps {
   onContinue?: (name: string, email: string) => void;
@@ -31,34 +29,270 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const scrollViewRef = React.useRef<ScrollView>(null);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const nameInputRef = useRef<TextInput>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  
+  // Animated values for smooth, elegant transitions
+  const greenSectionOpacity = useRef(new Animated.Value(1)).current;
+  const greenSectionTranslateY = useRef(new Animated.Value(0)).current;
+  const formContainerTranslateY = useRef(new Animated.Value(0)).current;
+  const nameInputScale = useRef(new Animated.Value(1)).current;
+  const emailInputScale = useRef(new Animated.Value(1)).current;
+  const nameInputBorder = useRef(new Animated.Value(0)).current;
+  const emailInputBorder = useRef(new Animated.Value(0)).current;
+  const errorOpacity = useRef(new Animated.Value(0)).current;
+  const errorTranslateY = useRef(new Animated.Value(-10)).current;
+  const buttonScale = useRef(new Animated.Value(1)).current;
+  const [keyboardHeight, setKeyboardHeight] = React.useState(0);
+  // State tracking for form animations (set but not read - used for state management)
+  const [_focusedField, setFocusedField] = React.useState<'name' | 'email' | null>(null);
+  const [_isFormMoved, setIsFormMoved] = React.useState(false);
 
-  // Listen to keyboard events
+  // Smooth easing function for natural motion
+  const smoothEasing = Easing.bezier(0.4, 0.0, 0.2, 1);
+  const springConfig = { tension: 100, friction: 8 };
+
+  // Listen to keyboard events - restore form when keyboard hides
   React.useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      () => {
-        setKeyboardVisible(true);
+    const keyboardWillShowListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (event) => {
+        const keyboardHeightValue = event.endCoordinates.height;
+        setKeyboardHeight(keyboardHeightValue);
       }
     );
-    const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
-      () => {
-        setKeyboardVisible(false);
+
+    const keyboardWillHideListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      (event) => {
+        setKeyboardHeight(0);
+        setIsFormMoved(false);
+        const animationDuration = Platform.OS === 'ios' 
+          ? event.duration || 300 
+          : 300;
+        
+        // Restore green section and form position when keyboard hides
+        Animated.parallel([
+          Animated.timing(greenSectionOpacity, {
+            toValue: 1,
+            duration: animationDuration,
+            easing: smoothEasing,
+            useNativeDriver: true,
+          }),
+          Animated.timing(greenSectionTranslateY, {
+            toValue: 0,
+            duration: animationDuration,
+            easing: smoothEasing,
+            useNativeDriver: true,
+          }),
+          Animated.timing(formContainerTranslateY, {
+            toValue: 0,
+            duration: animationDuration,
+            easing: smoothEasing,
+            useNativeDriver: true,
+          }),
+        ]).start();
       }
     );
 
     return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
+      keyboardWillShowListener.remove();
+      keyboardWillHideListener.remove();
     };
   }, []);
 
-  const handleContinue = async () => {
-    // Clear any existing inline error before validation
-    if (error) {
+  // Input focus animations
+  const handleInputFocus = (inputType: 'name' | 'email') => {
+    setFocusedField(inputType);
+    
+    // Animate focused input with subtle scale and border
+    if (inputType === 'name') {
+      // Hide green section and move form up when name is focused
+      setIsFormMoved(true);
+      Animated.parallel([
+        Animated.spring(nameInputScale, {
+          toValue: 1.01,
+          ...springConfig,
+          useNativeDriver: true,
+        }),
+        Animated.timing(nameInputBorder, {
+          toValue: 1,
+          duration: 250,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        Animated.timing(greenSectionOpacity, {
+          toValue: 0,
+          duration: 350,
+          easing: smoothEasing,
+          useNativeDriver: true,
+        }),
+        Animated.timing(greenSectionTranslateY, {
+          toValue: -300,
+          duration: 350,
+          easing: smoothEasing,
+          useNativeDriver: true,
+        }),
+        Animated.timing(formContainerTranslateY, {
+          toValue: -120,
+          duration: 350,
+          easing: smoothEasing,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      
+      // Reset email input
+      Animated.parallel([
+        Animated.spring(emailInputScale, {
+          toValue: 1,
+          ...springConfig,
+          useNativeDriver: true,
+        }),
+        Animated.timing(emailInputBorder, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]).start();
+    } else {
+      // Email focused - move form to same position as name field and hide green section
+      setIsFormMoved(true);
+      Animated.parallel([
+        Animated.spring(emailInputScale, {
+          toValue: 1.01,
+          ...springConfig,
+          useNativeDriver: true,
+        }),
+        Animated.timing(emailInputBorder, {
+          toValue: 1,
+          duration: 250,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        Animated.timing(greenSectionOpacity, {
+          toValue: 0,
+          duration: 350,
+          easing: smoothEasing,
+          useNativeDriver: true,
+        }),
+        Animated.timing(greenSectionTranslateY, {
+          toValue: -300,
+          duration: 350,
+          easing: smoothEasing,
+          useNativeDriver: true,
+        }),
+        Animated.timing(formContainerTranslateY, {
+          toValue: -120,
+          duration: 350,
+          easing: smoothEasing,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      
+      // Reset name input
+      Animated.parallel([
+        Animated.spring(nameInputScale, {
+          toValue: 1,
+          ...springConfig,
+          useNativeDriver: true,
+        }),
+        Animated.timing(nameInputBorder, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]).start();
+    }
+
+    // Scroll to ensure input is visible with smooth animation
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({
+        y: 0,
+        animated: true,
+      });
+    }, 100);
+  };
+
+  const handleInputBlur = (inputType: 'name' | 'email') => {
+    // Reset input animations with smooth transitions
+    if (inputType === 'name') {
+      Animated.parallel([
+        Animated.spring(nameInputScale, {
+          toValue: 1,
+          ...springConfig,
+          useNativeDriver: true,
+        }),
+        Animated.timing(nameInputBorder, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.spring(emailInputScale, {
+          toValue: 1,
+          ...springConfig,
+          useNativeDriver: true,
+        }),
+        Animated.timing(emailInputBorder, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]).start();
+    }
+    
+    setFocusedField(null);
+  };
+
+  // Show error with animation
+  const showError = (errorMessage: string) => {
+    setError(errorMessage);
+    Animated.parallel([
+      Animated.timing(errorOpacity, {
+        toValue: 1,
+        duration: 300,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(errorTranslateY, {
+        toValue: 0,
+        ...springConfig,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  // Hide error with animation
+  const hideError = () => {
+    Animated.parallel([
+      Animated.timing(errorOpacity, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(errorTranslateY, {
+        toValue: -10,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
       setError('');
+    });
+  };
+
+  const handleContinue = async () => {
+    // Hide error if exists
+    if (error) {
+      hideError();
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
 
     // Validation
@@ -66,18 +300,18 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
     const trimmedEmail = email.trim();
 
     if (!trimmedFullName) {
-      setError('Please enter your full name');
+      showError('Please enter your full name');
       return;
     }
 
     if (!trimmedEmail) {
-      setError('Please enter your email');
+      showError('Please enter your email');
       return;
     }
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(trimmedEmail)) {
-      setError('Please enter a valid email address');
+      showError('Please enter a valid email address');
       return;
     }
 
@@ -136,12 +370,24 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
     }
   };
 
+
+  // Interpolate border color for smooth transition
+  const nameBorderColor = nameInputBorder.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', '#00B14F'],
+  });
+
+  const emailBorderColor = emailInputBorder.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', '#00B14F'],
+  });
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <ScrollView
@@ -149,14 +395,25 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            keyboardVisible && styles.scrollContentWithKeyboard
+            keyboardHeight > 0 && { paddingBottom: keyboardHeight + 20 }
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           bounces={false}
+          keyboardDismissMode="interactive"
         >
-          {/* Green Background Section */}
-          <View style={styles.greenSection}>
+          {/* Green Background Section with Elegant Animation */}
+          <Animated.View
+            style={[
+              styles.greenSection,
+              {
+                opacity: greenSectionOpacity,
+                transform: [
+                  { translateY: greenSectionTranslateY },
+                ],
+              },
+            ]}
+          >
             {/* Welcome Title */}
             <Text style={styles.welcomeTitle}>Welcome</Text>
 
@@ -169,84 +426,161 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
               style={styles.illustrationImage}
               resizeMode="contain"
             />
-          </View>
+          </Animated.View>
 
-          {/* White Bottom Sheet */}
-          <View style={styles.bottomSheet}>
+          {/* White Bottom Sheet with Smooth Animation */}
+          <Animated.View
+            style={[
+              styles.bottomSheet,
+              {
+                transform: [{ translateY: formContainerTranslateY }],
+              },
+            ]}
+          >
             <View style={styles.formContainer}>
               {/* Title */}
               <Text style={styles.title}>Whats your name</Text>
               <Text style={styles.subtitle}>Lets get to know you better</Text>
 
-              {/* Full Name Input */}
+              {/* Full Name Input with Focus Animation */}
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Full Name</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your full name"
-                  placeholderTextColor="rgba(0, 30, 31, 0.3)"
-                  value={fullName}
-                  onChangeText={(text) => {
-                    setFullName(text);
-                    if (error) {
-                      setError('');
-                    }
-                  }}
-                  autoCapitalize="words"
-                  maxLength={18}
-                  onFocus={() => {
-                    // Scroll to make name input visible when focused
-                    setTimeout(() => {
-                      scrollViewRef.current?.scrollTo({ y: 100, animated: true });
-                    }, 100);
-                  }}
-                />
+                <Animated.View
+                  style={[
+                    styles.inputWrapper,
+                    {
+                      borderColor: nameBorderColor,
+                    },
+                  ]}
+                >
+                  <Animated.View
+                    style={{
+                      transform: [{ scale: nameInputScale }],
+                    }}
+                  >
+                    <TextInput
+                      ref={nameInputRef}
+                      style={styles.input}
+                      placeholder="Enter your full name"
+                      placeholderTextColor="rgba(0, 30, 31, 0.3)"
+                      value={fullName}
+                      onChangeText={(text) => {
+                        setFullName(text);
+                        if (error) {
+                          hideError();
+                        }
+                      }}
+                      autoCapitalize="words"
+                      maxLength={18}
+                      returnKeyType="next"
+                      onSubmitEditing={() => {
+                        emailInputRef.current?.focus();
+                      }}
+                      onFocus={() => handleInputFocus('name')}
+                      onBlur={() => handleInputBlur('name')}
+                    />
+                  </Animated.View>
+                </Animated.View>
               </View>
 
-              {/* Email Input */}
+              {/* Email Input with Focus Animation */}
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Email</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your email"
-                  placeholderTextColor="rgba(0, 30, 31, 0.3)"
-                  value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    if (error) {
-                      setError('');
-                    }
-                  }}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  maxLength={30}
-                  onFocus={() => {
-                    // Scroll to bottom when email input is focused to ensure it's visible
-                    setTimeout(() => {
-                      scrollViewRef.current?.scrollToEnd({ animated: true });
-                    }, 100);
-                  }}
-                />
+                <Animated.View
+                  style={[
+                    styles.inputWrapper,
+                    {
+                      borderColor: emailBorderColor,
+                    },
+                  ]}
+                >
+                  <Animated.View
+                    style={{
+                      transform: [{ scale: emailInputScale }],
+                    }}
+                  >
+                    <TextInput
+                      ref={emailInputRef}
+                      style={styles.input}
+                      placeholder="Enter your email"
+                      placeholderTextColor="rgba(0, 30, 31, 0.3)"
+                      value={email}
+                      onChangeText={(text) => {
+                        setEmail(text);
+                        if (error) {
+                          hideError();
+                        }
+                      }}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      maxLength={30}
+                      returnKeyType="done"
+                      onSubmitEditing={() => {
+                        Keyboard.dismiss();
+                      }}
+                      onFocus={() => handleInputFocus('email')}
+                      onBlur={() => handleInputBlur('email')}
+                    />
+                  </Animated.View>
+                </Animated.View>
               </View>
 
-              {/* Inline Error Message */}
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+              {/* Animated Error Message */}
+              {error ? (
+                <Animated.View
+                  style={[
+                    styles.errorContainer,
+                    {
+                      opacity: errorOpacity,
+                      transform: [{ translateY: errorTranslateY }],
+                    },
+                  ]}
+                >
+                  <Text style={styles.errorText}>{error}</Text>
+                </Animated.View>
+              ) : null}
 
-              {/* Continue Button */}
-              <TouchableOpacity
-                style={[styles.continueButton, isLoading && styles.continueButtonDisabled]}
-                onPress={handleContinue}
-                activeOpacity={0.8}
-                disabled={isLoading}
+              {/* Continue Button with Animation */}
+              <Animated.View
+                style={{
+                  transform: [{ scale: buttonScale }],
+                }}
               >
-                {isLoading ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.continueButtonText}>CONTINUE</Text>
-                )}
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.continueButton,
+                    isLoading && styles.continueButtonDisabled,
+                    (!fullName.trim() || !email.trim()) && styles.continueButtonInactive,
+                  ]}
+                  onPress={handleContinue}
+                  activeOpacity={0.85}
+                  disabled={isLoading || !fullName.trim() || !email.trim()}
+                  onPressIn={() => {
+                    if (!isLoading && fullName.trim() && email.trim()) {
+                      Animated.spring(buttonScale, {
+                        toValue: 0.98,
+                        ...springConfig,
+                        useNativeDriver: true,
+                      }).start();
+                    }
+                  }}
+                  onPressOut={() => {
+                    Animated.spring(buttonScale, {
+                      toValue: 1,
+                      ...springConfig,
+                      useNativeDriver: true,
+                    }).start();
+                  }}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={styles.continueButtonText}>CONTINUE</Text>
+                  )}
+                </TouchableOpacity>
+              </Animated.View>
             </View>
-          </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -266,9 +600,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-  },
-  scrollContentWithKeyboard: {
-    paddingBottom: 0,
+    paddingBottom: 20,
   },
   greenSection: {
     height: 258,
@@ -345,19 +677,22 @@ const styles = StyleSheet.create({
     color: '#001E1F',
     marginBottom: 8,
   },
+  inputWrapper: {
+    width: '100%',
+    borderRadius: 10,
+    borderWidth: 2,
+    overflow: 'hidden',
+  },
   input: {
     width: '100%',
     height: 60,
     backgroundColor: '#F7F7F7',
-    borderRadius: 10,
     paddingHorizontal: 16,
     fontFamily: 'Poppins',
     fontWeight: '400',
     fontSize: 14,
     lineHeight: 21,
     color: '#001E1F',
-    borderWidth: 1,
-    borderColor: 'transparent',
   },
   continueButton: {
     width: '100%',
@@ -377,13 +712,25 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: '#FFFFFF',
   },
-  errorText: {
+  errorContainer: {
     width: '100%',
     marginTop: 4,
     marginBottom: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFEBEE',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#D32F2F',
+  },
+  errorText: {
+    width: '100%',
     fontFamily: 'Poppins',
     fontSize: 13,
     lineHeight: 18,
     color: '#D32F2F',
+  },
+  continueButtonInactive: {
+    opacity: 0.5,
   },
 });

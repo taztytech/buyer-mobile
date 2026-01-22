@@ -1,6 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+apply plugin: "com.google.firebase.crashlytics"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
@@ -88,6 +89,15 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace 'in.tazty.buyer'
+
+    // Load app version from android/version.properties (single source of truth for Android)
+   def versionPropsFile = rootProject.file('version.properties')
+    def versionProps = new Properties()
+    if (versionPropsFile.exists()) {
+        versionProps.load(new FileInputStream(versionPropsFile))
+    }
+    def appVersionCode = (versionProps['VERSION_CODE'] ?: '3').toInteger()
+    def appVersionName = versionProps['VERSION_NAME'] ?: '1.0.0'
     
     // Product flavors for dev and prod environments
     flavorDimensions "environment"
@@ -107,8 +117,8 @@ android {
         applicationId 'in.tazty.buyer'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "1.0.0"
+        versionCode appVersionCode
+        versionName appVersionName
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
         
@@ -210,6 +220,7 @@ dependencies {
     implementation platform('com.google.firebase:firebase-bom:33.7.0')
     implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-analytics'
+    implementation 'com.google.firebase:firebase-crashlytics'
     
     // Facebook Marketing SDK - Load campaigns from local AAR files
     implementation files('libs/facebook-common.aar')

@@ -81,6 +81,7 @@ function ordersReducer(state: OrdersState, action: OrdersAction): OrdersState {
       }
 
       // If order exists, merge updates; otherwise create new entry
+      // IMPORTANT: Always update status if provided in orderData (from FCM)
       const updatedOrder: OrderListItem = existingOrder
         ? {
             ...existingOrder,
@@ -89,10 +90,11 @@ function ordersReducer(state: OrdersState, action: OrdersAction): OrdersState {
             restaurant: orderData.restaurant || existingOrder.restaurant,
             items: orderData.items || existingOrder.items,
             summary: orderData.summary || existingOrder.summary,
-            // Ensure status is updated
-            status: orderData.status || existingOrder.status,
-            // Ensure updated_at is set
-            updated_at: orderData.updated_at || new Date().toISOString(),
+            // CRITICAL: Always update status if provided (FCM updates must override)
+            // Check if status is explicitly provided (not undefined)
+            status: orderData.status !== undefined ? orderData.status : existingOrder.status,
+            // Always update timestamp if provided, otherwise use current time
+            updated_at: orderData.updated_at || existingOrder.updated_at || new Date().toISOString(),
           }
         : ({
             id: orderData.id || parseInt(orderId) || 0,

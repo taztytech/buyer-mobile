@@ -185,6 +185,11 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 contentContainerStyle={styles.gridContainer}
                 showsVerticalScrollIndicator={false}
                 columnWrapperStyle={styles.row}
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={16}
+                windowSize={5}
+                initialNumToRender={16}
+                updateCellsBatchingPeriod={50}
               />
             )}
           </TouchableOpacity>

@@ -1,16 +1,21 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   StatusBar,
   TouchableOpacity,
-  Image,
+  ActivityIndicator,
+  Dimensions,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ordersService } from '@/services/orders.service';
+import { useOrders } from '@/context/OrdersContext';
+import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface OrderTrackingScreenProps {
   onBack?: () => void;
@@ -20,72 +25,126 @@ interface OrderTrackingScreenProps {
 
 export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
   onBack,
-  onCallPartner,
+  orderId,
 }) => {
-  // Mock data - replace with actual data
-  const restaurantLocation = {
-    latitude: 12.9716,
-    longitude: 80.2425,
+  const { state } = useOrders();
+  const [orderData, setOrderData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const lastStatusRef = React.useRef<string | null>(null);
+
+  // Fetch order details from API
+  const fetchOrderDetails = useCallback(async () => {
+    if (!orderId) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const response = await ordersService.getOrderById(Number(orderId));
+
+      if (response.success && response.data) {
+        setOrderData(response.data);
+        // Initialize status ref with fetched status
+        if (response.data.status) {
+          lastStatusRef.current = response.data.status;
+        }
+      } else {
+        setError(response.error || 'Failed to load order details');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load order details');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [orderId]);
+
+  // Initial fetch when component mounts
+  useEffect(() => {
+    if (orderId) {
+      fetchOrderDetails();
+    }
+  }, [orderId, fetchOrderDetails]);
+
+  // Subscribe to FCM updates via OrdersContext
+  // This will automatically update when FCM sends status updates
+  // Watch the specific order in state.byId to detect when it's updated via FCM
+  const contextOrder = orderId ? state.byId[orderId] : undefined;
+  
+  useEffect(() => {
+    if (!orderId || !contextOrder || !orderData) return undefined;
+
+    // Check if status has actually changed
+    const currentContextStatus = contextOrder.status;
+    const currentContextUpdatedAt = contextOrder.updated_at;
+    const previousStatus = lastStatusRef.current;
+    
+    // Update ref with current status
+    if (previousStatus !== currentContextStatus) {
+      lastStatusRef.current = currentContextStatus;
+      
+      // Update status immediately from context
+      setOrderData((prevData: any) => {
+        if (!prevData) {
+          return contextOrder;
+        }
+        return {
+          ...prevData,
+          status: currentContextStatus,
+          updated_at: currentContextUpdatedAt,
+          ...(contextOrder.restaurant && { restaurant: contextOrder.restaurant }),
+        };
+      });
+      
+      // Refetch order details to get updated tracking array
+      // Use a small delay to avoid race conditions
+      const refetchTimer = setTimeout(() => {
+        fetchOrderDetails();
+      }, 500);
+      
+      return () => clearTimeout(refetchTimer);
+    }
+    
+    return undefined;
+  }, [orderId, contextOrder?.status, contextOrder?.updated_at, orderData]);
+
+  // Get current status from orderData
+  const currentStatus = orderData?.status || null;
+  const statusConfig = mapOrderStatusToUI(currentStatus);
+  
+  // Get tracking array from orderData
+  const trackingArray = orderData?.tracking || [];
+  // Sort tracking by timestamp (newest first, then reverse for display - oldest first)
+  const sortedTracking = [...trackingArray].sort((a: any, b: any) => {
+    return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+  });
+
+  // Format timestamp for display
+  const formatTimestamp = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return timestamp;
+    }
   };
 
-  const deliveryLocation = {
-    latitude: 12.9800,
-    longitude: 80.2550,
+  // Get status config for tracking item
+  const getTrackingStatusConfig = (status: string) => {
+    return mapOrderStatusToUI(status);
   };
-
-  const currentLocation = {
-    latitude: 12.9760,
-    longitude: 80.2490,
-  };
-
-  const routeCoordinates = [
-    restaurantLocation,
-    { latitude: 12.9740, longitude: 80.2450 },
-    currentLocation,
-    deliveryLocation,
-  ];
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="dark-content" backgroundColor="#E9E9E9" />
 
-      {/* Map */}
-      <MapView
-        provider={PROVIDER_GOOGLE}
-        style={styles.map}
-        initialRegion={{
-          latitude: 12.9750,
-          longitude: 80.2490,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
-        }}
-      >
-        {/* Route polyline */}
-        <Polyline
-          coordinates={routeCoordinates}
-          strokeColor="#00B14F"
-          strokeWidth={6}
-        />
-
-        {/* Restaurant marker */}
-        <Marker coordinate={restaurantLocation}>
-          <View style={styles.restaurantMarker}>
-            <MaterialIcons name="restaurant" size={20} color="#00B14F" />
-          </View>
-        </Marker>
-
-        {/* Current location marker */}
-        <Marker coordinate={currentLocation}>
-          <View style={styles.currentLocationMarker}>
-            <View style={styles.currentLocationDot} />
-          </View>
-        </Marker>
-
-        {/* Delivery location marker */}
-        <Marker coordinate={deliveryLocation}>
-          <MaterialIcons name="location-on" size={52} color="#00B14F" />
-        </Marker>
-      </MapView>
+      {/* Background - Simple colored background instead of map */}
+      <View style={styles.background} />
 
       {/* Back Button */}
       <SafeAreaView style={styles.backButtonContainer} edges={['top']}>
@@ -94,125 +153,119 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
         </TouchableOpacity>
       </SafeAreaView>
 
-      {/* Bottom Sheet */}
+      {/* Bottom Sheet - Covers half the screen */}
       <View style={styles.bottomSheet}>
-        {/* Restaurant Info */}
-        <View style={styles.restaurantInfo}>
-          <View style={styles.restaurantLeft}>
-            <Image
-              source={require('@/assets/dummy-restaurent.png')}
-              style={styles.restaurantLogo}
-            />
-            <View style={styles.restaurantDetails}>
-              <Text style={styles.restaurantName}>KFC</Text>
-              <Text style={styles.restaurantLocation}>Keelkattlai | 0.5kms</Text>
-              <View style={styles.orderItem}>
-                <Text style={styles.orderQuantity}>1x</Text>
-                <Text style={styles.orderItemName}>Chicken Roll</Text>
-              </View>
-            </View>
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#00B14F" />
+            <Text style={styles.loadingText}>Loading order status...</Text>
           </View>
-          <LinearGradient
-            colors={['rgba(255, 255, 255, 0)', 'rgba(0, 177, 79, 0.2)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.statusBadge}
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <MaterialIcons name="error-outline" size={48} color="#DC2626" />
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={fetchOrderDetails}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : orderData ? (
+          <ScrollView 
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={true}
           >
-            <Text style={styles.statusText}>Partner is on the way</Text>
-          </LinearGradient>
-        </View>
-
-        {/* Divider */}
-        <View style={styles.divider} />
-
-        {/* Estimated Delivery Time */}
-        <View style={styles.timeSection}>
-          <Image
-            source={require('@/assets/delivery-cartoon.png')}
-            style={styles.deliveryIcon}
-          />
-          <View style={styles.timeContent}>
-            <Text style={styles.timeValue}>20 min</Text>
-            <Text style={styles.timeLabel}>ESTIMATED DELIVERY TIME</Text>
-          </View>
-        </View>
-
-        {/* Order Tracking Timeline */}
-        <View style={styles.timeline}>
-          {/* Step 1 - Completed */}
-          <View style={styles.timelineItem}>
-            <View style={styles.timelineIconContainer}>
-              <View style={[styles.timelineCircle, styles.timelineCircleActive]}>
-                <MaterialIcons name="check" size={8} color="#FFFFFF" />
+            {/* Current Status Display */}
+            <View style={styles.statusContainer}>
+              <View style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}>
+                <MaterialIcons 
+                  name={statusConfig.iconName as any} 
+                  size={24} 
+                  color={statusConfig.color} 
+                />
+                <Text style={[styles.statusText, { color: statusConfig.color }]}>
+                  {statusConfig.label}
+                </Text>
               </View>
-              <View style={[styles.timelineLine, styles.timelineLineActive]} />
+              
+              {/* Order Number */}
+              {orderData.order_number && (
+                <Text style={styles.orderNumber}>
+                  Order #{orderData.order_number}
+                </Text>
+              )}
             </View>
-            <Text style={[styles.timelineText, styles.timelineTextActive]}>
-              Your order has been received
-            </Text>
-          </View>
 
-          {/* Step 2 - In Progress */}
-          <View style={styles.timelineItem}>
-            <View style={styles.timelineIconContainer}>
-              <View style={[styles.timelineCircle, styles.timelineCircleActive]}>
-                <View style={styles.loaderDot} />
+            {/* Divider */}
+            <View style={styles.divider} />
+
+            {/* Tracking Timeline */}
+            {sortedTracking.length > 0 ? (
+              <View style={styles.trackingContainer}>
+                <Text style={styles.trackingTitle}>Order Timeline</Text>
+                <View style={styles.timeline}>
+                  {sortedTracking.map((trackingItem: any, index: number) => {
+                    const isLast = index === sortedTracking.length - 1;
+                    const trackingStatusConfig = getTrackingStatusConfig(trackingItem.status);
+                    const isActive = trackingItem.status === currentStatus;
+                    
+                    return (
+                      <View key={trackingItem.id || index} style={styles.timelineItem}>
+                        <View style={styles.timelineIconContainer}>
+                          <View 
+                            style={[
+                              styles.timelineCircle,
+                              isActive ? styles.timelineCircleActive : styles.timelineCircleInactive,
+                              { backgroundColor: isActive ? trackingStatusConfig.color : '#BFBCBA' }
+                            ]}
+                          >
+                            {isActive && trackingItem.status !== 'created' && (
+                              <MaterialIcons name="check" size={10} color="#FFFFFF" />
+                            )}
+                          </View>
+                          {!isLast && (
+                            <View 
+                              style={[
+                                styles.timelineLine,
+                                isActive ? styles.timelineLineActive : styles.timelineLineInactive
+                              ]} 
+                            />
+                          )}
+                        </View>
+                        <View style={styles.timelineContent}>
+                          <Text 
+                            style={[
+                              styles.timelineMessage,
+                              isActive && styles.timelineMessageActive
+                            ]}
+                          >
+                            {trackingItem.message || trackingStatusConfig.label}
+                          </Text>
+                          <Text style={styles.timelineTime}>
+                            {formatTimestamp(trackingItem.timestamp)}
+                          </Text>
+                          {trackingItem.agent_name && (
+                            <Text style={styles.timelineAgent}>
+                              Agent: {trackingItem.agent_name}
+                              {trackingItem.agent_phone && ` • ${trackingItem.agent_phone}`}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
               </View>
-              <View style={[styles.timelineLine, styles.timelineLineInactive]} />
-            </View>
-            <Text style={styles.timelineText}>
-              The restaurant is preparing your food
-            </Text>
-          </View>
-
-          {/* Step 3 - Pending */}
-          <View style={styles.timelineItem}>
-            <View style={styles.timelineIconContainer}>
-              <View style={[styles.timelineCircle, styles.timelineCircleInactive]}>
-                <MaterialIcons name="check" size={8} color="#FFFFFF" />
+            ) : (
+              <View style={styles.noTrackingContainer}>
+                <Text style={styles.noTrackingText}>No tracking information available</Text>
               </View>
-              <View style={[styles.timelineLine, styles.timelineLineInactive]} />
-            </View>
-            <Text style={styles.timelineText}>
-              Your order has been picked up for delivery
-            </Text>
-          </View>
-
-          {/* Step 4 - Pending */}
-          <View style={[styles.timelineItem, { marginBottom: 0 }]}>
-            <View style={styles.timelineIconContainer}>
-              <View style={[styles.timelineCircle, styles.timelineCircleInactive]}>
-                <MaterialIcons name="check" size={8} color="#FFFFFF" />
-              </View>
-            </View>
-            <Text style={styles.timelineText}>Order arriving soon!</Text>
-          </View>
-        </View>
-
-        {/* Divider */}
-        <View style={styles.divider} />
-
-        {/* Delivery Partner */}
-        <View style={styles.partnerInfo}>
-          <View style={styles.partnerLeft}>
-            <Image
-              source={require('@/assets/dummy-profile.png')}
-              style={styles.partnerPhoto}
-            />
-            <View style={styles.partnerDetails}>
-              <Text style={styles.partnerName}>Ananth V</Text>
-              <Text style={styles.partnerRole}>Delivery Partner</Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={styles.callButton}
-            onPress={onCallPartner}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons name="phone" size={16} color="#FFFFFF" />
-            <Text style={styles.callButtonText}>+91 9876543210</Text>
-          </TouchableOpacity>
-        </View>
+            )}
+          </ScrollView>
+        ) : null}
       </View>
     </View>
   );
@@ -223,34 +276,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#E9E9E9',
   },
-  map: {
+  background: {
     flex: 1,
-  },
-  restaurantMarker: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#00B14F',
-  },
-  currentLocationMarker: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 4,
-    borderColor: '#001E1F',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  currentLocationDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#001E1F',
+    backgroundColor: '#E9E9E9',
   },
   backButtonContainer: {
     position: 'absolute',
@@ -268,121 +296,145 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   bottomSheet: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    height: SCREEN_HEIGHT * 0.5, // Half the screen height
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    padding: 16,
-    paddingTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingTop: 24,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginTop: 8,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 40,
+  },
+  errorText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#DC2626',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  retryButton: {
+    marginTop: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#00B14F',
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  statusContainer: {
+    alignItems: 'center',
     gap: 12,
+    marginBottom: 8,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 100,
+    gap: 8,
+  },
+  statusText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  orderNumber: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginTop: 4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    marginVertical: 20,
   },
   restaurantInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 10,
+    marginBottom: 16,
   },
-  restaurantLeft: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  restaurantLogo: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: 'rgba(185, 185, 185, 0.2)',
-  },
-  restaurantDetails: {
-    gap: 0,
+  restaurantLabel: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   restaurantName: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
-    lineHeight: 22,
-    color: '#000000',
+    color: '#001E1F',
+    lineHeight: 24,
   },
-  restaurantLocation: {
-    fontFamily: 'Poppins',
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#000000',
-    opacity: 0.85,
+  updatedContainer: {
+    marginTop: 'auto',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.05)',
   },
-  orderItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  orderQuantity: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#000000',
-    opacity: 0.85,
-  },
-  orderItemName: {
-    fontFamily: 'Poppins',
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#000000',
-    opacity: 0.85,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    height: 26,
-    justifyContent: 'center',
-    borderRightWidth: 1,
-    borderRightColor: '#00B14F',
-  },
-  statusText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#00B14F',
-    opacity: 0.85,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-  },
-  timeSection: {
-    position: 'relative',
-    paddingVertical: 4,
-    alignItems: 'center',
-  },
-  deliveryIcon: {
-    position: 'absolute',
-    left: 0,
-    top: '50%',
-    marginTop: -40,
-    width: 80,
-    height: 80,
-  },
-  timeContent: {
-    alignItems: 'center',
-  },
-  timeValue: {
-    fontFamily: 'Poppins',
-    fontWeight: '800',
-    fontSize: 26,
-    lineHeight: 36,
-    textAlign: 'center',
-    color: '#000000',
-  },
-  timeLabel: {
+  updatedLabel: {
     fontFamily: 'Poppins',
     fontSize: 12,
-    lineHeight: 18,
-    textAlign: 'center',
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginBottom: 4,
     textTransform: 'uppercase',
-    color: '#000000',
+    letterSpacing: 0.5,
+  },
+  updatedTime: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#001E1F',
+  },
+  trackingContainer: {
+    marginTop: 8,
+  },
+  trackingTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    color: '#001E1F',
+    marginBottom: 16,
   },
   timeline: {
     gap: 0,
@@ -390,114 +442,75 @@ const styles = StyleSheet.create({
   timelineItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 0,
+    gap: 12,
+    marginBottom: 20,
   },
   timelineIconContainer: {
     alignItems: 'center',
-    paddingTop: 1,
+    paddingTop: 2,
   },
   timelineCircle: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   timelineCircleActive: {
-    backgroundColor: '#00B14F',
+    borderColor: '#FFFFFF',
   },
   timelineCircleInactive: {
-    backgroundColor: '#BFBCBA',
+    borderColor: '#FFFFFF',
   },
   timelineLine: {
-    width: 1,
-    height: 36,
-    marginTop: 0,
+    width: 2,
+    height: 40,
+    marginTop: 4,
+    marginBottom: -4,
   },
   timelineLineActive: {
     backgroundColor: '#00B14F',
   },
   timelineLineInactive: {
-    backgroundColor: '#B1B1B1',
+    backgroundColor: '#E5E5E5',
   },
-  loaderDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+  timelineContent: {
+    flex: 1,
+    paddingTop: 0,
   },
-  timelineText: {
+  timelineMessage: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(0, 30, 31, 0.7)',
+    marginBottom: 4,
+  },
+  timelineMessageActive: {
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#001E1F',
+  },
+  timelineTime: {
     fontFamily: 'Poppins',
     fontSize: 12,
-    lineHeight: 18,
-    color: '#B1B1B1',
-    flex: 1,
-    marginTop: -2,
+    color: 'rgba(0, 30, 31, 0.5)',
+    marginBottom: 4,
   },
-  timelineTextActive: {
-    color: '#00B14F',
-  },
-  partnerInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
-  },
-  partnerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    minWidth: 0,
-  },
-  partnerPhoto: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#C4C4C4',
-    flexShrink: 0,
-  },
-  partnerDetails: {
-    gap: 0,
-    flex: 1,
-    minWidth: 0,
-  },
-  partnerName: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 17,
-    lineHeight: 24,
-    textTransform: 'capitalize',
-    color: '#181C2E',
-  },
-  partnerRole: {
+  timelineAgent: {
     fontFamily: 'Poppins',
     fontSize: 12,
-    lineHeight: 18,
-    color: '#888888',
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginTop: 2,
   },
-  callButton: {
-    flexDirection: 'row',
+  noTrackingContainer: {
+    paddingVertical: 40,
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    gap: 8,
-    backgroundColor: '#00B14F',
-    borderRadius: 50,
-    shadowColor: 'rgba(0, 177, 79, 0.5)',
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-    shadowOpacity: 1,
-    shadowRadius: 20,
-    elevation: 6,
-    flexShrink: 0,
   },
-  callButtonText: {
+  noTrackingText: {
     fontFamily: 'Poppins',
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#FFFFFF',
+    fontSize: 14,
+    color: 'rgba(0, 30, 31, 0.6)',
+    textAlign: 'center',
   },
 });

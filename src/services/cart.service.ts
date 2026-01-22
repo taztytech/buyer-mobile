@@ -65,6 +65,9 @@ export interface CartItemResponse {
 export interface CartSummary {
   subtotal: number;
   delivery_fee: number;
+  delivery_fee_tax: number;
+  platform_fee_tax: number;
+  total_tax_amount: number;
   tax_amount: number;
   discount_amount: number;
   tip_amount?: number;
@@ -137,7 +140,7 @@ class CartService {
       let responseData: any = response.data || response;
 
       // Check if data is double-nested
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 
@@ -148,14 +151,14 @@ class CartService {
         cart_item_id: responseData.cart_item_id,
         cart_summary: responseData.cart_summary,
       };
-      
+
       // Preserve status code if response failed
       if (!response.success && (response as any).statusCode) {
         result.statusCode = (response as any).statusCode;
       } else if (!response.success && (response as any).status) {
         result.statusCode = (response as any).status;
       }
-      
+
       return result;
     } catch (error: any) {
       // Preserve status code from error if available
@@ -249,6 +252,7 @@ class CartService {
       customizations?: CartCustomization[];
       variants?: CartVariant[];
       special_instructions?: string;
+      is_active?: boolean;
     }
   ): Promise<{ success: boolean; cart_summary?: CartSummary; error?: string }> {
     if (updates.quantity && updates.quantity > MAX_ITEM_QUANTITY) {
@@ -269,16 +273,16 @@ class CartService {
       if (!response.success) {
         // Try to get error message from various possible locations
         // Priority: response.message (from apiService) > response.data.message > fullResponse.message
-        errorMessage = response.message || 
-                      (response as any).error ||
-                      (response.data as any)?.message ||
-                      (response as any).fullResponse?.message ||
-                      'Failed to update cart item';
+        errorMessage = response.message ||
+          (response as any).error ||
+          (response.data as any)?.message ||
+          (response as any).fullResponse?.message ||
+          'Failed to update cart item';
       }
 
       // Handle potential double-nested response structure for cart_summary
       let responseData: any = response.data || response;
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 
@@ -289,11 +293,11 @@ class CartService {
       };
     } catch (error: any) {
       // Extract error message from caught error
-      const errorMessage = error?.message || 
-                          error?.response?.data?.message ||
-                          error?.fullResponse?.message ||
-                          'Failed to update cart item';
-      
+      const errorMessage = error?.message ||
+        error?.response?.data?.message ||
+        error?.fullResponse?.message ||
+        'Failed to update cart item';
+
       // Throw error with message so it can be caught and displayed
       const apiError: any = new Error(errorMessage);
       apiError.response = error?.response;
@@ -301,6 +305,61 @@ class CartService {
       throw apiError;
     }
   }
+
+  /**
+   * Update entire cart
+   * PUT /api/buyer/cart/update
+   */
+  async updateCart(
+    cartId: number,
+    updates: {
+      is_active?: boolean;
+    }
+  ): Promise<{ success: boolean; cart_summary?: CartSummary; error?: string }> {
+    try {
+      const response = await apiService.put(
+        API_CONFIG.ENDPOINTS.BUYER.CART_UPDATE,
+        {
+          cart_id: cartId,
+          ...updates,
+        }
+      );
+
+      // Extract error message from response if success is false
+      let errorMessage: string | undefined;
+      if (!response.success) {
+        errorMessage = response.message ||
+          (response as any).error ||
+          (response.data as any)?.message ||
+          (response as any).fullResponse?.message ||
+          'Failed to update cart';
+      }
+
+      // Handle potential double-nested response structure for cart_summary
+      let responseData: any = response.data || response;
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
+        responseData = responseData.data;
+      }
+
+      return {
+        success: response.success,
+        cart_summary: responseData?.cart_summary,
+        error: errorMessage,
+      };
+    } catch (error: any) {
+      // Extract error message from caught error
+      const errorMessage = error?.message ||
+        error?.response?.data?.message ||
+        error?.fullResponse?.message ||
+        'Failed to update cart';
+
+      const apiError: any = new Error(errorMessage);
+      apiError.response = error?.response;
+      apiError.fullResponse = error?.fullResponse;
+      throw apiError;
+    }
+  }
+
 
   /**
    * Remove cart item
@@ -316,7 +375,7 @@ class CartService {
 
       // Handle potential double-nested response structure
       let responseData: any = response.data || response;
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 
@@ -340,7 +399,7 @@ class CartService {
 
       // Handle potential double-nested response structure
       let responseData: any = response.data || response;
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 
@@ -380,9 +439,9 @@ class CartService {
       // 2. { success: true, cart_summary: {...} }
       // 3. { cart_summary: {...} } (direct)
       let responseData: any = response.data || response;
-      
+
       // Unwrap nested data structure if needed
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 
@@ -432,7 +491,7 @@ class CartService {
       // 3. { cart_summary: {...} } (direct)
       let responseData: any = response.data || response;
 
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 
@@ -473,7 +532,7 @@ class CartService {
       // Handle possible nested response structures
       let responseData: any = response.data || response;
 
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+      if (responseData && typeof responseData === 'object' && responseData !== null && 'data' in responseData) {
         responseData = responseData.data;
       }
 
