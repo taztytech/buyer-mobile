@@ -6,17 +6,32 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_EAS_BUILD_PROFILE": "development",
+        "EXPO_PUBLIC_API_BASE_URL": "https://devapi.tazty.in",
+        "NODE_ENV": "development"
+      }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_EAS_BUILD_PROFILE": "preview",
+        "EXPO_PUBLIC_API_BASE_URL": "https://devapi.tazty.in",
+        "NODE_ENV": "development"
       }
     },
     "production": {
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_EAS_BUILD_PROFILE": "production",
+        "EXPO_PUBLIC_API_BASE_URL": "https://prodapi.tazty.in",
+        "NODE_ENV": "production"
       }
     }
   },

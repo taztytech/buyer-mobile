@@ -20,7 +20,8 @@ export const VegModeProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const loadVegMode = async () => {
       try {
         const savedMode = await storageService.getVegMode();
-        if (savedMode) {
+        // Validate that saved mode is a valid VegModeType
+        if (savedMode && (savedMode === 'off' || savedMode === 'pure' || savedMode === 'all')) {
           setVegModeState(savedMode as VegModeType);
         }
       } catch (error) {

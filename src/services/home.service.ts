@@ -5,6 +5,7 @@
 
 import { apiService, ApiResponse } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
+import type { VegModeType } from '@/context/VegModeContext';
 
 // Types
 export interface BannerItem {
@@ -80,6 +81,7 @@ export interface HomeData {
   nearby_restaurants?: Restaurant[];
   whats_on_your_mind?: CategoryItem[];
   pagination?: PaginationMetadata;
+  home_screen_restaurant_card_style?: string;
 }
 
 class HomeService {
@@ -123,9 +125,9 @@ class HomeService {
     const currentTime = now.getHours() * 100 + now.getMinutes(); // Convert to HHMM format
 
     // Convert JavaScript day (0-6) to API day format (1-7)
-    // API format: 1 = Monday, 2 = Tuesday, ..., 7 = Sunday
+    // API format: 1 = Sunday, 2 = Monday, ..., 7 = Saturday
     // JS format: 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-    const apiDay = jsDay === 0 ? 7 : jsDay;
+    const apiDay = jsDay + 1;
 
     // Find timing for current day
     const todayTiming = timings.find(t => t.day === apiDay);
@@ -168,8 +170,9 @@ class HomeService {
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
 
-    // Convert JavaScript day to API day format
-    const apiDay = jsDay === 0 ? 7 : jsDay;
+    // Convert JavaScript day (0-6) to API day format (1-7)
+    // API format: 1 = Sunday, 2 = Monday, ..., 7 = Saturday
+    const apiDay = jsDay + 1;
 
     // Check if restaurant opens later today
     const todayTiming = timings.find(t => t.day === apiDay);
@@ -201,7 +204,6 @@ class HomeService {
         const openMinute = openTime % 100;
 
         // Calculate minutes until opening
-        const daysInMinutes = i * 24 * 60;
         const timeUntilMidnight = (24 - currentHour) * 60 - currentMinute;
         const timeFromMidnight = openHour * 60 + openMinute;
         const minutesUntil = timeUntilMidnight + timeFromMidnight + ((i - 1) * 24 * 60);
@@ -265,7 +267,8 @@ class HomeService {
   async getDishes(
     foodType?: string,
     limit: number = 10,
-    page: number = 1
+    page: number = 1,
+    vegMode: VegModeType = 'off'
   ): Promise<ApiResponse<{ dishes: DishItem[] }>> {
     try {
       // Build query params
@@ -277,6 +280,15 @@ class HomeService {
 
       if (foodType) {
         params.append('food_type', foodType);
+      }
+
+      if (vegMode && vegMode !== 'off') {
+        // API expects explicit food_type when veg mode filters are active
+        if (vegMode === 'pure') {
+          params.set('food_type', 'pure-veg');
+        } else if (vegMode === 'all') {
+          params.set('food_type', 'veg');
+        }
       }
 
       const queryString = params.toString();

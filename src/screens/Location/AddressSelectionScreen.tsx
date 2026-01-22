@@ -9,11 +9,15 @@ import {
   FlatList,
   ScrollView,
   ActivityIndicator,
+  Platform,
+  Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { addressService, AddressResponse } from '@/services/address.service';
+import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface SavedAddress {
   id: string;
@@ -24,12 +28,19 @@ interface SavedAddress {
   latitude: number;
   longitude: number;
   isDefault: boolean;
+  // Full address details for API updates
+  address1?: string;
+  address2?: string;
+  address3?: string;
+  state?: string;
+  pincode?: string;
+  alternate_phone_number?: number;
 }
 
 interface AddressSelectionScreenProps {
   onBack?: () => void;
   onAddAddress?: () => void;
-  onUseCurrentLocation?: () => void;
+  onUseCurrentLocation?: (latitude?: number, longitude?: number) => void;
   onSelectAddress?: (address: SavedAddress) => void;
   onSearch?: (searchQuery: string) => void;
   visible?: boolean; // To track when screen becomes visible
@@ -43,10 +54,12 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
   onSearch,
   visible = true,
 }) => {
+  const { showConfirmation } = useConfirmation();
   const [searchText, setSearchText] = useState('');
   const [currentLocationName, setCurrentLocationName] = useState('Getting location...');
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [updatingAddressId, setUpdatingAddressId] = useState<string | null>(null);
 
   // Fetch addresses on initial mount
   useEffect(() => {
@@ -76,6 +89,13 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
           latitude: addr.latitude,
           longitude: addr.longitude,
           isDefault: addr.is_default,
+          // Store full address details for API updates
+          address1: addr.address1,
+          address2: addr.address2 || undefined,
+          address3: addr.address3 || undefined,
+          state: addr.state,
+          pincode: addr.pincode,
+          alternate_phone_number: addr.alternate_phone_number,
         }));
 
         setSavedAddresses(addresses);
@@ -110,22 +130,12 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
     }
   };
 
-  const handleUseCurrentLocation = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-
-      if (status === 'granted') {
-        if (onUseCurrentLocation) {
-          onUseCurrentLocation();
-        }
-      }
-    } catch (error) {
-    }
-  };
-
   const handleSearchSubmit = () => {
     if (searchText.trim() && onSearch) {
-      onSearch(searchText.trim());
+      const query = searchText.trim();
+      onSearch(query);
+      // Clear search text after submitting to avoid confusion on next search
+      setSearchText('');
     }
   };
 
@@ -146,12 +156,65 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
     return type.charAt(0).toUpperCase() + type.slice(1);
   };
 
-  const renderAddressItem = ({ item }: { item: SavedAddress }) => (
-    <TouchableOpacity
-      style={styles.addressItem}
-      onPress={() => onSelectAddress && onSelectAddress(item)}
-      activeOpacity={0.7}
-    >
+  const handleAddressSelect = async (address: SavedAddress) => {
+    // If address is already default, just proceed with selection
+    if (address.isDefault) {
+      if (onSelectAddress) {
+        onSelectAddress(address);
+      }
+      return;
+    }
+
+    // Update address to be default
+    setUpdatingAddressId(address.id);
+    try {
+      const response = await addressService.updateAddress(address.id, {
+        is_default: true,
+      });
+
+      if (response.success) {
+        // Refresh addresses to get updated list
+        await fetchAddresses();
+        
+        // Update the address object to reflect the change
+        const updatedAddress = { ...address, isDefault: true };
+        
+        // Proceed with address selection
+        if (onSelectAddress) {
+          onSelectAddress(updatedAddress);
+        }
+      } else {
+        showConfirmation({
+          title: 'Error',
+          message: response.error || 'Failed to update address. Please try again.',
+          confirmText: 'OK',
+          cancelText: 'Close',
+          onConfirm: () => {},
+        });
+      }
+    } catch (error: any) {
+      showConfirmation({
+        title: 'Error',
+        message: error.message || 'An unexpected error occurred. Please try again.',
+        confirmText: 'OK',
+        cancelText: 'Close',
+        onConfirm: () => {},
+      });
+    } finally {
+      setUpdatingAddressId(null);
+    }
+  };
+
+  const renderAddressItem = ({ item }: { item: SavedAddress }) => {
+    const isUpdating = updatingAddressId === item.id;
+    
+    return (
+      <TouchableOpacity
+        style={styles.addressItem}
+        onPress={() => handleAddressSelect(item)}
+        activeOpacity={0.7}
+        disabled={isUpdating}
+      >
       <View style={styles.addressIconContainer}>
         <MaterialIcons name={getIconForType(item.type)} size={24} color="#00B14F" />
       </View>
@@ -163,6 +226,9 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
               <Text style={styles.defaultBadgeText}>Default</Text>
             </View>
           )}
+          {isUpdating && (
+            <ActivityIndicator size="small" color="#00B14F" style={styles.updatingIndicator} />
+          )}
         </View>
         <Text style={styles.addressCity}>{item.address}</Text>
       </View>
@@ -170,7 +236,227 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         <Text style={styles.addressDistance}>{item.distance}</Text>
       )}
     </TouchableOpacity>
-  );
+    );
+  };
+
+  // Helper function to open location settings
+  const openLocationSettings = () => {
+    try {
+      if (Platform.OS === 'android') {
+        // Try to open Android location settings directly
+        Linking.openURL('android.settings.LOCATION_SOURCE_SETTINGS').catch(() => {
+          // Fallback to app settings if location settings can't be opened
+          Linking.openSettings();
+        });
+      } else {
+        // iOS - open app settings (location settings are within app settings)
+        Linking.openSettings();
+      }
+    } catch (error) {
+      // Fallback to app settings
+      try {
+        Linking.openSettings();
+      } catch {
+        // Ignore errors
+      }
+    }
+  };
+
+  // Helper to show clear, OS-specific steps to enable location
+  const getLocationSettingsGuide = () => {
+    if (Platform.OS === 'android') {
+      return (
+        'How to turn on location for Tazty on Android:\n' +
+        '1. Tap "Open Settings" below (or open the Settings app).\n' +
+        '2. Go to "Apps" → "Tazty".\n' +
+        '3. Tap "Permissions" → "Location".\n' +
+        '4. Select "Allow only while using the app".\n' +
+        '5. Then go back and make sure "Location" is turned ON in the main Settings screen.'
+      );
+    }
+
+    return (
+      'How to turn on location for Tazty on iPhone:\n' +
+      '1. Tap "Open Settings" below (or open the Settings app).\n' +
+      '2. Scroll down and tap "Tazty".\n' +
+      '3. Tap "Location".\n' +
+      '4. Choose "While Using the App".\n' +
+      '5. Also ensure Location Services are ON in "Settings" → "Privacy & Security" → "Location Services".'
+    );
+  };
+
+  const handleAddAddressPress = async () => {
+    if (savedAddresses.length >= MAX_ADDRESSES) {
+      showConfirmation({
+        title: 'Address limit reached',
+        message: `You can save up to ${MAX_ADDRESSES} delivery addresses. Please delete one before adding a new address.`,
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Step 1: Check initial permission status to detect first launch
+    // This MUST be done before requesting permission to accurately detect first launch
+    let initialStatus: string = 'undetermined';
+    let isFirstLaunch = true; // Default to true to be safe
+    
+    try {
+      const initialPermission = await Location.getForegroundPermissionsAsync();
+      initialStatus = initialPermission.status || 'undetermined';
+      isFirstLaunch = initialStatus === 'undetermined';
+    } catch (error) {
+      // If we can't check permission, assume first launch and proceed
+      // This ensures first launch users can always access the map
+      console.log('Could not check initial permission, assuming first launch:', error);
+      isFirstLaunch = true;
+    }
+
+    // Step 2: Handle first launch differently - navigate immediately without requesting permission
+    // LocationSelectionScreen will handle permission request and location fetching
+    if (isFirstLaunch) {
+      console.log('First launch detected - navigating immediately, LocationSelectionScreen will handle permission');
+      // Navigate immediately without any permission checks
+      // LocationSelectionScreen's getCurrentLocation will request permission and fetch location
+      if (onUseCurrentLocation) {
+        onUseCurrentLocation();
+      } else {
+        console.error('onUseCurrentLocation callback is not defined!');
+      }
+      return; // Exit early - navigation is done
+    }
+
+    // Step 3: NOT first launch - check and request permission
+    try {
+      let permission = await Location.getForegroundPermissionsAsync();
+
+      // If permission is not granted, request it
+      if (permission.status !== 'granted') {
+        permission = await Location.requestForegroundPermissionsAsync();
+      }
+
+      // Step 4: Handle permission response
+      if (permission.status !== 'granted') {
+        // Permission denied - show instructions
+        if (!permission.canAskAgain) {
+          // Permission is blocked ("Don't ask again") – send user to settings
+          Alert.alert(
+            'Enable Location Access',
+            'To add an address using your current location, please enable location access for Tazty in your device settings.\n\n' +
+              getLocationSettingsGuide(),
+            [
+              { text: 'Not now', style: 'cancel' },
+              {
+                text: 'Open Settings',
+                onPress: () => {
+                  try {
+                    openLocationSettings();
+                  } catch {
+                    // Ignore Linking errors
+                  }
+                },
+              },
+            ]
+          );
+        } else {
+          // Permission was denied but can be asked again
+          Alert.alert(
+            'Location Permission Required',
+            'To add an address using your current location, please allow Tazty to access your location. Turn on device location and choose "While using this app" or "Allow all the time" when prompted.\n\n' +
+              getLocationSettingsGuide()
+          );
+        }
+        return; // Don't navigate if permission is not granted
+      }
+
+      // NOT FIRST LAUNCH: Try to get location first, then navigate
+      let locationCoordinates: { latitude: number; longitude: number } | null = null;
+
+      try {
+        // Check if location services are enabled
+        const isLocationEnabled = await Location.hasServicesEnabledAsync();
+        
+        if (!isLocationEnabled) {
+          // Permission granted but location services are disabled - show alert
+          Alert.alert(
+            'Turn on Location',
+            'Location permission is granted, but location services are turned off. Please turn on location services in your device settings to add an address using your current location.\n\n' +
+              getLocationSettingsGuide(),
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Open Settings',
+                onPress: () => {
+                  openLocationSettings();
+                },
+              },
+            ]
+          );
+          return; // Don't navigate if location services are disabled
+        }
+
+        // Location services are enabled - try to get current location
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Platform.OS === 'ios'
+            ? Location.Accuracy.Balanced
+            : Location.Accuracy.High,
+        });
+
+        locationCoordinates = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        };
+      } catch (locationError) {
+        // Location fetch failed - still navigate, LocationSelectionScreen will handle it
+        console.log('Location fetch failed, navigating anyway:', locationError);
+      }
+
+      // Navigate to LocationSelectionScreen
+      if (onUseCurrentLocation) {
+        if (locationCoordinates) {
+          // Navigate with current location coordinates
+          onUseCurrentLocation(locationCoordinates.latitude, locationCoordinates.longitude);
+        } else {
+          // Navigate without coordinates - LocationSelectionScreen will handle getting location
+          onUseCurrentLocation();
+        }
+      }
+    } catch (error) {
+      // ANY error - check if this might be first launch and navigate accordingly
+      console.error('Error in permission check:', error);
+      
+      // If we couldn't determine first launch status, assume it is and navigate
+      // This ensures first launch users can always access the map
+      if (isFirstLaunch) {
+        // On first launch, always navigate even if there's an error
+        // LocationSelectionScreen will handle permission request and location fetching
+        console.log('First launch (or assumed first launch) - navigating despite error to ensure user can access map');
+        if (onUseCurrentLocation) {
+          onUseCurrentLocation();
+        } else {
+          console.error('onUseCurrentLocation callback is not defined!');
+        }
+      } else {
+        // Not first launch - show error but still allow navigation as fallback
+        Alert.alert(
+          'Location Error',
+          'Unable to access location. You can still manually set your location on the map.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Continue',
+              onPress: () => {
+                if (onUseCurrentLocation) {
+                  onUseCurrentLocation();
+                }
+              },
+            },
+          ]
+        );
+      }
+    }
+  };
 
   return (
     <View style={styles.wrapper}>
@@ -211,7 +497,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
             {/* Add Address */}
             <TouchableOpacity
               style={styles.optionItem}
-              onPress={handleUseCurrentLocation}
+              onPress={handleAddAddressPress}
               activeOpacity={0.7}
             >
               <View style={styles.optionLeft}>
@@ -256,11 +542,6 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
           )}
         </ScrollView>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>powered by </Text>
-          <Text style={styles.footerGoogle}>Google</Text>
-        </View>
       </View>
     </View>
   );
@@ -494,5 +775,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#4285F4',
+  },
+  updatingIndicator: {
+    marginLeft: 8,
   },
 });

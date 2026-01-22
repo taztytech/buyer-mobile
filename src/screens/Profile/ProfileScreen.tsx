@@ -5,12 +5,11 @@ import {
   StyleSheet,
   StatusBar,
   TouchableOpacity,
-  Switch,
   ScrollView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { storageService } from '@/services/storage.service';
 import { authService } from '@/services/auth.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
@@ -22,9 +21,10 @@ interface ProfileScreenProps {
   onMyOrders?: () => void;
   onMyAddresses?: () => void;
   onFavorites?: () => void;
-  onChatWithUs?: () => void;
+  onContactUs?: () => void;
   onPrivacyPolicy?: () => void;
   onTermsConditions?: () => void;
+  onFaq?: () => void;
   onLogout?: () => void;
 }
 
@@ -35,15 +35,23 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onMyOrders,
   onMyAddresses,
   onFavorites,
-  onChatWithUs,
+  onContactUs,
   onPrivacyPolicy,
   onTermsConditions,
+  onFaq,
   onLogout,
 }) => {
   const { showConfirmation } = useConfirmation();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [userName, setUserName] = useState('User');
   const [userPhone, setUserPhone] = useState('');
+
+  // Get app version dynamically from Expo Constants
+  // Try multiple sources to ensure we get the version in all environments
+  const appVersion = 
+    Constants.expoConfig?.version || 
+    Constants.manifest?.version || 
+    Constants.manifest2?.extra?.expoClient?.version ||
+    ''; // Fallback version if none found
 
   // Fetch user data from API whenever screen becomes visible
   useEffect(() => {
@@ -52,7 +60,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         try {
           // First try to get data from API
           const response = await authService.getProfile();
-
+          
           if (response.success && response.data?.user) {
             const user = response.data.user;
             setUserName(user.name || 'User');
@@ -148,37 +156,41 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   return (
     <View style={styles.rootContainer}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#00B14F"
-        translucent={false}
-      />
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <View style={styles.container}>
+      <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
+        <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
+      </SafeAreaView>
+
+      {/* Green Header */}
+      <View style={styles.header}>
+        {onBack && (
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={onBack}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+          </TouchableOpacity>
+        )}
+        <Text style={styles.headerTitle}>Profile</Text>
+      </View>
+
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+        <View style={styles.container}>
         <ScrollView
           style={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContentContainer}
         >
-          {/* Back Button */}
-          {onBack && (
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={onBack}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
-            </TouchableOpacity>
-          )}
-
           {/* Profile Header */}
           <View style={styles.profileHeader}>
             {/* Left side - Avatar and Info */}
             <View style={styles.profileLeft}>
-              {/* Avatar with Edit Icon */}
+              {/* Avatar with First Letter */}
               <View style={styles.avatarContainer}>
                 <View style={styles.avatar}>
-                  <MaterialIcons name="person" size={24} color="#FFFFFF" />
+                  <Text style={styles.avatarText}>
+                    {userName && userName.length > 0 ? userName.charAt(0).toUpperCase() : 'U'}
+                  </Text>
                 </View>
               </View>
 
@@ -206,10 +218,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <MenuItem label="My Orders" icon="receipt-long" onPress={onMyOrders} />
             <MenuItem label="My Addresses" icon="location-on" onPress={onMyAddresses} />
             <MenuItem label="Favorites" icon="favorite" onPress={onFavorites} />
-            <MenuItem label="Chat With Us" icon="chat" onPress={onChatWithUs} />
+            <MenuItem label="Contact Us" icon="chat" onPress={onContactUs} />
 
             {/* Notification Toggle */}
-            <View style={styles.menuItem}>
+            {/* <View style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <MaterialIcons name="notifications" size={20} color="#00B14F" />
                 <Text style={styles.menuItemText}>Notification</Text>
@@ -224,14 +236,22 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 />
               </View>
             </View>
-            <View style={styles.divider} />
+            <View style={styles.divider} /> */}
 
-            <MenuItem label="Privacy Policy" icon="shield" onPress={onPrivacyPolicy} />
+            <MenuItem 
+              label="Privacy Policy" 
+              icon="shield" 
+              onPress={onPrivacyPolicy} 
+            />
+            <MenuItem 
+              label="FAQ" 
+              icon="help-outline" 
+              onPress={onFaq} 
+            />
             <MenuItem
               label="Terms & Conditions"
               icon="description"
               onPress={onTermsConditions}
-              showArrow={false}
               showDivider={false}
             />
           </View>
@@ -240,7 +260,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         {/* Bottom Section - App Version & Logout Button */}
         <View style={styles.bottomSection}>
           {/* App Version */}
-          <Text style={styles.appVersion}>App Version 1.2</Text>
+          <Text style={styles.appVersion}>App Version {appVersion}</Text>
 
           {/* Logout Button */}
           <TouchableOpacity
@@ -252,7 +272,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
-      </View>
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -263,9 +283,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#00B14F',
   },
+  safeAreaTop: {
+    backgroundColor: '#00B14F',
+  },
   safeArea: {
     flex: 1,
-    backgroundColor: '#00B14F',
+    backgroundColor: '#F5F5F5',
   },
   container: {
     flex: 1,
@@ -280,6 +303,16 @@ const styles = StyleSheet.create({
     paddingTop: 15,
     backgroundColor: '#F5F5F5',
   },
+  // Green Header
+  header: {
+    backgroundColor: '#00B14F',
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    height: 76,
+  },
   // Back Button
   backButton: {
     width: 40,
@@ -290,15 +323,20 @@ const styles = StyleSheet.create({
     borderColor: '#E4E4E4',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+  },
+  headerTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#FFFFFF',
+    lineHeight: 27,
   },
   // Profile Header
   profileHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 30,
-    marginBottom: 40,
+    marginTop: 20,
+    marginBottom: 30,
   },
   profileLeft: {
     flexDirection: 'row',
@@ -313,23 +351,32 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#000000',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 2,
+    borderColor: '#00B14F',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarText: {
+    fontFamily: 'Poppins',
+    fontWeight: '300',
+    fontSize: 20,
+    color: '#00B14F',
+    lineHeight: 24,
   },
   profileInfo: {
     gap: 2,
   },
   profileName: {
     fontFamily: 'Poppins',
-    fontWeight: '600',
+    fontWeight: '300',
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
   },
   profilePhone: {
     fontFamily: 'Poppins',
-    fontWeight: '400',
+    fontWeight: '300',
     fontSize: 12,
     lineHeight: 18,
     color: '#000000',
@@ -342,7 +389,7 @@ const styles = StyleSheet.create({
   },
   editProfileText: {
     fontFamily: 'Poppins',
-    fontWeight: '500',
+    fontWeight: '300',
     fontSize: 13,
     lineHeight: 20,
     textAlign: 'center',
@@ -392,12 +439,13 @@ const styles = StyleSheet.create({
   // App Version
   appVersion: {
     fontFamily: 'Poppins',
-    fontWeight: '500',
+    fontWeight: '600',
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
     textAlign: 'center',
     marginBottom: 20,
+    opacity: 0.85,
   },
   // Logout Button
   logoutButton: {

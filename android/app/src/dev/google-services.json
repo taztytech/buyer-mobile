@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "486365337198",
+    "project_id": "ondc-buyer-app-63cee",
+    "storage_bucket": "ondc-buyer-app-63cee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:486365337198:android:b0c50aea85d1224e65787f",
+        "android_client_info": {
+          "package_name": "in.tazty.buyer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "486365337198-7c5o7n762mkiouo5mg6j4e5oqm39dfdm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9q2jy9m6wYMkhNMrPO0XEX_kHVyV3B80"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "486365337198-7c5o7n762mkiouo5mg6j4e5oqm39dfdm.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "486365337198-bn102s1f17v7n51bqgekb5j2l3rf4f4s.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "in.tazty.buyer"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

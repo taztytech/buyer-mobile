@@ -6,7 +6,7 @@
 import { apiService, ApiResponse } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 import { storageService, UserData } from './storage.service';
-import { pushNotificationService } from './pushNotification.service';
+import { fcmNotificationService } from './fcmNotification.service';
 
 // Types
 export interface SendOtpRequest {
@@ -137,9 +137,11 @@ class AuthService {
           response.data.expires_in || 3600
         );
 
-        // 4. Register for push notifications (don't block login if this fails)
-        pushNotificationService.registerForPushNotifications().catch((error) => {
-          // Silent fail - push notifications are optional
+        // 4. Register FCM token after successful login
+        // This ensures the token is uploaded to backend after authentication
+        fcmNotificationService.registerTokenAfterLogin().catch((error) => {
+          console.warn('⚠️  Failed to register FCM token after login:', error);
+          // Silent fail - push notifications are optional, but log the error
         });
       }
 
@@ -158,8 +160,9 @@ class AuthService {
    */
   async logout(): Promise<ApiResponse> {
     try {
-      // Unregister push notifications (don't block logout if this fails)
-      pushNotificationService.unregisterPushToken().catch(() => {
+      // Delete FCM token from backend and Firebase (don't block logout if this fails)
+      fcmNotificationService.unregisterToken().catch((error) => {
+        console.warn('⚠️  Failed to unregister FCM token on logout:', error);
         // Silent fail - continue with logout even if this fails
       });
 
@@ -197,6 +200,45 @@ class AuthService {
   }
 
   /**
+   * Get support contact details (number and email)
+   * Uses cached data first, only calls API if not found in cache
+   * @param forceRefresh - If true, forces API call to refresh data
+   */
+  async getSupportDetails(forceRefresh: boolean = false): Promise<{ support_number: string; support_email: string }> {
+    // First check cache if not forcing refresh
+    if (!forceRefresh) {
+      const cachedUser = await storageService.getUser();
+      if (cachedUser && (cachedUser as any).support_number) {
+        return {
+          support_number: (cachedUser as any).support_number || '',
+          support_email: (cachedUser as any).support_email || '',
+        };
+      }
+    }
+
+    // If not in cache or force refresh, fetch from API
+    try {
+      const response = await this.getProfile();
+      if (response.success && response.data?.user) {
+        const user = response.data.user as any;
+        return {
+          support_number: user.support_number || '',
+          support_email: user.support_email || '',
+        };
+      }
+    } catch {
+      // Silent fail
+    }
+
+    // Final fallback to cache (even if empty)
+    const cachedUser = await storageService.getUser();
+    return {
+      support_number: (cachedUser as any)?.support_number || '',
+      support_email: (cachedUser as any)?.support_email || '',
+    };
+  }
+
+  /**
    * Get user profile
    */
   async getProfile(): Promise<ApiResponse<any>> {
@@ -208,11 +250,14 @@ class AuthService {
       // If fetch successful, update stored user data
       // API returns user data directly in response.data (not response.data.user)
       if (response.success && response.data) {
+
         const updatedUser = {
           id: response.data.id?.toString() || '',
           phoneNumber: response.data.phone_number?.toString() || '',
           name: response.data.name || '',
           email: response.data.email || '',
+          support_email: response.data.support_email || '',
+          support_number: response.data.support_number || '',
         };
         await storageService.saveUser(updatedUser);
 
@@ -225,6 +270,8 @@ class AuthService {
               phoneNumber: response.data.phone_number?.toString() || '',
               name: response.data.name || '',
               email: response.data.email || '',
+              support_email: response.data.support_email || '',
+              support_number: response.data.support_number || '',
             }
           },
           message: response.message,

@@ -5,19 +5,17 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  StatusBar,
   ScrollView,
   Platform,
   Keyboard,
   Animated,
-  Alert,
   ActivityIndicator,
   Modal,
   KeyboardAvoidingView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { addressService, AddAddressRequest } from '@/services/address.service';
+import * as Location from 'expo-location';
 import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface AddAddressFormScreenProps {
@@ -26,12 +24,14 @@ interface AddAddressFormScreenProps {
   locationAddress: string;
   latitude: number;
   longitude: number;
+  geocodingData?: Location.LocationGeocodedAddress | null;
   onBack?: () => void;
   onSave?: (addressData: any) => void;
   onClose?: () => void;
   // Edit mode props
   editMode?: boolean;
   addressId?: string;
+  hasUserChangedLocation?: boolean; // Flag to indicate user changed location during editing
   initialData?: {
     houseNo?: string;
     building?: string;
@@ -51,14 +51,15 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   locationAddress,
   latitude,
   longitude,
+  geocodingData,
   onBack,
   onSave,
   onClose,
   editMode = false,
   addressId,
+  hasUserChangedLocation = false,
   initialData,
 }) => {
-  const { showConfirmation } = useConfirmation();
   const [houseNo, setHouseNo] = useState('');
   const [building, setBuilding] = useState('');
   const [locality, setLocality] = useState('');
@@ -71,7 +72,13 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [houseNoError, setHouseNoError] = useState('');
+  const [buildingError, setBuildingError] = useState('');
+  const [localityError, setLocalityError] = useState('');
+  const [pincodeError, setPincodeError] = useState('');
+  const [alternateMobileError, setAlternateMobileError] = useState('');
   const slideAnim = useRef(new Animated.Value(1000)).current;
+  const { showConfirmation } = useConfirmation();
   const hasInitializedRef = useRef(false);
   const previousVisibleRef = useRef(visible);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -85,12 +92,21 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     if (isOpening) {
       // Reset initialization flag when modal opens
       hasInitializedRef.current = false;
+
+      // Clear any previous validation errors when the popup is opened
+      setHouseNoError('');
+      setBuildingError('');
+      setLocalityError('');
+      setPincodeError('');
+      setAlternateMobileError('');
     }
 
     if (visible && !hasInitializedRef.current) {
       hasInitializedRef.current = true;
 
-      if (editMode && initialData) {
+      // Priority: If user changed location during edit, use geocodingData; otherwise use initialData
+      if (editMode && initialData && !hasUserChangedLocation) {
+        // Edit mode with original location - use initial data
         setHouseNo(initialData.houseNo || '');
         setBuilding(initialData.building || '');
         setLocality(initialData.locality || '');
@@ -103,20 +119,175 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           const tagCapitalized = initialData.tag.charAt(0).toUpperCase() + initialData.tag.slice(1) as 'Home' | 'Work' | 'Other';
           setSelectedTag(tagCapitalized);
         }
+      } else if (editMode && hasUserChangedLocation) {
+        // Edit mode but user changed location - use geocodingData for address fields, but keep tag, isDefault, alternateMobile from initialData
+        if (geocodingData) {
+          // Extract house/flat number from name or street (if it contains numbers at the start)
+          // Look for patterns like "123", "123A", "123-456", "Flat 123", etc.
+          const nameOrStreet = (geocodingData.name || geocodingData.street || '').trim();
+          let houseNoValue = '';
+          
+          // Try to extract house number from the beginning of the string
+          const houseNoPatterns = [
+            /^(\d+[A-Za-z]*(?:\s*[-/]\s*\d+[A-Za-z]*)?)/,  // "123", "123A", "123-456"
+            /^(?:Flat|Unit|Apt|Apartment|House|No\.?|#)\s*(\d+[A-Za-z]*(?:\s*[-/]\s*\d+[A-Za-z]*)?)/i,  // "Flat 123", "Unit 5A"
+          ];
+          
+          for (const pattern of houseNoPatterns) {
+            const match = nameOrStreet.match(pattern);
+            if (match) {
+              houseNoValue = match[1] || match[0];
+              break;
+            }
+          }
+          
+          // Building/Street name - use street, or name without house number
+          let buildingValue = geocodingData.street || '';
+          if (!buildingValue && geocodingData.name) {
+            // Remove house number from name if found
+            buildingValue = houseNoValue 
+              ? geocodingData.name.replace(new RegExp(`^${houseNoValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'), '').trim()
+              : geocodingData.name;
+          }
+          
+         
+          let localityValue = '';
+          
+          // Use district if available (most reliable for locality/area)
+          if (geocodingData.district) {
+            localityValue = geocodingData.district;
+          } 
+          // Use subregion as fallback (also reliable for area information)
+          else if (geocodingData.subregion) {
+            localityValue = geocodingData.subregion;
+          }
+          // If neither is available, leave empty rather than guessing from unreliable fields
+          // This ensures we only populate with accurate data
+          
+          // City - use city field
+          const cityValue = geocodingData.city || '';
+          
+          // State - use region field
+          const stateValue = geocodingData.region || '';
+          
+          // Pincode - use postalCode field
+          const pincodeValue = geocodingData.postalCode || '';
+          
+          // Set geocoded address fields
+          setHouseNo(houseNoValue);
+          setBuilding(buildingValue);
+          setLocality(localityValue);
+          setCity(cityValue);
+          setState(stateValue);
+          setPincode(pincodeValue);
+          
+          // Keep existing user preferences from initialData when editing
+          setAlternateMobile(initialData?.alternateMobile || '');
+          setIsDefault(initialData?.isDefault || false);
+          if (initialData?.tag) {
+            const tagCapitalized = initialData.tag.charAt(0).toUpperCase() + initialData.tag.slice(1) as 'Home' | 'Work' | 'Other';
+            setSelectedTag(tagCapitalized);
+          } else {
+            setSelectedTag('Home');
+          }
+        } else {
+          // No geocoding data but user changed location - reset address fields only
+          setHouseNo('');
+          setBuilding('');
+          setLocality('');
+          setCity('');
+          setState('');
+          setPincode('');
+          
+          // Keep existing user preferences from initialData when editing
+          setAlternateMobile(initialData?.alternateMobile || '');
+          setIsDefault(initialData?.isDefault || false);
+          if (initialData?.tag) {
+            const tagCapitalized = initialData.tag.charAt(0).toUpperCase() + initialData.tag.slice(1) as 'Home' | 'Work' | 'Other';
+            setSelectedTag(tagCapitalized);
+          } else {
+            setSelectedTag('Home');
+          }
+        }
       } else if (!editMode) {
-        // Reset form for add mode
-        setHouseNo('');
-        setBuilding('');
-        setLocality('');
-        setCity('');
-        setState('');
-        setPincode('');
-        setAlternateMobile('');
-        setIsDefault(false);
-        setSelectedTag('Home');
+        // Pre-fill form with geocoding data if available
+        if (geocodingData) {
+          // Extract house/flat number from name or street (if it contains numbers at the start)
+          // Look for patterns like "123", "123A", "123-456", "Flat 123", etc.
+          const nameOrStreet = (geocodingData.name || geocodingData.street || '').trim();
+          let houseNoValue = '';
+          
+          // Try to extract house number from the beginning of the string
+          const houseNoPatterns = [
+            /^(\d+[A-Za-z]*(?:\s*[-/]\s*\d+[A-Za-z]*)?)/,  // "123", "123A", "123-456"
+            /^(?:Flat|Unit|Apt|Apartment|House|No\.?|#)\s*(\d+[A-Za-z]*(?:\s*[-/]\s*\d+[A-Za-z]*)?)/i,  // "Flat 123", "Unit 5A"
+          ];
+          
+          for (const pattern of houseNoPatterns) {
+            const match = nameOrStreet.match(pattern);
+            if (match) {
+              houseNoValue = match[1] || match[0];
+              break;
+            }
+          }
+          
+          // Building/Street name - use street, or name without house number
+          let buildingValue = geocodingData.street || '';
+          if (!buildingValue && geocodingData.name) {
+            // Remove house number from name if found
+            buildingValue = houseNoValue 
+              ? geocodingData.name.replace(new RegExp(`^${houseNoValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'), '').trim()
+              : geocodingData.name;
+          }
+          
+         
+          let localityValue = '';
+          
+          // Use district if available (most reliable for locality/area)
+          if (geocodingData.district) {
+            localityValue = geocodingData.district;
+          } 
+          // Use subregion as fallback (also reliable for area information)
+          else if (geocodingData.subregion) {
+            localityValue = geocodingData.subregion;
+          }
+          // If neither is available, leave empty rather than guessing from unreliable fields
+          // This ensures we only populate with accurate data
+          
+          // City - use city field
+          const cityValue = geocodingData.city || '';
+          
+          // State - use region field
+          const stateValue = geocodingData.region || '';
+          
+          // Pincode - use postalCode field
+          const pincodeValue = geocodingData.postalCode || '';
+          
+          // Set form values
+          setHouseNo(houseNoValue);
+          setBuilding(buildingValue);
+          setLocality(localityValue);
+          setCity(cityValue);
+          setState(stateValue);
+          setPincode(pincodeValue);
+          setAlternateMobile('');
+          setIsDefault(false);
+          setSelectedTag('Home');
+        } else {
+          // Reset form if no geocoding data
+          setHouseNo('');
+          setBuilding('');
+          setLocality('');
+          setCity('');
+          setState('');
+          setPincode('');
+          setAlternateMobile('');
+          setIsDefault(false);
+          setSelectedTag('Home');
+        }
       }
     }
-  }, [visible, editMode, initialData]);
+  }, [visible, editMode, initialData, geocodingData, hasUserChangedLocation]);
 
   useEffect(() => {
     if (visible) {
@@ -168,75 +339,50 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   };
 
   const handleContinue = async () => {
-    // Validation
+    // Clear any previous errors before running validation
+    setHouseNoError('');
+    setBuildingError('');
+    setLocalityError('');
+    setPincodeError('');
+    setAlternateMobileError('');
+
+    // Validation - collect all field errors at once
+    let hasFieldError = false;
+
     if (!houseNo.trim()) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Please enter house/flat number',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
-      return;
+      setHouseNoError('Please enter house/flat number');
+      hasFieldError = true;
     }
     if (!building.trim()) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Please enter building/street name',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
-      return;
+      setBuildingError('Please enter building/street name');
+      hasFieldError = true;
     }
     if (!locality.trim()) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Please enter landmark',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
-      return;
+      setLocalityError('Please enter area / locality');
+      hasFieldError = true;
     }
     if (!pincode.trim()) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Please enter pincode',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
-      return;
+      setPincodeError('Please enter pincode');
+      hasFieldError = true;
+    } else if (!/^\d{6}$/.test(pincode.trim())) {
+      // Validate pincode format (must be exactly 6 digits)
+      setPincodeError('Pincode must be exactly 6 digits');
+      hasFieldError = true;
     }
-    // Validate pincode format (must be exactly 6 digits)
-    if (!/^\d{6}$/.test(pincode.trim())) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Pincode must be exactly 6 digits',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
-      return;
-    }
+
     // Validate alternate mobile if provided (must be exactly 10 digits)
     if (alternateMobile.trim() && !/^\d{10}$/.test(alternateMobile.trim())) {
-      showConfirmation({
-        title: 'Validation Error',
-        message: 'Alternate mobile number must be exactly 10 digits',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      setAlternateMobileError('Alternate mobile number must be exactly 10 digits');
+      hasFieldError = true;
+    }
+
+    if (hasFieldError) {
       return;
     }
 
     setLoading(true);
 
     try {
-      // Log received coordinates
-
       // Prepare address data for API
       const addressData: AddAddressRequest = {
         address1: houseNo,
@@ -249,7 +395,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         longitude: longitude,
         type: selectedTag.toLowerCase() as 'home' | 'work' | 'other',
         alternate_phone_number: alternateMobile ? parseInt(alternateMobile, 10) : undefined,
-        is_default: false,
+        is_default: true, // Set as default for both new and updated addresses
       };
 
       let response;
@@ -263,34 +409,38 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
       }
 
       if (response.success) {
-        // Call onSave to handle state cleanup and refresh
-        if (onSave) {
-          onSave(response.data);
+        // Close the form modal immediately (without animation) before navigation
+        if (onClose) {
+          onClose();
         }
-
-        // Show success message
-        showConfirmation({
-          title: 'Success',
-          message: editMode ? 'Address updated successfully' : 'Address added successfully',
-          confirmText: 'OK',
-          cancelText: 'Close',
-          onConfirm: () => {},
-        });
+        
+        // Small delay to ensure modal state updates before navigation
+        setTimeout(() => {
+          // Call onSave to handle navigation back to home
+          if (onSave) {
+            onSave(response.data);
+          }
+        }, 50);
       } else {
+        // Show API error in popup
+        const errorMessage = response.error || response.message || (editMode ? 'Failed to update address' : 'Failed to add address');
         showConfirmation({
-          title: 'Error',
-          message: response.error || (editMode ? 'Failed to update address' : 'Failed to add address'),
+          title: '',
+          message: errorMessage,
           confirmText: 'OK',
-          cancelText: 'Close',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
           onConfirm: () => {},
         });
       }
     } catch (error) {
+      // Show unexpected error in popup
       showConfirmation({
-        title: 'Error',
+        title: '',
         message: 'An unexpected error occurred. Please try again.',
         confirmText: 'OK',
-        cancelText: 'Close',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
         onConfirm: () => {},
       });
     } finally {
@@ -348,13 +498,21 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           {/* Header - Location Info */}
           <View style={styles.header}>
             <View style={styles.locationHeader}>
+              <TouchableOpacity 
+                style={styles.backButton} 
+                onPress={handleClose}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialIcons name="arrow-back" size={24} color="#001E1F" />
+              </TouchableOpacity>
               <MaterialIcons name="location-on" size={28} color="#00B14F" />
               <Text style={styles.locationName}>{editMode ? 'Edit Address' : locationName}</Text>
             </View>
             {!editMode && <Text style={styles.locationAddress}>{locationAddress}</Text>}
-            <TouchableOpacity style={styles.relocateButton} onPress={onBack}>
+            {/* Map pin/location button hidden as per requirement */}
+            {/* <TouchableOpacity style={styles.relocateButton} onPress={onBack}>
               <MaterialIcons name="my-location" size={20} color="#00B14F" />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
 
           {/* Form Fields */}
@@ -364,8 +522,13 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               <TextInput
                 style={styles.input}
                 value={houseNo}
-                onChangeText={setHouseNo}
-                placeholder="House / flat / floor number"
+                onChangeText={(text) => {
+                  setHouseNo(text);
+                  if (houseNoError) {
+                    setHouseNoError('');
+                  }
+                }}
+                placeholder="Flat / Floor number"
                 placeholderTextColor="#999"
                 maxLength={50}
                 onFocus={() => {
@@ -374,6 +537,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   }, 100);
                 }}
               />
+              {houseNoError ? <Text style={styles.errorText}>{houseNoError}</Text> : null}
             </View>
 
             {/* House/Building/Street Name - Full width */}
@@ -381,7 +545,12 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               <TextInput
                 style={styles.input}
                 value={building}
-                onChangeText={setBuilding}
+                onChangeText={(text) => {
+                  setBuilding(text);
+                  if (buildingError) {
+                    setBuildingError('');
+                  }
+                }}
                 placeholder="House / Building / Street Name"
                 placeholderTextColor="#999"
                 maxLength={100}
@@ -391,15 +560,21 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   }, 100);
                 }}
               />
+              {buildingError ? <Text style={styles.errorText}>{buildingError}</Text> : null}
             </View>
 
-            {/* Landmark - Full width */}
+            {/* Area / locality - Full width */}
             <View style={styles.fieldGroup}>
               <TextInput
                 style={styles.input}
                 value={locality}
-                onChangeText={setLocality}
-                placeholder="Landmark"
+                onChangeText={(text) => {
+                  setLocality(text);
+                  if (localityError) {
+                    setLocalityError('');
+                  }
+                }}
+                placeholder="Area / locality"
                 placeholderTextColor="#999"
                 maxLength={100}
                 onFocus={() => {
@@ -408,6 +583,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   }, 100);
                 }}
               />
+              {localityError ? <Text style={styles.errorText}>{localityError}</Text> : null}
             </View>
 
             {/* Pincode */}
@@ -419,6 +595,9 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   // Only allow numeric input
                   const numericText = text.replace(/[^0-9]/g, '');
                   setPincode(numericText);
+                  if (pincodeError) {
+                    setPincodeError('');
+                  }
                 }}
                 placeholder="Pincode"
                 placeholderTextColor="#999"
@@ -430,6 +609,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   }, 100);
                 }}
               />
+              {pincodeError ? <Text style={styles.errorText}>{pincodeError}</Text> : null}
             </View>
 
             {/* Alternate Mobile Number */}
@@ -441,6 +621,9 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   // Only allow numeric input
                   const numericText = text.replace(/[^0-9]/g, '');
                   setAlternateMobile(numericText);
+                  if (alternateMobileError) {
+                    setAlternateMobileError('');
+                  }
                 }}
                 placeholder="Alternate Mobile number (Optional)"
                 placeholderTextColor="#999"
@@ -452,6 +635,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   }, 100);
                 }}
               />
+              {alternateMobileError ? <Text style={styles.errorText}>{alternateMobileError}</Text> : null}
             </View>
 
             {/* Address Tags */}
@@ -609,7 +793,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     height: 30,
-    paddingRight: 48,
+  },
+  backButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: -4,
   },
   locationInfo: {
     flex: 1,
@@ -750,6 +940,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#00B14F',
     borderRadius: 10,
     gap: 10,
+    marginBottom: 30,
   },
   continueButtonDisabled: {
     backgroundColor: '#80D8A7',
@@ -760,5 +951,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  errorText: {
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#D32F2F',
   },
 });

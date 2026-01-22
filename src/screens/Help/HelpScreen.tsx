@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { apiService } from '@/services/api.service';
+import { OrderListItem } from '@/services/orders.service';
 
 interface HelpScreenProps {
+  visible?: boolean;
   onBack?: () => void;
+  onViewOrder?: (orderId: string) => void;
+  initialOrder?: Partial<OrderListItem> | null;
 }
 
 interface FAQItem {
@@ -21,8 +26,79 @@ interface FAQItem {
   answer: string;
 }
 
-export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
+interface RecentOrder {
+  id?: number;
+  externalId?: string | number;
+  order_number?: string;
+  created_at?: string;
+  status?: string;
+  payment_status?: string;
+  restaurant?: {
+    name?: string;
+    logo_url?: string;
+  };
+}
+
+const formatOrderDate = (dateString?: string) => {
+  if (!dateString) {
+    return '—';
+  }
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) {
+    return '—';
+  }
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const getStatusInfo = (status?: string, paymentStatus?: string) => {
+  const normalizedStatus = status?.toLowerCase();
+  const normalizedPayment = paymentStatus?.toLowerCase();
+
+  if (normalizedStatus === 'payment_failed' || normalizedPayment === 'payment_failed' || normalizedPayment === 'failed') {
+    return { label: 'Payment Failed', color: '#DC2626' };
+  }
+  if (normalizedStatus === 'delivered' || normalizedStatus === 'completed') {
+    return { label: 'Delivered', color: '#00B14F' };
+  }
+  if (normalizedStatus === 'cancelled' || normalizedStatus === 'rejected') {
+    return { label: 'Cancelled', color: '#DC2626' };
+  }
+  return { label: 'On the way', color: '#F59E0B' };
+};
+
+const normalizeOrderData = (order?: Partial<OrderListItem> | null): RecentOrder | null => {
+  if (!order) {
+    return null;
+  }
+
+  return {
+    id: typeof order.id === 'number' ? order.id : Number(order.id ?? 0) || undefined,
+    order_number: order.order_number,
+    created_at: order.created_at,
+    status: order.status,
+    payment_status: (order as any)?.payment_status,
+    restaurant: order.restaurant
+      ? {
+          name: order.restaurant.name,
+          logo_url: (order.restaurant as any)?.logo_url,
+        }
+      : undefined,
+  };
+};
+
+export const HelpScreen: React.FC<HelpScreenProps> = ({
+  visible = false,
+  onBack,
+  onViewOrder,
+  initialOrder,
+}) => {
   const [expandedFAQ, setExpandedFAQ] = useState<string | null>('1'); // First item expanded by default
+  const [recentOrder, setRecentOrder] = useState<RecentOrder | null>(normalizeOrderData(initialOrder));
+  const [isLoadingOrder, setIsLoadingOrder] = useState<boolean>(!initialOrder);
 
   const faqs: FAQItem[] = [
     {
@@ -45,6 +121,83 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
   const toggleFAQ = (id: string) => {
     setExpandedFAQ(expandedFAQ === id ? null : id);
   };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!visible) {
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    if (initialOrder) {
+      const mapped = normalizeOrderData(initialOrder);
+      setRecentOrder(mapped);
+      setIsLoadingOrder(false);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const fetchRecentOrder = async () => {
+      setIsLoadingOrder(true);
+      setRecentOrder(null);
+      try {
+        const response = await apiService.get('/api/buyer/orders', { limit: 5, page: 1 });
+        const payload = response?.data as any;
+        let orders: any[] = [];
+
+        if (Array.isArray(payload)) {
+          orders = payload;
+        } else if (Array.isArray(payload?.data?.data)) {
+          orders = payload.data.data;
+        } else if (Array.isArray(payload?.data)) {
+          orders = payload.data;
+        } else if (Array.isArray(payload?.orders)) {
+          orders = payload.orders;
+        }
+
+        if (isMounted) {
+          const latest = orders.length ? normalizeOrderData(orders[0]) : null;
+          setRecentOrder(latest);
+        }
+      } catch (_error) {
+        if (isMounted) {
+          setRecentOrder(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingOrder(false);
+        }
+      }
+    };
+
+    fetchRecentOrder();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [visible, initialOrder]);
+
+  const hasRecentOrder = Boolean(recentOrder);
+  const orderStatusInfo = hasRecentOrder
+    ? getStatusInfo(recentOrder?.status, recentOrder?.payment_status)
+    : { label: isLoadingOrder ? 'Fetching latest order...' : 'No recent orders yet', color: '#00B14F' };
+
+  const orderDateText = hasRecentOrder
+    ? `Order placed on ${formatOrderDate(recentOrder?.created_at)}`
+    : isLoadingOrder
+      ? 'Looking for your most recent order'
+      : 'No recent orders yet';
+
+  const orderNumberText = hasRecentOrder
+    ? `Order #${recentOrder?.order_number || recentOrder?.id}`
+    : 'Once you place an order, it will show up here.';
+
+  const orderImageSource = recentOrder?.restaurant?.logo_url
+    ? { uri: recentOrder.restaurant.logo_url }
+    : { uri: 'https://via.placeholder.com/155x137' };
 
   return (
     <View style={styles.outerContainer}>
@@ -76,20 +229,33 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
 
               <View style={styles.orderCard}>
                 <View style={styles.orderLeft}>
-                  <Text style={styles.orderDate}>Order placed on 12/12/2023</Text>
-                  <Text style={styles.orderNumber}>Order #123456789</Text>
-                  <Text style={styles.orderStatus}>Delivered</Text>
+                  <Text style={styles.orderDate}>{orderDateText}</Text>
+                  <Text style={styles.orderNumber}>{orderNumberText}</Text>
+                  <Text style={[styles.orderStatus, { color: orderStatusInfo.color }]}>
+                    {orderStatusInfo.label}
+                  </Text>
 
-                  <TouchableOpacity style={styles.viewOrderButton} activeOpacity={0.8}>
-                    <Text style={styles.viewOrderText}>View Order</Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.viewOrderButton,
+                      !hasRecentOrder && styles.viewOrderButtonDisabled,
+                    ]}
+                    activeOpacity={0.8}
+                    disabled={!hasRecentOrder || !recentOrder?.id}
+                    onPress={() => {
+                      if (hasRecentOrder && recentOrder?.id) {
+                        onViewOrder?.(recentOrder.id.toString());
+                      }
+                    }}
+                  >
+                    <Text style={styles.viewOrderText}>
+                      {hasRecentOrder ? 'View Order' : 'Browse Restaurants'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
                 <View style={styles.orderRight}>
-                  <Image
-                    source={{ uri: 'https://via.placeholder.com/155x137' }}
-                    style={styles.orderImage}
-                  />
+                  <Image source={orderImageSource} style={styles.orderImage} />
                 </View>
               </View>
             </View>
@@ -240,6 +406,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: '#FFFFFF',
+  },
+  viewOrderButtonDisabled: {
+    backgroundColor: '#9ADDBD',
   },
   orderRight: {
     width: 155,

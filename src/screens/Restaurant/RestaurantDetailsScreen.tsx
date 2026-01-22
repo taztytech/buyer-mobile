@@ -16,6 +16,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { restaurantService, RestaurantDetails } from '@/services/restaurant.service';
 import { isExpoGo } from '@/utils/platform.util';
+import { exotelService } from '@/services/exotel.service';
+import { authService } from '@/services/auth.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
+import { useSnackbar } from '@/context/SnackbarContext';
 
 // Conditionally import MapView only for standalone builds
 let MapView: any;
@@ -56,6 +60,9 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isTimingsExpanded, setIsTimingsExpanded] = useState(false);
+  const [isInitiatingCall, setIsInitiatingCall] = useState(false);
+  const { showConfirmation } = useConfirmation();
+  const { showSnackbar } = useSnackbar();
 
   useEffect(() => {
     fetchRestaurantDetails();
@@ -84,11 +91,89 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
     }
   };
 
-  const handleCall = () => {
+  const handleCall = async () => {
     // Check if phone number is available in restaurant data
-    const phoneNumber = (restaurantData as any)?.phone || (restaurantData as any)?.contact_number;
-    if (phoneNumber) {
-      Linking.openURL(`tel:${phoneNumber}`);
+    const phoneNumber = (restaurantData as any)?.phone_number || (restaurantData as any)?.contact_number;
+    
+    if (!phoneNumber) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Restaurant phone number is not available.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Get user's phone number
+    const currentUser = await authService.getCurrentUser();
+    if (!currentUser || !currentUser.phoneNumber) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Unable to get your phone number. Please ensure you are logged in.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Clean phone numbers (remove spaces, dashes, etc.)
+    const userPhone = currentUser.phoneNumber.replace(/\D/g, '');
+    const restaurantPhoneClean = phoneNumber.replace(/\D/g, '');
+
+    if (!userPhone || !restaurantPhoneClean) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Invalid phone number format. Please check your phone number.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    try {
+      setIsInitiatingCall(true);
+
+      // Call Exotel API without order_id (general restaurant call)
+      const response = await exotelService.initiateCall({
+        from: userPhone,
+        to: restaurantPhoneClean,
+        // No order_id - this is a general restaurant call, not order-specific
+      });
+
+      if (response.success) {
+        showSnackbar({
+          message: 'Your call to the restaurant is being connected. Please wait for the call.',
+          type: 'success',
+          duration: 4000,
+        });
+      } else {
+        showConfirmation({
+          title: 'Call Failed',
+          message: response.error || 'Failed to initiate call. Please try again later.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#DC2626',
+          onConfirm: () => {},
+        });
+      }
+    } catch (error: any) {
+      showConfirmation({
+        title: 'Error',
+        message: error.message || 'An unexpected error occurred. Please try again.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#DC2626',
+        onConfirm: () => {},
+      });
+    } finally {
+      setIsInitiatingCall(false);
     }
   };
 
@@ -113,8 +198,8 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
       }
 
       // Add rating if available
-      if (restaurantData.stats?.average_rating > 0 && restaurantData.stats?.total_reviews > 0) {
-        message += `⭐ ${restaurantData.stats.average_rating.toFixed(1)} (${restaurantData.stats.total_reviews} reviews)\n`;
+      if (restaurantData.stats?.average_rating > 0) {
+        message += `⭐ ${restaurantData.stats.average_rating.toFixed(1)}\n`;
       }
 
       // Add delivery info
@@ -123,7 +208,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
       }
 
       if (restaurantData.min_order_value) {
-        message += `💰 Min order ₹${parseFloat(restaurantData.min_order_value).toFixed(0)}\n`;
+        message += `💰 Min order ₹${Number(restaurantData.min_order_value).toFixed(0)}\n`;
       }
 
       // Add address
@@ -153,8 +238,11 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
 
   const getCurrentDayTiming = () => {
     if (!restaurantData?.timings || restaurantData.timings.length === 0) return null;
-    const today = new Date().getDay();
-    return restaurantData.timings.find(t => t.day === today);
+    // JS getDay(): 0 (Sunday) - 6 (Saturday)
+    // API day mapping: 1 (Sunday) - 7 (Saturday)
+    const jsDay = new Date().getDay();
+    const apiDay = jsDay === 0 ? 1 : jsDay + 1;
+    return restaurantData.timings.find(t => t.day === apiDay);
   };
 
   const getDayName = (day: number) => {
@@ -168,19 +256,49 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
     return `${loc.locality}, ${loc.city}`;
   };
 
-  // Get unique images from categories
+  // Get unique images from categories (handle both string URLs and image objects)
   const getRestaurantPhotos = () => {
     if (!restaurantData?.categories) return [];
+
+    const seen = new Set<string>();
     const photos: string[] = [];
+
     restaurantData.categories.forEach(category => {
       category.items?.forEach((item: any) => {
-        if (item.images && Array.isArray(item.images)) {
-          photos.push(...item.images);
+        const images = item.images;
+        if (!images) {
+          return;
+        }
+
+        // Always consider only the first image from the images collection
+        const firstImage = Array.isArray(images) ? images[0] : images;
+
+        let url: string | undefined;
+
+        if (typeof firstImage === 'string') {
+          url = firstImage.trim();
+        } else if (firstImage) {
+          // Support common image field names
+          const raw =
+            firstImage.url ||
+            firstImage.image_url ||
+            firstImage.image ||
+            firstImage.src;
+
+          if (typeof raw === 'string') {
+            url = raw.trim();
+          }
+        }
+
+        if (url && !seen.has(url)) {
+          seen.add(url);
+          photos.push(url);
         }
       });
     });
+
     // Return first 10 unique photos
-    return [...new Set(photos)].slice(0, 10);
+    return photos.slice(0, 10);
   };
 
   return (
@@ -222,10 +340,10 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
           >
             {/* Restaurant Info */}
             <View style={styles.titleSection}>
-              {restaurantData?.description && (
+              {/* {restaurantData?.description && (
                 <Text style={styles.subtitle}>{restaurantData.description}</Text>
-              )}
-              {restaurantData && (restaurantData.stats?.average_rating > 0 || restaurantData.delivery_time || restaurantData.min_order_value) && (
+              )} */}
+              {/* {restaurantData && (restaurantData.stats?.average_rating > 0 || restaurantData.delivery_time || restaurantData.min_order_value) && (
                 <Text style={styles.cuisines}>
                   {restaurantData.stats?.average_rating > 0 && restaurantData.stats?.total_reviews > 0 && (
                     <>⭐ {restaurantData.stats.average_rating.toFixed(1)} ({restaurantData.stats.total_reviews})</>
@@ -235,7 +353,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                   {restaurantData.delivery_time && restaurantData.min_order_value && ' · '}
                   {restaurantData.min_order_value && `Min ₹${parseFloat(restaurantData.min_order_value).toFixed(0)}`}
                 </Text>
-              )}
+              )} */}
 
               {/* Cuisine Tags */}
               {(() => {
@@ -271,8 +389,8 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                       provider={PROVIDER_GOOGLE}
                       style={styles.map}
                       initialRegion={{
-                        latitude: parseFloat(restaurantData.locations[0].lat),
-                        longitude: parseFloat(restaurantData.locations[0].lng),
+                        latitude: Number(restaurantData.locations[0].lat),
+                        longitude: Number(restaurantData.locations[0].lng),
                         latitudeDelta: 0.01,
                         longitudeDelta: 0.01,
                       }}
@@ -283,8 +401,8 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                     >
                       <Marker
                         coordinate={{
-                          latitude: parseFloat(restaurantData.locations[0].lat),
-                          longitude: parseFloat(restaurantData.locations[0].lng),
+                          latitude: Number(restaurantData.locations[0].lat),
+                          longitude: Number(restaurantData.locations[0].lng),
                         }}
                       />
                     </MapView>
@@ -320,10 +438,16 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                 </View>
                 <View style={styles.actionButtons}>
                   <TouchableOpacity
-                    style={styles.actionButton}
+                    style={[styles.actionButton, isInitiatingCall && styles.actionButtonDisabled]}
                     onPress={handleCall}
+                    disabled={isInitiatingCall}
+                    activeOpacity={0.7}
                   >
-                    <MaterialIcons name="call" size={18} color="#00B14F" />
+                    {isInitiatingCall ? (
+                      <ActivityIndicator size="small" color="#00B14F" />
+                    ) : (
+                      <MaterialIcons name="call" size={18} color="#00B14F" />
+                    )}
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.actionButton}
@@ -331,12 +455,12 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                   >
                     <MaterialIcons name="directions" size={18} color="#00B14F" />
                   </TouchableOpacity>
-                  <TouchableOpacity
+                  {/* <TouchableOpacity
                     style={styles.actionButton}
                     onPress={handleShare}
                   >
                     <MaterialIcons name="share" size={18} color="#00B14F" />
-                  </TouchableOpacity>
+                  </TouchableOpacity> */}
                 </View>
               </View>
             )}
@@ -376,9 +500,12 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
               {isTimingsExpanded && (
                 <View style={styles.timingsExpanded}>
                   {/* Show all 7 days in order (Sunday=0 to Saturday=6) */}
-                  {[0, 1, 2, 3, 4, 5, 6].map((dayNum) => {
+                  {[1, 2, 3, 4, 5, 6, 7].map((dayNum) => {
                     const timing = restaurantData.timings.find(t => t.day === dayNum);
-                    const isToday = dayNum === new Date().getDay();
+                    // JS getDay(): 0-6, API day: 1-7 (Sunday=1)
+                    const jsToday = new Date().getDay();
+                    const apiToday = jsToday === 0 ? 1 : jsToday + 1;
+                    const isToday = dayNum === apiToday;
 
                     return (
                       <View key={dayNum} style={styles.timingRow}>
@@ -386,7 +513,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                           styles.timingDay,
                           isToday && styles.timingDayToday
                         ]}>
-                          {getDayName(dayNum)}
+                          {getDayName(dayNum - 1)}
                         </Text>
                         {timing && timing.open_time && timing.close_time ? (
                           <Text style={styles.timingHours}>
@@ -404,7 +531,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
           )}
 
           {/* Delivery Service */}
-          {(restaurantData?.delivery_time || restaurantData?.delivery_fee || restaurantData?.min_order_value) && (
+          {/* {(restaurantData?.delivery_time || restaurantData?.delivery_fee || restaurantData?.min_order_value) && (
             <View style={styles.infoRow}>
               <MaterialIcons name="delivery-dining" size={24} color="#666666" />
               <View style={styles.infoContentColumn}>
@@ -427,7 +554,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                 </View>
               </View>
             </View>
-          )}
+          )} */}
 
           {/* Photos */}
           {getRestaurantPhotos().length > 0 && (
@@ -485,11 +612,12 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                 <Text style={styles.legalValue}>{restaurantData.fssai_license}</Text>
               </>
             )}
-            <Text style={styles.termsText}>
+            {/* <Text style={styles.termsText}>
               Please review the terms of service for Tazty{' '}
               <Text style={styles.termsLink}>here</Text>
-            </Text>
+            </Text> */}
           </View>
+
         </ScrollView>
         )}
       </View>
@@ -696,6 +824,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F0F0',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  actionButtonDisabled: {
+    opacity: 0.6,
   },
   infoRow: {
     flexDirection: 'row',

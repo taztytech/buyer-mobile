@@ -1,4 +1,4 @@
-package com.valarcom.tazty
+package `in`.tazty.buyer
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

@@ -8,19 +8,24 @@ import {
   Image,
   StatusBar,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { searchService, SearchSuggestion } from '@/services/search.service';
 import { SearchBar } from '@/components/SearchBar';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useVegMode } from '@/context/VegModeContext';
 
 // Default location fallback (same as HomeScreen)
 const DEFAULT_LOCATION = {
   latitude: 9.9352300,
   longitude: 78.1304040,
 };
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface SearchResult {
   id: string;
@@ -35,6 +40,11 @@ interface SearchScreenProps {
   onSelectItem?: (itemId: number, itemName: string) => void;
   onSelectRestaurant?: (restaurantId: number, restaurantName: string) => void;
   selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
+  searchQuery?: string;
+  searchResults?: SearchSuggestion[];
+  onSearchQueryChange?: (query: string) => void;
+  onSearchResultsChange?: (results: SearchSuggestion[]) => void;
+  onClearSearch?: () => void;
 }
 
 export const SearchScreen: React.FC<SearchScreenProps> = ({
@@ -43,12 +53,26 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   onSelectItem,
   onSelectRestaurant,
   selectedLocation,
+  searchQuery: propSearchQuery = '',
+  searchResults: propSearchResults = [],
+  onSearchQueryChange,
+  onSearchResultsChange,
+  onClearSearch,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchSuggestion[]>([]);
+  // Use props if provided, otherwise fall back to local state for backward compatibility
+  const [localSearchQuery, setLocalSearchQuery] = useState('');
+  const [localSearchResults, setLocalSearchResults] = useState<SearchSuggestion[]>([]);
+  
+  const searchQuery = onSearchQueryChange ? propSearchQuery : localSearchQuery;
+  const searchResults = onSearchResultsChange ? propSearchResults : localSearchResults;
+  
+  const setSearchQuery = onSearchQueryChange || setLocalSearchQuery;
+  const setSearchResults = onSearchResultsChange || setLocalSearchResults;
+  
   const [isLoading, setIsLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const { vegMode } = useVegMode();
 
   // Get user location on mount or when selectedLocation changes
   useEffect(() => {
@@ -117,13 +141,12 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     debounceTimer.current = setTimeout(async () => {
       try {
         // Pass location if available, otherwise search without location filter
-        const response = userLocation
-          ? await searchService.getSearchSuggestions(
+        const response = await searchService.getSearchSuggestions(
               searchQuery,
-              userLocation.lat,
-              userLocation.lng
-            )
-          : await searchService.getSearchSuggestions(searchQuery);
+          userLocation?.lat,
+          userLocation?.lng,
+          vegMode
+        );
 
         if (response.success && response.data) {
           // Combine items and restaurants into a single array
@@ -156,7 +179,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         clearTimeout(debounceTimer.current);
       }
     };
-  }, [searchQuery, userLocation]);
+  }, [searchQuery, userLocation, vegMode]);
 
   const renderSearchResult = ({ item, index }: { item: SearchSuggestion; index?: number }) => {
     // Get image URL
@@ -183,10 +206,16 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       >
         <View style={styles.resultLeft}>
           {imageUrl ? (
-            <Image
-              source={{ uri: imageUrl }}
+            <OptimizedImage
+              source={imageUrl}
               style={styles.resultIcon}
-              defaultSource={require('@/assets/icon.png')}
+              contentFit="cover"
+              shimmerWidth={40}
+              shimmerHeight={40}
+              shimmerBorderRadius={8}
+              transition={200}
+              priority="normal"
+              cachePolicy="memory-disk"
             />
           ) : (
             <View style={[styles.resultIcon, styles.placeholderIcon]}>
@@ -217,53 +246,64 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           value={searchQuery}
           onChangeText={setSearchQuery}
           showClearButton={true}
+          onClear={onClearSearch}
           backButtonColor="#001E1F"
           autoFocus={true}
           cursorColor="#00B14F"
         />
 
-      {/* Loading State */}
-      {isLoading && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#00B14F" />
-        </View>
-      )}
+        {/* Content Area */}
+        <View style={styles.contentArea}>
+          {/* Loading State */}
+          {isLoading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#00B14F" />
+            </View>
+          )}
 
-      {/* Search Results */}
-      {!isLoading && searchResults.length > 0 && (
-        <View style={styles.resultsContainer}>
-          <FlatList
-            data={searchResults}
-            renderItem={({ item, index }) => renderSearchResult({ item, index })}
-            keyExtractor={(item) => `${item.type}-${item.id}`}
-            showsVerticalScrollIndicator={false}
-          />
-        </View>
-      )}
+          {/* Search Results */}
+          {!isLoading && searchResults.length > 0 && (
+            <View style={styles.resultsContainer}>
+              <FlatList
+                data={searchResults}
+                renderItem={({ item, index }) => renderSearchResult({ item, index })}
+                keyExtractor={(item) => `${item.type}-${item.id}`}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled={true}
+                contentContainerStyle={styles.flatListContent}
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={10}
+                windowSize={10}
+                initialNumToRender={10}
+                updateCellsBatchingPeriod={50}
+              />
+            </View>
+          )}
 
-      {/* Empty State */}
-      {!isLoading && searchQuery && searchResults.length === 0 && (
-        <View style={styles.emptyState}>
-          <MaterialIcons name="search-off" size={64} color="rgba(0, 0, 0, 0.2)" />
-          <Text style={styles.emptyText}>No results found</Text>
-          <Text style={styles.emptySubtext}>
-            Try searching for something else
-          </Text>
-        </View>
-      )}
+          {/* Empty State */}
+          {!isLoading && searchQuery && searchResults.length === 0 && (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="search-off" size={64} color="rgba(0, 0, 0, 0.2)" />
+              <Text style={styles.emptyText}>No results found</Text>
+              <Text style={styles.emptySubtext}>
+                Try searching for something else
+              </Text>
+            </View>
+          )}
 
-      {/* Initial State */}
-      {!isLoading && searchQuery.trim().length < 2 && (
-        <View style={styles.emptyState}>
-          <MaterialIcons name="search" size={64} color="rgba(0, 0, 0, 0.2)" />
-          <Text style={styles.emptyText}>Search for dishes & restaurants</Text>
-          <Text style={styles.emptySubtext}>
-            {searchQuery.trim().length === 0
-              ? 'Type at least 2 characters to search'
-              : 'Type one more character to search'}
-          </Text>
+          {/* Initial State */}
+          {!isLoading && searchQuery.trim().length < 2 && (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="search" size={64} color="rgba(0, 0, 0, 0.2)" />
+              <Text style={styles.emptyText}>Search for dishes & restaurants</Text>
+              <Text style={styles.emptySubtext}>
+                {searchQuery.trim().length === 0
+                  ? 'Type at least 2 characters to search'
+                  : 'Type one more character to search'}
+              </Text>
+            </View>
+          )}
         </View>
-      )}
       </SafeAreaView>
     </View>
   );
@@ -281,11 +321,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  contentArea: {
+    flex: 1,
+  },
   resultsContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     marginHorizontal: 20,
     marginTop: 8,
+    marginBottom: 8,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: {
@@ -295,6 +339,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
+    maxHeight: SCREEN_HEIGHT * 0.7,
+  },
+  flatListContent: {
+    flexGrow: 0,
   },
   resultItem: {
     flexDirection: 'row',

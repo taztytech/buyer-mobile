@@ -9,13 +9,13 @@
     "owner": "hitasoft",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.valarcom.tazty",
+      "bundleIdentifier": "in.tazty.buyer",
       "infoPlist": {
         "NSUserNotificationsUsageDescription": "This app uses notifications to keep you updated on your orders and special offers."
       }
     },
     "android": {
-      "package": "com.valarcom.tazty",
+      "package": "in.tazty.buyer",
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

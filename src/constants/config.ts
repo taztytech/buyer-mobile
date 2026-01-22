@@ -1,21 +1,23 @@
 import Constants from 'expo-constants';
+import { envConfig, getEnvironment, isDevelopment, isProduction, isPreview } from '@/config/environment.config';
 
 interface Config {
   apiUrl: string;
   apiKey: string;
-  environment: 'development' | 'staging' | 'production';
+  environment: 'development' | 'preview' | 'production';
   appName: string;
   appVersion: string;
 }
 
 export const config: Config = {
-  apiUrl: Constants.expoConfig?.extra?.apiUrl || 'https://api.tazty.com',
-  apiKey: Constants.expoConfig?.extra?.apiKey || '',
-  environment: (Constants.expoConfig?.extra?.environment as Config['environment']) || 'development',
+  // Use environment config for API URL and environment
+  apiUrl: envConfig.apiBaseUrl,
+  apiKey: Constants.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+  environment: getEnvironment(),
   appName: 'Tazty',
   appVersion: Constants.expoConfig?.version || '1.0.0',
 };
 
-export const isDevelopment = config.environment === 'development';
-export const isProduction = config.environment === 'production';
-export const isStaging = config.environment === 'staging';
+// Export environment checks from environment config for consistency
+export { isDevelopment, isProduction, isPreview };
+export const isStaging = isPreview; // Alias for backward compatibility

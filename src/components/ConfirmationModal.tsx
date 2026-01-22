@@ -104,8 +104,10 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
               }
             ]}
           >
-            {/* Title */}
-            <Text style={styles.title}>{title}</Text>
+            {/* Title - Only show if title is provided */}
+            {title && title.trim() !== '' && (
+              <Text style={styles.title}>{title}</Text>
+            )}
 
             {/* Message */}
             <Text style={styles.message}>{message}</Text>

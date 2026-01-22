@@ -3,6 +3,8 @@
  * Handles all HTTP requests with proper error handling and authentication
  */
 
+import Constants from 'expo-constants';
+import { APP_VERSION_CODE, APP_VERSION_NAME } from '@/config/appVersion.generated';
 import { API_CONFIG, buildApiUrl } from '@/config/api.config';
 import { storageService } from './storage.service';
 
@@ -12,6 +14,7 @@ export interface ApiResponse<T = any> {
   data?: T;
   message?: string;
   error?: string;
+  statusCode?: number;
 }
 
 export interface ApiError {
@@ -20,12 +23,108 @@ export interface ApiError {
   code?: string;
 }
 
+const safeStringify = (obj: any, space: number = 2): string => {
+  const seen = new WeakSet();
+  try {
+    return JSON.stringify(obj, (key, value) => {
+      // Handle circular references
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) {
+          return '[Circular]';
+        }
+        seen.add(value);
+      }
+      // Handle undefined values
+      if (value === undefined) {
+        return '[undefined]';
+      }
+      // Handle functions
+      if (typeof value === 'function') {
+        return `[Function: ${value.name || 'anonymous'}]`;
+      }
+      return value;
+    }, space);
+  } catch (error) {
+    // Fallback if stringify fails
+    try {
+      return JSON.stringify({
+        error: 'Failed to stringify',
+        originalError: String(error),
+        objectType: typeof obj,
+        objectString: String(obj),
+      }, null, space);
+    } catch {
+      return String(obj);
+    }
+  }
+};
+
 class ApiService {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
   private isRefreshing: boolean = false;
   private refreshPromise: Promise<boolean> | null = null;
   private isInitialized: boolean = false;
+
+  /**
+   * Build version headers using generated app version (single source of truth)
+   * with safe fallback to native/Expo config in dev or if file missing.
+   * These are sent with every API request and also logged.
+   */
+  private getVersionHeaders(): Record<string, string> {
+    // 1) Primary source: generated config (kept in sync with android/version.properties)
+    let versionName: string | undefined =
+      typeof APP_VERSION_NAME === 'string' && APP_VERSION_NAME.length > 0
+        ? APP_VERSION_NAME
+        : undefined;
+
+    let versionCode: string | undefined;
+
+    const appVersionCodeAny: any = APP_VERSION_CODE;
+    if (typeof appVersionCodeAny === 'number' && appVersionCodeAny > 0) {
+      versionCode = String(appVersionCodeAny);
+    } else if (typeof appVersionCodeAny === 'string' && appVersionCodeAny.length > 0) {
+      versionCode = appVersionCodeAny;
+    }
+
+    // 2) Fallback: native/Expo config (mainly for dev / Expo Go)
+    if (!versionName || !versionCode) {
+      const expoConfig: any = (Constants as any).expoConfig ?? {};
+
+      if (!versionName) {
+        const versionNameFallback =
+          Constants.nativeAppVersion ??
+          expoConfig.version ??
+          expoConfig.runtimeVersion ??
+          undefined;
+
+        if (versionNameFallback !== undefined) {
+          versionName = String(versionNameFallback);
+        }
+      }
+
+      if (!versionCode) {
+        const versionCodeFallback =
+          Constants.nativeBuildVersion ??
+          expoConfig.android?.versionCode ??
+          expoConfig.ios?.buildNumber ??
+          undefined;
+
+        if (versionCodeFallback !== undefined) {
+          versionCode = String(versionCodeFallback);
+        }
+      }
+    }
+
+    // 3) Final safety defaults
+    if (!versionName) versionName = 'unknown';
+    if (!versionCode) versionCode = '0';
+
+    return {
+      'X-App-Version-Name': versionName,
+      'X-App-Version-Code': versionCode,
+    };
+  }
 
   /**
    * Initialize API service - load tokens from storage
@@ -137,15 +236,34 @@ class ApiService {
       }
 
       const url = buildApiUrl('/authentication/refresh-token');
+      const requestBody = {
+        refresh_token: refreshToken,
+      };
+
+      console.log('[API Request]', safeStringify({
+        method: 'POST',
+        url,
+        headers: API_CONFIG.HEADERS,
+        body: requestBody,
+        timestamp: new Date().toISOString(),
+      }));
+
       const response = await fetch(url, {
         method: 'POST',
         headers: API_CONFIG.HEADERS,
-        body: JSON.stringify({
-          refresh_token: refreshToken,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
+
+      console.log('[API Response]', safeStringify({
+        method: 'POST',
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        data: data,
+        timestamp: new Date().toISOString(),
+      }));
 
       if (response.ok && data.success) {
         // Validate that we received valid tokens (check both camelCase and snake_case)
@@ -196,8 +314,11 @@ class ApiService {
    * Note: Assumes ensureTokensLoaded() was already called by the request method
    */
   private buildHeaders(customHeaders?: Record<string, string>): HeadersInit {
+    const versionHeaders = this.getVersionHeaders();
+
     const headers: Record<string, string> = {
       ...API_CONFIG.HEADERS,
+      ...versionHeaders,
       ...customHeaders,
     };
 
@@ -207,6 +328,35 @@ class ApiService {
     }
 
     return headers;
+  }
+
+  /**
+   * Recursively sanitize request payloads by removing null and undefined values.
+   * This ensures we don't send fields like `item_id: null` to the backend.
+   */
+  private sanitizePayload<T>(data: T): T {
+    if (data === null || data === undefined) {
+      return data;
+    }
+
+    if (Array.isArray(data)) {
+      return data
+        .map((item) => this.sanitizePayload(item))
+        .filter((item) => item !== null && item !== undefined) as any;
+    }
+
+    if (typeof data === 'object') {
+      const result: any = {};
+      Object.entries(data as any).forEach(([key, value]) => {
+        if (value === null || value === undefined) {
+          return;
+        }
+        result[key] = this.sanitizePayload(value as any);
+      });
+      return result;
+    }
+
+    return data;
   }
 
   /**
@@ -255,18 +405,42 @@ class ApiService {
         method,
         headers,
       };
+      
+      // Sanitize payload to avoid sending null/undefined values to the API
+      const shouldHaveBody =
+        method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
 
-      if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE')) {
-        config.body = JSON.stringify(data);
+      if (data && shouldHaveBody) {
+        const sanitizedData = this.sanitizePayload(data);
+        config.body = JSON.stringify(sanitizedData);
       }
+
+      // Centralized request logging for debugging purposes
+      const requestBody = config.body ? JSON.parse(config.body as string) : undefined;
+      console.log(
+        '[apiService][request]',
+        safeStringify({
+          method,
+          endpoint: url,
+          body: requestBody,
+          hasBody: Boolean(config.body),
+          headers: {
+            'X-App-Version-Name': (headers as Record<string, string>)['X-App-Version-Name'],
+            'X-App-Version-Code': (headers as Record<string, string>)['X-App-Version-Code'],
+          },
+          timestamp: new Date().toISOString(),
+        }),
+      );
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
+      const startTime = Date.now();
       const response = await fetch(url, {
         ...config,
         signal: controller.signal,
       });
+      const duration = Date.now() - startTime;
 
       clearTimeout(timeoutId);
 
@@ -310,11 +484,26 @@ class ApiService {
 
       const responseData = await response.json();
 
+      console.log('[apiService][response]', safeStringify({
+        method,
+        endpoint: url,
+        status: response.status,
+        statusText: response.statusText,
+        success: response.ok,
+        fullResponse: responseData,
+        data: responseData?.data ?? responseData,
+        message: responseData?.message,
+        error: responseData?.error,
+        duration: `${duration}ms`,
+        timestamp: new Date().toISOString(),
+      }));
+
       if (!response.ok) {
         return {
           success: false,
           error: responseData.message || 'Request failed',
           message: responseData.message,
+          statusCode: responseData.statusCode || response.status,
         };
       }
 
@@ -324,6 +513,15 @@ class ApiService {
         message: responseData.message,
       };
     } catch (error: any) {
+      console.log('[apiService][response_error]', safeStringify({
+        method,
+        endpoint,
+        error: error,
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name,
+        timestamp: new Date().toISOString(),
+      }));
       const apiError = this.handleError(error);
       return {
         success: false,

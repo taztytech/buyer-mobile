@@ -1,21 +1,23 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Alert, Modal, Image, ImageBackground, TextInput, ScrollView, FlatList, Dimensions, Keyboard, TouchableWithoutFeedback, Platform, ActivityIndicator, Animated, RefreshControl, Linking } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ImageBackground, ScrollView, FlatList, Dimensions, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
-import { homeService, BannerItem, CategoryItem, Restaurant, DishItem } from '@/services/home.service';
+import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/home.service';
 import { addressService } from '@/services/address.service';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { Shimmer } from '@/components/Shimmer';
+import { OptimizedImage } from '@/components/OptimizedImage';
+import { AppFooter } from '@/components/AppFooter';
 import * as Location from 'expo-location';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ViewCartBar } from '@/components/ViewCartBar';
 import { CategoryModal } from '@/components/CategoryModal';
 import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { restaurantService } from '@/services/restaurant.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BANNER_WIDTH = SCREEN_WIDTH - 40; // Fixed banner width with 20px padding on each side
@@ -28,9 +30,12 @@ interface HomeScreenProps {
   onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
   onNavigateToCheckout?: (restaurantId: number, restaurantName: string, restaurantAddress?: string, from?: 'home' | 'restaurant') => void;
   onNavigateToSearch?: () => void;
+  onNavigateToLocationSelection?: () => void;
   selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
   onCategoriesLoaded?: (categories: CategoryItem[]) => void;
   isFocused?: boolean;
+  addressRefreshTrigger?: number; // Trigger to refresh addresses when changed
+  onForcedUpdateRequired?: (message?: string) => void; // Callback when API indicates forced update is required
 }
 
 interface CarouselItem {
@@ -42,29 +47,30 @@ interface CarouselItem {
   sequence?: number;
   promotionType?: 'restaurant_id' | 'category_id' | 'url';
   promotionLink?: string;
+  backgroundColor?: string;
 }
 
-// Fallback carousel data if API fails
-const fallbackCarouselData: CarouselItem[] = [
-  {
-    id: '1',
-    title: 'Craving Something Delicious?',
-    description: 'Get your favorite meals delivered hot & fast—right to your doorstep.',
-    buttonText: 'Order Now!',
-  },
-  {
-    id: '2',
-    title: 'Special Offers Today!',
-    description: 'Get up to 50% off on selected restaurants near you.',
-    buttonText: 'View Offers',
-  },
-  {
-    id: '3',
-    title: 'Fast & Fresh Delivery',
-    description: 'Your food delivered in 30 minutes or less, guaranteed fresh.',
-    buttonText: 'Order Now!',
-  },
-];
+interface AppOperationStatus {
+  is_open: boolean;
+  reason?: string;
+  message?: string;
+  next_open_time?: string;
+}
+
+
+// Utility to normalize veg food types returned by API (handles values like "pure-veg")
+const isVegFoodType = (foodType?: string, isVegFlag?: boolean): boolean => {
+  if (isVegFlag) {
+    return true;
+  }
+
+  if (!foodType) {
+    return false;
+  }
+
+  const normalized = foodType.trim().toLowerCase();
+  return normalized === 'veg' || normalized === 'pure-veg' || normalized === 'pure veg' || normalized === 'pureveg';
+};
 
 // Default location coordinates (Madurai)
 const DEFAULT_LOCATION = {
@@ -74,91 +80,7 @@ const DEFAULT_LOCATION = {
   longitude: 78.1198,
 };
 
-// Fallback category data if API fails or returns empty
-const fallbackCategoryData: CategoryItem[] = [
-  {
-    id: 1,
-    name: 'Biryani',
-    description: 'Aromatic rice dish with spices',
-    icon: require('@/assets/biriyani.png'),
-  },
-  {
-    id: 2,
-    name: 'South Indian',
-    description: 'Traditional South Indian dishes',
-    icon: require('@/assets/idlies.png'),
-  },
-  {
-    id: 3,
-    name: 'Pizza',
-    description: 'Italian style pizzas',
-    icon: require('@/assets/pizza.png'),
-  },
-  {
-    id: 4,
-    name: 'Burger',
-    description: 'Delicious burgers',
-    icon: require('@/assets/burger.png'),
-  },
-  {
-    id: 5,
-    name: 'Cakes',
-    description: 'Sweet desserts',
-    icon: require('@/assets/cake.png'),
-  },
-  {
-    id: 'view-all',
-    name: 'View All',
-    description: 'See all categories',
-    icon: require('@/assets/Group 1272628220.png'),
-  },
-];
 
-// Fallback restaurant data if API fails or returns empty
-const fallbackRestaurantData: Restaurant[] = [
-  {
-    id: 1,
-    name: 'A2B',
-    cuisine: 'South Indian, Traditional, Meals.',
-    rating: 4.5,
-    reviewCount: 120,
-    deliveryTime: '10 - 15 mins',
-    location: 'Keelkattalai',
-    distance: '0.5Kms',
-    image: require('@/assets/biriyani.png'),
-    isFavorite: false,
-    isVeg: true,
-    isOpen: true,
-  },
-  {
-    id: 2,
-    name: 'Dinidigul Thalapakatti',
-    cuisine: 'Burgers, Pizza, Chicken Wings Rolls & Wrap',
-    rating: 4.5,
-    reviewCount: 85,
-    deliveryTime: '10 - 15 mins',
-    location: 'Pallavaram',
-    distance: '1.2Kms',
-    image: require('@/assets/burger.png'),
-    isFavorite: false,
-    isVeg: false,
-    isOpen: true,
-  },
-  {
-    id: 3,
-    name: 'Pizza Hut',
-    cuisine: 'Italian, Pizza, Fast Food',
-    rating: 4.2,
-    reviewCount: 200,
-    deliveryTime: '15 - 20 mins',
-    location: 'Chrompet',
-    distance: '2.5Kms',
-    image: require('@/assets/pizza.png'),
-    isFavorite: false,
-    isVeg: false,
-    isOpen: true,
-  },
-];
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onLogout,
@@ -168,9 +90,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToRestaurant,
   onNavigateToCheckout,
   onNavigateToSearch,
+  onNavigateToLocationSelection,
   selectedLocation: externalSelectedLocation,
   onCategoriesLoaded,
+  addressRefreshTrigger,
   isFocused = true,
+  onForcedUpdateRequired,
 }) => {
   const { restaurantId, restaurantName, restaurantLogo, getTotalItems } = useCart();
   const { vegMode, setVegMode, isVegModeEnabled } = useVegMode();
@@ -180,7 +105,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
   const [hasShownLocationModal, setHasShownLocationModal] = React.useState(false);
   const [showVegModePopup, setShowVegModePopup] = React.useState(false);
-  const [rememberVegChoice, setRememberVegChoice] = React.useState(false);
   const vegModalSlideAnim = React.useRef(new Animated.Value(500)).current;
   const vegModalOpacityAnim = React.useRef(new Animated.Value(1)).current;
   const [currentSlide, setCurrentSlide] = React.useState(0);
@@ -197,9 +121,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const isRequestingPermission = React.useRef(false);
 
   // Track image loading states
-  const [loadedBannerImages, setLoadedBannerImages] = React.useState<Set<string>>(new Set());
-  const [loadedCategoryImages, setLoadedCategoryImages] = React.useState<Set<string>>(new Set());
-  const [loadedRestaurantImages, setLoadedRestaurantImages] = React.useState<Set<string>>(new Set());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_loadedBannerImages, setLoadedBannerImages] = React.useState<Set<string>>(new Set());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_loadedCategoryImages, setLoadedCategoryImages] = React.useState<Set<string>>(new Set());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_loadedRestaurantImages, setLoadedRestaurantImages] = React.useState<Set<string>>(new Set());
 
   // Combined loading states (API + Images)
   const [showBannerShimmer, setShowBannerShimmer] = React.useState(true);
@@ -217,20 +144,89 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const flatListRef = React.useRef<FlatList>(null);
   const scrollViewRef = React.useRef<ScrollView>(null);
   const scrollPositionRef = React.useRef(0);
+  const autoSlideTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
-  const [hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_hasDefaultAddress, setHasDefaultAddress] = React.useState(false);
   const isInitialVegModeLoad = React.useRef(true);
+  const hasRedirectedToLocationMap = React.useRef(false); // Prevent multiple redirects
+  const hasHandledReturnFromLocationSelection = React.useRef(false); // Track if we've handled return from location selection
+  const isFetchingAddressRef = React.useRef(false); // Prevent concurrent address fetches
+  const lastFetchedCoords = React.useRef<{ latitude: number; longitude: number } | null>(null);
 
   // Pagination states
   const [currentPage, setCurrentPage] = React.useState(1);
   const [hasMoreRestaurants, setHasMoreRestaurants] = React.useState(false);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
 
+  // App operation status from API
+  const [appOperationStatus, setAppOperationStatus] = React.useState<AppOperationStatus | null>(null);
+
+  // Restaurant card layout style from API (1 = horizontal, 2 = vertical)
+  const [restaurantCardStyle, setRestaurantCardStyle] = React.useState<1 | 2>(1);
+
   // Refresh trigger - increments to force data reload
-  const [refreshTrigger, setRefreshTrigger] = React.useState(0);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_refreshTrigger, _setRefreshTrigger] = React.useState(0);
 
   // Location serviceability state
   const [isLocationServiceable, setIsLocationServiceable] = React.useState(true);
+  const hasCartItems = totalCartItems > 0;
+
+  /**
+   * Ensure the restaurant associated with the current cart is open
+   * before allowing user to navigate to checkout from the Home screen.
+   * Falls back to allowing navigation if the status cannot be determined.
+   */
+  const ensureCartRestaurantOpen = React.useCallback(async (): Promise<boolean> => {
+    // If there is no restaurant in cart, nothing to validate
+    if (!restaurantId) {
+      return true;
+    }
+
+    try {
+      // Use the best available coordinates for restaurant details lookup
+      const lat =
+        externalSelectedLocation?.latitude ||
+        defaultAddressCoords?.latitude ||
+        DEFAULT_LOCATION.latitude;
+      const lng =
+        externalSelectedLocation?.longitude ||
+        defaultAddressCoords?.longitude ||
+        DEFAULT_LOCATION.longitude;
+
+      const response = await restaurantService.getRestaurantDetails(restaurantId, {
+        lat,
+        lng,
+        include_items: false,
+      });
+
+      if (!response.success || !response.data) {
+        // If we can't determine status, don't hard-block the user.
+        return true;
+      }
+
+      const timings = response.data.timings;
+      const isOpen = timings ? homeService.isRestaurantOpen(timings) : true;
+
+      if (!isOpen) {
+        showConfirmation({
+          title: 'Restaurant is currently closed',
+          message: 'This restaurant is closed right now. You can place the order when it reopens.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
+        return false;
+      }
+
+      return true;
+    } catch {
+      // On any unexpected error, allow navigation and rely on backend validation.
+      return true;
+    }
+  }, [restaurantId, externalSelectedLocation, defaultAddressCoords, showConfirmation]);
 
   // Dismiss keyboard when component mounts (only once)
   React.useEffect(() => {
@@ -257,58 +253,84 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     if (externalSelectedLocation) {
       setSelectedLocation(externalSelectedLocation);
       // User selected a different address, fetch restaurants for the new location
+      // Clear data first to prevent showing stale cached data
       if (externalSelectedLocation.latitude && externalSelectedLocation.longitude) {
+        setRestaurantData([]);
+        setCarouselData([]);
+        setCategoryData([]);
         fetchHomeData(externalSelectedLocation.latitude, externalSelectedLocation.longitude);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalSelectedLocation]);
 
-  // Fetch default address on component mount (ONLY ONCE)
-  React.useEffect(() => {
-    const fetchDefaultAddress = async () => {
-      try {
-        const response = await addressService.getAddresses();
+  // Extract address fetching logic into a reusable function
+  const fetchDefaultAddress = React.useCallback(
+    async (options?: { overrideSelectedLocation?: boolean }) => {
+    // Prevent concurrent calls - return immediately if already fetching
+    if (isFetchingAddressRef.current) {
+      return;
+    }
+    
+    try {
+      // Set flag immediately to prevent any other calls
+      isFetchingAddressRef.current = true;
+      // Clear cache to ensure we get fresh data
+      addressService.clearCache();
+      const response = await addressService.getAddresses();
 
-        if (response.success && response.data) {
-          // Find the default address
-          const defaultAddress = response.data.find(addr => addr.is_default);
+      if (response.success && response.data) {
+        // Reset redirect flag if user has addresses now (allows redirect again if they delete all addresses later)
+        if (response.data.length > 0) {
+          hasRedirectedToLocationMap.current = false;
+          // Also reset the handled flag since addresses now exist
+          hasHandledReturnFromLocationSelection.current = false;
+        }
 
-          if (defaultAddress) {
-            // User has a default address saved
-            setHasDefaultAddress(true);
-            setDefaultAddressCoords({
-              latitude: defaultAddress.latitude,
-              longitude: defaultAddress.longitude,
-            });
-
-            // Format address type (home -> Home, work -> Work, other -> Other)
-            const formattedType = defaultAddress.type.charAt(0).toUpperCase() + defaultAddress.type.slice(1);
-
-            // Update selected location display (only if no external location is set)
-            if (!externalSelectedLocation) {
-              const newLocation = {
-                name: formattedType,
-                address: `${defaultAddress.address1}${defaultAddress.address2 ? ', ' + defaultAddress.address2 : ''}${defaultAddress.address3 ? ', ' + defaultAddress.address3 : ''}, ${defaultAddress.city}`,
-              };
-              setSelectedLocation(newLocation);
-            }
-
-            // Fetch home data with default address coordinates
-            await fetchHomeData(parseFloat(defaultAddress.latitude), parseFloat(defaultAddress.longitude));
-          } else {
-            // No default address, use fallback location
-            setHasDefaultAddress(false);
-            setSelectedLocation({
-              name: DEFAULT_LOCATION.name,
-              address: DEFAULT_LOCATION.address,
-            });
-
-            // Fetch home data with default Madurai coordinates
-            await fetchHomeData();
+        // Check if user has no addresses - redirect to location map screen (only on homepage)
+        // Only redirect if we haven't already redirected in this session
+        if (response.data.length === 0 && isFocused && !hasRedirectedToLocationMap.current) {
+          hasRedirectedToLocationMap.current = true;
+          // Redirect to location map screen
+          if (onNavigateToLocationSelection) {
+            onNavigateToLocationSelection();
+            return; // Exit early, don't fetch home data
           }
+        }
+
+        // Find the default address
+        const defaultAddress = response.data.find(addr => addr.is_default);
+
+        if (defaultAddress) {
+          // User has a default address saved
+          setHasDefaultAddress(true);
+          setDefaultAddressCoords({
+            latitude: defaultAddress.latitude,
+            longitude: defaultAddress.longitude,
+          });
+
+          // Format address type (home -> Home, work -> Work, other -> Other)
+          const formattedType = defaultAddress.type.charAt(0).toUpperCase() + defaultAddress.type.slice(1);
+
+          // Update selected location display
+          // - Normally, we respect an explicitly chosen externalSelectedLocation
+          // - But after address changes (delete/edit), we may want to override it
+          if (!externalSelectedLocation || options?.overrideSelectedLocation) {
+            const newLocation = {
+              name: formattedType,
+              address: `${defaultAddress.address1}${defaultAddress.address2 ? ', ' + defaultAddress.address2 : ''}${defaultAddress.address3 ? ', ' + defaultAddress.address3 : ''}, ${defaultAddress.city}`,
+            };
+            setSelectedLocation(newLocation);
+          }
+
+          // Fetch home data with default address coordinates
+          // Clear data first to prevent showing stale cached data
+          setRestaurantData([]);
+          setCarouselData([]);
+          setCategoryData([]);
+          await fetchHomeData(defaultAddress.latitude, defaultAddress.longitude);
         } else {
-          // API failed, use fallback location
+          // No default address, use fallback location
           setHasDefaultAddress(false);
           setSelectedLocation({
             name: DEFAULT_LOCATION.name,
@@ -316,10 +338,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           });
 
           // Fetch home data with default Madurai coordinates
-          await fetchHomeData();
+          setRestaurantData([]);
+          setCarouselData([]);
+          setCategoryData([]);
+          await fetchHomeData(undefined, undefined);
         }
-      } catch (error) {
-        // Error fetching addresses, use fallback location
+      } else {
+        // API failed, use fallback location
         setHasDefaultAddress(false);
         setSelectedLocation({
           name: DEFAULT_LOCATION.name,
@@ -327,15 +352,46 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         });
 
         // Fetch home data with default Madurai coordinates
-        await fetchHomeData();
-      } finally {
-        setIsLoadingLocation(false);
+        setRestaurantData([]);
+        setCarouselData([]);
+        setCategoryData([]);
+        await fetchHomeData(undefined, undefined);
       }
-    };
+    } catch (error) {
+      // Error fetching addresses, use fallback location
+      setHasDefaultAddress(false);
+      setSelectedLocation({
+        name: DEFAULT_LOCATION.name,
+        address: DEFAULT_LOCATION.address,
+      });
 
+      // Fetch home data with default Madurai coordinates
+      setRestaurantData([]);
+      setCarouselData([]);
+      setCategoryData([]);
+      await fetchHomeData(undefined, undefined);
+    } finally {
+      setIsLoadingLocation(false);
+      isFetchingAddressRef.current = false;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalSelectedLocation, isFocused, onNavigateToLocationSelection]);
+
+  // Fetch default address on component mount (ONLY ONCE)
+  React.useEffect(() => {
     fetchDefaultAddress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
+
+  // Refresh addresses when addressRefreshTrigger changes (e.g., address deleted/edited)
+  React.useEffect(() => {
+    if (addressRefreshTrigger && addressRefreshTrigger > 0) {
+      // Force override of selectedLocation so the home top bar reflects the
+      // latest default address after changes in MyAddresses
+      fetchDefaultAddress({ overrideSelectedLocation: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressRefreshTrigger]);
 
   // Reload home data when screen becomes focused (but don't reset address)
   // DISABLED: Not needed since auto-refresh on focus is disabled
@@ -429,10 +485,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
     // Reload data with current coordinates when veg mode changes
     const coords = defaultAddressCoords || { latitude: DEFAULT_LOCATION.latitude, longitude: DEFAULT_LOCATION.longitude };
+    setRestaurantData([]);
+    setCarouselData([]);
+    setCategoryData([]);
     fetchHomeData(coords.latitude, coords.longitude);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vegMode]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleAllowLocation = async () => {
     // Prevent multiple simultaneous permission requests
     if (isRequestingPermission.current) {
@@ -465,6 +525,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setIsLoadingLocation(false);
 
         // Reload home page data with user's actual location
+        setRestaurantData([]);
+        setCarouselData([]);
+        setCategoryData([]);
         await fetchHomeData(userLatitude, userLongitude);
       } else {
         setHasShownLocationModal(true); // Mark as shown to prevent repeated popups
@@ -489,6 +552,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleDenyLocation = () => {
     setShowLocationPopup(false);
     setHasShownLocationModal(true); // Prevent modal from showing again
@@ -568,10 +632,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const handleApplyVegMode = () => {
-    setVegMode(tempVegSelection, rememberVegChoice);
+    // Always persist veg mode when enabled (similar to major food delivery apps)
+    setVegMode(tempVegSelection, true);
     handleCloseVegModal();
-    // Reset remember choice for next time
-    setRememberVegChoice(false);
   };
 
   // Mark local (bundled) images as loaded immediately
@@ -610,6 +673,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     try {
       setHasNetworkError(false);
       setNoRestaurantsFound(false);
+      // Reset shimmers whenever a new fetch starts so UI never shows a blank state
+      setShowBannerShimmer(true);
+      setShowCategoryShimmer(true);
+      setShowRestaurantShimmer(true);
       setIsLoadingBanners(true);
       setIsLoadingCategories(true);
       setIsLoadingRestaurants(true);
@@ -617,10 +684,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       // Reset pagination state for fresh load
       setCurrentPage(1);
       setHasMoreRestaurants(false);
+      
+      // Reset app operation status
+      setAppOperationStatus(null);
 
       // Use provided coordinates or default Madurai location
       const lat = latitude ?? DEFAULT_LOCATION.latitude;
       const lng = longitude ?? DEFAULT_LOCATION.longitude;
+
+      // Check if coordinates have actually changed (using small threshold for floating point comparison)
+      const coordsChanged = !lastFetchedCoords.current || 
+        Math.abs(lastFetchedCoords.current.latitude - lat) > 0.0001 || 
+        Math.abs(lastFetchedCoords.current.longitude - lng) > 0.0001;
+
+      // If coordinates changed, clear existing data immediately to prevent showing stale cached data
+      if (coordsChanged) {
+        setRestaurantData([]);
+        setCarouselData([]);
+        setCategoryData([]);
+        lastFetchedCoords.current = { latitude: lat, longitude: lng };
+      }
 
       // Check if location is serviceable
       const serviceable = homeService.isLocationServiceable(lat, lng);
@@ -636,20 +719,51 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       const response = await homeService.getHomeData(lat, lng, vegMode, 1);
 
+        // Check if API indicates forced update is required
+        // Response format: { success: false, statusCode: 426, message: "Please update your app..." }
+        if (!response.success && response.statusCode === 426) {
+          // Show forced update modal
+          if (onForcedUpdateRequired) {
+            onForcedUpdateRequired(response.message);
+          }
+          // Stop loading and don't process data
+          setIsLoadingBanners(false);
+          setIsLoadingCategories(false);
+          setIsLoadingRestaurants(false);
+          return;
+        }
+
         if (response.success && response.data) {
           // The API returns data nested as: { data: { data: { promotional_banner: {...} } } }
-          const actualData = response.data.data || response.data;
+          const actualData = (response.data as any).data || response.data;
           const promotionalBanner = actualData.promotional_banner;
           const whatsOnYourMind = actualData.whats_on_your_mind;
           const nearbyRestaurants = actualData.nearby_restaurants;
           const pagination = actualData.pagination;
+          const appOperationStatusData = actualData.app_operation_status;
+          const homeScreenRestaurantCardStyle = actualData.home_screen_restaurant_card_style;
 
+          // Store app operation status
+          if (appOperationStatusData) {
+            setAppOperationStatus(appOperationStatusData);
+          }
+
+          // Store restaurant card style from API (convert string to number, default to 1)
+          if (homeScreenRestaurantCardStyle) {
+            const styleNumber = parseInt(homeScreenRestaurantCardStyle, 10);
+            if (styleNumber === 1 || styleNumber === 2) {
+              setRestaurantCardStyle(styleNumber as 1 | 2);
+            } else {
+              setRestaurantCardStyle(1); // Default to 1 if invalid value
+            }
+          } else {
+            setRestaurantCardStyle(1); // Default to 1 if not provided
+          }
 
           // Handle promotional banners
           if (promotionalBanner) {
             // Handle if it's a single object or array
             const bannerArray = Array.isArray(promotionalBanner) ? promotionalBanner : [promotionalBanner];
-
             // Transform API data to carousel format
             const transformedBanners: CarouselItem[] = bannerArray.map((banner: BannerItem, index: number) => ({
               id: banner.id || `banner-${index}`,
@@ -660,6 +774,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               sequence: banner.sequence !== undefined ? banner.sequence : index,
               promotionType: banner.promotion_type,
               promotionLink: banner.promotion_link,
+              backgroundColor: banner.background_color,
             }));
 
             // Sort banners by sequence field
@@ -672,10 +787,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             if (sortedBanners.length > 0) {
               setCarouselData(sortedBanners);
             } else {
-              setCarouselData(fallbackCarouselData);
+              setCarouselData([]);
             }
           } else {
-            setCarouselData(fallbackCarouselData);
+            setCarouselData([]);
           }
 
           // Handle categories - use fallback if empty or undefined
@@ -684,12 +799,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             let filteredCategories = whatsOnYourMind;
 
             if (vegMode === 'pure') {
-              // Show only Veg categories (food_type === 'Veg' or is_veg === true)
-              filteredCategories = whatsOnYourMind.filter((category: CategoryItem) => {
-                const foodType = category.food_type;
-                const isVeg = category.is_veg;
-                return (foodType && foodType.toLowerCase() === 'veg') || isVeg === true;
-              });
+              // Show only Veg categories (handles values like "pure-veg")
+              filteredCategories = whatsOnYourMind.filter((category: CategoryItem) =>
+                isVegFoodType(category.food_type, category.is_veg)
+              );
             } else if (vegMode === 'all') {
               // Show all categories regardless of food_type
               filteredCategories = whatsOnYourMind;
@@ -699,7 +812,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             // If filtered categories is empty, fetch dishes from API based on vegMode
             if (filteredCategories.length === 0 && vegMode !== 'off') {
               const foodTypeParam = vegMode === 'pure' ? 'Veg' : undefined;
-              const dishResponse = await homeService.getDishes(foodTypeParam, 10, 1);
+              const dishResponse = await homeService.getDishes(foodTypeParam, 10, 1, vegMode);
 
               if (dishResponse.success && dishResponse.data?.dishes) {
                 // Transform dishes to category format
@@ -734,9 +847,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 setCategoryData(categoriesWithViewAll);
                 onCategoriesLoaded?.(categoriesWithViewAll);
               } else {
-                // If dish API also fails, use fallback
-                setCategoryData(fallbackCategoryData);
-                onCategoriesLoaded?.(fallbackCategoryData);
+                setCategoryData([]);
+                onCategoriesLoaded?.([]);
               }
             } else {
               // Sort filtered categories by sequence field
@@ -761,8 +873,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               onCategoriesLoaded?.(categoriesWithViewAll);
             }
           } else {
-            setCategoryData(fallbackCategoryData);
-            onCategoriesLoaded?.(fallbackCategoryData);
+            setCategoryData([]);
+            onCategoriesLoaded?.([]);
           }
 
           // Handle restaurants - show error if empty or undefined
@@ -771,11 +883,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             let filteredRestaurants = nearbyRestaurants;
 
             if (vegMode === 'pure') {
-              // Show only Veg restaurants (food_type === 'Veg')
-              filteredRestaurants = nearbyRestaurants.filter((restaurant: any) => {
-                const foodType = restaurant.food_type;
-                return foodType && foodType.toLowerCase() === 'veg';
-              });
+              // Show only Veg restaurants (handles values like "pure-veg")
+              filteredRestaurants = nearbyRestaurants.filter((restaurant: any) =>
+                isVegFoodType(restaurant.food_type, restaurant.is_veg)
+              );
             } else if (vegMode === 'all') {
               // Show all restaurants regardless of food_type
               filteredRestaurants = nearbyRestaurants;
@@ -828,16 +939,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           }
         } else {
           // API call failed - show network error
-          setCarouselData(fallbackCarouselData);
-          setCategoryData(fallbackCategoryData);
-          onCategoriesLoaded?.(fallbackCategoryData);
+          setCarouselData([]);
+          setCategoryData([]);
+          onCategoriesLoaded?.([]);
           setHasNetworkError(true);
           setRestaurantData([]);
         }
       } catch (error) {
-        setCarouselData(fallbackCarouselData);
-        setCategoryData(fallbackCategoryData);
-        onCategoriesLoaded?.(fallbackCategoryData);
+        setCarouselData([]);
+        setCategoryData([]);
+        onCategoriesLoaded?.([]);
         setHasNetworkError(true);
         setRestaurantData([]);
       } finally {
@@ -862,8 +973,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       const response = await homeService.getHomeData(coords.latitude, coords.longitude, vegMode, nextPage);
 
+      // Check if API indicates forced update is required
+      if (!response.success && response.statusCode === 426) {
+        // Show forced update modal
+        if (onForcedUpdateRequired) {
+          onForcedUpdateRequired(response.message);
+        }
+        // Stop loading
+        setIsLoadingMore(false);
+        return;
+      }
+
       if (response.success && response.data) {
-        const actualData = response.data.data || response.data;
+        const actualData = (response.data as any).data || response.data;
         const nearbyRestaurants = actualData.nearby_restaurants;
         const pagination = actualData.pagination;
 
@@ -872,11 +994,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           let filteredRestaurants = nearbyRestaurants;
 
           if (vegMode === 'pure') {
-            // Show only Veg restaurants (food_type === 'Veg')
-            filteredRestaurants = nearbyRestaurants.filter((restaurant: any) => {
-              const foodType = restaurant.food_type;
-              return foodType && foodType.toLowerCase() === 'veg';
-            });
+            // Show only Veg restaurants (handles values like "pure-veg")
+            filteredRestaurants = nearbyRestaurants.filter((restaurant: any) =>
+              isVegFoodType(restaurant.food_type, restaurant.is_veg)
+            );
           } else if (vegMode === 'all') {
             // Show all restaurants regardless of food_type
             filteredRestaurants = nearbyRestaurants;
@@ -937,6 +1058,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [isLoadingMore, hasMoreRestaurants, isLoadingRestaurants, currentPage, defaultAddressCoords, vegMode]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleLogout = async () => {
     showConfirmation({
       title: 'Logout',
@@ -970,6 +1092,76 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   });
 
   const viewConfigRef = React.useRef({ viewAreaCoveragePercentThreshold: 50 });
+
+  // Auto-slide carousel every 3 seconds
+  React.useEffect(() => {
+    if (carouselData.length <= 1) {
+      // Clear timer if only one banner
+      if (autoSlideTimerRef.current) {
+        clearInterval(autoSlideTimerRef.current);
+        autoSlideTimerRef.current = null;
+      }
+      return;
+    }
+
+    // Clear existing timer
+    if (autoSlideTimerRef.current) {
+      clearInterval(autoSlideTimerRef.current);
+    }
+
+    // Set up auto-slide
+    autoSlideTimerRef.current = setInterval(() => {
+      if (flatListRef.current) {
+        const nextIndex = (currentSlide + 1) % carouselData.length;
+        flatListRef.current.scrollToIndex({
+          index: nextIndex,
+          animated: true,
+        });
+        setCurrentSlide(nextIndex);
+      }
+    }, 3000);
+
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (autoSlideTimerRef.current) {
+        clearInterval(autoSlideTimerRef.current);
+        autoSlideTimerRef.current = null;
+      }
+    };
+  }, [carouselData.length, currentSlide]);
+
+  // Handle manual navigation
+  const handleCarouselNavigation = React.useCallback((direction: 'prev' | 'next') => {
+    if (!flatListRef.current || carouselData.length <= 1) return;
+
+    let newIndex: number;
+    if (direction === 'next') {
+      newIndex = (currentSlide + 1) % carouselData.length;
+    } else {
+      newIndex = (currentSlide - 1 + carouselData.length) % carouselData.length;
+    }
+
+    flatListRef.current.scrollToIndex({
+      index: newIndex,
+      animated: true,
+    });
+    setCurrentSlide(newIndex);
+
+    // Reset auto-slide timer after manual navigation
+    if (autoSlideTimerRef.current) {
+      clearInterval(autoSlideTimerRef.current);
+    }
+    autoSlideTimerRef.current = setInterval(() => {
+      if (flatListRef.current) {
+        const nextIndex = (newIndex + 1) % carouselData.length;
+        flatListRef.current.scrollToIndex({
+          index: nextIndex,
+          animated: true,
+        });
+        setCurrentSlide(nextIndex);
+      }
+    }, 3000);
+  }, [currentSlide, carouselData.length]);
 
   // Handle banner CTA click based on promotion type
   const handleBannerCTAClick = React.useCallback((item: CarouselItem) => {
@@ -1019,41 +1211,43 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const renderCarouselItem = React.useCallback(({ item }: { item: CarouselItem }) => {
     return (
       <View style={styles.carouselSlide} testID={`carousel-slide-${item.id}`}>
-        <View style={[styles.adBanner, { width: BANNER_WIDTH }]} testID={`banner-${item.id}`}>
-          {/* Blob with masked image */}
-          {item.imageUrl ? (
-            <View style={styles.blobContainer} testID={`blob-container-${item.id}`}>
-              {/* Blob background with image masked inside */}
-              <View style={styles.adImageBlob}>
-                <Image
-                  source={{ uri: item.imageUrl }}
-                  style={styles.adImageMasked}
-                  resizeMode="cover"
-                  testID={`banner-image-${item.id}`}
-                  onLoad={() => {
-                    setLoadedBannerImages(prev => new Set(prev).add(item.id));
-                  }}
-                  onError={() => {
-                    // Mark as loaded even on error
-                    setLoadedBannerImages(prev => new Set(prev).add(item.id));
-                  }}
-                  fadeDuration={300}
-                  progressiveRenderingEnabled={true}
-                />
-              </View>
-            </View>
-          ) : null}
-
+        <View style={[styles.adBanner, { width: BANNER_WIDTH, backgroundColor: item.backgroundColor || '#00BEC8' }]} testID={`banner-${item.id}`}>
+          {/* Background Image - fills entire rectangle */}
+          {item.imageUrl && (
+            <OptimizedImage
+              source={item.imageUrl}
+              style={styles.adBannerImage}
+              contentFit="cover"
+              shimmerWidth={BANNER_WIDTH}
+              shimmerHeight={200}
+              transition={300}
+              priority="high"
+              cachePolicy="memory-disk"
+            />
+          )}
+          
+          {/* Black overlay for text readability */}
+          <View style={styles.adOverlay} />
+          
+          {/* Content with background color visible behind buttons */}
           <View style={styles.adContent} testID={`banner-content-${item.id}`}>
             <Text style={styles.adTitle} numberOfLines={1} ellipsizeMode="tail" testID={`banner-title-${item.id}`}>{item.title}</Text>
             <Text style={styles.adDescription} testID={`banner-description-${item.id}`}>{item.description}</Text>
             <TouchableOpacity
-              style={styles.adButton}
+              style={[
+                styles.adButton,
+                { backgroundColor: item.backgroundColor || '#FFFFFF' }
+              ]}
               testID={`banner-button-${item.id}`}
               onPress={() => handleBannerCTAClick(item)}
               activeOpacity={0.8}
             >
-              <Text style={styles.adButtonText}>{item.buttonText}</Text>
+              <Text style={[
+                styles.adButtonText,
+                { color: item.backgroundColor ? '#FFFFFF' : '#000000' }
+              ]}>
+                {item.buttonText}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1090,7 +1284,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             onLoad={() => {
               setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
             }}
-            onError={(error) => {
+            onError={() => {
               // Mark as loaded anyway
               setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
             }}
@@ -1113,7 +1307,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const lat = externalSelectedLocation?.latitude || defaultAddressCoords?.latitude || DEFAULT_LOCATION.latitude;
     const lng = externalSelectedLocation?.longitude || defaultAddressCoords?.longitude || DEFAULT_LOCATION.longitude;
 
-    // Reload home data
+    // Reload home data - clear cached data first
+    setRestaurantData([]);
+    setCarouselData([]);
+    setCategoryData([]);
     await fetchHomeData(lat, lng);
 
     setIsRefreshing(false);
@@ -1142,10 +1339,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [hasMoreRestaurants, isLoadingMore, isLoadingRestaurants, loadMoreRestaurants]);
 
+  const handleCartPress = React.useCallback(async () => {
+    if (!restaurantId || !onNavigateToCheckout || !hasCartItems) {
+      return;
+    }
+
+    const isOpen = await ensureCartRestaurantOpen();
+    if (!isOpen) {
+      return;
+    }
+
+    onNavigateToCheckout(restaurantId, restaurantName, 'home');
+  }, [restaurantId, restaurantName, hasCartItems, onNavigateToCheckout, ensureCartRestaurantOpen]);
+
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <SafeAreaView style={styles.safeArea} edges={[]}>
         <ScrollView
           ref={scrollViewRef}
           style={styles.container}
@@ -1175,7 +1385,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Header with Background Image */}
       <ImageBackground
         source={require('@/assets/home_app_bar.png')}
-        style={styles.headerBackground}
+        style={[styles.headerBackground, { paddingTop: insets.top + 20 }]}
         imageStyle={styles.headerBackgroundImage}
         testID="header-background"
       >
@@ -1221,26 +1431,72 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             )}
           </TouchableOpacity>
 
-          {/* Profile Avatar */}
+          {/* Profile & Cart Actions */}
           {isLoadingLocation ? (
             <View style={styles.profileButton}>
               <Shimmer width={50} height={50} borderRadius={25} />
             </View>
           ) : (
-            <TouchableOpacity
-              style={styles.profileButton}
-              onPress={(isLocationServiceable && !hasNetworkError) ? onNavigateToProfile : undefined}
-              activeOpacity={(isLocationServiceable && !hasNetworkError) ? 0.7 : 1}
-              disabled={!isLocationServiceable || hasNetworkError}
-              testID="profile-button"
-            >
-              <View style={[
-                styles.profileAvatar,
-                (!isLocationServiceable || hasNetworkError) && styles.profileAvatarDisabled
-              ]}>
-                <MaterialIcons name="person" size={22} color={(isLocationServiceable && !hasNetworkError) ? "#00B14F" : "rgba(0, 177, 79, 0.3)"} />
-              </View>
-            </TouchableOpacity>
+            <View style={styles.headerActionsRow}>
+              {/* Cart Icon - hidden */}
+              {/* {hasCartItems && (
+                <TouchableOpacity
+                  style={styles.cartButton}
+                  onPress={handleCartPress}
+                  activeOpacity={0.7}
+                  disabled={!isLocationServiceable}
+                  testID="cart-button"
+                >
+                  <View
+                    style={[
+                      styles.cartAvatar,
+                      !isLocationServiceable && styles.cartAvatarDisabled,
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="shopping-cart"
+                      size={22}
+                      color={
+                        isLocationServiceable
+                          ? '#00B14F'
+                          : 'rgba(0, 177, 79, 0.4)'
+                      }
+                    />
+                    <View style={styles.cartBadge}>
+                      <Text style={styles.cartBadgeText} numberOfLines={1}>
+                        {totalCartItems > 99 ? '99+' : totalCartItems}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )} */}
+
+              {/* Profile Avatar */}
+              <TouchableOpacity
+                style={styles.profileButton}
+                onPress={onNavigateToProfile}
+                activeOpacity={0.7}
+                disabled={!isLocationServiceable}
+                testID="profile-button"
+              >
+                <View
+                  style={[
+                    styles.profileAvatar,
+                    !isLocationServiceable && styles.profileAvatarDisabled,
+                  ]}
+                >
+                  <MaterialIcons
+                    name="person"
+                    size={22}
+                    color={
+                      isLocationServiceable
+                        ? '#00B14F'
+                        : 'rgba(0, 177, 79, 0.4)'
+                    }
+                  />
+                </View>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -1260,18 +1516,31 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <>
               <TouchableOpacity
                 style={{ flex: 1 }}
-                onPress={(isLocationServiceable && !hasNetworkError) ? onNavigateToSearch : undefined}
-                activeOpacity={(isLocationServiceable && !hasNetworkError) ? 0.7 : 1}
-                disabled={!isLocationServiceable || hasNetworkError}
+                onPress={onNavigateToSearch}
+                activeOpacity={0.7}
+                disabled={!isLocationServiceable}
               >
                 <LinearGradient
                   colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={[styles.searchBar, (!isLocationServiceable || hasNetworkError) && styles.searchBarDisabled]}
+                  style={[
+                    styles.searchBar,
+                    !isLocationServiceable && styles.searchBarDisabled
+                  ]}
                 >
-                  <MaterialIcons name="search" size={24} color={(isLocationServiceable && !hasNetworkError) ? "#FFFFFF" : "rgba(255, 255, 255, 0.3)"} />
-                  <Text style={[styles.searchInput, (!isLocationServiceable || hasNetworkError) && styles.searchInputDisabled]} numberOfLines={1}>
+                  <MaterialIcons 
+                    name="search" 
+                    size={24} 
+                    color={isLocationServiceable ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)"} 
+                  />
+                  <Text 
+                    style={[
+                      styles.searchInput,
+                      !isLocationServiceable && styles.searchInputDisabled
+                    ]} 
+                    numberOfLines={1}
+                  >
                     Search Restaurants & foods..
                   </Text>
                 </LinearGradient>
@@ -1279,21 +1548,31 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
               {/* VEG Mode Toggle */}
               <TouchableOpacity
-                style={[styles.vegModeContainer, (!isLocationServiceable || hasNetworkError) && styles.vegModeContainerDisabled]}
-                onPress={(isLocationServiceable && !hasNetworkError) ? handleVegModeToggle : undefined}
-                disabled={!isLocationServiceable || hasNetworkError}
+                style={[
+                  styles.vegModeContainer,
+                  !isLocationServiceable && styles.vegModeContainerDisabled
+                ]}
+                onPress={handleVegModeToggle}
+                disabled={!isLocationServiceable}
                 testID="veg-mode-toggle"
               >
-                <Text style={[styles.vegModeLabel, (!isLocationServiceable || hasNetworkError) && styles.vegModeLabelDisabled]}>VEG{'\n'}MODE</Text>
+                <Text 
+                  style={[
+                    styles.vegModeLabel,
+                    !isLocationServiceable && styles.vegModeLabelDisabled
+                  ]}
+                >
+                  VEG{'\n'}MODE
+                </Text>
                 <View style={[
                   styles.vegToggle,
                   isVegModeEnabled && styles.vegToggleActive,
-                  (!isLocationServiceable || hasNetworkError) && styles.vegToggleDisabled
+                  !isLocationServiceable && styles.vegToggleDisabled
                 ]}>
                   <View style={[
                     styles.vegToggleThumb,
                     isVegModeEnabled && styles.vegToggleThumbActive,
-                    (!isLocationServiceable || hasNetworkError) && styles.vegToggleThumbDisabled
+                    !isLocationServiceable && styles.vegToggleThumbDisabled
                   ]} />
                 </View>
               </TouchableOpacity>
@@ -1318,131 +1597,150 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
       )}
 
-      {/* Ad Banner Carousel */}
+      {/* Ad Banner Carousel or Closed Banner */}
       {isLocationServiceable && (
       <>
       <View style={styles.carouselContainer}>
-        {showBannerShimmer ? (
+        {appOperationStatus && !appOperationStatus.is_open ? (
+          // Show closed banner when app is not open
+          <View style={styles.closedBannerContainer}>
+            <Image
+              source={require('@../../../assets/Closed Banner.webp')}
+              style={styles.closedBannerImage}
+              resizeMode="contain"
+            />
+            {appOperationStatus.message && (
+              <View style={styles.closedBannerMessageContainer}>
+                <Text style={styles.closedBannerMessage}>
+                  {appOperationStatus.message}
+                </Text>
+              </View>
+            )}
+          </View>
+        ) : showBannerShimmer ? (
           <View style={styles.loadingContainer}>
+            
             <Shimmer width="100%" height={149} borderRadius={20} backgroundColor="#00BEC8" />
           </View>
         ) : (
           <>
-            <FlatList
-              ref={flatListRef}
-              data={carouselData}
-              renderItem={renderCarouselItem}
-              keyExtractor={(item) => item.id}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onViewableItemsChanged={onViewRef.current}
-              viewabilityConfig={viewConfigRef.current}
-              decelerationRate="fast"
-              snapToAlignment="start"
-              snapToInterval={SCREEN_WIDTH}
-              disableIntervalMomentum={true}
-              removeClippedSubviews={false}
-              bounces={false}
-              overScrollMode="never"
-              scrollEventThrottle={16}
-              getItemLayout={(data, index) => ({
-                length: SCREEN_WIDTH,
-                offset: SCREEN_WIDTH * index,
-                index,
-              })}
-            />
+            <View style={styles.carouselWrapper}>
+              <FlatList
+                ref={flatListRef}
+                data={carouselData}
+                renderItem={renderCarouselItem}
+                keyExtractor={(item) => item.id}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onViewableItemsChanged={onViewRef.current}
+                viewabilityConfig={viewConfigRef.current}
+                decelerationRate="fast"
+                snapToAlignment="start"
+                snapToInterval={SCREEN_WIDTH}
+                disableIntervalMomentum={true}
+                removeClippedSubviews={false}
+                bounces={false}
+                overScrollMode="never"
+                scrollEventThrottle={16}
+                getItemLayout={(_data, index) => ({
+                  length: SCREEN_WIDTH,
+                  offset: SCREEN_WIDTH * index,
+                  index,
+                })}
+                onScrollToIndexFailed={(info) => {
+                  // Handle scroll to index failure
+                  const wait = new Promise(resolve => setTimeout(resolve, 500));
+                  wait.then(() => {
+                    flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
+                  });
+                }}
+              />
 
-            {/* Pagination Indicators - only show if more than 1 banner */}
-            {carouselData.length > 1 && (
-              <View style={styles.paginationContainer}>
-                {carouselData.map((_, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.paginationDot,
-                      currentSlide === index && styles.paginationDotActive,
-                    ]}
-                  />
-                ))}
-              </View>
-            )}
+              {/* Navigation Buttons - removed but functionality preserved (manual sliding and auto-slide still work) */}
+            </View>
           </>
         )}
       </View>
 
-      {/* What's On Your Mind Section */}
-      <View style={[
-        styles.sectionTitleContainer,
-        carouselData.length <= 1 && styles.sectionTitleContainerCompact
-      ]}>
-        <LinearGradient
-          colors={['rgba(0, 0, 0, 0)', '#000000']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.sectionTitleLine}
-        />
-        <Text style={styles.sectionTitle}>What's On Your Mind?</Text>
-        <LinearGradient
-          colors={['#000000', 'rgba(0, 0, 0, 0)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.sectionTitleLine}
-        />
-      </View>
+      {/* What's On Your Mind Section - Only show if there's data or still loading, and when app is open */}
+      {appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0) && (
+        <>
+          <View style={[
+            styles.sectionTitleContainer,
+            carouselData.length <= 1 && styles.sectionTitleContainerCompact
+          ]}>
+            <LinearGradient
+              colors={['rgba(0, 0, 0, 0)', '#000000']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.sectionTitleLine}
+            />
+            <Text style={styles.sectionTitle}>What's On Your Mind?</Text>
+            <LinearGradient
+              colors={['#000000', 'rgba(0, 0, 0, 0)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.sectionTitleLine}
+            />
+          </View>
 
-      {/* Category List */}
-      <View style={[
-        styles.categoryListContainer,
-        isCategorySectionSticky && styles.categoryListContainerSticky
-      ]}>
-        {showCategoryShimmer ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryListContent}
-          >
-            {/* Render 6 shimmer category items */}
-            {[1, 2, 3, 4, 5, 6].map((item) => (
-              <View key={item} style={styles.categoryItem}>
-                {/* Image Shimmer */}
-                <View style={styles.categoryImageContainer}>
-                  <Shimmer width={50} height={50} borderRadius={25} backgroundColor="#E8E8E8" />
-                </View>
-                {/* Text Shimmer */}
-                <Shimmer width={50} height={10} borderRadius={5} backgroundColor="#E8E8E8" />
-              </View>
-            ))}
-          </ScrollView>
-        ) : (
-          <FlatList
-            data={categoryData}
-            renderItem={renderCategoryItem}
-            keyExtractor={(item) => item.id.toString()}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryListContent}
-            testID="category-list"
+          {/* Category List */}
+          <View style={[
+            styles.categoryListContainer,
+            isCategorySectionSticky && styles.categoryListContainerSticky
+          ]}>
+            {showCategoryShimmer ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryListContent}
+              >
+                {/* Render 6 shimmer category items */}
+                {[1, 2, 3, 4, 5, 6].map((item) => (
+                  <View key={item} style={styles.categoryItem}>
+                    {/* Image Shimmer */}
+                    <View style={styles.categoryImageContainer}>
+                      <Shimmer width={50} height={50} borderRadius={25} backgroundColor="#E8E8E8" />
+                    </View>
+                    {/* Text Shimmer */}
+                    <Shimmer width={50} height={10} borderRadius={5} backgroundColor="#E8E8E8" />
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <FlatList
+                data={categoryData}
+                renderItem={renderCategoryItem}
+                keyExtractor={(item) => item.id.toString()}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryListContent}
+                testID="category-list"
+              />
+            )}
+          </View>
+        </>
+      )}
+
+      {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
+      {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
+        <View style={styles.restaurantsSectionTitleContainer}>
+          <LinearGradient
+            colors={['rgba(0, 0, 0, 0)', '#000000']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.restaurantsTitleLine}
           />
-        )}
-      </View>
-
-      {/* Restaurants Near You Section */}
-      <View style={styles.restaurantsSectionTitleContainer}>
-        <LinearGradient
-          colors={['rgba(0, 0, 0, 0)', '#000000']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.restaurantsTitleLine}
-        />
-        <Text style={styles.restaurantsTitle}>Restaurants Near You</Text>
-        <LinearGradient
-          colors={['#000000', 'rgba(0, 0, 0, 0)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.restaurantsTitleLine}
-        />
-      </View>
+          <Text style={styles.restaurantsTitle}>Restaurants Near You</Text>
+          <LinearGradient
+            colors={['#000000', 'rgba(0, 0, 0, 0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.restaurantsTitleLine}
+          />
+        </View>
+      )}
 
       {/* Filter Buttons - Hidden */}
       {/* <View style={styles.filterContainer}>
@@ -1488,112 +1786,120 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         )}
       </View> */}
 
-      {/* Restaurant List */}
-      <View style={[
-        styles.restaurantListContainer,
-        totalCartItems > 0 && {
-          paddingBottom: 160 + Math.max(insets.bottom, 0)
-        }
-      ]}>
-        {showRestaurantShimmer ? (
-          <>
-            {/* Shimmer for 2 restaurant cards */}
-            {[1, 2].map((item) => (
-              <View key={item} style={styles.restaurantCardWrapper}>
-                <View style={styles.restaurantCardShimmer}>
-                  {/* Left Side - Image Shimmer */}
-                  <Shimmer width={130} height={160} borderRadius={16} backgroundColor="#E8E8E8" style={styles.restaurantImageShimmer} />
+      {/* Restaurant List - Only show if there's data, still loading, or error states */}
+      {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
+        <View style={[
+          styles.restaurantListContainer,
+          totalCartItems > 0 && {
+            paddingBottom: 160 + Math.max(insets.bottom, 0)
+          }
+        ]}>
+          {showRestaurantShimmer ? (
+            <>
+              {/* Shimmer for 2 restaurant cards */}
+              {[1, 2].map((item) => (
+                <View key={item} style={styles.restaurantCardWrapper}>
+                  <View style={styles.restaurantCardShimmer}>
+                    {/* Left Side - Image Shimmer */}
+                    <Shimmer width={130} height={160} borderRadius={16} backgroundColor="#E8E8E8" style={styles.restaurantImageShimmer} />
 
-                  {/* Right Side - Details Shimmer */}
-                  <View style={styles.restaurantDetailsShimmer}>
-                    {/* Pure Veg Badge */}
-                    <Shimmer width={80} height={18} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                    {/* Right Side - Details Shimmer */}
+                    <View style={styles.restaurantDetailsShimmer}>
+                      {/* Pure Veg Badge */}
+                      <Shimmer width={80} height={18} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
-                    {/* Restaurant Name */}
-                    <Shimmer width="90%" height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                      {/* Restaurant Name */}
+                      <Shimmer width="90%" height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
-                    {/* Rating and Delivery Time */}
-                    <Shimmer width="70%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                      {/* Rating and Delivery Time */}
+                      <Shimmer width="70%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
-                    {/* Cuisine */}
-                    <Shimmer width="85%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                      {/* Cuisine */}
+                      <Shimmer width="85%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
-                    {/* Location and Distance */}
-                    <Shimmer width="60%" height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+                      {/* Location and Distance */}
+                      <Shimmer width="60%" height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+                    </View>
                   </View>
                 </View>
-              </View>
-            ))}
-          </>
-        ) : noRestaurantsFound ? (
-          <View style={styles.noRestaurantsContainer}>
-            <MaterialIcons name="store" size={64} color="rgba(0, 0, 0, 0.2)" />
-            <Text style={styles.noRestaurantsTitle}>No Restaurants Nearby</Text>
-            <Text style={styles.noRestaurantsMessage}>
-              We couldn't find any restaurants within 10km of your location. Try changing your delivery address or check back later.
-            </Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={handleRefresh}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : hasNetworkError ? (
-          <View style={styles.networkErrorContainer}>
-            <MaterialIcons name="cloud-off" size={64} color="rgba(0, 0, 0, 0.2)" />
-            <Text style={styles.networkErrorTitle}>Network Error</Text>
-            <Text style={styles.networkErrorMessage}>
-              Unable to load restaurants. Please check your connection and try again.
-            </Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={handleRefresh}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <FlatList
-            data={restaurantData}
-            renderItem={({ item: restaurant }) => (
-              <View style={styles.restaurantCardWrapper}>
-                <RestaurantCard
-                  restaurant={restaurant}
-                  onPress={() => {
-                    if (onNavigateToRestaurant) {
-                      const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
-                      onNavigateToRestaurant(restaurantId, restaurant.name);
-                    }
-                  }}
-                  onImageLoad={() => {
-                    setLoadedRestaurantImages(prev => new Set(prev).add(restaurant.id.toString()));
-                  }}
-                />
-              </View>
-            )}
-            keyExtractor={(restaurant) => restaurant.id.toString()}
-            scrollEnabled={false}
-            removeClippedSubviews={true}
-            maxToRenderPerBatch={5}
-            windowSize={5}
-            initialNumToRender={3}
-            updateCellsBatchingPeriod={50}
-          />
-        )}
+              ))}
+            </>
+          ) : noRestaurantsFound ? (
+            <View style={styles.noRestaurantsContainer}>
+              <MaterialIcons name="store" size={64} color="rgba(0, 0, 0, 0.2)" />
+              <Text style={styles.noRestaurantsTitle}>No Restaurants Nearby</Text>
+              <Text style={styles.noRestaurantsMessage}>
+                We couldn't find any restaurants within 10km of your location. Try changing your delivery address or check back later.
+              </Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={handleRefresh}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : hasNetworkError ? (
+            <View style={styles.networkErrorContainer}>
+              <MaterialIcons name="cloud-off" size={64} color="rgba(0, 0, 0, 0.2)" />
+              <Text style={styles.networkErrorTitle}>Network Error</Text>
+              <Text style={styles.networkErrorMessage}>
+                Unable to load restaurants. Please check your connection and try again.
+              </Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={handleRefresh}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              data={restaurantData}
+              renderItem={({ item: restaurant }) => (
+                <View style={styles.restaurantCardWrapper}>
+                  <RestaurantCard
+                    restaurant={restaurant}
+                    layoutMode={restaurantCardStyle}
+                    onPress={() => {
+                      if (onNavigateToRestaurant) {
+                        const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
+                        onNavigateToRestaurant(restaurantId, restaurant.name);
+                      }
+                    }}
+                    onImageLoad={() => {
+                      setLoadedRestaurantImages(prev => new Set(prev).add(restaurant.id.toString()));
+                    }}
+                  />
+                </View>
+              )}
+              keyExtractor={(restaurant) => restaurant.id.toString()}
+              scrollEnabled={false}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={3}
+              windowSize={3}
+              initialNumToRender={2}
+              updateCellsBatchingPeriod={100}
+              getItemLayout={(data, index) => ({
+                length: 166, // Approximate card height with margin
+                offset: 166 * index,
+                index,
+              })}
+            />
+          )}
 
-        {/* Loading More Indicator */}
-        {isLoadingMore && (
-          <View style={styles.loadingMoreContainer}>
-            <ActivityIndicator size="large" color="#00B14F" />
-            <Text style={styles.loadingMoreText}>Loading more restaurants...</Text>
-          </View>
-        )}
-      </View>
+          {/* Loading More Indicator */}
+          {isLoadingMore && (
+            <View style={styles.loadingMoreContainer}>
+              <ActivityIndicator size="large" color="#00B14F" />
+              <Text style={styles.loadingMoreText}>Loading more restaurants...</Text>
+            </View>
+          )}
+        </View>
+      )}
       </>
       )}
 
@@ -1707,20 +2013,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </View>
             </TouchableOpacity>
 
-            {/* Remember Choice Checkbox */}
-            <TouchableOpacity
-              style={styles.vegRememberOption}
-              onPress={() => setRememberVegChoice(!rememberVegChoice)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.checkbox, rememberVegChoice && styles.checkboxChecked]}>
-                {rememberVegChoice && (
-                  <MaterialIcons name="check" size={14} color="#FFFFFF" />
-                )}
-              </View>
-              <Text style={styles.vegRememberText}>Remember my choice going forward</Text>
-            </TouchableOpacity>
-
             {/* Show Restaurants Button */}
             <TouchableOpacity
               style={styles.vegApplyButton}
@@ -1734,31 +2026,34 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
       </Modal>
 
+      <AppFooter />
       </ScrollView>
       </SafeAreaView>
 
-      {/* View Cart Bar - shows when cart has items */}
-      <ViewCartBar
-        onPress={() => {
-          // Navigate directly to checkout page
-          if (restaurantId && onNavigateToCheckout) {
-            onNavigateToCheckout(restaurantId, restaurantName, 'home');
-          }
-        }}
-        onViewMenu={() => {
-          // Navigate to restaurant menu
-          if (restaurantId && onNavigateToRestaurant) {
-            onNavigateToRestaurant(restaurantId, restaurantName);
-          }
-        }}
-        restaurantLogo={restaurantLogo}
-        deliveryLocation={selectedLocation.name}
-      />
+      {/* View Cart Bar - shows when cart has items and location is serviceable */}
+      {isLocationServiceable && (
+        <ViewCartBar
+          onPress={handleCartPress}
+          onViewMenu={() => {
+            // Navigate to restaurant menu
+            if (restaurantId && onNavigateToRestaurant) {
+              onNavigateToRestaurant(restaurantId, restaurantName);
+            }
+          }}
+          restaurantLogo={restaurantLogo}
+          deliveryLocation={selectedLocation.name}
+        />
+      )}
 
       {/* Category Modal */}
       <CategoryModal
         visible={showCategoryModal}
-        categories={categoryData}
+        categories={categoryData.map(cat => ({
+          id: cat.id,
+          name: cat.name,
+          description: cat.description || '',
+          icon: cat.icon || require('@/assets/Group 1272628220.png'),
+        }))}
         onClose={() => setShowCategoryModal(false)}
         onCategorySelect={(categoryName) => {
           if (onNavigateToCategory) {
@@ -1787,16 +2082,17 @@ const styles = StyleSheet.create({
   // Header styles
   headerBackground: {
     width: '100%',
-    height: 212,
     paddingHorizontal: 20,
-    paddingTop: 20,
     paddingBottom: 20,
     gap: 18,
+    minHeight: 240,
   },
   headerBackgroundImage: {
     width: '120%',
-    height: 212,
+    height: '150%',
+    resizeMode: 'cover',
     left: 0,
+    top: 0,
   },
   // Location section
   locationSection: {
@@ -1859,12 +2155,53 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#F7F7F7',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileAvatarDisabled: {
     opacity: 0.4,
+  },
+  headerActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  cartButton: {
+    width: 50,
+    height: 50,
+  },
+  cartAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  cartAvatarDisabled: {
+    opacity: 0.4,
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  cartBadgeText: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 10,
+    lineHeight: 14,
+    color: '#FFFFFF',
   },
   // Search section
   searchSection: {
@@ -1950,8 +2287,39 @@ const styles = StyleSheet.create({
   },
   // Carousel Container
   carouselContainer: {
-    marginTop: -44,
+    marginTop: -35,
     marginBottom: 16,
+  },
+  closedBannerContainer: {
+    width: '100%',
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  closedBannerImage: {
+    width: BANNER_WIDTH,
+    height: 340,
+    borderRadius: 20,
+  },
+  closedBannerMessageContainer: {
+    position: 'absolute',
+    bottom: 45,
+    left: 20,
+    right: 20,
+    width: BANNER_WIDTH,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closedBannerMessage: {
+    width: '100%',
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#00B14F',
+    textAlign: 'center',
   },
   loadingContainer: {
     width: '100%',
@@ -1967,17 +2335,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
   },
+  carouselWrapper: {
+    position: 'relative',
+    width: '100%',
+  },
   // Ad Banner
   adBanner: {
     flexDirection: 'column',
     alignItems: 'flex-start',
     justifyContent: 'flex-start',
-    padding: 14,
+    padding: 0,
     height: 149,
     backgroundColor: '#00BEC8',
     borderRadius: 20,
     overflow: 'hidden',
     position: 'relative',
+    width: BANNER_WIDTH,
+    minHeight: 149,
+  },
+  adBannerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: BANNER_WIDTH,
+    height: 149,
+    borderRadius: 20,
+  },
+  adOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.15)', // 25% opacity black overlay (reduced from 40%)
+    zIndex: 1,
   },
   adContent: {
     flexDirection: 'column',
@@ -1987,36 +2378,8 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 2,
     flex: 1,
-  },
-  blobContainer: {
-    position: 'absolute',
-    right: -15,
-    bottom: -35,
-    width: 180,
-    height: 160,
-  },
-  adImageBlob: {
     width: '100%',
-    height: '100%',
-    backgroundColor: '#FF6B6B',
-    borderTopLeftRadius: 120,
-    borderTopRightRadius: 55,
-    borderBottomLeftRadius: 75,
-    borderBottomRightRadius: 95,
-    transform: [
-      { rotate: '-18deg' },
-      { scaleX: 1.2 },
-      { scaleY: 0.88 },
-      { skewX: '5deg' },
-    ],
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  adImageMasked: {
-    width: '120%',
-    height: '120%',
-    transform: [{ rotate: '18deg' }],
+    padding: 14,
   },
   adTitle: {
     maxWidth: '90%',
@@ -2046,6 +2409,7 @@ const styles = StyleSheet.create({
     height: 28,
     backgroundColor: '#FFFFFF',
     borderRadius: 13,
+    opacity: 0.95, // Slight transparency to show background color through
   },
   adButtonText: {
     fontFamily: 'Poppins',
@@ -2075,6 +2439,26 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#00B14F',
+  },
+  // Carousel Navigation Buttons
+  carouselNavigation: {
+    position: 'absolute',
+    right: 20,
+    top: '50%',
+    marginTop: -40, // Half of total button height (40px * 2 + 8px gap) / 2
+    flexDirection: 'column',
+    gap: 8,
+    zIndex: 10,
+  },
+  navButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   // Section Title
   sectionTitleContainer: {
@@ -2479,35 +2863,6 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: '#00B14F',
-  },
-  vegRememberOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingVertical: 12,
-    gap: 10,
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#CCCCCC',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  checkboxChecked: {
-    backgroundColor: '#00B14F',
-    borderColor: '#00B14F',
-  },
-  vegRememberText: {
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#666666',
-    flex: 1,
   },
   vegApplyButton: {
     flexDirection: 'row',

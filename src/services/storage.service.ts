@@ -13,6 +13,8 @@ const STORAGE_KEYS = {
   USER_DATA: '@tazty_user_data',
   IS_LOGGED_IN: '@tazty_is_logged_in',
   VEG_MODE: '@tazty_veg_mode',
+  CART_DATA: '@tazty_cart_data',
+  CART_RESTAURANT: '@tazty_cart_restaurant',
 };
 
 export interface TokenData {
@@ -26,6 +28,8 @@ export interface UserData {
   phoneNumber: string;
   name?: string;
   email?: string;
+  support_email?: string;
+  support_number?: string;
   // Add other user fields as needed
 }
 
@@ -153,6 +157,77 @@ class StorageService {
   }
 
   /**
+   * Save cart data
+   */
+  async saveCartData(cartData: {
+    cart: { [key: string]: any };
+    restaurantId: number | null;
+    restaurantName: string;
+    restaurantLogo?: any;
+  }): Promise<void> {
+    try {
+      await AsyncStorage.multiSet([
+        [STORAGE_KEYS.CART_DATA, JSON.stringify(cartData.cart)],
+        [STORAGE_KEYS.CART_RESTAURANT, JSON.stringify({
+          id: cartData.restaurantId,
+          name: cartData.restaurantName,
+          logo: cartData.restaurantLogo,
+        })],
+      ]);
+    } catch (error) {
+      console.error('[StorageService] Error saving cart data:', error);
+    }
+  }
+
+  /**
+   * Get cart data
+   */
+  async getCartData(): Promise<{
+    cart: { [key: string]: any } | null;
+    restaurantId: number | null;
+    restaurantName: string;
+    restaurantLogo: any;
+  } | null> {
+    try {
+      const [cartData, restaurantData] = await AsyncStorage.multiGet([
+        STORAGE_KEYS.CART_DATA,
+        STORAGE_KEYS.CART_RESTAURANT,
+      ]);
+
+      const cart = cartData[1] ? JSON.parse(cartData[1]) : null;
+      const restaurant = restaurantData[1] ? JSON.parse(restaurantData[1]) : null;
+
+      if (!cart && !restaurant) {
+        return null;
+      }
+
+      return {
+        cart: cart || {},
+        restaurantId: restaurant?.id || null,
+        restaurantName: restaurant?.name || '',
+        restaurantLogo: restaurant?.logo || null,
+      };
+    } catch (error) {
+      console.error('[StorageService] Error getting cart data:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Clear cart data
+   */
+  async clearCartData(): Promise<void> {
+    try {
+      await AsyncStorage.multiRemove([
+        STORAGE_KEYS.CART_DATA,
+        STORAGE_KEYS.CART_RESTAURANT,
+      ]);
+    } catch (error) {
+      console.error('[StorageService] Error clearing cart data:', error);
+    }
+  }
+
+  /**
    * Clear all stored data (logout)
    */
   async clearAll(): Promise<void> {
@@ -163,6 +238,9 @@ class StorageService {
         STORAGE_KEYS.TOKEN_EXPIRY,
         STORAGE_KEYS.USER_DATA,
         STORAGE_KEYS.IS_LOGGED_IN,
+        // Note: Cart data is cleared on logout
+        STORAGE_KEYS.CART_DATA,
+        STORAGE_KEYS.CART_RESTAURANT,
       ]);
       // Note: VEG_MODE is not cleared on logout - it persists
     } catch (error) {

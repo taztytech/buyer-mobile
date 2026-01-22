@@ -1,12 +1,13 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState } from 'react-native';
+import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
 import { WelcomeScreen } from '@/screens/Auth/WelcomeScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
-import { OrdersScreen } from '@/screens/Order/OrdersScreen';
+import { OrdersScreen, resetOrdersPersistence } from '@/screens/Order/OrdersScreen';
 import { OrderDetailScreen } from '@/screens/Order/OrderDetailScreen';
 import { RateOrderScreen } from '@/screens/Order/RateOrderScreen';
 import { OrderTrackingScreen } from '@/screens/Order/OrderTrackingScreen';
@@ -14,6 +15,7 @@ import { SearchScreen } from '@/screens/Search/SearchScreen';
 import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { MyAddressesScreen } from '@/screens/Location/MyAddressesScreen';
+import { addressService } from '@/services/address.service';
 import { CategoryResultsScreen } from '@/screens/Category/CategoryResultsScreen';
 import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
 import { RestaurantDetailsScreen } from '@/screens/Restaurant/RestaurantDetailsScreen';
@@ -21,6 +23,7 @@ import { OrderDetailsScreen } from '@/screens/Order/OrderDetailsScreen';
 import { ExploreDishesScreen } from '@/screens/Favorites/ExploreDishesScreen';
 import { ContentPage } from '@/screens/Legal/ContentPage';
 import { HelpScreen } from '@/screens/Help/HelpScreen';
+import { ContactUsScreen } from '@/screens/Help/ContactUsScreen';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -31,8 +34,17 @@ import { homeService } from '@/services/home.service';
 import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
 import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
-import { ordersService } from '@/services/orders.service';
+import { SnackbarProvider } from '@/context/SnackbarContext';
+import { OrdersProvider, useOrders } from '@/context/OrdersContext';
+import { ordersService, OrderListItem } from '@/services/orders.service';
+import { SearchSuggestion } from '@/services/search.service';
 import CustomSplashScreen from '@/components/CustomSplashScreen';
+import { fcmNotificationService } from '@/services/fcmNotification.service';
+import { NetworkStatusScreen } from '@/components/NetworkStatusScreen';
+import { analyticsService, AnalyticsEvents, AnalyticsScreens } from '@/services/analytics.service';
+import { inAppUpdateService } from '@/services/inAppUpdate.service';
+import { crashlyticsService } from '@/services/crashlytics.service';
+import { ForcedUpdateModal } from '@/components/ForcedUpdateModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -41,13 +53,25 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Inner component with cart and confirmation context access
 function AppContent() {
-  const { cart, addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart } = useCart();
+  const {
+    addToCart,
+    setRestaurantInfo,
+    checkRestaurantConflict,
+    clearCart,
+    reloadCart,
+    restaurantId: cartRestaurantId,
+    restaurantName: cartRestaurantName,
+  } = useCart();
   const { showConfirmation } = useConfirmation();
 
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchResults, setSearchResults] = React.useState<SearchSuggestion[]>([]);
+  const [locationSearchQuery, setLocationSearchQuery] = React.useState('');
+  const [forcedUpdateRequired, setForcedUpdateRequired] = React.useState(false);
+  const [forcedUpdateMessage, setForcedUpdateMessage] = React.useState<string | undefined>(undefined);
   const [selectedLocation, setSelectedLocation] = React.useState<{
     name: string;
     address: string;
@@ -60,12 +84,24 @@ function AppContent() {
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
   const [selectedRestaurantAddress, setSelectedRestaurantAddress] = React.useState<string>('');
   const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites' | 'orders'>('home');
+  const [checkoutCameFrom, setCheckoutCameFrom] = React.useState<'restaurant' | 'home' | 'orders'>('restaurant');
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
-  const [checkoutCameFrom, setCheckoutCameFrom] = React.useState<'home' | 'restaurant'>('home');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
   const [selectedOrderData, setSelectedOrderData] = React.useState<any>(null);
-  const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses'>('home');
+  const [highlightOrderId, setHighlightOrderId] = React.useState<string | null>(null);
+  const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses' | 'registration'>('home');
+  const [locationSelectionCameFrom, setLocationSelectionCameFrom] = React.useState<'home' | 'addressSelection' | 'myAddresses'>('home');
+  const [orderTrackingCameFrom, setOrderTrackingCameFrom] = React.useState<'orders' | 'checkout' | 'orderDetail'>('orders');
+  const [ordersCameFrom, setOrdersCameFrom] = React.useState<'profile' | 'orderDetail'>('profile');
   const [editingAddress, setEditingAddress] = React.useState<any>(null);
+  const [helpOrderData, setHelpOrderData] = React.useState<OrderListItem | null>(null);
+  const [_isRegistrationFlow, setIsRegistrationFlow] = React.useState(false);
+  const [initialLocationCoords, setInitialLocationCoords] = React.useState<{ latitude?: number; longitude?: number } | null>(null);
+  const [legalCameFrom, setLegalCameFrom] = React.useState<'profile' | 'login' | 'otp'>('profile');
+  const [addressRefreshTrigger, setAddressRefreshTrigger] = React.useState(0);
+  const [pendingHomeRefresh, setPendingHomeRefresh] = React.useState(false);
+  const [isNetworkOnline, setIsNetworkOnline] = React.useState(true);
+  const lastConnectionStatusRef = React.useRef<boolean | null>(null);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -74,7 +110,11 @@ function AppContent() {
   const termsConditionsScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const addressScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const locationScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const ordersScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const orderDetailScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const helpScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const contactUsScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const faqScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const restaurantScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const checkoutScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
@@ -86,6 +126,153 @@ function AppContent() {
     'Poppins_700Bold': Poppins_700Bold,
   });
 
+  // Set Poppins as default font for all Text components
+  React.useEffect(() => {
+    if (fontsLoaded) {
+      // Set default font family for all Text components
+      // This applies Poppins as the default font across the entire app
+      // Note: defaultProps is deprecated but still works in React Native
+      if (!(Text as any).defaultProps) {
+        (Text as any).defaultProps = {};
+      }
+      (Text as any).defaultProps.style = { fontFamily: 'Poppins' };
+    }
+  }, [fontsLoaded]);
+
+  // Network connectivity listener - runs while app is open
+  // Optimized: Only updates state when connection status actually changes
+  React.useEffect(() => {
+    let isFirstUpdate = true;
+
+    const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
+      const connected = (state.isInternetReachable ?? state.isConnected) ?? false;
+      const previous = lastConnectionStatusRef.current;
+
+      // Skip update if status hasn't changed (prevents unnecessary re-renders)
+      if (previous === connected && !isFirstUpdate) {
+        return;
+      }
+
+      lastConnectionStatusRef.current = connected;
+
+      if (isFirstUpdate) {
+        isFirstUpdate = false;
+        setIsNetworkOnline(connected);
+        return;
+      }
+
+      // Only update state when connection status actually changes
+      setIsNetworkOnline(connected);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // Get orders dispatch from context
+  const { dispatch: ordersDispatch, getOrderByOrderNumber } = useOrders();
+
+  // Track screen views
+  React.useEffect(() => {
+    if (isCheckingAuth) return;
+    
+    const screenNameMap: Record<typeof currentScreen, string> = {
+      login: AnalyticsScreens.LOGIN,
+      otp: AnalyticsScreens.OTP_VERIFICATION,
+      welcome: AnalyticsScreens.WELCOME,
+      home: AnalyticsScreens.HOME,
+      profile: AnalyticsScreens.PROFILE,
+      editProfile: AnalyticsScreens.EDIT_PROFILE,
+      orders: AnalyticsScreens.ORDERS,
+      orderDetail: AnalyticsScreens.ORDER_DETAIL,
+      rateOrder: AnalyticsScreens.RATE_ORDER,
+      orderTracking: AnalyticsScreens.ORDER_TRACKING,
+      search: AnalyticsScreens.SEARCH,
+      myAddresses: AnalyticsScreens.MY_ADDRESSES,
+      addressSelection: AnalyticsScreens.ADDRESS_SELECTION,
+      locationSelection: AnalyticsScreens.LOCATION_SELECTION,
+      categoryResults: AnalyticsScreens.CATEGORY_RESULTS,
+      restaurant: AnalyticsScreens.RESTAURANT,
+      restaurantDetails: AnalyticsScreens.RESTAURANT_DETAILS,
+      exploreDishes: AnalyticsScreens.EXPLORE_DISHES,
+      checkout: AnalyticsScreens.CHECKOUT,
+      privacyPolicy: AnalyticsScreens.PRIVACY_POLICY,
+      termsConditions: AnalyticsScreens.TERMS_CONDITIONS,
+      help: AnalyticsScreens.HELP,
+      contactUs: AnalyticsScreens.CONTACT_US,
+      faq: AnalyticsScreens.FAQ,
+    };
+    
+    const screenName = screenNameMap[currentScreen];
+    if (screenName) {
+      analyticsService.logScreenView(screenName);
+    }
+  }, [currentScreen, isCheckingAuth]);
+
+  // Set up FCM handlers for order notifications
+  React.useEffect(() => {
+    // Set orders dispatch in FCM service
+    fcmNotificationService.setOrdersDispatch(ordersDispatch);
+
+    // Set order lookup function for FCM handler (to find orders by order_number)
+    const { setOrderLookupFunction } = require('@/services/orderNotificationHandler');
+    setOrderLookupFunction(getOrderByOrderNumber);
+
+    // Set navigation callback to handle notification taps
+    // Navigate to My Orders screen and highlight the order
+    fcmNotificationService.setNavigationCallback((orderId: string) => {
+      console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
+      setHighlightOrderId(orderId);
+      setCurrentScreen('orders');
+      
+      // Clear highlight after 3 seconds (enough time for scroll animation)
+      setTimeout(() => {
+        setHighlightOrderId(null);
+      }, 3000);
+    });
+
+    // Cleanup callbacks on unmount
+    return () => {
+      fcmNotificationService.setNavigationCallback(null);
+      fcmNotificationService.setOrdersDispatch(null);
+    };
+  }, [ordersDispatch, getOrderByOrderNumber]);
+
+  // Handle app state changes to check for notifications when app becomes active
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        // Check if app was opened from notification when it becomes active
+        fcmNotificationService.checkInitialNotification().catch((error) => {
+          console.warn('⚠️  Failed to check initial notification:', error);
+        });
+        
+        // Check for app updates when app becomes active (but not on checkout)
+        if (currentScreen !== 'checkout') {
+          inAppUpdateService.checkForUpdate({ currentScreen }).catch((error) => {
+            console.error('In-app update check error:', error);
+          });
+        }
+        
+        // Track app foreground
+        analyticsService.logEvent(AnalyticsEvents.APP_FOREGROUND);
+      } else if (nextAppState === 'background') {
+        // Track app background
+        analyticsService.logEvent(AnalyticsEvents.APP_BACKGROUND);
+      }
+    });
+
+    // Also check immediately when component mounts
+    fcmNotificationService.checkInitialNotification().catch((error) => {
+      console.warn('⚠️  Failed to check initial notification on mount:', error);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [currentScreen]);
+
   // Check if user is already logged in on app startup
   React.useEffect(() => {
     const checkAuth = async () => {
@@ -93,10 +280,41 @@ function AppContent() {
         // Initialize API service with stored tokens
         await apiService.initialize();
 
+        // Initialize Crashlytics
+        await crashlyticsService.initialize();
+
+        // Initialize Analytics
+        await analyticsService.initialize();
+        await analyticsService.logEvent(AnalyticsEvents.APP_OPEN);
+
+        // Initialize FCM notifications
+        fcmNotificationService.initialize().catch((error) => {
+          console.error('FCM initialization error:', error);
+          crashlyticsService.recordError(error, { source: 'fcm_initialize' });
+        });
+
+        // Check for app updates after a short delay (to ensure app is ready)
+        // Only check if not on checkout screen
+        setTimeout(() => {
+          if (currentScreen !== 'checkout') {
+            inAppUpdateService.checkForUpdate({ currentScreen }).catch((error) => {
+              console.error('In-app update check error:', error);
+            });
+          }
+        }, 2000);
+
         // Check if user is authenticated
         const isLoggedIn = await authService.isAuthenticated();
 
         if (isLoggedIn) {
+          // Get current user and set analytics / crashlytics user ID
+          const currentUser = await authService.getCurrentUser();
+          if (currentUser?.id) {
+            const idString = currentUser.id.toString();
+            await analyticsService.setUserId(idString);
+            await crashlyticsService.setUserId(idString);
+          }
+
           // User has valid session, navigate to home
           setCurrentScreen('home');
         } else {
@@ -112,13 +330,29 @@ function AppContent() {
     };
 
     checkAuth();
+
+    // Cleanup FCM listeners and update service on unmount
+    return () => {
+      fcmNotificationService.cleanup();
+      inAppUpdateService.cleanup();
+    };
   }, []);
+
 
   // const [animationComplete, setAnimationComplete] = React.useState(false);
 
   // Handle Android back button
   React.useEffect(() => {
     const backAction = () => {
+      // Block navigation when forced update is required, but ONLY on non-auth screens
+      // Allow back button to work normally on login, welcome, and OTP screens
+      const authScreens: Array<typeof currentScreen> = ['login', 'welcome', 'otp'];
+      const isOnAuthScreen = authScreens.includes(currentScreen);
+      
+      if (forcedUpdateRequired && !isOnAuthScreen) {
+        return true; // Prevent back button from doing anything on non-auth screens
+      }
+      
       // Handle back button based on current screen
       switch (currentScreen) {
         case 'home':
@@ -161,6 +395,9 @@ function AppContent() {
         case 'restaurant':
           handleBackFromRestaurant();
           return true;
+        case 'restaurantDetails':
+          handleBackFromRestaurantDetails();
+          return true;
         case 'checkout':
           handleBackFromCheckout();
           return true;
@@ -172,6 +409,12 @@ function AppContent() {
           return true;
         case 'termsConditions':
           handleBackFromTermsConditions();
+          return true;
+        case 'faq':
+          handleBackFromFaq();
+          return true;
+        case 'contactUs':
+          handleBackFromContactUs();
           return true;
         case 'help':
           handleBackFromHelp();
@@ -196,16 +439,53 @@ function AppContent() {
   const handleLoginSuccess = (phone: string) => {
     setPhoneNumber(phone);
     setCurrentScreen('otp');
+    analyticsService.logEvent(AnalyticsEvents.LOGIN_START, { phone_number: phone });
   };
 
-  const handleOtpSuccess = (isExistingUser: boolean) => {
+  // Ensure notification permission after login
+  const ensureNotificationPermission = React.useCallback(async () => {
+    try {
+      // Always request permission after login (will show popup if not granted)
+      // This ensures users are prompted for notifications after successful login
+      console.log('📱 Requesting notification permission after login...');
+      const granted = await fcmNotificationService.requestPermission();
+      if (granted) {
+        console.log('✅ Notification permission granted');
+        // Get token after permission is granted
+        await fcmNotificationService.getToken();
+      } else {
+        console.warn('⚠️ Notification permission denied by user');
+      }
+    } catch (error) {
+      console.warn('⚠️ Notification permission check failed:', error);
+    }
+  }, []);
+
+  const handleOtpSuccess = async (isExistingUser: boolean) => {
     if (isExistingUser) {
-      // Existing user - go directly to home
+      // Existing user - go directly to home (skip address selection)
+      // Set analytics user ID
+      const currentUser = await authService.getCurrentUser();
+      if (currentUser?.id) {
+        await analyticsService.setUserId(currentUser.id.toString());
+      }
+      
+      await analyticsService.logEvent(AnalyticsEvents.LOGIN_SUCCESS, {
+        is_existing_user: true,
+      });
+      
       setCurrentScreen('home');
+      setIsRegistrationFlow(false);
+      reloadCart().catch(() => {});
+      ensureNotificationPermission();
     } else {
       // New user - show welcome screen for profile completion
+      await analyticsService.logEvent(AnalyticsEvents.SIGNUP_START);
       setCurrentScreen('welcome');
+      setIsRegistrationFlow(true);
+      ensureNotificationPermission();
     }
+    setPhoneNumber('');
   };
 
   const handleWelcomeComplete = async (name: string, email: string) => {
@@ -220,17 +500,45 @@ function AppContent() {
           email,
         };
         await storageService.saveUser(updatedUser);
+        
+        // Set analytics user ID and properties
+        await analyticsService.setUserId(currentUser.id.toString());
+        await analyticsService.setUserProperties({
+          user_name: name,
+          user_email: email,
+        });
       }
     } catch (error) {
       // Silent fail
     }
 
+    // Log signup success
+    await analyticsService.logEvent(AnalyticsEvents.SIGNUP_SUCCESS, {
+      has_name: !!name,
+      has_email: !!email,
+    });
+
+    // For new users, go directly to home
+    // HomeScreen will check for addresses and redirect if needed
     setCurrentScreen('home');
+    setIsRegistrationFlow(false);
+
+    // Ensure cart (if any) is synced for this user
+    reloadCart().catch(() => {});
   };
 
   const handleLogout = async () => {
+    // Log logout event
+    await analyticsService.logEvent(AnalyticsEvents.LOGOUT);
+
+    // Reset analytics user data
+    await analyticsService.resetAnalyticsData();
+    
     // Clear authentication tokens and user data
     await authService.logout();
+
+    // Clear address cache to prevent showing previous account's addresses
+    addressService.clearCache();
 
     // Reset all animated values to their initial state
     homeScreenSlide.setValue(0);
@@ -255,6 +563,15 @@ function AppContent() {
   };
 
   const handleNavigateToProfile = () => {
+    // Reset persisted orders and scroll position when navigating to profile
+    // This ensures a fresh state when user returns to orders screen
+    resetOrdersPersistence();
+    
+    // Clear orders context to ensure fresh data on next visit
+    if (ordersDispatch) {
+      ordersDispatch({ type: 'CLEAR_ORDERS' });
+    }
+    
     setCurrentScreen('profile');
 
     // Slide both screens simultaneously
@@ -331,9 +648,30 @@ function AppContent() {
   };
 
   // Location Selection Navigation
-  const handleNavigateToLocationSelection = (query?: string) => {
+  const handleNavigateToLocationSelection = (query?: string, latitude?: number, longitude?: number) => {
     if (query) {
-      setSearchQuery(query);
+      setLocationSearchQuery(query);
+    } else {
+      // Clear location search query when navigating without a query
+      setLocationSearchQuery('');
+    }
+    // Store initial location coordinates if provided (from "Add address" button)
+    if (latitude !== undefined && longitude !== undefined) {
+      setInitialLocationCoords({ latitude, longitude });
+    } else {
+      setInitialLocationCoords(null);
+    }
+    // Track where we're coming from based on current screen
+    if (currentScreen === 'addressSelection') {
+      setLocationSelectionCameFrom('addressSelection');
+    } else {
+      // Coming from home or myAddresses
+      if (addressSelectionCameFrom === 'myAddresses') {
+        setLocationSelectionCameFrom('myAddresses');
+      } else {
+        setLocationSelectionCameFrom('home');
+        setAddressSelectionCameFrom('home');
+      }
     }
     setCurrentScreen('locationSelection');
 
@@ -351,13 +689,45 @@ function AppContent() {
     ]).start();
   };
 
+  // Navigate to location selection from home (for address check redirect)
+  const handleNavigateToLocationSelectionFromHome = () => {
+    setAddressSelectionCameFrom('home');
+    setLocationSelectionCameFrom('home');
+    setCurrentScreen('locationSelection');
+    
+    Animated.timing(locationScreenSlide, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+
   const handleBackFromLocationSelection = () => {
-    if (addressSelectionCameFrom === 'myAddresses') {
-      setCurrentScreen('myAddresses');
-      setAddressSelectionCameFrom('home');
-      setSearchQuery('');
-    } else {
+    // Clear editing address when going back
+    setEditingAddress(null);
+    
+    if (locationSelectionCameFrom === 'myAddresses') {
+      // Animate location screen out and navigate back to myAddresses
+      Animated.timing(locationScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setCurrentScreen('myAddresses');
+        setAddressSelectionCameFrom('home');
+        setLocationSelectionCameFrom('home');
+        setSearchQuery('');
+        setInitialLocationCoords(null);
+      });
+    } else if (locationSelectionCameFrom === 'addressSelection') {
+      // Coming from address selection - go back to address selection
+      // Ensure home screen is visible and address screen is shown
       Animated.parallel([
+        Animated.timing(homeScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
         Animated.timing(addressScreenSlide, {
           toValue: 0,
           duration: 180,
@@ -371,6 +741,30 @@ function AppContent() {
       ]).start(() => {
         setCurrentScreen('addressSelection');
         setSearchQuery('');
+        setLocationSelectionCameFrom('home');
+      });
+    } else {
+      // Coming from home - go back to home
+      // Ensure home screen is visible (slide to 0 if it was moved)
+      Animated.parallel([
+        Animated.timing(homeScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(locationScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('home');
+        setAddressSelectionCameFrom('home');
+        setLocationSelectionCameFrom('home');
+        setSearchQuery('');
+        // Trigger refresh when returning from location selection to home
+        // This ensures home data is fetched if user added an address
+        setAddressRefreshTrigger(prev => prev + 1);
       });
     }
   };
@@ -380,13 +774,22 @@ function AppContent() {
     setSelectedLocation({
       name: location.name || location.locationName,
       address: location.locationAddress || location.address,
-      latitude: location.latitude || location.lat || 9.9352300,
-      longitude: location.longitude || location.lng || 78.1304040,
+      // Do NOT silently fall back to hardcoded Madurai coordinates.
+      // Only use coordinates that were explicitly selected/confirmed.
+      latitude: location.latitude ?? location.lat,
+      longitude: location.longitude ?? location.lng,
     });
 
-    // Check if coming from MyAddresses
-    if (addressSelectionCameFrom === 'myAddresses') {
+    // Trigger homepage refresh when address changes
+    handleAddressChange();
+
+    // Check if we're editing an address (from myAddresses) or check navigation source
+    const isEditingFromMyAddresses = editingAddress && locationSelectionCameFrom === 'myAddresses';
+    
+    if (isEditingFromMyAddresses || addressSelectionCameFrom === 'myAddresses') {
       // Navigate back to MyAddresses after saving
+      // Clear editing address and reset navigation state
+      setEditingAddress(null);
       Animated.timing(locationScreenSlide, {
         toValue: SCREEN_WIDTH,
         duration: 300,
@@ -394,10 +797,31 @@ function AppContent() {
       }).start(() => {
         setCurrentScreen('myAddresses');
         setAddressSelectionCameFrom('home');
+        setLocationSelectionCameFrom('home');
+        setSearchQuery('');
+        setInitialLocationCoords(null);
+      });
+    } else if (addressSelectionCameFrom === 'home') {
+      // Coming from home - navigate back to home
+      // Ensure home screen is visible (slide to 0 if it was moved)
+      Animated.parallel([
+        Animated.timing(homeScreenSlide, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(locationScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('home');
+        setAddressSelectionCameFrom('home');
         setSearchQuery('');
       });
     } else {
-      // Slide both address and location screens back to home
+      // Coming from address selection - slide both screens back to home
       Animated.parallel([
         Animated.timing(homeScreenSlide, {
           toValue: 0,
@@ -416,7 +840,11 @@ function AppContent() {
         }),
       ]).start(() => {
         setCurrentScreen('home');
+        setAddressSelectionCameFrom('home');
+        setLocationSelectionCameFrom('home');
+        setEditingAddress(null);
         setSearchQuery('');
+        setInitialLocationCoords(null);
       });
     }
   };
@@ -466,6 +894,13 @@ function AppContent() {
     setSelectedRestaurantName(restaurantName);
     setRestaurantCameFrom('home');
     setCurrentScreen('restaurant');
+
+    // Track restaurant view
+    analyticsService.logEvent(AnalyticsEvents.RESTAURANT_VIEW, {
+      restaurant_id: restaurantId,
+      restaurant_name: restaurantName,
+      source: 'home',
+    });
 
     // Animate restaurant screen sliding in from right
     Animated.timing(restaurantScreenSlide, {
@@ -518,6 +953,45 @@ function AppContent() {
     });
   }, [checkoutScreenSlide, checkoutCameFrom]);
 
+  // Handle Add More Items from Checkout - Navigate to restaurant menu, back goes to home
+  const handleAddMoreItemsFromCheckout = useCallback(() => {
+    const targetRestaurantId = cartRestaurantId || selectedRestaurantId;
+    const targetRestaurantName = cartRestaurantName || selectedRestaurantName;
+
+    if (!targetRestaurantId || !targetRestaurantName) {
+      // If no restaurant info, just go back
+      handleBackFromCheckout();
+      return;
+    }
+
+    // Set restaurant info
+    setSelectedRestaurantId(targetRestaurantId);
+    setSelectedRestaurantName(targetRestaurantName);
+    // Set restaurantCameFrom to 'home' so back button goes to home, not checkout
+    setRestaurantCameFrom('home');
+
+    // Reset restaurant screen to off-screen position first
+    restaurantScreenSlide.setValue(SCREEN_WIDTH);
+
+    // Slide out checkout screen and navigate to restaurant
+    Animated.parallel([
+      Animated.timing(checkoutScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 200,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(restaurantScreenSlide, {
+        toValue: 0,
+        duration: 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentScreen('restaurant');
+    });
+  }, [checkoutScreenSlide, restaurantScreenSlide, cartRestaurantId, cartRestaurantName, selectedRestaurantId, selectedRestaurantName, handleBackFromCheckout]);
+
   // Handle place order from checkout
   const handlePlaceOrderFromCheckout = useCallback(() => {
     // Navigate to order success/tracking
@@ -529,65 +1003,94 @@ function AppContent() {
     }).start();
   }, [checkoutScreenSlide]);
 
-  // Handle order success from checkout - View Order button
+  // Handle order success from checkout - View Order Details button
   const handleOrderSuccessFromCheckout = useCallback((orderId: number) => {
-    // Close checkout and navigate to order detail
+    // Validate orderId
+    if (!orderId || isNaN(orderId)) {
+      console.error('Invalid orderId received:', orderId);
+      return;
+    }
+
+    // Ensure restaurant screen is properly hidden and reset state
+    restaurantScreenSlide.setValue(SCREEN_WIDTH);
+    // Reset restaurant selection to prevent any unwanted rendering
+    setSelectedRestaurantId(1);
+    setSelectedRestaurantName('');
+    setSelectedRestaurantAddress('');
+
+    // Set order ID immediately to ensure it's available
+    setSelectedOrderId(orderId.toString());
+    // Reset order detail screen position to show it
+    orderDetailScreenSlide.setValue(0);
+
+    // Close checkout screen with animation first, then navigate to order detail
     Animated.timing(checkoutScreenSlide, {
       toValue: SCREEN_WIDTH,
       duration: 200,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start(() => {
-      if (orderId) {
-        setSelectedOrderId(orderId.toString());
+      // After checkout screen closes, navigate to order detail
+      // Use requestAnimationFrame to ensure state updates are processed
+      requestAnimationFrame(() => {
         setCurrentScreen('orderDetail');
+      });
+    });
+  }, [checkoutScreenSlide, restaurantScreenSlide, orderDetailScreenSlide]);
+
+  // Handle order cancel from checkout - OK button after payment failure
+  const handleOrderCancelFromCheckout = useCallback(() => {
+    // Close checkout and navigate back based on where we came from
+    Animated.timing(checkoutScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 200,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      // Navigate back to restaurant screen if we came from there, otherwise go to home
+      if (checkoutCameFrom === 'restaurant') {
+        setCurrentScreen('restaurant');
+        // Force restaurant screen to reload by briefly hiding and showing
+        // This ensures the menu loads properly
+        setTimeout(() => {
+          // The restaurant screen's useEffect will trigger when visible becomes true
+        }, 100);
+      } else {
+        setCurrentScreen('home');
       }
     });
-  }, [checkoutScreenSlide]);
-
-  // Handle order cancel from checkout - Close button
-  const handleOrderCancelFromCheckout = useCallback(() => {
-    // Close checkout and go to home
-    Animated.timing(checkoutScreenSlide, {
-      toValue: SCREEN_WIDTH,
-      duration: 200,
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: true,
-    }).start(() => {
-      setCurrentScreen('home');
-    });
-  }, [checkoutScreenSlide]);
+  }, [checkoutScreenSlide, checkoutCameFrom]);
 
   // Back from Restaurant (dynamic based on where we came from)
   const handleBackFromRestaurant = () => {
-    // Set screen immediately for smoother transition
-    if (restaurantCameFrom === 'home') {
-      setCurrentScreen('home');
-    } else if (restaurantCameFrom === 'category') {
-      setCurrentScreen('categoryResults');
-    } else if (restaurantCameFrom === 'search') {
-      setCurrentScreen('search');
-      // Re-open search screen with animation
-      Animated.timing(searchScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    } else if (restaurantCameFrom === 'favorites') {
-      setCurrentScreen('exploreDishes');
-    } else if (restaurantCameFrom === 'orders') {
-      setCurrentScreen('orders');
-    } else {
-      setCurrentScreen('categoryResults');
-    }
-
     // Animate restaurant screen sliding out to the right
     Animated.timing(restaurantScreenSlide, {
       toValue: SCREEN_WIDTH,
       duration: 200,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
-    }).start();
+    }).start(() => {
+      // Set screen after animation completes to prevent double loading
+      if (restaurantCameFrom === 'home') {
+        setCurrentScreen('home');
+      } else if (restaurantCameFrom === 'category') {
+        setCurrentScreen('categoryResults');
+      } else if (restaurantCameFrom === 'search') {
+        setCurrentScreen('search');
+        // Re-open search screen with animation
+        Animated.timing(searchScreenSlide, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      } else if (restaurantCameFrom === 'favorites') {
+        setCurrentScreen('exploreDishes');
+      } else if (restaurantCameFrom === 'orders') {
+        setCurrentScreen('orders');
+      } else {
+        setCurrentScreen('categoryResults');
+      }
+    });
   };
 
   // Navigate to Restaurant Details
@@ -606,13 +1109,37 @@ function AppContent() {
 
   // Orders Navigation
   const handleNavigateToOrders = () => {
+    setOrdersCameFrom('profile'); // Track that we're coming from profile
     setCurrentScreen('orders');
+    // Reset orders screen position to show it
+    ordersScreenSlide.setValue(0);
+    analyticsService.logEvent(AnalyticsEvents.ORDER_VIEW);
   };
 
   const handleBackFromOrders = () => {
-    // Use requestAnimationFrame to ensure smooth transition and proper pointer events update
-    requestAnimationFrame(() => {
-      setCurrentScreen('profile');
+    // Animate orders screen out
+    Animated.timing(ordersScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 200,  // Small duration for smooth transition
+      useNativeDriver: true,
+    }).start(() => {
+      // If we came from orderDetail (which came from checkout), go to home
+      // Otherwise, go to profile (normal flow from profile screen)
+      if (ordersCameFrom === 'orderDetail') {
+        // Batch all screen position resets together before state update
+        orderDetailScreenSlide.setValue(SCREEN_WIDTH);
+        ordersScreenSlide.setValue(SCREEN_WIDTH);
+        profileScreenSlide.setValue(SCREEN_WIDTH);
+        restaurantScreenSlide.setValue(SCREEN_WIDTH);
+        checkoutScreenSlide.setValue(SCREEN_WIDTH);
+        homeScreenSlide.setValue(0);
+        
+        // Update state after all positions are set
+        setCurrentScreen('home');
+        setOrdersCameFrom('profile'); // Reset for next time
+      } else {
+        setCurrentScreen('profile');
+      }
     });
   };
 
@@ -620,12 +1147,24 @@ function AppContent() {
   const handleNavigateToOrderDetail = (orderId: string) => {
     setSelectedOrderId(orderId);
     setCurrentScreen('orderDetail');
+    // Reset order detail screen position to show it
+    orderDetailScreenSlide.setValue(0);
   };
 
   const handleBackFromOrderDetail = () => {
-    // Use requestAnimationFrame to ensure smooth transition
-    requestAnimationFrame(() => {
+    // Track that we're going to orders from orderDetail
+    // If we came from checkout (orderDetail was accessed via handleOrderSuccessFromCheckout),
+    // we need to track this so orders can go back to home
+    setOrdersCameFrom('orderDetail');
+    
+    // Animate order detail screen out
+    Animated.timing(orderDetailScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 0,  // Instant
+      useNativeDriver: true,
+    }).start(() => {
       setCurrentScreen('orders');
+      ordersScreenSlide.setValue(0);
     });
   };
 
@@ -635,13 +1174,36 @@ function AppContent() {
   };
 
   const handleBackFromMyAddresses = () => {
-    // Reset location screen position
+    // Reset location screen position and clear all related state
     locationScreenSlide.setValue(SCREEN_WIDTH);
     setEditingAddress(null);
+    setLocationSelectionCameFrom('home');
+    setAddressSelectionCameFrom('home');
+    setSearchQuery('');
+    setInitialLocationCoords(null);
     setCurrentScreen('profile');
   };
 
+  // Handle address changes (trigger HomeScreen refresh)
+  const handleAddressChange = () => {
+    if (currentScreen === 'home') {
+      setAddressRefreshTrigger(prev => prev + 1);
+      return;
+    }
+
+    setPendingHomeRefresh(true);
+  };
+
+  React.useEffect(() => {
+    if (currentScreen === 'home' && pendingHomeRefresh) {
+      setAddressRefreshTrigger(prev => prev + 1);
+      setPendingHomeRefresh(false);
+    }
+  }, [currentScreen, pendingHomeRefresh]);
+
   const handleNavigateToAddressSelectionFromMyAddresses = () => {
+    // Set correct navigation source for location selection
+    setLocationSelectionCameFrom('myAddresses');
     setAddressSelectionCameFrom('myAddresses');
     setEditingAddress(null); // Clear any editing address
     setCurrentScreen('locationSelection');
@@ -655,7 +1217,8 @@ function AppContent() {
   };
 
   const handleEditAddressFromMyAddresses = (address: any) => {
-    setAddressSelectionCameFrom('myAddresses');
+    // Set the correct navigation source
+    setLocationSelectionCameFrom('myAddresses');
     setEditingAddress(address); // Store the address being edited
     setCurrentScreen('locationSelection');
 
@@ -677,78 +1240,141 @@ function AppContent() {
   };
 
   // Privacy Policy Navigation
-  const handleNavigateToPrivacyPolicy = () => {
+  const handleNavigateToPrivacyPolicy = (from: 'profile' | 'login' | 'otp' = 'profile') => {
+    setLegalCameFrom(from);
     setCurrentScreen('privacyPolicy');
 
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
+    if (from === 'profile') {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: -SCREEN_WIDTH,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(privacyPolicyScreenSlide, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // Coming from login or otp: only animate the privacy policy screen
+      privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
       Animated.timing(privacyPolicyScreenSlide, {
         toValue: 0,
         duration: 200,
         useNativeDriver: true,
-      }),
-    ]).start();
+      }).start();
+    }
   };
 
   const handleBackFromPrivacyPolicy = () => {
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
+    if (legalCameFrom === 'login') {
       Animated.timing(privacyPolicyScreenSlide, {
         toValue: SCREEN_WIDTH,
         duration: 180,
         useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('profile');
-    });
+      }).start(() => {
+        setCurrentScreen('login');
+        setLegalCameFrom('profile');
+      });
+    } else if (legalCameFrom === 'otp') {
+      Animated.timing(privacyPolicyScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }).start(() => {
+        setCurrentScreen('otp');
+        setLegalCameFrom('profile');
+      });
+    } else {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(privacyPolicyScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('profile');
+      });
+    }
   };
 
   // Terms & Conditions Navigation
-  const handleNavigateToTermsConditions = () => {
+  const handleNavigateToTermsConditions = (from: 'profile' | 'login' | 'otp' = 'profile') => {
+    setLegalCameFrom(from);
     setCurrentScreen('termsConditions');
 
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
+    if (from === 'profile') {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: -SCREEN_WIDTH,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(termsConditionsScreenSlide, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // Coming from login or otp: only animate the terms & conditions screen
+      termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
       Animated.timing(termsConditionsScreenSlide, {
         toValue: 0,
         duration: 200,
         useNativeDriver: true,
-      }),
-    ]).start();
+      }).start();
+    }
   };
 
   const handleBackFromTermsConditions = () => {
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
+    if (legalCameFrom === 'login') {
       Animated.timing(termsConditionsScreenSlide, {
         toValue: SCREEN_WIDTH,
         duration: 180,
         useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentScreen('profile');
-    });
+      }).start(() => {
+        setCurrentScreen('login');
+        setLegalCameFrom('profile');
+      });
+    } else if (legalCameFrom === 'otp') {
+      Animated.timing(termsConditionsScreenSlide, {
+        toValue: SCREEN_WIDTH,
+        duration: 180,
+        useNativeDriver: true,
+      }).start(() => {
+        setCurrentScreen('otp');
+        setLegalCameFrom('profile');
+      });
+    } else {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(termsConditionsScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('profile');
+      });
+    }
   };
 
-  // Help Navigation
-  const handleNavigateToHelp = () => {
-    setCurrentScreen('help');
+  // FAQ Navigation
+  const handleNavigateToFaq = () => {
+    setCurrentScreen('faq');
+    setLegalCameFrom('profile');
 
     Animated.parallel([
       Animated.timing(profileScreenSlide, {
@@ -756,7 +1382,7 @@ function AppContent() {
         duration: 200,
         useNativeDriver: true,
       }),
-      Animated.timing(helpScreenSlide, {
+      Animated.timing(faqScreenSlide, {
         toValue: 0,
         duration: 200,
         useNativeDriver: true,
@@ -764,20 +1390,166 @@ function AppContent() {
     ]).start();
   };
 
-  const handleBackFromHelp = () => {
-    Animated.parallel([
-      Animated.timing(profileScreenSlide, {
-        toValue: 0,
+  const handleBackFromFaq = () => {
+    if (legalCameFrom === 'login') {
+      Animated.timing(faqScreenSlide, {
+        toValue: SCREEN_WIDTH,
         duration: 180,
         useNativeDriver: true,
-      }),
+      }).start(() => {
+        setCurrentScreen('login');
+        setLegalCameFrom('profile');
+      });
+    } else {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(faqScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('profile');
+      });
+    }
+  };
+
+  // Help Navigation
+  const [helpCameFrom, setHelpCameFrom] = React.useState<'profile' | 'orders'>('profile');
+  const [isHelpClosing, setIsHelpClosing] = React.useState(false);
+
+  // Contact Us Navigation
+  const [contactUsCameFrom, setContactUsCameFrom] = React.useState<'profile' | 'orders' | 'orderDetail'>('profile');
+  
+  const handleNavigateToContactUs = (from: 'profile' | 'orders' | 'orderDetail' = 'profile') => {
+    setContactUsCameFrom(from);
+    setCurrentScreen('contactUs');
+
+    if (from === 'profile') {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: -SCREEN_WIDTH,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(contactUsScreenSlide, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // From orders or orderDetail screen - no animation, instant transition
+      contactUsScreenSlide.setValue(0);
+    }
+  };
+
+  const handleBackFromContactUs = () => {
+    if (contactUsCameFrom === 'profile') {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(contactUsScreenSlide, {
+          toValue: SCREEN_WIDTH,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentScreen('profile');
+      });
+    } else if (contactUsCameFrom === 'orderDetail') {
+      // Back to order detail screen - instant, no animation
+      contactUsScreenSlide.setValue(SCREEN_WIDTH);
+      orderDetailScreenSlide.setValue(0);
+      setCurrentScreen('orderDetail');
+    } else {
+      // Back to orders screen - instant, no animation
+      contactUsScreenSlide.setValue(SCREEN_WIDTH);
+      ordersScreenSlide.setValue(0);
+      setCurrentScreen('orders');
+    }
+  };
+
+  const handleNavigateToHelp = (from: 'profile' | 'orders' = 'profile', order?: OrderListItem) => {
+    setHelpCameFrom(from);
+    setHelpOrderData(order ?? null);
+    setCurrentScreen('help');
+
+    setIsHelpClosing(false);
+
+    if (from === 'profile') {
+      Animated.parallel([
+        Animated.timing(profileScreenSlide, {
+          toValue: -SCREEN_WIDTH,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(helpScreenSlide, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      helpScreenSlide.setValue(SCREEN_WIDTH);
+      Animated.timing(helpScreenSlide, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  const closeHelpScreen = (
+    targetScreen: typeof currentScreen,
+    afterStateCallback?: () => void
+  ) => {
+    if (currentScreen !== targetScreen) {
+      setCurrentScreen(targetScreen);
+    }
+    setIsHelpClosing(true);
+    const animations = [
       Animated.timing(helpScreenSlide, {
         toValue: SCREEN_WIDTH,
         duration: 180,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setCurrentScreen('profile');
+    ];
+
+    if (helpCameFrom === 'profile') {
+      animations.push(
+        Animated.timing(profileScreenSlide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        })
+      );
+    }
+
+    Animated.parallel(animations).start(() => {
+      setIsHelpClosing(false);
+      setHelpOrderData(null);
+      afterStateCallback?.();
+    });
+  };
+
+  const handleBackFromHelp = () => {
+    closeHelpScreen(helpCameFrom);
+  };
+
+  const handleHelpViewOrder = (orderId: string) => {
+    if (!orderId) {
+      return;
+    }
+    closeHelpScreen('orderDetail', () => {
+      setSelectedOrderId(orderId);
     });
   };
 
@@ -803,18 +1575,40 @@ function AppContent() {
   };
 
   // Order Tracking Navigation
-  const handleNavigateToOrderTracking = (orderId: string) => {
+  const handleNavigateToOrderTracking = (orderId: string, cameFrom?: 'orders' | 'checkout' | 'orderDetail') => {
     setSelectedOrderId(orderId);
+    setOrderTrackingCameFrom(cameFrom || 'orders');
     setCurrentScreen('orderTracking');
   };
 
   const handleBackFromOrderTracking = () => {
-    setCurrentScreen('orders');
+    if (orderTrackingCameFrom === 'checkout') {
+      // If came from payment success, go back to home
+      // Ensure restaurant screen is properly hidden and reset state
+      restaurantScreenSlide.setValue(SCREEN_WIDTH);
+      // Reset restaurant selection to prevent any unwanted rendering
+      setSelectedRestaurantId(1);
+      setSelectedRestaurantName('');
+      setSelectedRestaurantAddress('');
+      // Set screen to home immediately - this ensures RestaurantScreen is not visible
+      // RestaurantScreen only shows when currentScreen === 'restaurant'
+      setCurrentScreen('home');
+      setOrderTrackingCameFrom('orders'); // Reset for next time
+    } else if (orderTrackingCameFrom === 'orderDetail') {
+      // If came from order detail, go back to order detail
+      setCurrentScreen('orderDetail');
+    } else {
+      // If came from orders, go back to orders
+      setCurrentScreen('orders');
+    }
   };
 
   // Search Navigation
   const handleNavigateToSearch = () => {
     setCurrentScreen('search');
+    
+    // Track search start
+    analyticsService.logEvent(AnalyticsEvents.SEARCH_START);
 
     Animated.parallel([
       Animated.timing(homeScreenSlide, {
@@ -847,6 +1641,12 @@ function AppContent() {
     });
   };
 
+  // Clear search state
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
   // Reorder functionality
   const handleReorder = async (orderId: string) => {
     try {
@@ -856,7 +1656,7 @@ function AppContent() {
       if (!orderResponse.success || !orderResponse.data) {
         showConfirmation({
           title: 'Error',
-          message: orderResponse.error || 'Failed to fetch order details',
+          message: typeof orderResponse.error === 'string' ? orderResponse.error : 'Failed to fetch order details',
           confirmText: 'OK',
           cancelText: 'Close',
           onConfirm: () => {},
@@ -870,16 +1670,24 @@ function AppContent() {
       const restaurantLogo = orderData.restaurant.logo_url;
 
       // Check if restaurant is currently open
-      // Fetch restaurant details to get timing information
-      const lat = selectedLocation?.latitude || 9.9352300;
-      const lng = selectedLocation?.longitude || 78.1304040;
+      // Fetch restaurant details to get timing information.
+      // IMPORTANT: Do not silently fall back to hardcoded coordinates here.
+      // If we don't have a confirmed user/location coordinate, we skip distance-based checks.
+      const hasUserCoords =
+        typeof selectedLocation?.latitude === 'number' &&
+        typeof selectedLocation?.longitude === 'number';
 
-      const restaurantResponse = await apiService.get(
-        `/api/buyer/restaurants/${restaurantId}?lat=${lat}&lng=${lng}`
-      );
+      const restaurantResponse = hasUserCoords
+        ? await apiService.get(
+            `/api/buyer/restaurants/${restaurantId}?lat=${selectedLocation!.latitude}&lng=${selectedLocation!.longitude}`
+          )
+        : await apiService.get(`/api/buyer/restaurants/${restaurantId}`);
 
       if (restaurantResponse.success && restaurantResponse.data) {
-        const restaurantData = restaurantResponse.data?.data || restaurantResponse.data;
+        // Handle both nested data structure and direct data structure
+        const restaurantData = (restaurantResponse.data && typeof restaurantResponse.data === 'object' && restaurantResponse.data !== null && 'data' in restaurantResponse.data)
+          ? (restaurantResponse.data as { data: any }).data
+          : restaurantResponse.data;
 
         // Check if restaurant is within 10km radius
         // The API returns distance_km when lat/lng are provided
@@ -894,19 +1702,25 @@ function AppContent() {
           distance = distanceKm;
         }
 
-        // Check if restaurant location exists and calculate distance if not provided by API
-        if (distance === 0 && restaurantData.locations?.[0]) {
+        // Check if restaurant location exists and calculate distance if not provided by API.
+        // Only perform this calculation when we have a confirmed user coordinate.
+        if (
+          distance === 0 &&
+          restaurantData.locations?.[0] &&
+          typeof selectedLocation?.latitude === 'number' &&
+          typeof selectedLocation?.longitude === 'number'
+        ) {
           const restaurantLat = restaurantData.locations[0].latitude;
           const restaurantLng = restaurantData.locations[0].longitude;
 
           if (restaurantLat && restaurantLng) {
             // Calculate distance using Haversine formula
             const R = 6371; // Earth's radius in km
-            const dLat = (restaurantLat - lat) * Math.PI / 180;
-            const dLng = (restaurantLng - lng) * Math.PI / 180;
+            const dLat = (restaurantLat - selectedLocation.latitude) * Math.PI / 180;
+            const dLng = (restaurantLng - selectedLocation.longitude) * Math.PI / 180;
             const a =
               Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat * Math.PI / 180) * Math.cos(restaurantLat * Math.PI / 180) *
+              Math.cos(selectedLocation.latitude * Math.PI / 180) * Math.cos(restaurantLat * Math.PI / 180) *
               Math.sin(dLng / 2) * Math.sin(dLng / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             distance = R * c;
@@ -972,7 +1786,7 @@ function AppContent() {
     } catch (error: any) {
       showConfirmation({
         title: 'Error',
-        message: error.message || 'Failed to reorder',
+        message: typeof error?.message === 'string' ? error.message : 'Failed to reorder',
         confirmText: 'OK',
         cancelText: 'Close',
         onConfirm: () => {},
@@ -1009,7 +1823,7 @@ function AppContent() {
         title: 'Items Added!',
         message: `${orderData.items.length} item${orderData.items.length > 1 ? 's' : ''} added to your cart from ${restaurantName}`,
         confirmText: 'View Cart',
-        cancelText: 'Continue',
+        cancelText: '', // Remove Continue button
         confirmButtonColor: '#00B14F',
         onConfirm: () => {
           // Navigate to restaurant screen to view cart
@@ -1027,14 +1841,13 @@ function AppContent() {
           }).start();
         },
         onCancel: () => {
-          // User clicked "Continue" - stay on current screen
-          // No action needed, just close the modal
+          // No action needed
         },
       });
     } catch (error: any) {
       showConfirmation({
         title: 'Error',
-        message: error.message || 'Failed to add items to cart',
+        message: typeof error?.message === 'string' ? error.message : 'Failed to add items to cart',
         confirmText: 'OK',
         cancelText: 'Close',
         onConfirm: () => {},
@@ -1042,26 +1855,58 @@ function AppContent() {
     }
   };
 
-  // Check if app is ready
-  const isAppReady = fontsLoaded && !isCheckingAuth;
-  // const showSplash = !animationComplete;
-
   // Hide native splash screen INSTANTLY
   React.useEffect(() => {
     // Hide immediately on mount
     SplashScreen.hideAsync().catch(() => {});
   }, []);
 
+  // Handler for forced update from API
+  const handleForcedUpdateRequired = React.useCallback((message?: string) => {
+    setForcedUpdateRequired(true);
+    setForcedUpdateMessage(message);
+  }, []);
+
+  const shouldShowForcedUpdate = React.useMemo(() => {
+    if (!forcedUpdateRequired) {
+      return false;
+    }
+    
+    // Don't show while checking auth
+    if (isCheckingAuth) {
+      return false;
+    }
+    
+    // Don't show on auth screens (login, welcome, OTP)
+    const authScreens: Array<typeof currentScreen> = ['login', 'welcome', 'otp'];
+    if (authScreens.includes(currentScreen)) {
+      return false;
+    }
+    
+    // Show on all other screens
+    return true;
+  }, [forcedUpdateRequired, isCheckingAuth, currentScreen]);
+
   return (
     <>
       <SafeAreaProvider>
-        {!isCheckingAuth && currentScreen === 'login' ? (
-        <LoginScreen onLoginSuccess={handleLoginSuccess} />
+        {/* Show Network Status Screen when offline on any screen */}
+        {!isCheckingAuth && !isNetworkOnline ? (
+          <NetworkStatusScreen selectedLocation={selectedLocation} />
+        ) : !isCheckingAuth && currentScreen === 'login' ? (
+        <LoginScreen
+          initialPhoneNumber={phoneNumber}
+          onLoginSuccess={handleLoginSuccess}
+          onOpenTerms={() => handleNavigateToTermsConditions('login')}
+          onOpenPrivacy={() => handleNavigateToPrivacyPolicy('login')}
+        />
       ) : !isCheckingAuth && currentScreen === 'otp' ? (
         <OTPVerificationScreen
           phoneNumber={phoneNumber}
           onBack={handleBackToLogin}
           onSuccess={handleOtpSuccess}
+          onOpenTerms={() => handleNavigateToTermsConditions('otp')}
+          onOpenPrivacy={() => handleNavigateToPrivacyPolicy('otp')}
         />
       ) : !isCheckingAuth && currentScreen === 'welcome' ? (
         <WelcomeScreen onContinue={handleWelcomeComplete} />
@@ -1084,9 +1929,12 @@ function AppContent() {
               onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
               onNavigateToCheckout={handleNavigateToCheckout}
               onNavigateToSearch={handleNavigateToSearch}
+              onNavigateToLocationSelection={handleNavigateToLocationSelectionFromHome}
               selectedLocation={selectedLocation}
               onCategoriesLoaded={setCategoryData}
               isFocused={currentScreen === 'home'}
+              addressRefreshTrigger={addressRefreshTrigger}
+              onForcedUpdateRequired={handleForcedUpdateRequired}
             />
           </Animated.View>
 
@@ -1108,9 +1956,10 @@ function AppContent() {
               onMyOrders={handleNavigateToOrders}
               onMyAddresses={handleNavigateToMyAddresses}
               onFavorites={handleNavigateToExploreDishes}
-              onChatWithUs={handleNavigateToHelp}
+              onContactUs={() => handleNavigateToContactUs('profile')}
               onPrivacyPolicy={handleNavigateToPrivacyPolicy}
               onTermsConditions={handleNavigateToTermsConditions}
+              onFaq={handleNavigateToFaq}
             />
           </Animated.View>
 
@@ -1127,7 +1976,7 @@ function AppContent() {
             <AddressSelectionScreen
               visible={currentScreen === 'addressSelection'}
               onBack={handleBackFromAddressSelection}
-              onUseCurrentLocation={() => handleNavigateToLocationSelection()}
+              onUseCurrentLocation={(latitude, longitude) => handleNavigateToLocationSelection(undefined, latitude, longitude)}
               onSearch={(query) => handleNavigateToLocationSelection(query)}
               onSelectAddress={(address) => {
                 // Capitalize the type (home -> Home, work -> Work, other -> Other)
@@ -1135,9 +1984,13 @@ function AppContent() {
                 setSelectedLocation({
                   name: formattedType,
                   address: `${address.address}, ${address.city}`,
-                  latitude: address.latitude || 9.9352300,
-                  longitude: address.longitude || 78.1304040,
+                  // Do NOT silently fall back to hardcoded Madurai coordinates.
+                  // If an address has no coordinates yet, keep them undefined until user sets them.
+                  latitude: address.latitude,
+                  longitude: address.longitude,
                 });
+                // Trigger homepage refresh when address changes
+                handleAddressChange();
                 handleBackFromAddressSelection();
               }}
             />
@@ -1154,48 +2007,62 @@ function AppContent() {
             pointerEvents={currentScreen === 'locationSelection' ? 'auto' : 'none'}
           >
             <LocationSelectionScreen
-              initialSearchQuery={searchQuery}
+              initialSearchQuery={locationSearchQuery}
               editingAddress={editingAddress}
-              initialLatitude={editingAddress?.latitude}
-              initialLongitude={editingAddress?.longitude}
+              initialLatitude={editingAddress?.latitude || initialLocationCoords?.latitude}
+              initialLongitude={editingAddress?.longitude || initialLocationCoords?.longitude}
               onBack={handleBackFromLocationSelection}
               onLocationConfirm={handleLocationConfirm}
             />
           </Animated.View>
 
-          {/* Conditionally render OrdersScreen only when needed */}
-          {currentScreen === 'orders' && (
-            <View style={styles.ordersOverlay}>
-              <OrdersScreen
-                visible={true}
-                onBack={handleBackFromOrders}
-                onOrderDetails={handleNavigateToOrderDetail}
-                onReorder={handleReorder}
-                onRateOrder={handleNavigateToRateOrder}
-                onTrackOrder={handleNavigateToOrderTracking}
-                onHelp={(orderId) => {}}
-                onViewMore={() => {}}
-              />
-            </View>
-          )}
+          {/* Always render OrdersScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.ordersOverlay,
+              {
+                transform: [{ translateX: ordersScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'orders' ? 'auto' : 'none'}
+          >
+            <OrdersScreen
+              visible={currentScreen === 'orders'}
+              onBack={handleBackFromOrders}
+              onOrderDetails={handleNavigateToOrderDetail}
+              onReorder={handleReorder}
+              onRateOrder={handleNavigateToRateOrder}
+              highlightOrderId={highlightOrderId}
+              onTrackOrder={handleNavigateToOrderTracking}
+              onHelp={(order) => handleNavigateToHelp('orders', order)}
+              onContactUs={() => handleNavigateToContactUs('orders')}
+              onViewMore={() => {}}
+            />
+          </Animated.View>
 
-          {/* Conditionally render OrderDetailScreen only when needed */}
-          {currentScreen === 'orderDetail' && (
-            <View style={styles.orderDetailOverlay}>
-              <OrderDetailScreen
-                key={selectedOrderId}
-                orderId={selectedOrderId}
-                visible={true}
-                onBack={handleBackFromOrderDetail}
-                onChatWithUs={() => {}}
-                onThankDriver={() => {}}
-                onRateOrder={handleNavigateToRateOrder}
-                onReorder={() => handleReorder(selectedOrderId)}
-                onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId)}
-                onDownloadInvoice={() => {}}
-              />
-            </View>
-          )}
+          {/* Always render OrderDetailScreen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.orderDetailOverlay,
+              {
+                transform: [{ translateX: orderDetailScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'orderDetail' ? 'auto' : 'none'}
+          >
+            <OrderDetailScreen
+              key={selectedOrderId}
+              orderId={selectedOrderId}
+              visible={currentScreen === 'orderDetail'}
+              onBack={handleBackFromOrderDetail}
+              onThankDriver={() => {}}
+              onRateOrder={handleNavigateToRateOrder}
+              onReorder={() => handleReorder(selectedOrderId)}
+              onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId, 'orderDetail')}
+              onDownloadInvoice={() => {}}
+              onContactUs={() => handleNavigateToContactUs('orderDetail')}
+            />
+          </Animated.View>
 
           {/* Conditionally render RateOrderScreen only when needed */}
           {currentScreen === 'rateOrder' && (
@@ -1215,6 +2082,7 @@ function AppContent() {
           {currentScreen === 'orderTracking' && (
             <View style={styles.orderTrackingOverlay}>
               <OrderTrackingScreen
+                orderId={selectedOrderId}
                 onBack={handleBackFromOrderTracking}
                 onCallPartner={() => {}}
               />
@@ -1235,10 +2103,15 @@ function AppContent() {
               <SearchScreen
                 onBack={handleBackFromSearch}
                 selectedLocation={selectedLocation}
-                onSelectResult={(result) => {
+                searchQuery={searchQuery}
+                searchResults={searchResults}
+                onSearchQueryChange={setSearchQuery}
+                onSearchResultsChange={setSearchResults}
+                onClearSearch={handleClearSearch}
+                onSelectResult={(_result) => {
                   handleBackFromSearch();
                 }}
-                onSelectItem={(itemId, itemName) => {
+                onSelectItem={(_itemId, itemName) => {
                   // Navigate to category results screen to show restaurants with this dish
                   setSelectedCategory(itemName);
                   setCategoryCameFrom('search');
@@ -1293,6 +2166,7 @@ function AppContent() {
                 onBack={handleBackFromMyAddresses}
                 onAddNew={handleNavigateToAddressSelectionFromMyAddresses}
                 onEditAddress={handleEditAddressFromMyAddresses}
+                onAddressChange={handleAddressChange}
               />
             </View>
           )}
@@ -1339,6 +2213,7 @@ function AppContent() {
           >
             <ContentPage
               title="Privacy Policy"
+              url="https://tazty.in/privacy"
               onBack={handleBackFromPrivacyPolicy}
             />
           </Animated.View>
@@ -1355,7 +2230,25 @@ function AppContent() {
           >
             <ContentPage
               title="Terms & Conditions"
+              url="https://tazty.in/terms"
               onBack={handleBackFromTermsConditions}
+            />
+          </Animated.View>
+
+          {/* FAQ Screen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.faqOverlay,
+              {
+                transform: [{ translateX: faqScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'faq' ? 'auto' : 'none'}
+          >
+            <ContentPage
+              title="FAQ"
+              url="https://tazty.in/faqs"
+              onBack={handleBackFromFaq}
             />
           </Animated.View>
 
@@ -1367,10 +2260,29 @@ function AppContent() {
                 transform: [{ translateX: helpScreenSlide }],
               },
             ]}
-            pointerEvents={currentScreen === 'help' ? 'auto' : 'none'}
+            pointerEvents={currentScreen === 'help' && !isHelpClosing ? 'auto' : 'none'}
           >
             <HelpScreen
+              visible={currentScreen === 'help'}
               onBack={handleBackFromHelp}
+              onViewOrder={handleHelpViewOrder}
+              initialOrder={helpOrderData || undefined}
+            />
+          </Animated.View>
+
+          {/* Contact Us Screen, positioned off-screen initially */}
+          <Animated.View
+            style={[
+              styles.contactUsOverlay,
+              {
+                transform: [{ translateX: contactUsScreenSlide }],
+              },
+            ]}
+            pointerEvents={currentScreen === 'contactUs' ? 'auto' : 'none'}
+          >
+            <ContactUsScreen
+              visible={currentScreen === 'contactUs'}
+              onBack={handleBackFromContactUs}
             />
           </Animated.View>
 
@@ -1379,7 +2291,7 @@ function AppContent() {
             <View style={styles.editProfileOverlay}>
               <EditProfileScreen
                 onBack={handleBackFromEditProfile}
-                onSave={(data) => {
+                onSave={(_data) => {
                   handleBackFromEditProfile();
                 }}
               />
@@ -1394,6 +2306,7 @@ function AppContent() {
                 categories={categoryData}
                 onBack={handleBackFromCategoryResults}
                 onNavigateToRestaurant={handleNavigateToRestaurantFromCategory}
+                selectedLocation={selectedLocation}
               />
             </View>
           )}
@@ -1469,13 +2382,17 @@ function AppContent() {
               pointerEvents="auto"
             >
               <OrderDetailsScreen
-                restaurantId={selectedRestaurantId}
-                restaurantName={selectedRestaurantName}
+                restaurantId={cartRestaurantId || selectedRestaurantId}
+                restaurantName={cartRestaurantName || selectedRestaurantName}
                 restaurantAddress={selectedRestaurantAddress}
+                selectedLocation={selectedLocation}
+                visible={currentScreen === 'checkout'}
                 onBack={handleBackFromCheckout}
+                onAddMoreItems={handleAddMoreItemsFromCheckout}
                 onPlaceOrder={handlePlaceOrderFromCheckout}
                 onOrderSuccess={handleOrderSuccessFromCheckout}
                 onOrderCancel={handleOrderCancelFromCheckout}
+                onAddressChange={handleAddressChange}
               />
             </Animated.View>
           )}
@@ -1494,6 +2411,16 @@ function AppContent() {
           )}
         </View>
       ) : null}
+        
+        {/* Forced Update Modal - Blocks all app usage when flag is true */}
+        {/* Show on all screens except login, welcome, and OTP verification */}
+        {/* Works when app is opened from notification or any other scenario */}
+        <ForcedUpdateModal
+          visible={shouldShowForcedUpdate}
+          title="Update Available"
+          message={forcedUpdateMessage || "A new version of the app is available. Please update to continue using the app."}
+          updateButtonText="Update Now"
+        />
       </SafeAreaProvider>
     </>
   );
@@ -1515,7 +2442,11 @@ export default function App() {
       <VegModeProvider>
         <CartProvider>
           <ConfirmationProvider>
-            <AppContent />
+            <SnackbarProvider>
+              <OrdersProvider>
+                <AppContent />
+              </OrdersProvider>
+            </SnackbarProvider>
           </ConfirmationProvider>
         </CartProvider>
       </VegModeProvider>
@@ -1573,7 +2504,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 5,
+    zIndex: 8,
     backgroundColor: '#F3F4F6',
   },
   rateOrderOverlay: {
@@ -1591,7 +2522,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 7,
+    zIndex: 10,
     backgroundColor: '#E9E9E9',
   },
   searchOverlay: {
@@ -1639,6 +2570,15 @@ const styles = StyleSheet.create({
     zIndex: 7,
     backgroundColor: '#FFFFFF',
   },
+  faqOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 7,
+    backgroundColor: '#FFFFFF',
+  },
   helpOverlay: {
     position: 'absolute',
     top: 0,
@@ -1646,6 +2586,15 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  contactUsOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9,
     backgroundColor: '#FFFFFF',
   },
   editProfileOverlay: {
@@ -1694,5 +2643,14 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     zIndex: 9,
     backgroundColor: '#FFFFFF',
+  },
+  testFCMOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 8,
+    backgroundColor: '#F5F5F5',
   },
 });

@@ -1,31 +1,24 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  StatusBar,
-  Image,
-  Dimensions,
-  Linking,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '@/theme';
 import { authService } from '@/services/auth.service';
-import { useConfirmation } from '@/context/ConfirmationContext';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface LoginScreenProps {
   onLoginSuccess?: (phoneNumber: string) => void;
+  onOpenTerms?: () => void;
+  onOpenPrivacy?: () => void;
+  initialPhoneNumber?: string;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
-  const { showConfirmation } = useConfirmation();
-  const [phoneNumber, setPhoneNumber] = useState('');
+export const LoginScreen: React.FC<LoginScreenProps> = ({
+  onLoginSuccess,
+  onOpenTerms,
+  onOpenPrivacy,
+  initialPhoneNumber,
+}) => {
+  const [phoneNumber, setPhoneNumber] = useState(initialPhoneNumber || '');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -40,35 +33,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     const cleaned = text.replace(/\D/g, '');
     setPhoneNumber(cleaned);
 
-    if (cleaned.length > 0 && cleaned.length < 10) {
-      setError('Phone number must be 10 digits');
-    } else if (cleaned.length === 10 && !validatePhoneNumber(cleaned)) {
-      setError('Invalid phone number');
-    } else {
+    if (error) {
       setError('');
     }
   };
 
   const handleLogin = async () => {
     if (!phoneNumber) {
-      showConfirmation({
-        title: 'Error',
-        message: 'Please enter your phone number',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      setError('Please enter your phone number');
       return;
     }
 
     if (!validatePhoneNumber(phoneNumber)) {
-      showConfirmation({
-        title: 'Error',
-        message: 'Please enter a valid 10-digit Indian phone number',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      setError('Please enter a valid 10-digit phone number');
       return;
     }
 
@@ -83,35 +60,23 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         if (onLoginSuccess) {
           onLoginSuccess(phoneNumber);
         }
+
+        // Clear any previous error on successful login attempt
+        setError('');
       } else {
-        // Show error message
-        showConfirmation({
-          title: 'Error',
-          message: response.error || 'Failed to send OTP. Please try again.',
-          confirmText: 'OK',
-          cancelText: 'Close',
-          onConfirm: () => {},
-        });
+        // Show error message with better context for rate limiting
+        const errorMessage = response.error || 'Failed to send OTP. Please try again.';
+        const detailedMessage = errorMessage.includes('Failed to generate OTP')
+          ? 'Please try again after a minute.'
+          : errorMessage;
+
+        setError(detailedMessage);
       }
     } catch (error: any) {
-      showConfirmation({
-        title: 'Error',
-        message: 'An unexpected error occurred. Please try again.',
-        confirmText: 'OK',
-        cancelText: 'Close',
-        onConfirm: () => {},
-      });
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleGoogleLogin = () => {
-    // TODO: Implement Google login
-  };
-
-  const handleLinkPress = (url: string) => {
-    Linking.openURL(url).catch(err => {});
   };
 
   return (
@@ -161,6 +126,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               />
             </View>
 
+            {/* Inline Error Message */}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
             {/* LOG IN Button */}
             <TouchableOpacity
               style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
@@ -203,14 +171,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             By Clicking, You agree our{' '}
             <Text
               style={styles.termsLink}
-              onPress={() => handleLinkPress('https://tazty.in/terms')}
+              onPress={onOpenTerms}
             >
               T&C
             </Text>
             {' and '}
             <Text
               style={styles.termsLink}
-              onPress={() => handleLinkPress('https://tazty.in/privacy')}
+              onPress={onOpenPrivacy}
             >
               Privacy Policy
             </Text>
@@ -281,7 +249,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 20,
+    paddingBottom: 36,
     justifyContent: 'space-between',
   },
   formContainer: {
@@ -343,6 +311,15 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: '#001E1F',
     textAlignVertical: 'center',
+  },
+  errorText: {
+    width: '100%',
+    marginTop: 4,
+    marginBottom: 4,
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#D32F2F',
   },
   loginButton: {
     flexDirection: 'row',
@@ -410,6 +387,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     textAlign: 'center',
     color: 'rgba(0, 30, 31, 0.5)',
+    marginBottom: 8,
   },
   termsLink: {
     fontFamily: 'Poppins_600SemiBold',

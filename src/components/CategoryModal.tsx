@@ -72,7 +72,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         foodTypeParam = undefined; // vegMode is 'off', fetch all
       }
 
-      const dishResponse = await homeService.getDishes(foodTypeParam, 30, 1); // Fetch up to 30 dishes
+      const dishResponse = await homeService.getDishes(foodTypeParam, 30, 1, vegMode); // Fetch up to 30 dishes
 
       // The API returns dishes in data.data, not data.dishes
       const dishesArray = dishResponse.data?.data || dishResponse.data?.dishes || [];
@@ -185,6 +185,11 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 contentContainerStyle={styles.gridContainer}
                 showsVerticalScrollIndicator={false}
                 columnWrapperStyle={styles.row}
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={16}
+                windowSize={5}
+                initialNumToRender={16}
+                updateCellsBatchingPeriod={50}
               />
             )}
           </TouchableOpacity>

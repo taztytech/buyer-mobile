@@ -366,6 +366,7 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
               )}
             </>
           )}
+
         </ScrollView>
       </SafeAreaView>
     </View>

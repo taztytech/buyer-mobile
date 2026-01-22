@@ -23,8 +23,10 @@ import { ordersService } from '@/services/orders.service';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 
 interface OrderItem {
-  id: number;
-  name: string;
+  id?: number;
+  item_id?: number;
+  name?: string;
+  item_name?: string;
   image?: string;
   quantity: number;
 }
@@ -138,12 +140,26 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
     }
 
     try {
+      console.log('orderItems', orderItems);
+      console.log('foodRating:', foodRating);
+      console.log('itemRatings:', itemRatings);
+      
       // Prepare food ratings array with comments only if they exist
-      const food_ratings = orderItems.map(item => {
-        const itemRating = itemRatings[item.id];
+      const food_ratings = orderItems.map((item) => {
+        const itemId = item.item_id || 0;
+        const itemRating = itemRatings[itemId];
+        
+        // For single item: use foodRating if itemRatings is empty
+        // For multiple items: use itemRatings[itemId]?.rating, fallback to foodRating
+        let rating = itemRating?.rating || 0;
+        if (rating === 0 && foodRating > 0) {
+          // If no item-specific rating but foodRating is set, use foodRating
+          rating = foodRating;
+        }
+        
         const foodItem: any = {
-          item_id: item.id,
-          rating: itemRating?.rating || 0,
+          item_id: itemId,
+          rating: rating,
         };
 
         // Only include comment if it exists and is not empty
@@ -173,6 +189,9 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
         reviewData.photos = photos;
       }
 
+      // Log the payload for debugging
+      console.log('📦 Rate Order Payload:', JSON.stringify(reviewData, null, 2));
+
       // Submit review to API
       const response = await ordersService.submitReview(reviewData);
 
@@ -191,6 +210,13 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
   };
 
   const handleFoodRatingModalClose = async () => {
+    // Calculate and set average rating before closing
+    if (orderItems.length > 1) {
+      const avgRating = calculateAverageRating();
+      if (avgRating > 0) {
+        setFoodRating(avgRating);
+      }
+    }
     setShowFoodRatingModal(false);
   };
 
@@ -354,13 +380,44 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
             <MaterialIcons
               name="star"
               size={24}
-              color={star <= rating ? '#D1D5DB' : '#D1D5DB'}
+              color={star <= rating ? '#FFB800' : '#D1D5DB'}
             />
           </TouchableOpacity>
         ))}
       </View>
     );
   };
+
+  // Calculate average rating from item ratings
+  const calculateAverageRating = React.useCallback(() => {
+    if (!orderItems || orderItems.length === 0) return 0;
+    const ratings = orderItems
+      .map((item: OrderItem, index: number) => {
+        const itemId = item.id || item.item_id || index;
+        return itemRatings[itemId]?.rating || 0;
+      })
+      .filter((rating: number) => rating > 0);
+    if (ratings.length === 0) return 0;
+    const sum = ratings.reduce((acc: number, rating: number) => acc + rating, 0);
+    return Math.round(sum / ratings.length);
+  }, [orderItems, itemRatings]);
+
+  // Auto-open modal for multiple items on screen load
+  useEffect(() => {
+    if (orderItems && orderItems.length > 1) {
+      setShowFoodRatingModal(true);
+    }
+  }, [orderItems]);
+
+  // Update foodRating when itemRatings change (for multiple items)
+  useEffect(() => {
+    if (orderItems && orderItems.length > 1) {
+      const avgRating = calculateAverageRating();
+      if (avgRating > 0) {
+        setFoodRating(avgRating);
+      }
+    }
+  }, [itemRatings, calculateAverageRating, orderItems]);
 
   return (
     <View style={styles.outerContainer}>
@@ -394,18 +451,12 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
             {renderStars(overallRating, setOverallRating, true)}
           </View>
 
-          {/* Rate Delivery Partner */}
-          <View style={styles.ratingSection}>
-            <Text style={styles.ratingLabel}>Rate Delivery Partner</Text>
-            {renderStars(deliveryPartnerRating, setDeliveryPartnerRating)}
-          </View>
-
-          <View style={styles.divider} />
-
           {/* Rate Food */}
-          <View style={styles.ratingSection}>
-            <Text style={styles.ratingLabel}>Rate Food</Text>
-            {renderStars(foodRating, setFoodRating)}
+          <View style={styles.ratingSectionContainer}>
+            <View style={styles.ratingSection}>
+              <Text style={styles.ratingLabel}>Rate Food</Text>
+              {renderStars(foodRating, setFoodRating)}
+            </View>
             <TextInput
               style={styles.commentInput}
               value={foodComment}
@@ -418,43 +469,16 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
             />
           </View>
 
-          <View style={styles.divider} />
-
           {/* Rate Restaurant */}
-          <View style={styles.ratingSection}>
+          <View style={[styles.ratingSection, styles.rateRestaurantSection]}>
             <Text style={styles.ratingLabel}>Rate Restaurant</Text>
             {renderStars(restaurantRating, setRestaurantRating)}
-            <TextInput
-              style={styles.commentInput}
-              value={restaurantComment}
-              onChangeText={setRestaurantComment}
-              placeholder="Type Here..."
-              placeholderTextColor="rgba(0, 0, 0, 0.3)"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
           </View>
 
-          {/* Add Photo or Video */}
-          <View style={styles.photoSection}>
-            <Text style={styles.photoLabel}>Add Photo or Video</Text>
-            <View style={styles.photosContainer}>
-              {photos.map((photo, index) => (
-                <View key={index} style={styles.photoItem}>
-                  <Image source={{ uri: photo.url }} style={styles.photoPreview} />
-                  <TouchableOpacity
-                    style={styles.removePhotoButton}
-                    onPress={() => handleRemovePhoto(index)}
-                  >
-                    <MaterialIcons name="close" size={16} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              <TouchableOpacity style={styles.photoBox} activeOpacity={0.7} onPress={handlePickImage}>
-                <MaterialIcons name="image" size={32} color="#00B14F" />
-              </TouchableOpacity>
-            </View>
+          {/* Rate Delivery Partner */}
+          <View style={[styles.ratingSection, styles.rateDeliveryPartnerSection]}>
+            <Text style={styles.ratingLabel}>Rate Delivery Partner</Text>
+            {renderStars(deliveryPartnerRating, setDeliveryPartnerRating)}
           </View>
         </ScrollView>
 
@@ -500,17 +524,21 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
             </View>
 
             {/* Dynamic Food Items */}
-            {orderItems.map((item) => (
-              <View key={item.id} style={styles.foodItemRow}>
-                <Text style={styles.foodItemName} numberOfLines={1}>
-                  {item.name} {item.quantity > 1 && `(x${item.quantity})`}
-                </Text>
-                {renderModalStars(
-                  itemRatings[item.id]?.rating || 0,
-                  (rating) => handleItemRatingChange(item.id, rating)
-                )}
-              </View>
-            ))}
+            {orderItems.map((item, index) => {
+              const itemId = item.id || item.item_id || index;
+              const itemName = item.name || item.item_name || 'Unknown Item';
+              return (
+                <View key={itemId} style={styles.foodItemRow}>
+                  <Text style={styles.foodItemName} numberOfLines={1}>
+                    {itemName} {item.quantity > 1 && `(x${item.quantity})`}
+                  </Text>
+                  {renderModalStars(
+                    itemRatings[itemId]?.rating || 0,
+                    (rating) => handleItemRatingChange(itemId, rating)
+                  )}
+                </View>
+              );
+            })}
 
             {/* Okay Button */}
             <TouchableOpacity
@@ -597,6 +625,7 @@ const styles = StyleSheet.create({
   overallRatingSection: {
     alignItems: 'center',
     paddingVertical: 8,
+    marginBottom: 16,
   },
   overallRatingTitle: {
     fontFamily: 'Poppins_600SemiBold',
@@ -689,8 +718,21 @@ const styles = StyleSheet.create({
     borderColor: '#000000',
     borderTopWidth: 0,
   },
-  ratingSection: {
+  ratingSectionContainer: {
     gap: 6,
+    marginTop: 16,
+  },
+  ratingSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rateRestaurantSection: {
+    marginTop: 25,
+  },
+  rateDeliveryPartnerSection: {
+    marginTop: 25,
   },
   ratingLabel: {
     fontFamily: 'Poppins',
@@ -707,12 +749,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     color: '#000000',
-    minHeight: 60,
+    minHeight: 80,
   },
   divider: {
     height: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    marginVertical: 2,
+    marginVertical: 16,
   },
   photoSection: {
     gap: 6,
