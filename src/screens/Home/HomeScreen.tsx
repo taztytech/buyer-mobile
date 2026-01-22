@@ -720,26 +720,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       const response = await homeService.getHomeData(lat, lng, vegMode, 1);
 
         // Check if API indicates forced update is required
-        // Response format: { success: false, statusCode: 400, message: "Please update your app..." }
-        if (!response.success && response.statusCode === 400 && response.message) {
-          const messageLower = response.message.toLowerCase();
-          // Check if message contains update-related keywords
-          const isUpdateMessage = messageLower.includes('update') && 
-            (messageLower.includes('play store') || 
-             messageLower.includes('latest version') || 
-             messageLower.includes('app store'));
-          
-          if (isUpdateMessage) {
-            // Show forced update modal
-            if (onForcedUpdateRequired) {
-              onForcedUpdateRequired(response.message);
-            }
-            // Stop loading and don't process data
-            setIsLoadingBanners(false);
-            setIsLoadingCategories(false);
-            setIsLoadingRestaurants(false);
-            return;
+        // Response format: { success: false, statusCode: 426, message: "Please update your app..." }
+        if (!response.success && response.statusCode === 426) {
+          // Show forced update modal
+          if (onForcedUpdateRequired) {
+            onForcedUpdateRequired(response.message);
           }
+          // Stop loading and don't process data
+          setIsLoadingBanners(false);
+          setIsLoadingCategories(false);
+          setIsLoadingRestaurants(false);
+          return;
         }
 
         if (response.success && response.data) {
@@ -981,6 +972,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       const coords = defaultAddressCoords || { latitude: DEFAULT_LOCATION.latitude, longitude: DEFAULT_LOCATION.longitude };
 
       const response = await homeService.getHomeData(coords.latitude, coords.longitude, vegMode, nextPage);
+
+      // Check if API indicates forced update is required
+      if (!response.success && response.statusCode === 426) {
+        // Show forced update modal
+        if (onForcedUpdateRequired) {
+          onForcedUpdateRequired(response.message);
+        }
+        // Stop loading
+        setIsLoadingMore(false);
+        return;
+      }
 
       if (response.success && response.data) {
         const actualData = (response.data as any).data || response.data;
