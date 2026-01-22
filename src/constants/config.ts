@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import { envConfig, getEnvironment } from '@/config/environment.config';
+import { envConfig, getEnvironment, isDevelopment, isProduction, isPreview } from '@/config/environment.config';
 
 interface Config {
   apiUrl: string;
@@ -19,5 +19,5 @@ export const config: Config = {
 };
 
 // Export environment checks from environment config for consistency
-export { isDevelopment, isProduction, isPreview } from '@/config/environment.config';
+export { isDevelopment, isProduction, isPreview };
 export const isStaging = isPreview; // Alias for backward compatibility

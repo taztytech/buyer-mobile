@@ -44,6 +44,7 @@ import { NetworkStatusScreen } from '@/components/NetworkStatusScreen';
 import { analyticsService, AnalyticsEvents, AnalyticsScreens } from '@/services/analytics.service';
 import { inAppUpdateService } from '@/services/inAppUpdate.service';
 import { crashlyticsService } from '@/services/crashlytics.service';
+import { ForcedUpdateModal } from '@/components/ForcedUpdateModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -68,6 +69,9 @@ function AppContent() {
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchResults, setSearchResults] = React.useState<SearchSuggestion[]>([]);
+  const [locationSearchQuery, setLocationSearchQuery] = React.useState('');
+  const [forcedUpdateRequired, setForcedUpdateRequired] = React.useState(false);
+  const [forcedUpdateMessage, setForcedUpdateMessage] = React.useState<string | undefined>(undefined);
   const [selectedLocation, setSelectedLocation] = React.useState<{
     name: string;
     address: string;
@@ -340,6 +344,15 @@ function AppContent() {
   // Handle Android back button
   React.useEffect(() => {
     const backAction = () => {
+      // Block navigation when forced update is required, but ONLY on non-auth screens
+      // Allow back button to work normally on login, welcome, and OTP screens
+      const authScreens: Array<typeof currentScreen> = ['login', 'welcome', 'otp'];
+      const isOnAuthScreen = authScreens.includes(currentScreen);
+      
+      if (forcedUpdateRequired && !isOnAuthScreen) {
+        return true; // Prevent back button from doing anything on non-auth screens
+      }
+      
       // Handle back button based on current screen
       switch (currentScreen) {
         case 'home':
@@ -637,7 +650,10 @@ function AppContent() {
   // Location Selection Navigation
   const handleNavigateToLocationSelection = (query?: string, latitude?: number, longitude?: number) => {
     if (query) {
-      setSearchQuery(query);
+      setLocationSearchQuery(query);
+    } else {
+      // Clear location search query when navigating without a query
+      setLocationSearchQuery('');
     }
     // Store initial location coordinates if provided (from "Add address" button)
     if (latitude !== undefined && longitude !== undefined) {
@@ -1845,6 +1861,32 @@ function AppContent() {
     SplashScreen.hideAsync().catch(() => {});
   }, []);
 
+  // Handler for forced update from API
+  const handleForcedUpdateRequired = React.useCallback((message?: string) => {
+    setForcedUpdateRequired(true);
+    setForcedUpdateMessage(message);
+  }, []);
+
+  const shouldShowForcedUpdate = React.useMemo(() => {
+    if (!forcedUpdateRequired) {
+      return false;
+    }
+    
+    // Don't show while checking auth
+    if (isCheckingAuth) {
+      return false;
+    }
+    
+    // Don't show on auth screens (login, welcome, OTP)
+    const authScreens: Array<typeof currentScreen> = ['login', 'welcome', 'otp'];
+    if (authScreens.includes(currentScreen)) {
+      return false;
+    }
+    
+    // Show on all other screens
+    return true;
+  }, [forcedUpdateRequired, isCheckingAuth, currentScreen]);
+
   return (
     <>
       <SafeAreaProvider>
@@ -1892,6 +1934,7 @@ function AppContent() {
               onCategoriesLoaded={setCategoryData}
               isFocused={currentScreen === 'home'}
               addressRefreshTrigger={addressRefreshTrigger}
+              onForcedUpdateRequired={handleForcedUpdateRequired}
             />
           </Animated.View>
 
@@ -1964,7 +2007,7 @@ function AppContent() {
             pointerEvents={currentScreen === 'locationSelection' ? 'auto' : 'none'}
           >
             <LocationSelectionScreen
-              initialSearchQuery={searchQuery}
+              initialSearchQuery={locationSearchQuery}
               editingAddress={editingAddress}
               initialLatitude={editingAddress?.latitude || initialLocationCoords?.latitude}
               initialLongitude={editingAddress?.longitude || initialLocationCoords?.longitude}
@@ -2368,6 +2411,16 @@ function AppContent() {
           )}
         </View>
       ) : null}
+        
+        {/* Forced Update Modal - Blocks all app usage when flag is true */}
+        {/* Show on all screens except login, welcome, and OTP verification */}
+        {/* Works when app is opened from notification or any other scenario */}
+        <ForcedUpdateModal
+          visible={shouldShowForcedUpdate}
+          title="Update Available"
+          message={forcedUpdateMessage || "A new version of the app is available. Please update to continue using the app."}
+          updateButtonText="Update Now"
+        />
       </SafeAreaProvider>
     </>
   );

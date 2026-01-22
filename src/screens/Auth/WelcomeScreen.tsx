@@ -602,7 +602,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 20,
   },
   greenSection: {
     height: 258,
@@ -648,11 +647,13 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 40,
+    paddingBottom: 0,
   },
   formContainer: {
     width: '100%',
     gap: 16,
+    paddingBottom: 40,
+    flex: 1,
   },
   title: {
     width: '100%',

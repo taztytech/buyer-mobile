@@ -14,6 +14,7 @@ export interface ApiResponse<T = any> {
   data?: T;
   message?: string;
   error?: string;
+  statusCode?: number;
 }
 
 export interface ApiError {
@@ -502,6 +503,7 @@ class ApiService {
           success: false,
           error: responseData.message || 'Request failed',
           message: responseData.message,
+          statusCode: responseData.statusCode || response.status,
         };
       }
 

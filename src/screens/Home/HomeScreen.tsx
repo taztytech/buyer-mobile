@@ -35,6 +35,7 @@ interface HomeScreenProps {
   onCategoriesLoaded?: (categories: CategoryItem[]) => void;
   isFocused?: boolean;
   addressRefreshTrigger?: number; // Trigger to refresh addresses when changed
+  onForcedUpdateRequired?: (message?: string) => void; // Callback when API indicates forced update is required
 }
 
 interface CarouselItem {
@@ -94,6 +95,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onCategoriesLoaded,
   addressRefreshTrigger,
   isFocused = true,
+  onForcedUpdateRequired,
 }) => {
   const { restaurantId, restaurantName, restaurantLogo, getTotalItems } = useCart();
   const { vegMode, setVegMode, isVegModeEnabled } = useVegMode();
@@ -716,6 +718,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       }
 
       const response = await homeService.getHomeData(lat, lng, vegMode, 1);
+
+        // Check if API indicates forced update is required
+        // Response format: { success: false, statusCode: 400, message: "Please update your app..." }
+        if (!response.success && response.statusCode === 400 && response.message) {
+          const messageLower = response.message.toLowerCase();
+          // Check if message contains update-related keywords
+          const isUpdateMessage = messageLower.includes('update') && 
+            (messageLower.includes('play store') || 
+             messageLower.includes('latest version') || 
+             messageLower.includes('app store'));
+          
+          if (isUpdateMessage) {
+            // Show forced update modal
+            if (onForcedUpdateRequired) {
+              onForcedUpdateRequired(response.message);
+            }
+            // Stop loading and don't process data
+            setIsLoadingBanners(false);
+            setIsLoadingCategories(false);
+            setIsLoadingRestaurants(false);
+            return;
+          }
+        }
 
         if (response.success && response.data) {
           // The API returns data nested as: { data: { data: { promotional_banner: {...} } } }
