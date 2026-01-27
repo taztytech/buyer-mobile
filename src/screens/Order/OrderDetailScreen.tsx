@@ -1072,10 +1072,10 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       'confirmed',
                       'billed',
                       'packed',
-                      'agent-assigned',
-                      'agent_assigned',
-                      'agent-arrived-restaurant',
-                      'agent_arrived_restaurant',
+                      // 'agent-assigned',
+                      // 'agent_assigned',
+                      // 'agent-arrived-restaurant',
+                      // 'agent_arrived_restaurant',
                       'cancelled',
                       'canceled',
                       'rejected',
@@ -1089,6 +1089,10 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                     
                     // Define enabled statuses - tracking only works from "picked" status onward
                     const enabledStatuses = [
+                      'agent-assigned',
+                      'agent_assigned',
+                      'agent-arrived-restaurant',
+                      'agent_arrived_restaurant',
                       'picked',
                       'out-for-delivery',
                       'out_for_delivery',
