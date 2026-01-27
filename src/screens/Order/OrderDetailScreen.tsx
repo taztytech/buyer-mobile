@@ -25,6 +25,8 @@ import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
 import { useOrders } from '@/context/OrdersContext';
 import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
+import { exotelService } from '@/services/exotel.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface OrderDetailScreenProps {
   orderId?: string;
@@ -52,6 +54,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   onHelp,
 }) => {
   const { getOrderById, state } = useOrders();
+  const { showConfirmation } = useConfirmation();
   const [contextOrder, setContextOrder] = useState<any>(null);
   const [orderData, setOrderData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,6 +67,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
   const lastFetchedStatusRef = useRef<string | null>(null);
   const [showTaxTooltip, setShowTaxTooltip] = useState(false);
+  const [isInitiatingCall, setIsInitiatingCall] = useState(false);
   
   // Bottom sheet drag state
   const HALF_SCREEN = SCREEN_HEIGHT * 0.5;
@@ -470,6 +474,94 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     }
   };
 
+  // Handle Exotel call to delivery agent
+  const handleCallDeliveryAgent = async (agentPhone: string) => {
+    // Validate inputs
+    if (!agentPhone) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Agent phone number is missing. Cannot initiate call.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Get user's phone number
+    const currentUser = await authService.getCurrentUser();
+    if (!currentUser || !currentUser.phoneNumber) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Unable to get your phone number. Please ensure you are logged in.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Clean phone numbers (remove spaces, dashes, etc.)
+    const userPhone = currentUser.phoneNumber.replace(/\D/g, '');
+    const agentPhoneClean = agentPhone.replace(/\D/g, '');
+    
+    if (!userPhone || !agentPhoneClean) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Invalid phone number format. Please check your phone number.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    try {
+      setIsInitiatingCall(true);
+
+      // Call Exotel API
+      const response = await exotelService.initiateCall({
+        order_id: orderData?.order_number || orderId,
+        from: userPhone,
+        to: agentPhoneClean,
+      });
+
+      if (response.success) {
+        showConfirmation({
+          title: 'Call Initiated',
+          message: 'Your call to the delivery agent is being connected. Please wait for the call.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
+      } else {
+        showConfirmation({
+          title: 'Call Failed',
+          message: response.error || 'Failed to initiate call. Please try again later.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#DC2626',
+          onConfirm: () => {},
+        });
+      }
+    } catch (error: any) {
+      showConfirmation({
+        title: 'Error',
+        message: error.message || 'An unexpected error occurred. Please try again.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#DC2626',
+        onConfirm: () => {},
+      });
+    } finally {
+      setIsInitiatingCall(false);
+    }
+  };
+
   // Helper function to format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -862,9 +954,18 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       </Text>
                       <Text style={styles.driverLabel}>Your delivery driver</Text>
                       {orderData.tracking[0].agent_phone && (
-                        <Text style={styles.driverPhone}>
-                          {orderData.tracking[0].agent_phone}
-                        </Text>
+                        <TouchableOpacity
+                          onPress={() => handleCallDeliveryAgent(orderData.tracking[0].agent_phone)}
+                          disabled={isInitiatingCall}
+                          activeOpacity={0.7}
+                          style={styles.driverCallButton}
+                        >
+                          {isInitiatingCall ? (
+                            <ActivityIndicator size="small" color="#00B14F" />
+                          ) : (
+                            <MaterialIcons name="phone" size={20} color="#00B14F" />
+                          )}
+                        </TouchableOpacity>
                       )}
                     </View>
                   </View>
@@ -1043,7 +1144,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                         </TouchableOpacity>
                         {!isTrackingEnabled && (
                           <Text style={styles.trackingDisabledMessage}>
-                            Tracking unlocks after your order is picked up.
+                            Track order available after agent is assigned.
                           </Text>
                         )}
                       </>
@@ -1633,9 +1734,20 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                         <Text style={styles.trackingPartnerName}>
                           {agentName || 'No Delivery Agent Assigned'}
                         </Text>
-                        <Text style={styles.trackingPartnerPhone}>
-                          {agentPhone || ' '}
-                        </Text>
+                        {agentPhone ? (
+                          <TouchableOpacity
+                            onPress={() => handleCallDeliveryAgent(agentPhone)}
+                            disabled={isInitiatingCall}
+                            activeOpacity={0.7}
+                            style={styles.trackingPartnerCallButton}
+                          >
+                            {isInitiatingCall ? (
+                              <ActivityIndicator size="small" color="#00B14F" />
+                            ) : (
+                              <MaterialIcons name="phone" size={20} color="#00B14F" />
+                            )}
+                          </TouchableOpacity>
+                        ) : null}
                       </View>
                       
                       {/* Bottom spacing - two lines */}
@@ -2110,11 +2222,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  driverPhone: {
-    fontFamily: 'Poppins',
-    fontSize: 12,
-    color: 'rgba(0, 30, 31, 0.6)',
-    marginTop: 2,
+  driverCallButton: {
+    marginTop: 8,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 177, 79, 0.1)',
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   moreItemsText: {
     fontFamily: 'Poppins',
@@ -2584,12 +2700,14 @@ const styles = StyleSheet.create({
     color: '#181C2E',
     flex: 1,
   },
-  trackingPartnerPhone: {
-    fontFamily: 'Poppins',
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#888888',
-    textAlign: 'right',
+  trackingPartnerCallButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 177, 79, 0.1)',
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   trackingBottomSpacing: {
     height: 32, // Two lines worth of space (16px per line)

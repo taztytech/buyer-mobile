@@ -1247,10 +1247,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   'confirmed',
                   'billed',
                   'packed',
-                  'agent-assigned',
-                  'agent_assigned',
-                  'agent-arrived-restaurant',
-                  'agent_arrived_restaurant',
+                  // 'agent-assigned',
+                  // 'agent_assigned',
+                  // 'agent-arrived-restaurant',
+                  // 'agent_arrived_restaurant',
                   'cancelled',
                   'canceled',
                   'rejected',
@@ -1264,6 +1264,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 
                 // Define enabled statuses - tracking only works from "picked" status onward
                 const enabledStatuses = [
+                  'agent-assigned',
+                  'agent_assigned',
+                  'agent-arrived-restaurant',
+                  'agent_arrived_restaurant',
                   'picked',
                   'out-for-delivery',
                   'out_for_delivery',
@@ -1279,7 +1283,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 // Enable tracking only if status is in enabled list AND not explicitly disabled
                 // Note: tracking_url override removed - status must be enabled
                 const isTrackingEnabled = !isExplicitlyDisabled && enabledStatuses.includes(normalizedStatus);
-                
+
                 return (
                   <TouchableOpacity
                     style={[
