@@ -25,4 +25,11 @@
 -keep class io.invertase.firebase.** { *; }
 -dontwarn io.invertase.firebase.**
 
+# Facebook Marketing SDK ProGuard Rules
+-keep class com.facebook.** { *; }
+-dontwarn com.facebook.**
+-keepattributes Signature
+-keepattributes *Annotation*
+-keep class com.facebook.marketing.** { *; }
+
 # Add any project specific keep options here:

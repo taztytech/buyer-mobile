@@ -221,6 +221,11 @@ dependencies {
     implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-analytics'
     implementation 'com.google.firebase:firebase-crashlytics'
+    
+    // Facebook Marketing SDK - Load campaigns from local AAR files
+    implementation files('libs/facebook-common.aar')
+    implementation files('libs/facebook-core.aar')
+    implementation files('libs/facebook-marketing.aar')
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
