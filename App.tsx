@@ -45,6 +45,7 @@ import { analyticsService, AnalyticsEvents, AnalyticsScreens } from '@/services/
 import { inAppUpdateService } from '@/services/inAppUpdate.service';
 import { crashlyticsService } from '@/services/crashlytics.service';
 import { ForcedUpdateModal } from '@/components/ForcedUpdateModal';
+import { initFacebookAnalytics, logAppOpen } from '@/services/facebookAnalytics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -138,6 +139,13 @@ function AppContent() {
       (Text as any).defaultProps.style = { fontFamily: 'Poppins' };
     }
   }, [fontsLoaded]);
+
+  // Initialize Facebook analytics and log app open once
+  React.useEffect(() => {
+    initFacebookAnalytics().then(() => {
+      logAppOpen();
+    });
+  }, []);
 
   // Network connectivity listener - runs while app is open
   // Optimized: Only updates state when connection status actually changes
