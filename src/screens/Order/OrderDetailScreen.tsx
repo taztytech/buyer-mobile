@@ -25,6 +25,8 @@ import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
 import { useOrders } from '@/context/OrdersContext';
 import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
+import { exotelService } from '@/services/exotel.service';
+import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface OrderDetailScreenProps {
   orderId?: string;
@@ -52,6 +54,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   onHelp,
 }) => {
   const { getOrderById, state } = useOrders();
+  const { showConfirmation } = useConfirmation();
   const [contextOrder, setContextOrder] = useState<any>(null);
   const [orderData, setOrderData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,6 +67,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
   const lastFetchedStatusRef = useRef<string | null>(null);
   const [showTaxTooltip, setShowTaxTooltip] = useState(false);
+  const [isInitiatingCall, setIsInitiatingCall] = useState(false);
   
   // Bottom sheet drag state
   const HALF_SCREEN = SCREEN_HEIGHT * 0.5;
@@ -467,6 +471,94 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     // Navigate to Contact Us page instead of directly calling
     if (onContactUs) {
       onContactUs();
+    }
+  };
+
+  // Handle Exotel call to delivery agent
+  const handleCallDeliveryAgent = async (orderNumber: string, agentPhone: string) => {
+    // Validate inputs
+    if (!orderNumber || !agentPhone) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Order number or agent phone number is missing. Cannot initiate call.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Get user's phone number
+    const currentUser = await authService.getCurrentUser();
+    if (!currentUser || !currentUser.phoneNumber) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Unable to get your phone number. Please ensure you are logged in.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    // Clean phone numbers (remove spaces, dashes, etc.)
+    const userPhone = currentUser.phoneNumber.replace(/\D/g, '');
+    const agentPhoneClean = agentPhone.replace(/\D/g, '');
+    console.log('displayOrder userPhone', userPhone, 'displayOrder agentPhoneClean', agentPhoneClean);
+    if (!userPhone || !agentPhoneClean) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Invalid phone number format. Please check your phone number.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    try {
+      setIsInitiatingCall(true);
+
+      // Call Exotel API
+      const response = await exotelService.initiateCall({
+        order_id: orderNumber,
+        from: userPhone,
+        to: agentPhoneClean,        
+      });
+
+      if (response.success) {
+        showConfirmation({
+          title: 'Call Initiated',
+          message: 'Your call to the delivery agent is being connected. Please wait for the call.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
+      } else {
+        showConfirmation({
+          title: 'Call Failed',
+          message: response.error || 'Failed to initiate call. Please try again later.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#DC2626',
+          onConfirm: () => {},
+        });
+      }
+    } catch (error: any) {
+      showConfirmation({
+        title: 'Error',
+        message: error.message || 'An unexpected error occurred. Please try again.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#DC2626',
+        onConfirm: () => {},
+      });
+    } finally {
+      setIsInitiatingCall(false);
     }
   };
 
@@ -1393,43 +1485,71 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               const displayStatus = displayOrder?.status;
               const statusConfig = mapOrderStatusToUI(displayStatus);
               
+              // Get agent info from tracking array - find latest entry with agent details
+              const trackingArray = displayOrder?.tracking || [];
+              let agentName: string | null = null;
+              let agentPhone: string | null = null;
+              
+              // Find the latest tracking entry with agent_name or agent_phone
+              // Iterate from the end to get the most recent agent assignment
+              for (let i = trackingArray.length - 1; i >= 0; i--) {
+                const trackingEntry = trackingArray[i];
+                if (trackingEntry) {
+                  // If we find an entry with agent_name, use it
+                  if (trackingEntry.agent_name) {
+                    agentName = trackingEntry.agent_name;
+                    agentPhone = trackingEntry.agent_phone || null;
+                    break;
+                  }
+                  // If we find an entry with agent_phone but no name, still use it
+                  if (trackingEntry.agent_phone && !agentName) {
+                    agentName = null;
+                    agentPhone = trackingEntry.agent_phone;
+                  }
+                }
+              }
+              
               return (
                 <View 
                   style={styles.trackingTopSection}
                   {...(!isBottomSheetOpen ? panResponder.panHandlers : {})}
                 >
-                  <View style={styles.trackingRestaurantLeft}>
-                    {displayOrder.restaurant?.logo_url ? (
-                      <Image
-                        source={{ uri: displayOrder.restaurant.logo_url }}
-                        style={styles.trackingRestaurantLogo}
-                        defaultSource={require('@/assets/dummy-restaurent.png')}
-                      />
-                    ) : (
-                      <View style={styles.trackingRestaurantLogoPlaceholder}>
-                        <MaterialIcons name="restaurant" size={20} color="#999" />
-                      </View>
-                    )}
-                    <View style={styles.trackingRestaurantDetails}>
-                      <Text style={styles.trackingRestaurantName}>
-                        {displayOrder.restaurant?.name || 'Unknown Restaurant'}
-                      </Text>
-                      {displayOrder.delivery_address?.address3 && (
-                        <Text style={styles.trackingRestaurantAddress}>
-                          {displayOrder.delivery_address.address3}
-                        </Text>
+                  <View style={styles.trackingLeftContent}>
+                    <View style={styles.trackingRestaurantRow}>
+                      {displayOrder.restaurant?.logo_url ? (
+                        <Image
+                          source={{ uri: displayOrder.restaurant.logo_url }}
+                          style={styles.trackingRestaurantLogo}
+                          defaultSource={require('@/assets/dummy-restaurent.png')}
+                        />
+                      ) : (
+                        <View style={styles.trackingRestaurantLogoPlaceholder}>
+                          <MaterialIcons name="restaurant" size={20} color="#999" />
+                        </View>
                       )}
+                      <View style={styles.trackingRestaurantDetails}>
+                        <Text style={styles.trackingRestaurantName}>
+                          {displayOrder.restaurant?.name || 'Unknown Restaurant'}
+                        </Text>
+                        {displayOrder.delivery_address?.address3 && (
+                          <Text style={styles.trackingRestaurantAddress}>
+                            {displayOrder.delivery_address.address3}
+                          </Text>
+                        )}
+                      </View>
                     </View>
                   </View>
-                  <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
-                    <MaterialIcons 
-                      name={statusConfig.iconName as any} 
-                      size={16} 
-                      color={statusConfig.color} 
-                    />
-                    <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
-                      {statusConfig.label}
-                    </Text>
+                  <View style={styles.trackingRightContent}>
+                    <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
+                      <MaterialIcons 
+                        name={statusConfig.iconName as any} 
+                        size={16} 
+                        color={statusConfig.color} 
+                      />
+                      <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
+                        {statusConfig.label}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               );
@@ -1555,6 +1675,27 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       {/* Divider */}
                       <View style={styles.trackingDivider} />
                       
+                      {/* Agent Details - above estimated delivery time */}
+                      <View style={styles.trackingAgentRowInScroll}>
+                        <Text style={styles.trackingAgentNameInScroll}>
+                          {agentName || 'No Delivery Agent Assigned'}
+                        </Text>
+                        {agentPhone && (
+                          <TouchableOpacity
+                            style={styles.trackingCallButtonInScroll}
+                            onPress={() => handleCallDeliveryAgent(displayOrder.order_number, agentPhone)}
+                            disabled={isInitiatingCall}
+                            activeOpacity={0.7}
+                          >
+                            {isInitiatingCall ? (
+                              <ActivityIndicator size="small" color="#00B14F" />
+                            ) : (
+                              <MaterialIcons name="phone" size={18} color="#00B14F" />
+                            )}
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      
                       {/* Estimated Delivery Time or Completed Status */}
                       {isDelivered ? (
                         <View style={styles.trackingCompletedContainer}>
@@ -1627,16 +1768,6 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       
                       {/* Divider */}
                       <View style={styles.trackingDivider} />
-                      
-                      {/* Agent Details */}
-                      <View style={styles.trackingPartnerRow}>
-                        <Text style={styles.trackingPartnerName}>
-                          {agentName || 'No Delivery Agent Assigned'}
-                        </Text>
-                        <Text style={styles.trackingPartnerPhone}>
-                          {agentPhone || ' '}
-                        </Text>
-                      </View>
                       
                       {/* Bottom spacing - two lines */}
                       <View style={styles.trackingBottomSpacing} />
@@ -2398,14 +2529,22 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingRight: 20,
     paddingLeft: 20,
-    paddingBottom: 16,
+    paddingBottom: 12,
     marginBottom: 12,
   },
-  trackingRestaurantLeft: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  trackingLeftContent: {
     flex: 1,
     marginRight: 12,
+  },
+  trackingRightContent: {
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    gap: 8,
+  },
+  trackingRestaurantRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 6,
   },
   trackingRestaurantLogo: {
     width: 36,
@@ -2425,7 +2564,6 @@ const styles = StyleSheet.create({
   },
   trackingRestaurantDetails: {
     flex: 1,
-    gap: 0,
   },
   trackingRestaurantName: {
     fontFamily: 'Poppins_600SemiBold',
@@ -2440,6 +2578,53 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: '#000000',
     opacity: 0.85,
+  },
+  trackingAgentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 46, // Align with restaurant name (logo width 36 + margin 10 = 46)
+    marginBottom: 0,
+  },
+  trackingAgentName: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#000000',
+  },
+  trackingAgentRowInScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  trackingAgentNameInScroll: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#000000',
+    flex: 1,
+  },
+  trackingCallButtonInScroll: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 177, 79, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#00B14F',
+    marginLeft: 12,
+  },
+  trackingCallButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 177, 79, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#00B14F',
+    marginTop: 0,
   },
   trackingStatusBadge: {
     flexDirection: 'row',
@@ -2470,7 +2655,8 @@ const styles = StyleSheet.create({
   trackingDivider: {
     height: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    marginVertical: 12,
+    marginTop: 8,
+    marginBottom: 12,
   },
   trackingDeliveryTimeContainer: {
     alignItems: 'center',

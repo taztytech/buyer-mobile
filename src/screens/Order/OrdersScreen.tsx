@@ -1563,43 +1563,71 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
               const displayStatus = displayOrder?.status;
               const statusConfig = mapOrderStatusToUI(displayStatus);
               
+              // Get agent info from tracking array - find latest entry with agent details
+              const trackingArray = displayOrder?.tracking || [];
+              let agentName: string | null = null;
+              let agentPhone: string | null = null;
+              
+              // Find the latest tracking entry with agent_name or agent_phone
+              // Iterate from the end to get the most recent agent assignment
+              for (let i = trackingArray.length - 1; i >= 0; i--) {
+                const trackingEntry = trackingArray[i];
+                if (trackingEntry) {
+                  // If we find an entry with agent_name, use it
+                  if (trackingEntry.agent_name) {
+                    agentName = trackingEntry.agent_name;
+                    agentPhone = trackingEntry.agent_phone || null;
+                    break;
+                  }
+                  // If we find an entry with agent_phone but no name, still use it
+                  if (trackingEntry.agent_phone && !agentName) {
+                    agentName = null;
+                    agentPhone = trackingEntry.agent_phone;
+                  }
+                }
+              }
+              
               return (
                 <View 
                   style={styles.trackingTopSection}
                   {...(!isBottomSheetOpen ? panResponder.panHandlers : {})}
                 >
-                  <View style={styles.trackingRestaurantLeft}>
-                    {displayOrder.restaurant?.logo_url ? (
-                      <Image
-                        source={{ uri: displayOrder.restaurant.logo_url }}
-                        style={styles.trackingRestaurantLogo}
-                        defaultSource={require('@/assets/dummy-restaurent.png')}
-                      />
-                    ) : (
-                      <View style={styles.trackingRestaurantLogoPlaceholder}>
-                        <MaterialIcons name="restaurant" size={20} color="#999" />
-                      </View>
-                    )}
-                    <View style={styles.trackingRestaurantDetails}>
-                      <Text style={styles.trackingRestaurantName}>
-                        {displayOrder.restaurant?.name || 'Unknown Restaurant'}
-                      </Text>
-                      {displayOrder.delivery_address?.address3 && (
-                        <Text style={styles.trackingRestaurantAddress}>
-                          {displayOrder.delivery_address.address3}
-                        </Text>
+                  <View style={styles.trackingLeftContent}>
+                    <View style={styles.trackingRestaurantRow}>
+                      {displayOrder.restaurant?.logo_url ? (
+                        <Image
+                          source={{ uri: displayOrder.restaurant.logo_url }}
+                          style={styles.trackingRestaurantLogo}
+                          defaultSource={require('@/assets/dummy-restaurent.png')}
+                        />
+                      ) : (
+                        <View style={styles.trackingRestaurantLogoPlaceholder}>
+                          <MaterialIcons name="restaurant" size={20} color="#999" />
+                        </View>
                       )}
+                      <View style={styles.trackingRestaurantDetails}>
+                        <Text style={styles.trackingRestaurantName}>
+                          {displayOrder.restaurant?.name || 'Unknown Restaurant'}
+                        </Text>
+                        {displayOrder.delivery_address?.address3 && (
+                          <Text style={styles.trackingRestaurantAddress}>
+                            {displayOrder.delivery_address.address3}
+                          </Text>
+                        )}
+                      </View>
                     </View>
                   </View>
-                  <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
-                    <MaterialIcons 
-                      name={statusConfig.iconName as any} 
-                      size={16} 
-                      color={statusConfig.color} 
-                    />
-                    <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
-                      {statusConfig.label}
-                    </Text>
+                  <View style={styles.trackingRightContent}>
+                    <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
+                      <MaterialIcons 
+                        name={statusConfig.iconName as any} 
+                        size={16} 
+                        color={statusConfig.color} 
+                      />
+                      <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
+                        {statusConfig.label}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               );
@@ -1725,6 +1753,27 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                       {/* Divider */}
                       <View style={styles.trackingDivider} />
                       
+                      {/* Agent Details - above estimated delivery time */}
+                      <View style={styles.trackingAgentRowInScroll}>
+                        <Text style={styles.trackingAgentNameInScroll}>
+                          {agentName || 'No Delivery Agent Assigned'}
+                        </Text>
+                        {agentPhone && (
+                          <TouchableOpacity
+                            style={styles.trackingCallButtonInScroll}
+                            onPress={() => handleCallDeliveryAgent(displayOrder.order_number, agentPhone)}
+                            disabled={isInitiatingCall}
+                            activeOpacity={0.7}
+                          >
+                            {isInitiatingCall ? (
+                              <ActivityIndicator size="small" color="#00B14F" />
+                            ) : (
+                              <MaterialIcons name="phone" size={18} color="#00B14F" />
+                            )}
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      
                       {/* Estimated Delivery Time or Completed Status */}
                       {isDelivered ? (
                         <View style={styles.trackingCompletedContainer}>
@@ -1797,32 +1846,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                       
                       {/* Divider */}
                       <View style={styles.trackingDivider} />
-                      
-                      {/* Agent Details */}
-                      <View style={styles.trackingPartnerRow}>
-                        <Text style={styles.trackingPartnerName}>
-                          {agentName || 'No Delivery Agent Assigned'}
-                        </Text>
-                        <View style={styles.trackingPartnerPhoneContainer}>
-                          {/* <Text style={styles.trackingPartnerPhone}>
-                            {agentPhone || ' '}
-                          </Text> */}
-                          {agentPhone && (
-                            <TouchableOpacity
-                              style={styles.trackingCallButton}
-                              onPress={() => handleCallDeliveryAgent(displayOrder.order_number, agentPhone)}
-                              disabled={isInitiatingCall}
-                              activeOpacity={0.7}
-                            >
-                              {isInitiatingCall ? (
-                                <ActivityIndicator size="small" color="#00B14F" />
-                              ) : (
-                                <MaterialIcons name="phone" size={18} color="#00B14F" />
-                              )}
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      </View>
                       
                       {/* Bottom spacing - two lines */}
                       <View style={styles.trackingBottomSpacing} />
@@ -2295,14 +2318,22 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingRight: 20,
     paddingLeft: 20,
-    paddingBottom: 16,
+    paddingBottom: 12,
     marginBottom: 6,
   },
-  trackingRestaurantLeft: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  trackingLeftContent: {
     flex: 1,
     marginRight: 12,
+  },
+  trackingRightContent: {
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    gap: 8,
+  },
+  trackingRestaurantRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 6,
   },
   trackingRestaurantLogo: {
     width: 36,
@@ -2322,7 +2353,6 @@ const styles = StyleSheet.create({
   },
   trackingRestaurantDetails: {
     flex: 1,
-    gap: 0,
   },
   trackingRestaurantName: {
     fontFamily: 'Poppins_600SemiBold',
@@ -2337,6 +2367,42 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: '#000000',
     opacity: 0.85,
+  },
+  trackingAgentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 46, // Align with restaurant name (logo width 36 + margin 10 = 46)
+    marginBottom: 0,
+  },
+  trackingAgentName: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#000000',
+  },
+  trackingAgentRowInScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  trackingAgentNameInScroll: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#000000',
+    flex: 1,
+  },
+  trackingCallButtonInScroll: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 177, 79, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#00B14F',
+    marginLeft: 12,
   },
   trackingStatusBadge: {
     flexDirection: 'row',
@@ -2367,7 +2433,8 @@ const styles = StyleSheet.create({
   trackingDivider: {
     height: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    marginVertical: 12,
+    marginTop: 8,
+    marginBottom: 12,
   },
   trackingDeliveryTimeContainer: {
     alignItems: 'center',
@@ -2502,6 +2569,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#00B14F',
+    marginTop: 0,
   },
   trackingBottomSpacing: {
     height: 32, // Two lines worth of space (16px per line)
