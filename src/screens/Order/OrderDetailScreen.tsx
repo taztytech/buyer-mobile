@@ -1052,8 +1052,8 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               ) : ( */}
                 { orderData.status !== 'delivered' && <View style={styles.trackOrderContainer}>
                   {(() => {
-                    // Track Order is enabled ONLY for: picked, out-for-delivery, on-the-way, delivered
-                    // Disabled for: confirmed (order placed), billed (order accepted), packed (order ready), agent-assigned
+                    // Track Order is enabled for: agent-assigned, picked, out-for-delivery, on-the-way, delivered
+                    // Disabled for: confirmed (order placed), billed (order accepted), packed (order ready)
                     const rawStatus = (orderData?.status || '').toString().toLowerCase();
                     // Normalize: underscores/spaces to hyphen
                     const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
@@ -1063,8 +1063,6 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       'confirmed',
                       'billed',
                       'packed',
-                      'agent-assigned',
-                      'agent_assigned',
                       'agent-arrived-restaurant',
                       'agent_arrived_restaurant',
                       'cancelled',
@@ -1078,8 +1076,10 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       'preparing'
                     ];
                     
-                    // Define enabled statuses - tracking only works from "picked" status onward
+                    // Define enabled statuses - tracking works from "agent-assigned" status onward
                     const enabledStatuses = [
+                      'agent-assigned',
+                      'agent_assigned',
                       'picked',
                       'out-for-delivery',
                       'out_for_delivery',
@@ -1677,9 +1677,16 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       
                       {/* Agent Details - above estimated delivery time */}
                       <View style={styles.trackingAgentRowInScroll}>
-                        <Text style={styles.trackingAgentNameInScroll}>
-                          {agentName || 'No Delivery Agent Assigned'}
-                        </Text>
+                        <View style={styles.trackingAgentInfoContainer}>
+                          <Text style={styles.trackingAgentNameInScroll}>
+                            {agentName || 'No Delivery Agent Assigned'}
+                          </Text>
+                          {agentName && (
+                            <View style={styles.trackingAgentTag}>
+                              <Text style={styles.trackingAgentTagText}>Delivery Partner</Text>
+                            </View>
+                          )}
+                        </View>
                         {agentPhone && (
                           <TouchableOpacity
                             style={styles.trackingCallButtonInScroll}
@@ -2597,12 +2604,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
   },
+  trackingAgentInfoContainer: {
+    flex: 1,
+  },
   trackingAgentNameInScroll: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
     lineHeight: 20,
     color: '#000000',
-    flex: 1,
+  },
+  trackingAgentTag: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 177, 79, 0.08)',
+  },
+  trackingAgentTagText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#00B14F',
   },
   trackingCallButtonInScroll: {
     width: 32,
