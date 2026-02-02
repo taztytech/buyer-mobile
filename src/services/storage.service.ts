@@ -15,6 +15,11 @@ const STORAGE_KEYS = {
   VEG_MODE: '@tazty_veg_mode',
   CART_DATA: '@tazty_cart_data',
   CART_RESTAURANT: '@tazty_cart_restaurant',
+  // FCM and notification related keys
+  FCM_TOKEN: '@tazty_fcm_token',
+  PUSH_TOKEN: '@tazty_push_token',
+  DEVICE_ID: '@tazty_device_id',
+  BACKGROUND_NOTIFICATIONS: '@tazty_background_notifications',
 };
 
 export interface TokenData {
@@ -229,6 +234,9 @@ class StorageService {
 
   /**
    * Clear all stored data (logout)
+   * This clears all user-specific data including authentication tokens,
+   * user data, cart data, FCM tokens, device ID, and background notifications.
+   * Note: VEG_MODE preference is preserved as it's a device-level preference.
    */
   async clearAll(): Promise<void> {
     try {
@@ -238,12 +246,18 @@ class StorageService {
         STORAGE_KEYS.TOKEN_EXPIRY,
         STORAGE_KEYS.USER_DATA,
         STORAGE_KEYS.IS_LOGGED_IN,
-        // Note: Cart data is cleared on logout
+        // Cart data is cleared on logout
         STORAGE_KEYS.CART_DATA,
         STORAGE_KEYS.CART_RESTAURANT,
+        // FCM and notification data is cleared on logout
+        STORAGE_KEYS.FCM_TOKEN,
+        STORAGE_KEYS.PUSH_TOKEN,
+        STORAGE_KEYS.DEVICE_ID,
+        STORAGE_KEYS.BACKGROUND_NOTIFICATIONS,
       ]);
-      // Note: VEG_MODE is not cleared on logout - it persists
+      // Note: VEG_MODE is not cleared on logout - it persists as a device preference
     } catch (error) {
+      console.error('[StorageService] Error clearing all data:', error);
       throw error;
     }
   }
