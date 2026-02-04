@@ -63,6 +63,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [houseNo, setHouseNo] = useState('');
   const [building, setBuilding] = useState('');
   const [locality, setLocality] = useState('');
+  const [landmark, setLandmark] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [pincode, setPincode] = useState('');
@@ -110,6 +111,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         setHouseNo(initialData.houseNo || '');
         setBuilding(initialData.building || '');
         setLocality(initialData.locality || '');
+        setLandmark('');
         setCity(initialData.city || '');
         setState(initialData.state || '');
         setPincode(initialData.pincode || '');
@@ -177,6 +179,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           setHouseNo(houseNoValue);
           setBuilding(buildingValue);
           setLocality(localityValue);
+          setLandmark('');
           setCity(cityValue);
           setState(stateValue);
           setPincode(pincodeValue);
@@ -195,6 +198,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           setHouseNo('');
           setBuilding('');
           setLocality('');
+          setLandmark('');
           setCity('');
           setState('');
           setPincode('');
@@ -267,6 +271,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           setHouseNo(houseNoValue);
           setBuilding(buildingValue);
           setLocality(localityValue);
+          setLandmark('');
           setCity(cityValue);
           setState(stateValue);
           setPincode(pincodeValue);
@@ -278,6 +283,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           setHouseNo('');
           setBuilding('');
           setLocality('');
+          setLandmark('');
           setCity('');
           setState('');
           setPincode('');
@@ -338,11 +344,54 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     });
   };
 
+  // Validate if address contains geocoding/plus codes (e.g., "X44P+884")
+  // These are hard for delivery partners to find, so we ask users to enter proper address
+  const isValidAddress = (text: string): boolean => {
+    if (!text || !text.trim()) return true; // Empty is valid (will be validated separately)
+    
+    const trimmedText = text.trim();
+    
+    // Pattern to detect plus codes/geocoding formats:
+    // - Contains alphanumeric with "+" (e.g., "X44P+884")
+    // - Short alphanumeric codes (3-10 chars) with special characters
+    // - Patterns like "X44P+884", "ABC+123", etc.
+    const plusCodePattern = /^[A-Z0-9]{2,6}\+[A-Z0-9]{2,6}$/i;
+    const shortGeocodePattern = /^[A-Z0-9]{3,10}$/i; // Very short codes without context
+    
+    // Check if it matches plus code pattern
+    if (plusCodePattern.test(trimmedText)) {
+      return false;
+    }
+    
+    // Check if it's a very short code without proper address context
+    // Only flag if it's very short (3-6 chars) and looks like a code
+    if (trimmedText.length <= 6 && shortGeocodePattern.test(trimmedText) && !/[a-z]{3,}/i.test(trimmedText)) {
+      // If it's all uppercase/numeric and very short, likely a code
+      if (trimmedText === trimmedText.toUpperCase() && !trimmedText.includes(' ')) {
+        return false;
+      }
+    }
+    
+    return true;
+  };
+
+  // Build a user-friendly error snippet from the invalid input
+  const getAddressCodeExample = (text: string): string => {
+    const trimmed = text.trim();
+    if (!trimmed) return 'this';
+
+    // Limit length to keep message short
+    if (trimmed.length <= 10) return trimmed;
+
+    return `${trimmed.slice(0, 10)}...`;
+  };
+
   const handleContinue = async () => {
     // Clear any previous errors before running validation
     setHouseNoError('');
     setBuildingError('');
     setLocalityError('');
+    // Landmark is optional – no separate error state
     setPincodeError('');
     setAlternateMobileError('');
 
@@ -354,11 +403,20 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
       hasFieldError = true;
     }
     if (!building.trim()) {
-      setBuildingError('Please enter building/street name');
+      setBuildingError('Please enter your building and street name.');
+      hasFieldError = true;
+    } else if (!isValidAddress(building)) {
+      const example = getAddressCodeExample(building);
+      setBuildingError(`Please enter your building and street name (not map codes like "${example}").`);
       hasFieldError = true;
     }
+    
     if (!locality.trim()) {
-      setLocalityError('Please enter area / locality');
+      setLocalityError('Please enter your area or locality.');
+      hasFieldError = true;
+    } else if (!isValidAddress(locality)) {
+      const example = getAddressCodeExample(locality);
+      setLocalityError(`Please enter your area or locality (not map codes like "${example}").`);
       hasFieldError = true;
     }
     if (!pincode.trim()) {
@@ -384,10 +442,15 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
 
     try {
       // Prepare address data for API
+      // Option B: Pack landmark into existing address3 field along with locality
+      const address3Value = landmark.trim()
+        ? `${locality.trim()}, ${landmark.trim()}`
+        : locality.trim();
+
       const addressData: AddAddressRequest = {
         address1: houseNo,
         address2: building,
-        address3: locality,
+        address3: address3Value,
         city: 'Madurai',
         state: 'Tamil Nadu',
         pincode: pincode,
@@ -550,6 +613,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   if (buildingError) {
                     setBuildingError('');
                   }
+                  // Real-time validation for geocoding codes
+                  if (text.trim() && !isValidAddress(text)) {
+                    const example = getAddressCodeExample(text);
+                    setBuildingError(`Please enter your building and street name (not map codes like "${example}").`);
+                  }
                 }}
                 placeholder="House / Building / Street Name"
                 placeholderTextColor="#999"
@@ -573,6 +641,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                   if (localityError) {
                     setLocalityError('');
                   }
+                  // Real-time validation for geocoding codes
+                  if (text.trim() && !isValidAddress(text)) {
+                    const example = getAddressCodeExample(text);
+                    setLocalityError(`Please enter your area or locality (not map codes like "${example}").`);
+                  }
                 }}
                 placeholder="Area / locality"
                 placeholderTextColor="#999"
@@ -584,6 +657,26 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                 }}
               />
               {localityError ? <Text style={styles.errorText}>{localityError}</Text> : null}
+            </View>
+
+            {/* Landmark - Optional */}
+            <View style={styles.fieldGroup}>
+              <TextInput
+                style={styles.input}
+                value={landmark}
+                onChangeText={(text) => {
+                  setLandmark(text);
+                  // No hard validation; this is optional helper text for delivery partner
+                }}
+                placeholder="Nearby landmark (Optional)"
+                placeholderTextColor="#999"
+                maxLength={100}
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollTo({ y: 150, animated: true });
+                  }, 100);
+                }}
+              />
             </View>
 
             {/* Pincode */}

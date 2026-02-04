@@ -71,7 +71,7 @@ class ApiService {
   private onSessionExpiredCallback: (() => void) | null = null;
   private lastProfileCheckTime: number = 0; // Timestamp of last profile check
   private profileCheckInProgress: boolean = false; // Prevent multiple simultaneous profile checks
-  private readonly PROFILE_CHECK_INTERVAL_MS = 10 * 1000; // Check profile every 10 seconds max
+  private readonly PROFILE_CHECK_INTERVAL_MS = 60 * 1000; // Check profile every 60 seconds max (reduced frequency)
 
   /**
    * Set callback to be called when user deletion is detected
@@ -151,11 +151,26 @@ class ApiService {
 
   /**
    * Initialize API service - load tokens from storage
+   * Also checks for app version changes to clear cache
    */
   async initialize(): Promise<void> {
     try {
       this.accessToken = await storageService.getAccessToken();
       this.refreshToken = await storageService.getRefreshToken();
+      
+      // Check if app version changed (for cache clearing on update)
+      // This fixes the issue where old cached 426 responses persist after app update
+      try {
+        const versionChanged = await storageService.hasVersionChanged(APP_VERSION_CODE);
+        if (versionChanged) {
+          console.log('[apiService] App version changed, cache will be bypassed for home API');
+          // Version change is tracked, home API will use cache-busting headers
+        }
+      } catch (versionError) {
+        // Silent fail - version check is not critical
+        console.warn('[apiService] Error checking version change:', versionError);
+      }
+      
       this.isInitialized = true;
     } catch (error) {
       // Silent fail but mark as initialized
@@ -601,8 +616,13 @@ class ApiService {
         signal: controller.signal,
       };
       
+      // CRITICAL: Always bypass cache for home API to prevent stale 426 responses
+      // This fixes the issue where old cached 426 responses persist after app update/reinstall
+      const isHomeEndpoint = endpoint.includes('/api/buyer/home');
+      
       // If cache-control header indicates no-cache, use no-store cache option
-      if (customHeaders?.['Cache-Control']?.includes('no-cache')) {
+      // OR if this is the home endpoint, always bypass cache
+      if (customHeaders?.['Cache-Control']?.includes('no-cache') || isHomeEndpoint) {
         fetchOptions.cache = 'no-store';
       }
       
@@ -761,18 +781,27 @@ class ApiService {
 
       // CRITICAL: After successful authenticated API call, check profile API in background
       // This detects user deletion even when other APIs still work
+      // Only check for important endpoints and with throttling to reduce API calls
       // Only check if:
       // 1. This is an authenticated endpoint (not login/OTP)
       // 2. The current request was successful
       // 3. We haven't checked profile recently (throttle to avoid performance issues)
       // 4. This is NOT the profile endpoint itself (avoid recursive check)
+      // 5. This is an important endpoint (home, cart, orders) - not every endpoint
       const isAuthenticatedEndpoint = 
         this.accessToken !== null &&
         !endpoint.includes('/authentication/generate-otp') &&
         !endpoint.includes('/authentication/login') &&
         !endpoint.includes('/authentication/refresh-token');
       
-      if (response.ok && isAuthenticatedEndpoint && !endpoint.includes('/user/profile')) {
+      // Only check profile for important endpoints to reduce API calls
+      const isImportantEndpoint = 
+        endpoint.includes('/api/buyer/home') ||
+        endpoint.includes('/api/buyer/cart') ||
+        endpoint.includes('/api/buyer/orders') ||
+        endpoint.includes('/api/buyer/favorites');
+      
+      if (response.ok && isAuthenticatedEndpoint && !endpoint.includes('/user/profile') && isImportantEndpoint) {
         this.checkProfileInBackground().catch((error) => {
           // Silent fail - profile check is fire-and-forget
           console.warn('[apiService] Background profile check failed:', error);

@@ -1135,7 +1135,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                         </TouchableOpacity>
                         {!isTrackingEnabled && (
                           <Text style={styles.trackingDisabledMessage}>
-                            Tracking unlocks after your order is picked up.
+                            Tracking unlocks after agent assigned.
                           </Text>
                         )}
                       </>

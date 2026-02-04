@@ -233,33 +233,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     Keyboard.dismiss();
   }, []);
 
-  // Trigger data reload when screen becomes focused
-  // DISABLED: Causes jerk/jump when returning from other screens
-  // Will implement a better refresh approach later
-  // React.useEffect(() => {
-  //   if (isFocused) {
-  //     // Increment refresh trigger to force data reload
-  //     setRefreshTrigger(prev => prev + 1);
-  //   }
-  // }, [isFocused]);
-
   // Log API endpoint URL on mount
   React.useEffect(() => {
     // API endpoint configuration check
   }, []);
 
   // Update local state when external selectedLocation changes
+  // IMPORTANT:
+  // - This effect ONLY updates the displayed location text
+  // - Actual home data fetching is handled by:
+  //   1) addressRefreshTrigger → fetchDefaultAddress() → fetchHomeData(...)
+  //   2) isFocused change (coming back to home) → fetchHomeData(...)
+  // This avoids double-calling home API and prevents potential refresh loops
   React.useEffect(() => {
     if (externalSelectedLocation) {
       setSelectedLocation(externalSelectedLocation);
-      // User selected a different address, fetch restaurants for the new location
-      // Clear data first to prevent showing stale cached data
-      if (externalSelectedLocation.latitude && externalSelectedLocation.longitude) {
-        setRestaurantData([]);
-        setCarouselData([]);
-        setCategoryData([]);
-        fetchHomeData(externalSelectedLocation.latitude, externalSelectedLocation.longitude);
-      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalSelectedLocation]);
