@@ -68,7 +68,28 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const lastFetchedStatusRef = useRef<string | null>(null);
   const [showTaxTooltip, setShowTaxTooltip] = useState(false);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
-  
+
+  // Safely derive tracking URL from order data.
+  // Backend may populate either a top-level tracking_url OR one inside the tracking history.
+  const getTrackingUrlFromOrderData = useCallback((data: any): string | null => {
+    if (!data) return null;
+
+    // 1) Prefer top-level tracking_url when present
+    if (data.tracking_url && data.tracking_url !== null) {
+      return String(data.tracking_url);
+    }
+
+    // 2) Fallback: look into tracking history for the latest entry with tracking_url
+    const history = data.tracking;
+    if (Array.isArray(history) && history.length > 0) {
+      const lastWithUrl = [...history].reverse().find((entry: any) => entry?.tracking_url);
+      if (lastWithUrl?.tracking_url) {
+        return String(lastWithUrl.tracking_url);
+      }
+    }
+
+    return null;
+  }, []);
   // Bottom sheet drag state
   const HALF_SCREEN = SCREEN_HEIGHT * 0.5;
   const DRAG_HANDLE_HEIGHT = 40; // Height of drag handle
@@ -1052,8 +1073,8 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               ) : ( */}
                 { orderData.status !== 'delivered' && <View style={styles.trackOrderContainer}>
                   {(() => {
-                    // Track Order is enabled for: agent-assigned, picked, out-for-delivery, on-the-way, delivered
-                    // Disabled for: confirmed (order placed), billed (order accepted), packed (order ready)
+                    // Track Order is enabled for: packed, agent-assigned, agent-arrived-restaurant, picked, out-for-delivery, on-the-way, delivered
+                    // Disabled for: confirmed (order placed), billed (order accepted)
                     const rawStatus = (orderData?.status || '').toString().toLowerCase();
                     // Normalize: underscores/spaces to hyphen
                     const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
@@ -1062,9 +1083,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                     const disabledStatuses = [
                       'confirmed',
                       'billed',
-                      'packed',
-                      'agent-arrived-restaurant',
-                      'agent_arrived_restaurant',
+                      // From packed / agent-assigned onwards, tracking should be enabled
                       'cancelled',
                       'canceled',
                       'rejected',
@@ -1076,10 +1095,13 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       'preparing'
                     ];
                     
-                    // Define enabled statuses - tracking works from "agent-assigned" status onward
+                    // Define enabled statuses - tracking works from "packed" / "agent-assigned" status onward
                     const enabledStatuses = [
+                      'packed',
                       'agent-assigned',
                       'agent_assigned',
+                      'agent-arrived-restaurant',
+                      'agent_arrived_restaurant',
                       'picked',
                       'out-for-delivery',
                       'out_for_delivery',
@@ -1103,19 +1125,19 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                             !isTrackingEnabled && styles.disabledButton
                           ]}
                           onPress={() => {
-                            if (isTrackingEnabled) {
-                              // If tracking_url exists, use it; otherwise navigate to tracking screen
-                              if (orderData?.tracking_url && orderData.tracking_url !== null) {
-                                // Set order ID for tracking and fetch data for bottom sheet
-                                if (orderId) {
-                                  setSelectedOrderIdForTracking(orderId);
-                                  fetchTrackingOrderData(orderId);
-                                }
-                                setShowTrackingWebView(true);
-                              } else if (onTrackOrder) {
-                                // Fallback to tracking screen if no URL but status allows it
-                                onTrackOrder();
-                              }
+                            if (!isTrackingEnabled) return;
+
+                            // Prefer web tracking when any tracking_url is available (top-level or in history)
+                            const trackingUrl = getTrackingUrlFromOrderData(orderData);
+                            
+                            if (trackingUrl && orderId) {
+                              // Set order ID for tracking and fetch data for bottom sheet
+                              setSelectedOrderIdForTracking(orderId);
+                              fetchTrackingOrderData(orderId);
+                              setShowTrackingWebView(true);
+                            } else if (onTrackOrder) {
+                              // Fallback to internal tracking screen if no URL but status allows it
+                              onTrackOrder();
                             }
                           }}
                           activeOpacity={!isTrackingEnabled ? 1 : 0.8}
@@ -1437,9 +1459,14 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               <Text style={styles.webViewHeaderTitle}>Track Order</Text>
               <View style={styles.webViewBackButton} />
             </View>
-            {orderData?.tracking_url && (
-              <WebView
-                source={{ uri: orderData.tracking_url }}
+            {(() => {
+              // Prefer tracking URL from trackingOrderData (latest full data), fall back to orderData
+              const effectiveTrackingUrl = getTrackingUrlFromOrderData(trackingOrderData || orderData);
+              if (!effectiveTrackingUrl) return null;
+
+              return (
+                <WebView
+                  source={{ uri: effectiveTrackingUrl }}
                 style={styles.webView}
                 startInLoadingState={true}
                 renderLoading={() => (
@@ -1457,9 +1484,10 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 }}
                 javaScriptEnabled={true}
                 domStorageEnabled={true}
-                mixedContentMode="always"
-              />
-            )}
+                  mixedContentMode="always"
+                />
+              );
+            })()}
           </SafeAreaView>
           
           {/* Bottom Sheet Overlay */}
@@ -1624,6 +1652,22 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   
                   // Get status config
                   const statusConfig = mapOrderStatusToUI(displayStatus);
+
+                  // Normalize status for helper conditions
+                  const normalizedStatus = (displayStatus || '').toLowerCase().replace(/[_\s]+/g, '-');
+                  const isAgentAssignedish =
+                    normalizedStatus === 'agent-assigned' ||
+                    normalizedStatus === 'agent-arrived-restaurant' ||
+                    normalizedStatus === 'picked' ||
+                    normalizedStatus === 'out-for-delivery' ||
+                    normalizedStatus === 'on-the-way';
+
+                  // If status says agent is involved but we don't yet have name from API,
+                  // show a friendly placeholder instead of "No Delivery Agent Assigned"
+                  let agentDisplayName = agentName;
+                  if (!agentDisplayName && isAgentAssignedish) {
+                    agentDisplayName = 'Delivery partner is on the way';
+                  }
                   
                   // Check if order is delivered
                   const isDelivered = (displayStatus || '').toLowerCase().trim() === 'delivered' || 
@@ -1679,9 +1723,9 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       <View style={styles.trackingAgentRowInScroll}>
                         <View style={styles.trackingAgentInfoContainer}>
                           <Text style={styles.trackingAgentNameInScroll}>
-                            {agentName || 'No Delivery Agent Assigned'}
+                            {agentDisplayName || 'No Delivery Agent Assigned'}
                           </Text>
-                          {agentName && (
+                          {agentDisplayName && agentName && (
                             <View style={styles.trackingAgentTag}>
                               <Text style={styles.trackingAgentTagText}>Delivery Partner</Text>
                             </View>
