@@ -60,6 +60,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [updatingAddressId, setUpdatingAddressId] = useState<string | null>(null);
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
 
   // Fetch addresses on initial mount
   useEffect(() => {
@@ -286,6 +287,13 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
   };
 
   const handleAddAddressPress = async () => {
+    // Prevent duplicate taps
+    if (isAddingAddress) {
+      return;
+    }
+
+    setIsAddingAddress(true);
+
     if (savedAddresses.length >= MAX_ADDRESSES) {
       showConfirmation({
         title: 'Address limit reached',
@@ -294,6 +302,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         cancelText: '',
         onConfirm: () => {},
       });
+      setIsAddingAddress(false);
       return;
     }
 
@@ -319,10 +328,15 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
       console.log('First launch detected - navigating immediately, LocationSelectionScreen will handle permission');
       // Navigate immediately without any permission checks
       // LocationSelectionScreen's getCurrentLocation will request permission and fetch location
-      if (onUseCurrentLocation) {
-        onUseCurrentLocation();
-      } else {
-        console.error('onUseCurrentLocation callback is not defined!');
+      try {
+        if (onUseCurrentLocation) {
+          onUseCurrentLocation();
+        } else {
+          console.error('onUseCurrentLocation callback is not defined!');
+        }
+      } finally {
+        // Clear loading after navigation decision
+        setIsAddingAddress(false);
       }
       return; // Exit early - navigation is done
     }
@@ -455,6 +469,9 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
           ]
         );
       }
+    } finally {
+      // Ensure loading is cleared in all non-first-launch flows
+      setIsAddingAddress(false);
     }
   };
 
@@ -496,20 +513,32 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
           <View style={styles.optionsGroup}>
             {/* Add Address */}
             <TouchableOpacity
-              style={styles.optionItem}
+              style={[
+                styles.optionItem,
+                isAddingAddress && { opacity: 0.7 },
+              ]}
               onPress={handleAddAddressPress}
               activeOpacity={0.7}
+              disabled={isAddingAddress}
             >
               <View style={styles.optionLeft}>
                 <View style={styles.optionIconContainer}>
                   <MaterialIcons name="add" size={24} color="#00B14F" />
                 </View>
                 <View>
-                  <Text style={styles.optionText}>Add address</Text>
-                  <Text style={styles.optionSubtext}>{currentLocationName}</Text>
+                  <Text style={styles.optionText}>
+                    {isAddingAddress ? 'Getting location…' : 'Add address'}
+                  </Text>
+                  <Text style={styles.optionSubtext}>
+                    {isAddingAddress ? 'Please wait a moment' : currentLocationName}
+                  </Text>
                 </View>
               </View>
-              <MaterialIcons name="chevron-right" size={24} color="#999" />
+              {isAddingAddress ? (
+                <ActivityIndicator size="small" color="#00B14F" />
+              ) : (
+                <MaterialIcons name="chevron-right" size={24} color="#999" />
+              )}
             </TouchableOpacity>
           </View>
 

@@ -320,28 +320,36 @@ class HomeService {
     page: number = 1
   ): Promise<ApiResponse<HomeData>> {
     try {
-      // Build query params
-      const params = new URLSearchParams();
+      // Build query params as object (apiService.get will handle URL encoding)
+      const params: Record<string, any> = {};
 
       if (latitude !== undefined && longitude !== undefined) {
-        params.append('latitude', latitude.toString());
-        params.append('longitude', longitude.toString());
+        params.latitude = latitude.toString();
+        params.longitude = longitude.toString();
       }
 
       if (vegMode && vegMode !== 'off') {
-        params.append('veg_mode', vegMode);
+        params.veg_mode = vegMode;
       }
 
       if (page > 1) {
-        params.append('page', page.toString());
+        params.page = page.toString();
       }
 
-      const queryString = params.toString();
-      const endpoint = queryString
-        ? `${API_CONFIG.ENDPOINTS.BUYER.HOME}?${queryString}`
-        : API_CONFIG.ENDPOINTS.BUYER.HOME;
+      // CRITICAL: Always use cache-busting headers for home API
+      // This prevents HTTP cache from returning stale responses
+      // We call this API fresh whenever user comes to homepage, so no timestamp needed
+      const cacheBustingHeaders = {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      };
 
-      const response = await apiService.get<HomeData>(endpoint);
+      const response = await apiService.get<HomeData>(
+        API_CONFIG.ENDPOINTS.BUYER.HOME,
+        params,
+        cacheBustingHeaders
+      );
 
       return response;
     } catch (error: any) {

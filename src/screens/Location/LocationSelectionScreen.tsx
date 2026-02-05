@@ -14,6 +14,7 @@ import {
   Alert,
   Linking,
   AppState,
+  InteractionManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -256,7 +257,44 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     } else if (!initialLatitude && !initialLongitude) {
       // No initial coordinates and not editing: try to use current location as the default.
       // This is used both when user taps "Add address" and when home redirects due to no addresses.
-      getCurrentLocation(false); // Auto-triggered, not user-initiated
+      // CRITICAL FIX: Delay permission request to ensure screen is fully mounted and ready.
+      // This fixes the issue where permission dialog doesn't show on first launch.
+      const requestLocationWithDelay = async () => {
+        // Small delay to ensure loading state is visible
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // First, wait for all interactions to complete (ensures screen is fully rendered)
+        await new Promise<void>((resolve) => {
+          InteractionManager.runAfterInteractions(() => resolve());
+        });
+
+        // Additional delay for first launch to ensure app is fully ready
+        // Check if this is first launch (permission is undetermined)
+        try {
+          const permissionStatus = await Location.getForegroundPermissionsAsync();
+          const isFirstLaunch = permissionStatus.status === 'undetermined';
+
+          // Add extra delay for first launch (500ms) to ensure system is ready for permission dialog
+          if (isFirstLaunch) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } else {
+            // Smaller delay for subsequent launches (200ms)
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        } catch (error) {
+          // If we can't check permission, assume first launch and use longer delay
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        try {
+          // Now request location after ensuring everything is ready
+          await getCurrentLocation(false); // Auto-triggered, not user-initiated
+        } catch (error) {
+          // Silently handle errors
+        }
+      };
+
+      requestLocationWithDelay();
     }
   }, [editingAddress, initialLatitude, initialLongitude]);
 
@@ -450,7 +488,15 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       // If not granted, request it (this will trigger the system popup,
       // similar to the "Add address" button flow)
       if (permission.status !== 'granted') {
-        permission = await Location.requestForegroundPermissionsAsync();
+        try {
+          permission = await Location.requestForegroundPermissionsAsync();
+        } catch (permissionError) {
+          // If permission request fails (e.g., system dialog can't be shown),
+          // log the error and check status again after a short delay
+          console.warn('Permission request failed, retrying after delay:', permissionError);
+          await new Promise(resolve => setTimeout(resolve, 300));
+          permission = await Location.getForegroundPermissionsAsync();
+        }
       }
 
       if (permission.status !== 'granted') {
