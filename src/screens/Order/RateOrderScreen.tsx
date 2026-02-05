@@ -375,12 +375,13 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
           <TouchableOpacity
             key={star}
             onPress={() => onRate(star)}
-            activeOpacity={0.7}
+            activeOpacity={0.6}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <MaterialIcons
               name="star"
-              size={24}
-              color={star <= rating ? '#FFB800' : '#D1D5DB'}
+              size={28}
+              color={star <= rating ? '#FFB800' : '#E5E7EB'}
             />
           </TouchableOpacity>
         ))}
@@ -516,44 +517,69 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
       >
         <View style={styles.modalBackground}>
           <BlurView intensity={100} tint="dark" style={styles.modalOverlay}>
-          <View style={styles.foodModalContent}>
-            {/* Title and Subtitle */}
-            <View style={styles.foodModalHeader}>
-              <Text style={styles.foodModalTitle}>Rate Food</Text>
-              <Text style={styles.foodModalSubtitle}>For Future better Experience</Text>
+            <View style={styles.foodModalContent}>
+              {/* Title and Subtitle */}
+              <View style={styles.foodModalHeader}>
+                <Text style={styles.foodModalTitle}>Rate Food</Text>
+                <Text style={styles.foodModalSubtitle}>For a better future experience</Text>
+              </View>
+
+              {/* Scrollable Food Items */}
+              <ScrollView
+                style={styles.foodItemsScrollView}
+                contentContainerStyle={styles.foodItemsScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {orderItems.map((item, index) => {
+                  const itemId = item.id || item.item_id || index;
+                  const itemName = item.name || item.item_name || 'Unknown Item';
+                  const itemRating = itemRatings[itemId]?.rating || 0;
+                  const isLastItem = index === orderItems.length - 1;
+                  
+                  return (
+                    <View key={itemId}>
+                      <View style={styles.foodItemCard}>
+                        <View style={styles.foodItemInfo}>
+                          <Text style={styles.foodItemName} numberOfLines={2}>
+                            {itemName}
+                          </Text>
+                          {item.quantity > 1 && (
+                            <Text style={styles.foodItemQuantity}>Qty: {item.quantity}</Text>
+                          )}
+                        </View>
+                        <View style={styles.foodItemRatingContainer}>
+                          {renderModalStars(
+                            itemRating,
+                            (rating) => handleItemRatingChange(itemId, rating)
+                          )}
+                          {itemRating > 0 && (
+                            <Text style={styles.ratingText}>{itemRating}/5</Text>
+                          )}
+                        </View>
+                      </View>
+                      {!isLastItem && <View style={styles.foodItemDivider} />}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Done Button */}
+              <TouchableOpacity
+                style={styles.foodModalOkayButton}
+                onPress={handleFoodRatingModalClose}
+                activeOpacity={0.8}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.foodModalOkayText}>Done</Text>
+                    <MaterialIcons name="check" size={20} color="#FFFFFF" />
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
-
-            {/* Dynamic Food Items */}
-            {orderItems.map((item, index) => {
-              const itemId = item.id || item.item_id || index;
-              const itemName = item.name || item.item_name || 'Unknown Item';
-              return (
-                <View key={itemId} style={styles.foodItemRow}>
-                  <Text style={styles.foodItemName} numberOfLines={1}>
-                    {itemName} {item.quantity > 1 && `(x${item.quantity})`}
-                  </Text>
-                  {renderModalStars(
-                    itemRatings[itemId]?.rating || 0,
-                    (rating) => handleItemRatingChange(itemId, rating)
-                  )}
-                </View>
-              );
-            })}
-
-            {/* Okay Button */}
-            <TouchableOpacity
-              style={styles.foodModalOkayButton}
-              onPress={handleFoodRatingModalClose}
-              activeOpacity={0.8}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.foodModalOkayText}>Okay</Text>
-              )}
-            </TouchableOpacity>
-          </View>
           </BlurView>
         </View>
       </Modal>
@@ -840,58 +866,92 @@ const styles = StyleSheet.create({
   },
   foodModalContent: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    borderRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 20,
     width: '100%',
-    maxWidth: 400,
-    gap: 12,
+    maxWidth: 420,
+    maxHeight: '85%',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: -9,
+      height: 8,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 60,
-    elevation: 21,
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    elevation: 24,
   },
   foodModalHeader: {
     alignItems: 'center',
-    gap: 6,
+    marginBottom: 24,
+    gap: 8,
   },
   foodModalTitle: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 22,
-    lineHeight: 33,
+    fontSize: 24,
+    lineHeight: 36,
     textAlign: 'center',
-    color: '#000000',
-    opacity: 0.85,
+    color: '#001E1F',
+    letterSpacing: -0.5,
   },
   foodModalSubtitle: {
     fontFamily: 'Poppins',
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 21,
     textAlign: 'center',
-    color: 'rgba(0, 0, 0, 0.5)',
-    opacity: 0.85,
+    color: 'rgba(0, 30, 31, 0.6)',
   },
-  foodItemRow: {
+  foodItemsScrollView: {
+    maxHeight: 400,
+    marginBottom: 20,
+  },
+  foodItemsScrollContent: {
+    gap: 0,
+  },
+  foodItemCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 16,
+    paddingHorizontal: 4,
+  },
+  foodItemInfo: {
+    flex: 1,
+    marginRight: 16,
   },
   foodItemName: {
     fontFamily: 'Poppins_500Medium',
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#001E1F',
+    marginBottom: 4,
+  },
+  foodItemQuantity: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    lineHeight: 18,
+    color: 'rgba(0, 30, 31, 0.5)',
+  },
+  foodItemRatingContainer: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  ratingText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    lineHeight: 18,
     color: '#00B14F',
-    opacity: 0.85,
-    flex: 0,
+    marginTop: 2,
+  },
+  foodItemDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0, 30, 31, 0.08)',
+    marginLeft: 4,
   },
   modalStarsContainer: {
     flexDirection: 'row',
-    gap: 3,
+    gap: 6,
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
@@ -899,11 +959,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 19,
-    paddingHorizontal: 20,
-    gap: 10,
-    backgroundColor: '#001E1F',
-    borderRadius: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    gap: 8,
+    backgroundColor: '#00B14F',
+    borderRadius: 12,
+    shadowColor: '#00B14F',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   foodModalOkayText: {
     fontFamily: 'Poppins',
