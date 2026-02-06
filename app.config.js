@@ -153,7 +153,7 @@ module.exports = {
   expo: {
     name: "Tazty",
     slug: "Tazty",
-    version: "1.0.1",
+    version: "1.0.3",
     orientation: "portrait",
     icon: "./src/assets/icon.png",
     userInterfaceStyle: "light",
