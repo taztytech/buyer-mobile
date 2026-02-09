@@ -35,6 +35,7 @@ interface HomeScreenProps {
   onCategoriesLoaded?: (categories: CategoryItem[]) => void;
   isFocused?: boolean;
   addressRefreshTrigger?: number; // Trigger to refresh addresses when changed
+  onForcedUpdateRequired?: (message?: string) => void; // Callback when API indicates forced update is required
 }
 
 interface CarouselItem {
@@ -94,6 +95,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onCategoriesLoaded,
   addressRefreshTrigger,
   isFocused = true,
+  onForcedUpdateRequired,
 }) => {
   const { restaurantId, restaurantName, restaurantLogo, getTotalItems } = useCart();
   const { vegMode, setVegMode, isVegModeEnabled } = useVegMode();
@@ -231,33 +233,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     Keyboard.dismiss();
   }, []);
 
-  // Trigger data reload when screen becomes focused
-  // DISABLED: Causes jerk/jump when returning from other screens
-  // Will implement a better refresh approach later
-  // React.useEffect(() => {
-  //   if (isFocused) {
-  //     // Increment refresh trigger to force data reload
-  //     setRefreshTrigger(prev => prev + 1);
-  //   }
-  // }, [isFocused]);
-
   // Log API endpoint URL on mount
   React.useEffect(() => {
     // API endpoint configuration check
   }, []);
 
   // Update local state when external selectedLocation changes
+  // IMPORTANT:
+  // - This effect ONLY updates the displayed location text
+  // - Actual home data fetching is handled by:
+  //   1) addressRefreshTrigger → fetchDefaultAddress() → fetchHomeData(...)
+  //   2) isFocused change (coming back to home) → fetchHomeData(...)
+  // This avoids double-calling home API and prevents potential refresh loops
   React.useEffect(() => {
     if (externalSelectedLocation) {
       setSelectedLocation(externalSelectedLocation);
-      // User selected a different address, fetch restaurants for the new location
-      // Clear data first to prevent showing stale cached data
-      if (externalSelectedLocation.latitude && externalSelectedLocation.longitude) {
-        setRestaurantData([]);
-        setCarouselData([]);
-        setCategoryData([]);
-        fetchHomeData(externalSelectedLocation.latitude, externalSelectedLocation.longitude);
-      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalSelectedLocation]);
@@ -717,6 +707,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       const response = await homeService.getHomeData(lat, lng, vegMode, 1);
 
+        // Check if API indicates forced update is required
+        // Response format: { success: false, statusCode: 426, message: "Please update your app..." }
+        if (!response.success && response.statusCode === 426) {
+          // Show forced update modal
+          if (onForcedUpdateRequired) {
+            onForcedUpdateRequired(response.message);
+          }
+          // Stop loading and don't process data
+          setIsLoadingBanners(false);
+          setIsLoadingCategories(false);
+          setIsLoadingRestaurants(false);
+          return;
+        }
+
         if (response.success && response.data) {
           // The API returns data nested as: { data: { data: { promotional_banner: {...} } } }
           const actualData = (response.data as any).data || response.data;
@@ -956,6 +960,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       const coords = defaultAddressCoords || { latitude: DEFAULT_LOCATION.latitude, longitude: DEFAULT_LOCATION.longitude };
 
       const response = await homeService.getHomeData(coords.latitude, coords.longitude, vegMode, nextPage);
+
+      // Check if API indicates forced update is required
+      if (!response.success && response.statusCode === 426) {
+        // Show forced update modal
+        if (onForcedUpdateRequired) {
+          onForcedUpdateRequired(response.message);
+        }
+        // Stop loading
+        setIsLoadingMore(false);
+        return;
+      }
 
       if (response.success && response.data) {
         const actualData = (response.data as any).data || response.data;

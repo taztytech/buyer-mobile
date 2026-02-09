@@ -4,7 +4,7 @@
  * Replaces expo-notifications with native FCM
  */
 
-import { Platform, AppState, NativeEventEmitter, NativeModules, PermissionsAndroid } from 'react-native';
+import { Platform, NativeEventEmitter, NativeModules, PermissionsAndroid } from 'react-native';
 import { apiService } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,7 +13,6 @@ import { handleOrderNotification, OrdersDispatch } from './orderNotificationHand
 
 // Conditionally import Firebase to avoid errors if native modules aren't linked
 let messaging: any = null;
-let FirebaseMessagingTypes: any = null;
 
 try {
   // Check if native module exists before requiring
@@ -21,14 +20,13 @@ try {
   if (NativeModules.RNFBAppModule) {
     const firebaseMessaging = require('@react-native-firebase/messaging');
     messaging = firebaseMessaging.default;
-    FirebaseMessagingTypes = firebaseMessaging.FirebaseMessagingTypes;
   } else {
     console.warn('⚠️  FCM: Native module RNFBAppModule not found. Rebuild native app to enable FCM.');
     console.warn('   Run: npm run android:dev or npm run ios:dev');
   }
 } catch (error) {
   console.warn('⚠️  FCM: Native module not available. Rebuild native app to enable FCM.');
-  console.warn('   Error:', error.message);
+  console.warn('   Error:', error instanceof Error ? error.message : String(error));
 }
 
 const PUSH_TOKEN_KEY = '@tazty_fcm_token';
@@ -60,7 +58,6 @@ class FCMNotificationService {
   private tokenRefreshListener: (() => void) | null = null;
   private messageListener: (() => void) | null = null;
   private notificationOpenedListener: (() => void) | null = null;
-  private backgroundMessageHandler: BackgroundMessageHandler | null = null;
   private recentMessages: NotificationPayload[] = [];
   private readonly MAX_RECENT_MESSAGES = 50;
   private navigationCallback: NotificationNavigationCallback | null = null;
@@ -255,8 +252,19 @@ class FCMNotificationService {
         await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
         console.log('✅ FCM: Token obtained:', token.substring(0, 20) + '...');
         
-        // Send token to backend
-        await this.sendTokenToBackend(token);
+        // CRITICAL: Only send token to backend if user is logged in
+        // On fresh install, user is not logged in yet, so skip backend registration
+        // Token will be registered after login via registerTokenAfterLogin()
+        const isLoggedIn = await AsyncStorage.getItem('@tazty_is_logged_in') === 'true';
+        if (isLoggedIn) {
+          // User is logged in, send token to backend
+          await this.sendTokenToBackend(token).catch((error) => {
+            // Silent fail - token registration can be retried later
+            console.warn('⚠️  FCM: Failed to send token to backend during getToken:', error);
+          });
+        } else {
+          console.log('ℹ️  FCM: User not logged in, skipping backend registration. Token will be registered after login.');
+        }
         
         return token;
       }
@@ -553,7 +561,6 @@ class FCMNotificationService {
       console.warn('⚠️  FCM: Cannot set background handler - native module not available');
       return;
     }
-    this.backgroundMessageHandler = handler;
     messaging().setBackgroundMessageHandler(handler);
     console.log('✅ FCM: Background message handler set');
   }
@@ -691,9 +698,11 @@ class FCMNotificationService {
 
       console.log('📥 FCM: Delete token response:', JSON.stringify(response, null, 2));
 
-      // Clear local storage
+      // Clear local storage (tokens are also cleared by storageService.clearAll() on logout)
       this.fcmToken = null;
       await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
+      // Note: Device ID is cleared by storageService.clearAll() on logout
+      // We don't clear it here to avoid breaking analytics if unregister is called separately
 
       if (response.success) {
         console.log('✅ FCM: Token deleted from backend successfully');

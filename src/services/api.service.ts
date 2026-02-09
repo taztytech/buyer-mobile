@@ -4,6 +4,7 @@
  */
 
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { APP_VERSION_CODE, APP_VERSION_NAME } from '@/config/appVersion.generated';
 import { API_CONFIG, buildApiUrl } from '@/config/api.config';
 import { storageService } from './storage.service';
@@ -14,6 +15,7 @@ export interface ApiResponse<T = any> {
   data?: T;
   message?: string;
   error?: string;
+  statusCode?: number;
 }
 
 export interface ApiError {
@@ -25,7 +27,7 @@ export interface ApiError {
 const safeStringify = (obj: any, space: number = 2): string => {
   const seen = new WeakSet();
   try {
-    return JSON.stringify(obj, (key, value) => {
+    return JSON.stringify(obj, (_key, value) => {
       // Handle circular references
       if (typeof value === 'object' && value !== null) {
         if (seen.has(value)) {
@@ -61,9 +63,31 @@ const safeStringify = (obj: any, space: number = 2): string => {
 class ApiService {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
+  private tokenExpiry: number | null = null; // Timestamp when access token expires
   private isRefreshing: boolean = false;
   private refreshPromise: Promise<boolean> | null = null;
   private isInitialized: boolean = false;
+  private onUserDeletedCallback: (() => void) | null = null;
+  private onSessionExpiredCallback: (() => void) | null = null;
+  private lastProfileCheckTime: number = 0; // Timestamp of last profile check
+  private profileCheckInProgress: boolean = false; // Prevent multiple simultaneous profile checks
+  private readonly PROFILE_CHECK_INTERVAL_MS = 60 * 1000; // Check profile every 60 seconds max (reduced frequency)
+
+  /**
+   * Set callback to be called when user deletion is detected
+   * This allows the app to handle navigation to login screen
+   */
+  setUserDeletedCallback(callback: () => void): void {
+    this.onUserDeletedCallback = callback;
+  }
+
+  /**
+   * Set callback to be called when session expires (refresh token invalid/expired)
+   * This allows the app to handle navigation to login screen
+   */
+  setSessionExpiredCallback(callback: () => void): void {
+    this.onSessionExpiredCallback = callback;
+  }
 
   /**
    * Build version headers using generated app version (single source of truth)
@@ -127,11 +151,26 @@ class ApiService {
 
   /**
    * Initialize API service - load tokens from storage
+   * Also checks for app version changes to clear cache
    */
   async initialize(): Promise<void> {
     try {
       this.accessToken = await storageService.getAccessToken();
       this.refreshToken = await storageService.getRefreshToken();
+      
+      // Check if app version changed (for cache clearing on update)
+      // This fixes the issue where old cached 426 responses persist after app update
+      try {
+        const versionChanged = await storageService.hasVersionChanged(APP_VERSION_CODE);
+        if (versionChanged) {
+          console.log('[apiService] App version changed, cache will be bypassed for home API');
+          // Version change is tracked, home API will use cache-busting headers
+        }
+      } catch (versionError) {
+        // Silent fail - version check is not critical
+        console.warn('[apiService] Error checking version change:', versionError);
+      }
+      
       this.isInitialized = true;
     } catch (error) {
       // Silent fail but mark as initialized
@@ -147,6 +186,66 @@ class ApiService {
     if (!this.isInitialized || (!this.accessToken && !this.refreshToken)) {
       await this.initialize();
     }
+    
+    // Also load expiry if not set
+    if (this.tokenExpiry === null) {
+      try {
+        const expiryTimeStr = await AsyncStorage.getItem('@tazty_token_expiry');
+        this.tokenExpiry = expiryTimeStr ? parseInt(expiryTimeStr, 10) : null;
+      } catch (error) {
+        // Silent fail
+      }
+    }
+  }
+
+  /**
+   * Check profile API in background to detect user deletion
+   * This is called after successful authenticated API calls (except profile itself)
+   * Uses throttling to avoid performance issues
+   * CRITICAL: Always makes a fresh API call (no cache) to detect user deletion immediately
+   */
+  private async checkProfileInBackground(): Promise<void> {
+    // Throttle: Only check if enough time has passed since last check
+    const now = Date.now();
+    if (now - this.lastProfileCheckTime < this.PROFILE_CHECK_INTERVAL_MS) {
+      return; // Too soon, skip check
+    }
+
+    // Prevent multiple simultaneous profile checks
+    if (this.profileCheckInProgress) {
+      return; // Already checking, skip
+    }
+
+    // Update last check time immediately to prevent rapid checks
+    this.lastProfileCheckTime = now;
+    this.profileCheckInProgress = true;
+
+    try {
+      // CRITICAL: Make a fresh GET request to profile endpoint with cache-busting headers
+      // This ensures we always get the latest data from server, not cached responses
+      // Add timestamp query param and cache-control headers to bypass any caching
+      const cacheBustingParams = {
+        _t: Date.now(), // Timestamp to ensure fresh request
+      };
+      
+      // Add cache-control headers to ensure no caching
+      const cacheBustingHeaders = {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      };
+
+      // Make a fresh API call with cache-busting
+      // This will trigger the user deletion detection logic if user is deleted
+      // The user deletion check happens in the request() method
+      // If user is deleted, it will call onUserDeletedCallback automatically
+      await this.get('/user/profile', cacheBustingParams, cacheBustingHeaders);
+    } catch (error) {
+      // Silent fail - this is a background check, don't disrupt user flow
+      // The error handling in request() will handle user deletion detection
+    } finally {
+      this.profileCheckInProgress = false;
+    }
   }
 
   /**
@@ -157,6 +256,9 @@ class ApiService {
     if (refreshToken) {
       this.refreshToken = refreshToken;
     }
+    
+    // Calculate and store expiry timestamp
+    this.tokenExpiry = Date.now() + (expiresIn * 1000);
 
     // Also persist to storage to ensure tokens survive app restart
     // Only save if we have both access and refresh tokens
@@ -168,6 +270,8 @@ class ApiService {
           refreshToken: tokenToSave,
           expiresIn,
         });
+        // Update expiry timestamp in storage (already saved by saveTokens, but ensure it's set)
+        await AsyncStorage.setItem('@tazty_token_expiry', this.tokenExpiry.toString());
       } catch (error) {
         // Silent fail - tokens are still in memory
       }
@@ -180,6 +284,7 @@ class ApiService {
   async clearTokens(): Promise<void> {
     this.accessToken = null;
     this.refreshToken = null;
+    this.tokenExpiry = null;
     await storageService.clearAll();
   }
 
@@ -226,41 +331,80 @@ class ApiService {
       // Ensure tokens are loaded from storage
       await this.ensureTokensLoaded();
 
+      // Get refresh token from memory or storage
       const refreshToken = this.refreshToken || await storageService.getRefreshToken();
 
-      if (!refreshToken) {
-        // No refresh token available - only then clear tokens
+      // Validate refresh token exists and is not empty
+      if (!refreshToken || refreshToken.trim() === '') {
+        console.warn('[apiService] No refresh token available for refresh');
         await this.clearTokens();
+        
+        // Notify callback that session expired
+        if (this.onSessionExpiredCallback) {
+          try {
+            this.onSessionExpiredCallback();
+          } catch (callbackError) {
+            console.error('[apiService] Error in session expired callback:', callbackError);
+          }
+        }
+        
         return false;
       }
 
       const url = buildApiUrl('/authentication/refresh-token');
+      
+      // Build request body and sanitize to ensure no null/undefined values
       const requestBody = {
         refresh_token: refreshToken,
       };
+      const sanitizedBody = this.sanitizePayload(requestBody);
 
-      console.log('[API Request]', safeStringify({
+      // Build headers with version info (but NO Authorization header for refresh token endpoint)
+      const versionHeaders = this.getVersionHeaders();
+      const headers: Record<string, string> = {
+        ...API_CONFIG.HEADERS,
+        ...versionHeaders,
+      };
+
+      // Log request for debugging
+      console.log('[apiService][refresh-token-request]', safeStringify({
         method: 'POST',
-        url,
-        headers: API_CONFIG.HEADERS,
-        body: requestBody,
+        endpoint: url,
+        body: sanitizedBody,
+        hasBody: true,
+        headers: {
+          'X-App-Version-Name': headers['X-App-Version-Name'],
+          'X-App-Version-Code': headers['X-App-Version-Code'],
+        },
         timestamp: new Date().toISOString(),
       }));
 
+      // Add timeout handling like main request method
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+
+      const startTime = Date.now();
       const response = await fetch(url, {
         method: 'POST',
-        headers: API_CONFIG.HEADERS,
-        body: JSON.stringify(requestBody),
+        headers,
+        body: JSON.stringify(sanitizedBody),
+        signal: controller.signal,
       });
+      const duration = Date.now() - startTime;
+
+      clearTimeout(timeoutId);
 
       const data = await response.json();
 
-      console.log('[API Response]', safeStringify({
+      // Log response for debugging
+      console.log('[apiService][refresh-token-response]', safeStringify({
         method: 'POST',
-        url,
+        endpoint: url,
         status: response.status,
         statusText: response.statusText,
-        data: data,
+        success: response.ok,
+        fullResponse: data,
+        duration: `${duration}ms`,
         timestamp: new Date().toISOString(),
       }));
 
@@ -269,41 +413,71 @@ class ApiService {
         const newAccessToken = data.data?.access_token || data.data?.accessToken;
         const newRefreshToken = data.data?.refresh_token || data.data?.refreshToken;
 
-        if (!newAccessToken) {
-          // Keep existing tokens - don't clear them
+        if (!newAccessToken || newAccessToken.trim() === '') {
+          console.warn('[apiService] Refresh token response missing access token');
+          // Keep existing tokens - don't clear them (might be temporary backend issue)
           return false;
         }
 
         // Save new tokens
         this.accessToken = newAccessToken;
-        this.refreshToken = newRefreshToken || refreshToken;
+        // Use new refresh token if provided, otherwise keep the old one
+        const finalRefreshToken = (newRefreshToken && newRefreshToken.trim() !== '') 
+          ? newRefreshToken 
+          : refreshToken;
+        this.refreshToken = finalRefreshToken;
+        
+        // Update expiry timestamp
+        const expiresIn = data.data?.expires_in || data.data?.expiresIn || 3600;
+        this.tokenExpiry = Date.now() + (expiresIn * 1000);
 
         await storageService.saveTokens({
           accessToken: newAccessToken,
-          refreshToken: newRefreshToken || refreshToken,
-          expiresIn: data.data?.expires_in || data.data?.expiresIn || 3600,
+          refreshToken: finalRefreshToken,
+          expiresIn,
         });
 
+        console.log('[apiService] Token refresh successful');
         return true;
       } else {
         // Check if this is a definitive "invalid token" error
-        const errorMessage = data.message || data.error || '';
+        const errorMessage = (data.message || data.error || '').toLowerCase();
         const isInvalidToken = response.status === 401 ||
-                              errorMessage.toLowerCase().includes('invalid') ||
-                              errorMessage.toLowerCase().includes('expired') ||
-                              errorMessage.toLowerCase().includes('unauthorized');
+                              response.status === 403 ||
+                              errorMessage.includes('invalid') ||
+                              errorMessage.includes('expired') ||
+                              errorMessage.includes('unauthorized') ||
+                              errorMessage.includes('token not found');
 
         if (isInvalidToken) {
+          console.warn('[apiService] Refresh token is invalid/expired, clearing session');
           await this.clearTokens();
+          
+          // Notify callback that session expired
+          if (this.onSessionExpiredCallback) {
+            try {
+              this.onSessionExpiredCallback();
+            } catch (callbackError) {
+              console.error('[apiService] Error in session expired callback:', callbackError);
+            }
+          }
         } else {
           // Network/server error - keep tokens and try again later
+          console.warn('[apiService] Refresh token failed (non-auth error), keeping tokens');
         }
 
         return false;
       }
     } catch (error: any) {
+      // Handle abort (timeout) separately
+      if (error.name === 'AbortError') {
+        console.warn('[apiService] Refresh token request timed out');
+        return false;
+      }
+
       // Network error or other exception - DON'T clear tokens
       // The user might just have temporary connectivity issues
+      console.error('[apiService] Refresh token error:', error);
       return false;
     }
   }
@@ -394,7 +568,7 @@ class ApiService {
     retryCount: number = 0
   ): Promise<ApiResponse<T>> {
     try {
-      // Ensure tokens are loaded from storage before making request
+      // Ensure tokens are loaded from storage
       await this.ensureTokensLoaded();
 
       const url = buildApiUrl(endpoint);
@@ -435,48 +609,82 @@ class ApiService {
       const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
       const startTime = Date.now();
-      const response = await fetch(url, {
+      // CRITICAL: For background profile checks, ensure no caching
+      // Check if cache-control header is set to bypass cache
+      const fetchOptions: RequestInit = {
         ...config,
         signal: controller.signal,
-      });
+      };
+      
+      // CRITICAL: Always bypass cache for home API to prevent stale 426 responses
+      // This fixes the issue where old cached 426 responses persist after app update/reinstall
+      const isHomeEndpoint = endpoint.includes('/api/buyer/home');
+      
+      // If cache-control header indicates no-cache, use no-store cache option
+      // OR if this is the home endpoint, always bypass cache
+      if (customHeaders?.['Cache-Control']?.includes('no-cache') || isHomeEndpoint) {
+        fetchOptions.cache = 'no-store';
+      }
+      
+      const response = await fetch(url, fetchOptions);
       const duration = Date.now() - startTime;
 
       clearTimeout(timeoutId);
 
-      // Handle 401 Unauthorized - attempt token refresh
+      // Handle 401 Unauthorized - attempt token refresh (REACTIVE REFRESH)
+      // Only refresh when API fails with 401, not proactively
       if (response.status === 401) {
         // Only attempt refresh once per request to avoid infinite loops
         if (retryCount < 1) {
+          console.log('[apiService] 🔄 REACTIVE REFRESH: API returned 401, attempting token refresh...');
           const refreshed = await this.refreshAccessToken();
 
           if (refreshed) {
             // Retry the original request with new token
+            console.log('[apiService] ✅ Token refresh successful, retrying original request...');
             return this.request<T>(method, endpoint, data, customHeaders, retryCount + 1);
           } else {
-            // Refresh failed - check if session was cleared
-            const stillHasTokens = await storageService.getAccessToken() !== null;
-            if (stillHasTokens) {
-              // Tokens still exist, refresh just failed temporarily
-              return {
-                success: false,
-                error: 'Unable to refresh session. Please try again.',
-                message: 'Unable to refresh session. Please try again.',
-              };
-            } else {
-              // Session was cleared, user needs to login
-              return {
-                success: false,
-                error: 'Session expired. Please login again.',
-                message: 'Session expired. Please login again.',
-              };
+            // Refresh failed - session expired, logout user
+            console.warn('[apiService] ⚠️ Token refresh failed, logging out user...');
+            
+            // Clear tokens if not already cleared
+            await this.clearTokens();
+            
+            // Trigger session expired callback to logout and navigate to login
+            if (this.onSessionExpiredCallback) {
+              try {
+                this.onSessionExpiredCallback();
+              } catch (callbackError) {
+                console.error('[apiService] Error in session expired callback:', callbackError);
+              }
             }
+            
+            return {
+              success: false,
+              error: 'Session expired. Please login again.',
+              message: 'Session expired. Please login again.',
+            };
           }
         } else {
-          // Already retried, don't try again
+          // Already retried, refresh must have failed
+          console.warn('[apiService] ⚠️ Already retried after 401, refresh failed - logging out...');
+          
+          // Clear tokens
+          await this.clearTokens();
+          
+          // Trigger session expired callback
+          if (this.onSessionExpiredCallback) {
+            try {
+              this.onSessionExpiredCallback();
+            } catch (callbackError) {
+              console.error('[apiService] Error in session expired callback:', callbackError);
+            }
+          }
+          
           return {
             success: false,
-            error: 'Authentication failed. Please login again.',
-            message: 'Authentication failed. Please login again.',
+            error: 'Session expired. Please login again.',
+            message: 'Session expired. Please login again.',
           };
         }
       }
@@ -497,12 +705,107 @@ class ApiService {
         timestamp: new Date().toISOString(),
       }));
 
+      // Check for user deletion / invalid session indicators on ALL authenticated endpoints
+      // When a user is deleted, ANY authenticated API call should detect it
       if (!response.ok) {
+        const statusCode = response.status;
+        const errorMessage = (responseData.message || responseData.error || '').toLowerCase();
+        
+        // Check if this is an authenticated endpoint (requires auth token)
+        // Exclude unauthenticated endpoints like login, OTP, etc.
+        // Only check if we have a token (meaning user was logged in)
+        const isAuthenticatedEndpoint = 
+          this.accessToken !== null &&
+          !endpoint.includes('/authentication/generate-otp') &&
+          !endpoint.includes('/authentication/login') &&
+          !endpoint.includes('/authentication/refresh-token');
+        
+        // Check for user deletion / invalid account indicators in error messages
+        // This is useful when backend returns generic 400/500 but with specific text
+        const hasExplicitUserDeletionMessage = 
+          errorMessage.includes('user not found') ||
+          errorMessage.includes('user deleted') ||
+          errorMessage.includes('account deleted') ||
+          errorMessage.includes('user does not exist') ||
+          errorMessage.includes('invalid user') ||
+          errorMessage.includes('account suspended') ||
+          errorMessage.includes('account deactivated') ||
+          errorMessage.includes('failed to retrieve user profile') ||
+          errorMessage.includes('failed to retrieve user') ||
+          errorMessage.includes('user account') ||
+          errorMessage.includes('invalid session') ||
+          errorMessage.includes('session expired');
+        
+        // For /user/profile endpoint, 400 status often means user deleted or invalid
+        // For other endpoints, be more conservative with 400 (only if explicit message)
+        const isProfileEndpoint400 = endpoint.includes('/user/profile') && statusCode === 400;
+        
+        // CRITICAL: Treat as user deleted / invalid session if:
+        // 1. ANY authenticated endpoint returns 401/403/404/410 (these indicate auth/session issues)
+        // 2. OR /user/profile returns 400 (specific case for profile endpoint)
+        // 3. OR error message explicitly indicates deleted / invalid user (on any endpoint)
+        // 
+        // This ensures user deletion is detected on ALL API calls, not just profile-related ones
+        const isUserDeleted = 
+          (isAuthenticatedEndpoint && (statusCode === 401 || statusCode === 403 || statusCode === 404 || statusCode === 410)) ||
+          isProfileEndpoint400 ||
+          hasExplicitUserDeletionMessage;
+
+        // If user deletion is detected, clear tokens and notify callback
+        if (isUserDeleted) {
+          console.warn('[apiService] User deletion detected, clearing session...', {
+            endpoint,
+            method,
+            statusCode,
+            errorMessage: responseData.message || responseData.error,
+          });
+          await this.clearTokens();
+          
+          // Notify callback if set (allows App.tsx to navigate to login)
+          if (this.onUserDeletedCallback) {
+            try {
+              this.onUserDeletedCallback();
+            } catch (callbackError) {
+              console.error('[apiService] Error in user deleted callback:', callbackError);
+            }
+          }
+        }
+
         return {
           success: false,
           error: responseData.message || 'Request failed',
           message: responseData.message,
+          statusCode: responseData.statusCode || response.status,
         };
+      }
+
+      // CRITICAL: After successful authenticated API call, check profile API in background
+      // This detects user deletion even when other APIs still work
+      // Only check for important endpoints and with throttling to reduce API calls
+      // Only check if:
+      // 1. This is an authenticated endpoint (not login/OTP)
+      // 2. The current request was successful
+      // 3. We haven't checked profile recently (throttle to avoid performance issues)
+      // 4. This is NOT the profile endpoint itself (avoid recursive check)
+      // 5. This is an important endpoint (home, cart, orders) - not every endpoint
+      const isAuthenticatedEndpoint = 
+        this.accessToken !== null &&
+        !endpoint.includes('/authentication/generate-otp') &&
+        !endpoint.includes('/authentication/login') &&
+        !endpoint.includes('/authentication/refresh-token');
+      
+      // Only check profile for important endpoints to reduce API calls
+      const isImportantEndpoint = 
+        endpoint.includes('/api/buyer/home') ||
+        endpoint.includes('/api/buyer/cart') ||
+        endpoint.includes('/api/buyer/orders') ||
+        endpoint.includes('/api/buyer/favorites');
+      
+      if (response.ok && isAuthenticatedEndpoint && !endpoint.includes('/user/profile') && isImportantEndpoint) {
+        this.checkProfileInBackground().catch((error) => {
+          // Silent fail - profile check is fire-and-forget
+          console.warn('[apiService] Background profile check failed:', error);
+        });
       }
 
       return {

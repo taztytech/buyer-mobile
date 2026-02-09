@@ -45,6 +45,7 @@ import { NetworkStatusScreen } from '@/components/NetworkStatusScreen';
 import { analyticsService, AnalyticsEvents, AnalyticsScreens } from '@/services/analytics.service';
 import { inAppUpdateService } from '@/services/inAppUpdate.service';
 import { crashlyticsService } from '@/services/crashlytics.service';
+import { ForcedUpdateModal } from '@/components/ForcedUpdateModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -69,6 +70,9 @@ function AppContent() {
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchResults, setSearchResults] = React.useState<SearchSuggestion[]>([]);
+  const [locationSearchQuery, setLocationSearchQuery] = React.useState('');
+  const [forcedUpdateRequired, setForcedUpdateRequired] = React.useState(false);
+  const [forcedUpdateMessage, setForcedUpdateMessage] = React.useState<string | undefined>(undefined);
   const [selectedLocation, setSelectedLocation] = React.useState<{
     name: string;
     address: string;
@@ -141,31 +145,49 @@ function AppContent() {
 
   // Network connectivity listener - runs while app is open
   // Optimized: Only updates state when connection status actually changes
+  // Fix: Get initial state immediately from first listener callback to avoid showing offline screen incorrectly
   React.useEffect(() => {
     let isFirstUpdate = true;
+    let hasReceivedInitialState = false;
 
+    // Set up listener for network state changes
+    // The listener fires immediately with current state, so we use that for initial state
     const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
       const connected = (state.isInternetReachable ?? state.isConnected) ?? false;
       const previous = lastConnectionStatusRef.current;
 
+      // On first update, always set the state (this is the initial state)
+      if (isFirstUpdate) {
+        isFirstUpdate = false;
+        hasReceivedInitialState = true;
+        lastConnectionStatusRef.current = connected;
+        setIsNetworkOnline(connected);
+        console.log('[App] Initial network state:', connected ? 'online' : 'offline');
+        return;
+      }
+
       // Skip update if status hasn't changed (prevents unnecessary re-renders)
-      if (previous === connected && !isFirstUpdate) {
+      if (previous === connected) {
         return;
       }
 
       lastConnectionStatusRef.current = connected;
-
-      if (isFirstUpdate) {
-        isFirstUpdate = false;
-        setIsNetworkOnline(connected);
-        return;
-      }
-
       // Only update state when connection status actually changes
       setIsNetworkOnline(connected);
     });
 
+    // Fallback: If listener doesn't fire within 500ms, default to online
+    // This prevents showing offline screen incorrectly for new users
+    const fallbackTimer = setTimeout(() => {
+      if (!hasReceivedInitialState) {
+        console.warn('[App] Network listener did not fire within timeout, defaulting to online');
+        lastConnectionStatusRef.current = true;
+        setIsNetworkOnline(true);
+      }
+    }, 500);
+
     return () => {
+      clearTimeout(fallbackTimer);
       unsubscribe();
     };
   }, []);
@@ -282,6 +304,80 @@ function AppContent() {
         // Initialize API service with stored tokens
         await apiService.initialize();
 
+        // Set callback for user deletion detection
+        // This will be called when API detects user is deleted from database
+        apiService.setUserDeletedCallback(async () => {
+          console.warn('[App] User deletion detected, forcing logout...');
+          try {
+            // Force logout without API call (user is already deleted)
+            await authService.forceLogout();
+            
+            // Reset analytics user data
+            await analyticsService.resetAnalyticsData();
+            
+            // Clear address cache
+            addressService.clearCache();
+            
+            // Clear cart
+            clearCart();
+            
+            // Reset all animated values
+            homeScreenSlide.setValue(0);
+            profileScreenSlide.setValue(SCREEN_WIDTH);
+            searchScreenSlide.setValue(SCREEN_WIDTH);
+            privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
+            termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
+            addressScreenSlide.setValue(SCREEN_WIDTH);
+            locationScreenSlide.setValue(SCREEN_WIDTH);
+            helpScreenSlide.setValue(SCREEN_WIDTH);
+            
+            // Navigate to login screen
+            setCurrentScreen('login');
+            setPhoneNumber('');
+          } catch (error) {
+            console.error('[App] Error handling user deletion:', error);
+            // Still navigate to login even if cleanup fails
+            setCurrentScreen('login');
+          }
+        });
+
+        // Set callback for session expiration
+        // This will be called when refresh token is invalid/expired and session is cleared
+        apiService.setSessionExpiredCallback(async () => {
+          console.warn('[App] Session expired, navigating to login...');
+          try {
+            // Force logout to clear all data
+            await authService.forceLogout();
+            
+            // Reset analytics user data
+            await analyticsService.resetAnalyticsData();
+            
+            // Clear address cache
+            addressService.clearCache();
+            
+            // Clear cart
+            clearCart();
+            
+            // Reset all animated values
+            homeScreenSlide.setValue(0);
+            profileScreenSlide.setValue(SCREEN_WIDTH);
+            searchScreenSlide.setValue(SCREEN_WIDTH);
+            privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
+            termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
+            addressScreenSlide.setValue(SCREEN_WIDTH);
+            locationScreenSlide.setValue(SCREEN_WIDTH);
+            helpScreenSlide.setValue(SCREEN_WIDTH);
+            
+            // Navigate to login screen
+            setCurrentScreen('login');
+            setPhoneNumber('');
+          } catch (error) {
+            console.error('[App] Error handling session expiration:', error);
+            // Still navigate to login even if cleanup fails
+            setCurrentScreen('login');
+          }
+        });
+
         // Initialize Crashlytics
         await crashlyticsService.initialize();
 
@@ -346,6 +442,15 @@ function AppContent() {
   // Handle Android back button
   React.useEffect(() => {
     const backAction = () => {
+      // Block navigation when forced update is required, but ONLY on non-auth screens
+      // Allow back button to work normally on login, welcome, and OTP screens
+      const authScreens: Array<typeof currentScreen> = ['login', 'welcome', 'otp'];
+      const isOnAuthScreen = authScreens.includes(currentScreen);
+      
+      if (forcedUpdateRequired && !isOnAuthScreen) {
+        return true; // Prevent back button from doing anything on non-auth screens
+      }
+      
       // Handle back button based on current screen
       switch (currentScreen) {
         case 'home':
@@ -650,7 +755,10 @@ function AppContent() {
   // Location Selection Navigation
   const handleNavigateToLocationSelection = (query?: string, latitude?: number, longitude?: number) => {
     if (query) {
-      setSearchQuery(query);
+      setLocationSearchQuery(query);
+    } else {
+      // Clear location search query when navigating without a query
+      setLocationSearchQuery('');
     }
     // Store initial location coordinates if provided (from "Add address" button)
     if (latitude !== undefined && longitude !== undefined) {
@@ -1890,6 +1998,32 @@ function AppContent() {
     SplashScreen.hideAsync().catch(() => {});
   }, []);
 
+  // Handler for forced update from API
+  const handleForcedUpdateRequired = React.useCallback((message?: string) => {
+    setForcedUpdateRequired(true);
+    setForcedUpdateMessage(message);
+  }, []);
+
+  const shouldShowForcedUpdate = React.useMemo(() => {
+    if (!forcedUpdateRequired) {
+      return false;
+    }
+    
+    // Don't show while checking auth
+    if (isCheckingAuth) {
+      return false;
+    }
+    
+    // Don't show on auth screens (login, welcome, OTP)
+    const authScreens: Array<typeof currentScreen> = ['login', 'welcome', 'otp'];
+    if (authScreens.includes(currentScreen)) {
+      return false;
+    }
+    
+    // Show on all other screens
+    return true;
+  }, [forcedUpdateRequired, isCheckingAuth, currentScreen]);
+
   return (
     <>
       <SafeAreaProvider>
@@ -1937,6 +2071,7 @@ function AppContent() {
               onCategoriesLoaded={setCategoryData}
               isFocused={currentScreen === 'home'}
               addressRefreshTrigger={addressRefreshTrigger}
+              onForcedUpdateRequired={handleForcedUpdateRequired}
             />
           </Animated.View>
 
@@ -2009,7 +2144,7 @@ function AppContent() {
             pointerEvents={currentScreen === 'locationSelection' ? 'auto' : 'none'}
           >
             <LocationSelectionScreen
-              initialSearchQuery={searchQuery}
+              initialSearchQuery={locationSearchQuery}
               editingAddress={editingAddress}
               initialLatitude={editingAddress?.latitude || initialLocationCoords?.latitude}
               initialLongitude={editingAddress?.longitude || initialLocationCoords?.longitude}
@@ -2427,6 +2562,16 @@ function AppContent() {
           )}
         </View>
       ) : null}
+        
+        {/* Forced Update Modal - Blocks all app usage when flag is true */}
+        {/* Show on all screens except login, welcome, and OTP verification */}
+        {/* Works when app is opened from notification or any other scenario */}
+        <ForcedUpdateModal
+          visible={shouldShowForcedUpdate}
+          title="Update Available"
+          message={forcedUpdateMessage || "A new version of the app is available. Please update to continue using the app."}
+          updateButtonText="Update Now"
+        />
       </SafeAreaProvider>
     </>
   );

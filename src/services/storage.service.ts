@@ -15,6 +15,13 @@ const STORAGE_KEYS = {
   VEG_MODE: '@tazty_veg_mode',
   CART_DATA: '@tazty_cart_data',
   CART_RESTAURANT: '@tazty_cart_restaurant',
+  // FCM and notification related keys
+  FCM_TOKEN: '@tazty_fcm_token',
+  PUSH_TOKEN: '@tazty_push_token',
+  DEVICE_ID: '@tazty_device_id',
+  BACKGROUND_NOTIFICATIONS: '@tazty_background_notifications',
+  // App version tracking for cache clearing
+  APP_VERSION_CODE: '@tazty_app_version_code',
 };
 
 export interface TokenData {
@@ -228,7 +235,62 @@ class StorageService {
   }
 
   /**
+   * Save app version code for tracking version changes
+   */
+  async saveAppVersionCode(versionCode: number | string): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.APP_VERSION_CODE, String(versionCode));
+    } catch (error) {
+      console.error('[StorageService] Error saving app version code:', error);
+    }
+  }
+
+  /**
+   * Get stored app version code
+   */
+  async getAppVersionCode(): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem(STORAGE_KEYS.APP_VERSION_CODE);
+    } catch (error) {
+      console.error('[StorageService] Error getting app version code:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if app version has changed (for cache clearing on update)
+   */
+  async hasVersionChanged(currentVersionCode: number | string): Promise<boolean> {
+    try {
+      const storedVersion = await this.getAppVersionCode();
+      const currentVersionStr = String(currentVersionCode);
+      
+      // If no stored version, this is first run or fresh install
+      if (!storedVersion) {
+        // Save current version for next check
+        await this.saveAppVersionCode(currentVersionCode);
+        return false; // Don't treat first run as version change
+      }
+      
+      // Check if version changed
+      if (storedVersion !== currentVersionStr) {
+        // Update stored version
+        await this.saveAppVersionCode(currentVersionCode);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('[StorageService] Error checking version change:', error);
+      return false;
+    }
+  }
+
+  /**
    * Clear all stored data (logout)
+   * This clears all user-specific data including authentication tokens,
+   * user data, cart data, FCM tokens, device ID, and background notifications.
+   * Note: VEG_MODE preference is preserved as it's a device-level preference.
    */
   async clearAll(): Promise<void> {
     try {
@@ -238,12 +300,19 @@ class StorageService {
         STORAGE_KEYS.TOKEN_EXPIRY,
         STORAGE_KEYS.USER_DATA,
         STORAGE_KEYS.IS_LOGGED_IN,
-        // Note: Cart data is cleared on logout
+        // Cart data is cleared on logout
         STORAGE_KEYS.CART_DATA,
         STORAGE_KEYS.CART_RESTAURANT,
+        // FCM and notification data is cleared on logout
+        STORAGE_KEYS.FCM_TOKEN,
+        STORAGE_KEYS.PUSH_TOKEN,
+        STORAGE_KEYS.DEVICE_ID,
+        STORAGE_KEYS.BACKGROUND_NOTIFICATIONS,
       ]);
-      // Note: VEG_MODE is not cleared on logout - it persists
+      // Note: VEG_MODE is not cleared on logout - it persists as a device preference
+      // Note: APP_VERSION_CODE is not cleared on logout - it persists for version tracking
     } catch (error) {
+      console.error('[StorageService] Error clearing all data:', error);
       throw error;
     }
   }

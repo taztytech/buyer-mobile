@@ -157,6 +157,7 @@ class AuthService {
 
   /**
    * Logout user
+   * Clears all user data including tokens, FCM tokens, device ID, and background notifications
    */
   async logout(): Promise<ApiResponse> {
     try {
@@ -166,22 +167,71 @@ class AuthService {
         // Silent fail - continue with logout even if this fails
       });
 
-      // Attempt to call logout API
-      const response = await apiService.post(API_CONFIG.ENDPOINTS.AUTHENTICATION.LOGOUT);
+      // Attempt to call logout API (but don't block if it fails)
+      let response: ApiResponse;
+      try {
+        response = await apiService.post(API_CONFIG.ENDPOINTS.AUTHENTICATION.LOGOUT);
+      } catch (error: any) {
+        // If API call fails, create a response object but continue with cleanup
+        response = {
+          success: false,
+          error: error.message || 'Failed to call logout API',
+          message: error.message,
+        };
+      }
 
-      // Clear tokens and user data regardless of API response
+      // Clear all tokens and user data regardless of API response
+      // This ensures complete cleanup even if API call fails
       await apiService.clearTokens();
 
       return response;
     } catch (error: any) {
-      // Clear tokens even if API call fails
-      await apiService.clearTokens();
+      // Clear tokens even if everything fails
+      await apiService.clearTokens().catch((clearError) => {
+        console.error('⚠️  Failed to clear tokens on logout:', clearError);
+      });
 
       return {
         success: false,
         error: error.message || 'Failed to logout',
         message: error.message,
       };
+    }
+  }
+
+  /**
+   * Force logout without API call (used when user deletion is detected)
+   * This clears all data immediately without attempting to call the logout API
+   */
+  async forceLogout(): Promise<void> {
+    try {
+      // Delete FCM token from backend and Firebase (don't block if this fails)
+      fcmNotificationService.unregisterToken().catch((error) => {
+        console.warn('⚠️  Failed to unregister FCM token on force logout:', error);
+      });
+
+      // Clear all tokens and user data immediately
+      await apiService.clearTokens();
+    } catch (error: any) {
+      console.error('⚠️  Error during force logout:', error);
+      // Still try to clear tokens even if FCM unregister fails
+      await apiService.clearTokens().catch((clearError) => {
+        console.error('⚠️  Failed to clear tokens on force logout:', clearError);
+      });
+    }
+  }
+
+  /**
+   * Validate user session by checking if user profile can be fetched
+   * Returns true if user exists and session is valid, false otherwise
+   */
+  async validateSession(): Promise<boolean> {
+    try {
+      const response = await this.getProfile();
+      return response.success === true;
+    } catch (error) {
+      console.warn('[AuthService] Session validation failed:', error);
+      return false;
     }
   }
 

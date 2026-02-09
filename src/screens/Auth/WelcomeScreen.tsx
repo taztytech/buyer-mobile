@@ -47,7 +47,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
   const [keyboardHeight, setKeyboardHeight] = React.useState(0);
   // State tracking for form animations (set but not read - used for state management)
   const [_focusedField, setFocusedField] = React.useState<'name' | 'email' | null>(null);
-  const [_isFormMoved, setIsFormMoved] = React.useState(false);
+  const [isFormMoved, setIsFormMoved] = React.useState(false);
 
   // Smooth easing function for natural motion
   const smoothEasing = Easing.bezier(0.4, 0.0, 0.2, 1);
@@ -395,12 +395,14 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            keyboardHeight > 0 && { paddingBottom: keyboardHeight + 20 }
+            keyboardHeight > 0 && { paddingBottom: keyboardHeight + 20 },
+            isFormMoved && { flexGrow: 0 }
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           bounces={false}
           keyboardDismissMode="interactive"
+          scrollEnabled={!isFormMoved}
         >
           {/* Green Background Section with Elegant Animation */}
           <Animated.View
@@ -600,7 +602,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 20,
   },
   greenSection: {
     height: 258,
@@ -646,11 +647,13 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 40,
+    paddingBottom: 0,
   },
   formContainer: {
     width: '100%',
     gap: 16,
+    paddingBottom: 40,
+    flex: 1,
   },
   title: {
     width: '100%',

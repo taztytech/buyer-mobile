@@ -720,21 +720,32 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const bottomSheetHeight = useRef(new Animated.Value(OPEN_HEIGHT)).current; // Start open
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(true); // Start open
 
-  const handleTrackOrder = (orderId: string, order?: OrderListItem) => {
-    // Check if order has tracking_url
-    const trackingUrl = (order as any)?.tracking_url || null;
-    
-    if (trackingUrl && trackingUrl !== null) {
-      // Open WebView with tracking URL
-      setSelectedTrackingUrl(trackingUrl);
-      setSelectedOrderIdForTracking(orderId);
-      setShowTrackingWebView(true);
-      // Fetch order details for bottom sheet
-      fetchTrackingOrderData(orderId);
-    } else if (onTrackOrder) {
-      // Fallback to parent handler if no tracking URL
-      onTrackOrder(orderId);
+  // Safely derive tracking URL from full order data (detail API response)
+  const getTrackingUrlFromOrderData = useCallback((data: any): string | null => {
+    if (!data) return null;
+
+    // 1) Prefer top-level tracking_url when present
+    if (data.tracking_url && data.tracking_url !== null) {
+      return String(data.tracking_url);
     }
+
+    // 2) Fallback: look into tracking history for the latest entry with tracking_url
+    const history = data.tracking;
+    if (Array.isArray(history) && history.length > 0) {
+      const lastWithUrl = [...history].reverse().find((entry: any) => entry?.tracking_url);
+      if (lastWithUrl?.tracking_url) {
+        return String(lastWithUrl.tracking_url);
+      }
+    }
+
+    return null;
+  }, []);
+
+  const handleTrackOrder = (orderId: string) => {
+    if (!orderId) return;
+    setSelectedOrderIdForTracking(orderId);
+    // Always fetch full order details; fetchTrackingOrderData will decide whether to open WebView or fallback
+    fetchTrackingOrderData(orderId);
   };
 
   // Fetch order details for tracking bottom sheet from API
@@ -787,6 +798,18 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           });
           return response.data;
         });
+
+        if (!silent) {
+          // Prefer opening WebView with tracking URL when available
+          const trackingUrl = getTrackingUrlFromOrderData(response.data);
+          if (trackingUrl) {
+            setSelectedTrackingUrl(trackingUrl);
+            setShowTrackingWebView(true);
+          } else if (onTrackOrder) {
+            // Fallback to parent handler (internal tracking screen) only when no tracking URL exists
+            onTrackOrder(orderId);
+          }
+        }
       }
     } catch (err: any) {
       console.error('Failed to fetch tracking order data:', err);
@@ -1237,8 +1260,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 <Text style={styles.rateButtonText}>Help</Text>
               </TouchableOpacity> */}
               {(() => {
-                // Track Order is enabled ONLY for: picked, out-for-delivery, on-the-way, delivered
-                // Disabled for: confirmed (order placed), billed (order accepted), packed (order ready), agent-assigned
+                // Track Order is enabled for: packed, agent-assigned, agent-arrived-restaurant, picked, out-for-delivery, on-the-way, delivered
+                // Disabled for: confirmed (order placed), billed (order accepted)
                 const rawStatus = (order.status || '').toString().toLowerCase();
                 const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
                 
@@ -1246,11 +1269,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 const disabledStatuses = [
                   'confirmed',
                   'billed',
-                  'packed',
-                  'agent-assigned',
-                  'agent_assigned',
-                  'agent-arrived-restaurant',
-                  'agent_arrived_restaurant',
+                  // From packed / agent-assigned onwards, tracking should be enabled
                   'cancelled',
                   'canceled',
                   'rejected',
@@ -1262,8 +1281,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   'preparing'
                 ];
                 
-                // Define enabled statuses - tracking only works from "picked" status onward
+                // Define enabled statuses - tracking works from "packed" / "agent-assigned" status onward
                 const enabledStatuses = [
+                  'packed',
+                  'agent-assigned',
+                  'agent_assigned',
+                  'agent-arrived-restaurant',
+                  'agent_arrived_restaurant',
                   'picked',
                   'out-for-delivery',
                   'out_for_delivery',
@@ -1286,7 +1310,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                       styles.reorderButton,
                       !isTrackingEnabled && styles.disabledButton
                     ]}
-                    onPress={() => handleTrackOrder(order.id.toString(), order)}
+                    onPress={() => handleTrackOrder(order.id.toString())}
                     activeOpacity={!isTrackingEnabled ? 1 : 0.8}
                     disabled={!isTrackingEnabled}
                   >
@@ -1563,43 +1587,71 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
               const displayStatus = displayOrder?.status;
               const statusConfig = mapOrderStatusToUI(displayStatus);
               
+              // Get agent info from tracking array - find latest entry with agent details
+              const trackingArray = displayOrder?.tracking || [];
+              let agentName: string | null = null;
+              let agentPhone: string | null = null;
+              
+              // Find the latest tracking entry with agent_name or agent_phone
+              // Iterate from the end to get the most recent agent assignment
+              for (let i = trackingArray.length - 1; i >= 0; i--) {
+                const trackingEntry = trackingArray[i];
+                if (trackingEntry) {
+                  // If we find an entry with agent_name, use it
+                  if (trackingEntry.agent_name) {
+                    agentName = trackingEntry.agent_name;
+                    agentPhone = trackingEntry.agent_phone || null;
+                    break;
+                  }
+                  // If we find an entry with agent_phone but no name, still use it
+                  if (trackingEntry.agent_phone && !agentName) {
+                    agentName = null;
+                    agentPhone = trackingEntry.agent_phone;
+                  }
+                }
+              }
+              
               return (
                 <View 
                   style={styles.trackingTopSection}
                   {...(!isBottomSheetOpen ? panResponder.panHandlers : {})}
                 >
-                  <View style={styles.trackingRestaurantLeft}>
-                    {displayOrder.restaurant?.logo_url ? (
-                      <Image
-                        source={{ uri: displayOrder.restaurant.logo_url }}
-                        style={styles.trackingRestaurantLogo}
-                        defaultSource={require('@/assets/dummy-restaurent.png')}
-                      />
-                    ) : (
-                      <View style={styles.trackingRestaurantLogoPlaceholder}>
-                        <MaterialIcons name="restaurant" size={20} color="#999" />
-                      </View>
-                    )}
-                    <View style={styles.trackingRestaurantDetails}>
-                      <Text style={styles.trackingRestaurantName}>
-                        {displayOrder.restaurant?.name || 'Unknown Restaurant'}
-                      </Text>
-                      {displayOrder.delivery_address?.address3 && (
-                        <Text style={styles.trackingRestaurantAddress}>
-                          {displayOrder.delivery_address.address3}
-                        </Text>
+                  <View style={styles.trackingLeftContent}>
+                    <View style={styles.trackingRestaurantRow}>
+                      {displayOrder.restaurant?.logo_url ? (
+                        <Image
+                          source={{ uri: displayOrder.restaurant.logo_url }}
+                          style={styles.trackingRestaurantLogo}
+                          defaultSource={require('@/assets/dummy-restaurent.png')}
+                        />
+                      ) : (
+                        <View style={styles.trackingRestaurantLogoPlaceholder}>
+                          <MaterialIcons name="restaurant" size={20} color="#999" />
+                        </View>
                       )}
+                      <View style={styles.trackingRestaurantDetails}>
+                        <Text style={styles.trackingRestaurantName}>
+                          {displayOrder.restaurant?.name || 'Unknown Restaurant'}
+                        </Text>
+                        {displayOrder.delivery_address?.address3 && (
+                          <Text style={styles.trackingRestaurantAddress}>
+                            {displayOrder.delivery_address.address3}
+                          </Text>
+                        )}
+                      </View>
                     </View>
                   </View>
-                  <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
-                    <MaterialIcons 
-                      name={statusConfig.iconName as any} 
-                      size={16} 
-                      color={statusConfig.color} 
-                    />
-                    <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
-                      {statusConfig.label}
-                    </Text>
+                  <View style={styles.trackingRightContent}>
+                    <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
+                      <MaterialIcons 
+                        name={statusConfig.iconName as any} 
+                        size={16} 
+                        color={statusConfig.color} 
+                      />
+                      <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
+                        {statusConfig.label}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               );
@@ -1678,6 +1730,22 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   // Check if order is delivered
                   const isDelivered = (displayStatus || '').toLowerCase().trim() === 'delivered' || 
                                       (displayStatus || '').toLowerCase().trim() === 'completed';
+
+                  // Normalize status for helper conditions
+                  const normalizedStatus = (displayStatus || '').toLowerCase().replace(/[_\s]+/g, '-');
+                  const isAgentAssignedish =
+                    normalizedStatus === 'agent-assigned' ||
+                    normalizedStatus === 'agent-arrived-restaurant' ||
+                    normalizedStatus === 'picked' ||
+                    normalizedStatus === 'out-for-delivery' ||
+                    normalizedStatus === 'on-the-way';
+
+                  // If status says agent is involved but we don't yet have name from API,
+                  // show a friendly placeholder instead of "No Delivery Agent Assigned"
+                  let agentDisplayName = agentName;
+                  if (!agentDisplayName && isAgentAssignedish) {
+                    agentDisplayName = 'Delivery partner is on the way';
+                  }
                   
                   // Format timestamp to show only time
                   const formatTimestamp = (timestamp: string | null | undefined): string => {
@@ -1724,6 +1792,34 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                       
                       {/* Divider */}
                       <View style={styles.trackingDivider} />
+                      
+                      {/* Agent Details - above estimated delivery time */}
+                      <View style={styles.trackingAgentRowInScroll}>
+                        <View style={styles.trackingAgentInfoContainer}>
+                          <Text style={styles.trackingAgentNameInScroll}>
+                            {agentDisplayName || 'No Delivery Agent Assigned'}
+                          </Text>
+                          {agentDisplayName && agentName && (
+                            <View style={styles.trackingAgentTag}>
+                              <Text style={styles.trackingAgentTagText}>Delivery Partner</Text>
+                            </View>
+                          )}
+                        </View>
+                        {agentPhone && (
+                          <TouchableOpacity
+                            style={styles.trackingCallButtonInScroll}
+                            onPress={() => handleCallDeliveryAgent(displayOrder.order_number, agentPhone)}
+                            disabled={isInitiatingCall}
+                            activeOpacity={0.7}
+                          >
+                            {isInitiatingCall ? (
+                              <ActivityIndicator size="small" color="#00B14F" />
+                            ) : (
+                              <MaterialIcons name="phone" size={18} color="#00B14F" />
+                            )}
+                          </TouchableOpacity>
+                        )}
+                      </View>
                       
                       {/* Estimated Delivery Time or Completed Status */}
                       {isDelivered ? (
@@ -1797,32 +1893,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                       
                       {/* Divider */}
                       <View style={styles.trackingDivider} />
-                      
-                      {/* Agent Details */}
-                      <View style={styles.trackingPartnerRow}>
-                        <Text style={styles.trackingPartnerName}>
-                          {agentName || 'No Delivery Agent Assigned'}
-                        </Text>
-                        <View style={styles.trackingPartnerPhoneContainer}>
-                          {/* <Text style={styles.trackingPartnerPhone}>
-                            {agentPhone || ' '}
-                          </Text> */}
-                          {agentPhone && (
-                            <TouchableOpacity
-                              style={styles.trackingCallButton}
-                              onPress={() => handleCallDeliveryAgent(displayOrder.order_number, agentPhone)}
-                              disabled={isInitiatingCall}
-                              activeOpacity={0.7}
-                            >
-                              {isInitiatingCall ? (
-                                <ActivityIndicator size="small" color="#00B14F" />
-                              ) : (
-                                <MaterialIcons name="phone" size={18} color="#00B14F" />
-                              )}
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      </View>
                       
                       {/* Bottom spacing - two lines */}
                       <View style={styles.trackingBottomSpacing} />
@@ -2295,14 +2365,22 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingRight: 20,
     paddingLeft: 20,
-    paddingBottom: 16,
+    paddingBottom: 12,
     marginBottom: 6,
   },
-  trackingRestaurantLeft: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  trackingLeftContent: {
     flex: 1,
     marginRight: 12,
+  },
+  trackingRightContent: {
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    gap: 8,
+  },
+  trackingRestaurantRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 6,
   },
   trackingRestaurantLogo: {
     width: 36,
@@ -2322,7 +2400,6 @@ const styles = StyleSheet.create({
   },
   trackingRestaurantDetails: {
     flex: 1,
-    gap: 0,
   },
   trackingRestaurantName: {
     fontFamily: 'Poppins_600SemiBold',
@@ -2337,6 +2414,58 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: '#000000',
     opacity: 0.85,
+  },
+  trackingAgentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 46, // Align with restaurant name (logo width 36 + margin 10 = 46)
+    marginBottom: 0,
+  },
+  trackingAgentName: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#000000',
+  },
+  trackingAgentRowInScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  trackingAgentInfoContainer: {
+    flex: 1,
+  },
+  trackingAgentNameInScroll: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#000000',
+  },
+  trackingAgentTag: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 177, 79, 0.08)',
+  },
+  trackingAgentTagText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#00B14F',
+  },
+  trackingCallButtonInScroll: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 177, 79, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#00B14F',
+    marginLeft: 12,
   },
   trackingStatusBadge: {
     flexDirection: 'row',
@@ -2367,7 +2496,8 @@ const styles = StyleSheet.create({
   trackingDivider: {
     height: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    marginVertical: 12,
+    marginTop: 8,
+    marginBottom: 12,
   },
   trackingDeliveryTimeContainer: {
     alignItems: 'center',
@@ -2502,6 +2632,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#00B14F',
+    marginTop: 0,
   },
   trackingBottomSpacing: {
     height: 32, // Two lines worth of space (16px per line)

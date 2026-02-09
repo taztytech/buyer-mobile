@@ -595,6 +595,39 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   }, [showAddressModal, showLocationSelection, showCustomizationModal]);
 
+  /**
+   * Reactivate cart with retry logic
+   * This ensures the cart is made active when payment is cancelled
+   */
+  const reactivateCartWithRetry = async (cartId: number, maxRetries: number = 3): Promise<boolean> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[OrderDetails] Reactivating cart (attempt ${attempt}/${maxRetries})...`);
+        const response = await cartService.updateCart(cartId, { is_active: true });
+        
+        if (response.success) {
+          console.log('[OrderDetails] Cart reactivated successfully');
+          return true;
+        } else {
+          console.warn(`[OrderDetails] Cart reactivation failed (attempt ${attempt}):`, response.error);
+          // If not the last attempt, wait before retrying
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // Exponential backoff
+          }
+        }
+      } catch (error) {
+        console.error(`[OrderDetails] Cart reactivation error (attempt ${attempt}):`, error);
+        // If not the last attempt, wait before retrying
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // Exponential backoff
+        }
+      }
+    }
+    
+    console.error('[OrderDetails] Failed to reactivate cart after all retries');
+    return false;
+  };
+
   const handlePlaceOrder = async () => {
     if (!effectiveRestaurantId) {
       showConfirmation({
@@ -748,6 +781,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount
 
+          setIsPlacingOrder(false); // Reset loading state before showing confirmation
+
           showConfirmation({
             title: '',
             message: 'Order created successfully. Payment details not found.',
@@ -763,11 +798,42 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           return;
         }
 
+        // Reset loading state before opening Razorpay to prevent blank screen
+        // This ensures the UI remains visible during the transition to Razorpay
+        setIsPlacingOrder(false);
+
+        // Small delay to ensure UI is ready before opening Razorpay
+        // This prevents the blank screen issue that occurs sometimes when Razorpay opens
+        // Using requestAnimationFrame to ensure UI is fully rendered before opening Razorpay
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            // Additional small delay to ensure all UI updates are complete
+            setTimeout(() => {
+              resolve();
+            }, 100);
+          });
+        });
+
         // Process online payment via Razorpay using payment_details from order response
         const paymentResult = await paymentService.processPayment(
           orderId,
           paymentDetails
         );
+
+        // CRITICAL: After Razorpay closes, ensure UI is fully restored before showing dialogs
+        // Razorpay is a native module that takes over the screen, so we need to wait for
+        // React Native to fully restore the UI before showing any modals/dialogs
+        // This prevents the black screen issue
+        await new Promise<void>((resolve) => {
+          // Use requestAnimationFrame to ensure UI is fully rendered
+          // This is critical after returning from native modules like Razorpay
+          requestAnimationFrame(() => {
+            // Additional delay to ensure all interactions and animations are complete
+            setTimeout(() => {
+              resolve();
+            }, 200); // Slightly longer delay to ensure UI is stable
+          });
+        });
 
         if (paymentResult.success) {
           // Payment successful - clear local cart and reset form (backend handles API clearing)
@@ -853,27 +919,52 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             }
           }
 
+          // Reactivate cart when payment is cancelled/failed
+          // This is critical for allowing user to retry the order
+          // Use retry logic to ensure it succeeds even if network is slow
+          if (cartData?.id) {
+            // Call reactivation with retry logic - don't await to avoid blocking UI
+            // But log the result for debugging
+            reactivateCartWithRetry(cartData.id).then((success) => {
+              if (success) {
+                console.log('[OrderDetails] Cart reactivated successfully after payment cancellation');
+              } else {
+                console.warn('[OrderDetails] Cart reactivation failed after all retries - user may need to refresh');
+              }
+            }).catch((error) => {
+              console.error('[OrderDetails] Unexpected error during cart reactivation:', error);
+            });
+          } else {
+            console.warn('[OrderDetails] No cart ID available to reactivate');
+          }
+
           // Don't reset form or clear cart - user can try again with same selections
           // Cart is preserved so user can retry placing the order
 
+          // CRITICAL: After Razorpay closes (even on failure), ensure UI is fully restored
+          // Wait for UI to be ready before showing error dialog to prevent black screen
+          await new Promise<void>((resolve) => {
+            // Use requestAnimationFrame to ensure UI is fully rendered
+            requestAnimationFrame(() => {
+              // Additional delay to ensure all interactions and animations are complete
+              setTimeout(() => {
+                resolve();
+              }, 200);
+            });
+          });
+
           // Show appropriate confirmation with "Try Again" button for all error types
           // User stays on OrderDetailsScreen (cart page) to try again
+          // Note: Cart reactivation already happened above, button just closes dialog
           showConfirmation({
             title,
             message,
             confirmText: 'Try Again',
             cancelText: '',
             confirmButtonColor: '#00B14F',
-            onConfirm: async () => {
+            onConfirm: () => {
               // Just close the dialog - user stays on OrderDetailsScreen (cart page) to try again
-              // Reactivate cart
-              if (cartData?.id) {
-                try {
-                  await cartService.updateCart(cartData.id, { is_active: true });
-                } catch (error) {
-                  console.error('Failed to reactivate cart:', error);
-                }
-              }
+              // Cart reactivation already happened automatically when user returned from Razorpay
             },
           });
         }

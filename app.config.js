@@ -153,7 +153,7 @@ module.exports = {
   expo: {
     name: "Tazty",
     slug: "Tazty",
-    version: "1.0.1",
+    version: "1.0.3",
     orientation: "portrait",
     icon: "./src/assets/icon.png",
     userInterfaceStyle: "light",
@@ -218,6 +218,7 @@ module.exports = {
       EXPO_PUBLIC_API_BASE_URL: apiConfig.apiBaseUrl,
       EXPO_PUBLIC_GOOGLE_MAPS_API_KEY:
         process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+      TAZTY_SELLER_BASEURL: process.env.TAZTY_SELLER_BASEURL || process.env.EXPO_PUBLIC_TAZTY_SELLER_BASEURL,
       eas: {
         projectId: "7d65a380-eee0-49b0-9f39-a5cd6eaede5a"
       }

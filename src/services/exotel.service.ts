@@ -3,6 +3,7 @@
  * Handles Exotel API calls for connecting users with delivery agents
  */
 
+import Constants from 'expo-constants';
 import { ApiResponse } from './api.service';
 
 // Types
@@ -19,7 +20,17 @@ export interface ExotelCallResponse {
 }
 
 class ExotelService {
-  private readonly EXOTEL_API_URL = 'https://apiuat.valardigital.in/exotel';
+  private getExotelApiUrl(): string {
+    // Get seller base URL from environment config
+    const sellerBaseUrl = Constants.expoConfig?.extra?.TAZTY_SELLER_BASEURL as string | undefined;
+    
+    if (!sellerBaseUrl) {
+      throw new Error('TAZTY_SELLER_BASEURL is not configured in environment variables');
+    }
+    
+    // Construct the full Exotel API URL by appending /exotel to the base URL
+    return `${sellerBaseUrl}/exotel`;
+  }
 
   /**
    * Initiate a call between user and delivery agent via Exotel
@@ -60,7 +71,7 @@ class ExotelService {
         requestBody.order_id = request.order_id;
       }
 
-      const response = await fetch(this.EXOTEL_API_URL, {
+      const response = await fetch(this.getExotelApiUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
