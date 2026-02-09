@@ -158,6 +158,11 @@ module.exports = {
     icon: "./src/assets/icon.png",
     userInterfaceStyle: "light",
     newArchEnabled: true,
+    // Facebook App configuration for Ads / App Events
+    facebookAppId: "1793377224702906",
+    facebookDisplayName: "Tazty Food Delivery",
+    facebookAutoLogAppEventsEnabled: true,
+    facebookAdvertiserIDCollectionEnabled: true,
     splash: {
       image: "./src/assets/splash.png",
       resizeMode: "cover",

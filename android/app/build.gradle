@@ -222,6 +222,10 @@ dependencies {
     implementation 'com.google.firebase:firebase-analytics'
     implementation 'com.google.firebase:firebase-crashlytics'
 
+    // Facebook SDK (includes Core + App Events for campaigns)
+    // Version 17.0.0 is AndroidX-compatible and satisfies >= 4.34 requirement
+    implementation 'com.facebook.android:facebook-android-sdk:17.0.0'
+
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
     def isWebpAnimatedEnabled = (findProperty('expo.webp.animated') ?: "") == "true";
