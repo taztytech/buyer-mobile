@@ -9,6 +9,8 @@ import {
   TextInput,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { analyticsService } from '@/services/analytics.service';
+import { AnalyticsScreens, AnalyticsEvents } from '@/services/analytics.service';
 
 interface PaymentModalProps {
   visible: boolean;
@@ -29,6 +31,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
   useEffect(() => {
     if (visible) {
+      // Track payment screen view when modal opens
+      analyticsService.logScreenView(AnalyticsScreens.PAYMENT);
+      
+      // Track payment start event
+      analyticsService.logEvent(AnalyticsEvents.PAYMENT_START, {
+        payment_method: selectedPayment,
+      });
+
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
@@ -38,11 +48,16 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     } else {
       slideAnim.setValue(1000);
     }
-  }, [visible]);
+  }, [visible, selectedPayment]);
 
   const handleSelectPayment = (method: string) => {
     setSelectedMethod(method);
     onSelectPayment(method);
+    
+    // Track payment method selection
+    analyticsService.logEvent(AnalyticsEvents.PAYMENT_START, {
+      payment_method: method,
+    });
   };
 
   return (

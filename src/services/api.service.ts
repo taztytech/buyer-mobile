@@ -5,9 +5,12 @@
 
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import * as Device from 'expo-device';
 import { APP_VERSION_CODE, APP_VERSION_NAME } from '@/config/appVersion.generated';
 import { API_CONFIG, buildApiUrl } from '@/config/api.config';
 import { storageService } from './storage.service';
+import { crashlyticsService } from './crashlytics.service';
 
 // Types
 export interface ApiResponse<T = any> {
@@ -590,6 +593,7 @@ class ApiService {
 
       // Centralized request logging for debugging purposes
       const requestBody = config.body ? JSON.parse(config.body as string) : undefined;
+      
       console.log(
         '[apiService][request]',
         safeStringify({
@@ -710,6 +714,28 @@ class ApiService {
       if (!response.ok) {
         const statusCode = response.status;
         const errorMessage = (responseData.message || responseData.error || '').toLowerCase();
+
+        // Log API failure to Crashlytics
+        const apiFailureError = new Error(`API Failure URL: ${url}`);
+        const deviceModel = Device.modelName || Device.deviceName || 'Unknown';
+        const osType = Platform.OS === 'ios' ? `iOS ${Platform.Version}` : `Android ${Platform.Version}`;
+        
+        crashlyticsService.recordError(apiFailureError, {
+          source: 'api_failure',
+          method: method,
+          url: url,
+          status: statusCode.toString(),
+          statusText: response.statusText,
+          request: safeStringify(requestBody || {}),
+          response: safeStringify({
+            statusCode: responseData.statusCode || statusCode,
+            message: responseData.message || responseData.error || 'Request failed',
+            error: responseData.error,
+            data: responseData.data,
+          }),
+          deviceModel: deviceModel,
+          osType: osType,
+        });
         
         // Check if this is an authenticated endpoint (requires auth token)
         // Exclude unauthenticated endpoints like login, OTP, etc.
@@ -823,6 +849,32 @@ class ApiService {
         name: error?.name,
         timestamp: new Date().toISOString(),
       }));
+
+      // Log API failure to Crashlytics for network/parsing errors
+      const url = buildApiUrl(endpoint);
+      const requestBody = data ? safeStringify(data) : undefined;
+      const apiFailureError = new Error(`API Failure URL: ${url}`);
+      const deviceModel = Device.modelName || Device.deviceName || 'Unknown';
+      const osType = Platform.OS === 'ios' ? `iOS ${Platform.Version}` : `Android ${Platform.Version}`;
+      
+      crashlyticsService.recordError(apiFailureError, {
+        source: 'api_failure',
+        method: method,
+        url: url,
+        status: '0', // Network error, no status code
+        statusText: 'Network Error',
+        request: requestBody || '{}',
+        response: safeStringify({
+          error: error?.message || 'Network request failed',
+          name: error?.name,
+          code: error?.code,
+        }),
+        errorType: error?.name || 'UnknownError',
+        errorMessage: error?.message || 'Unknown error',
+        deviceModel: deviceModel,
+        osType: osType,
+      });
+
       const apiError = this.handleError(error);
       return {
         success: false,

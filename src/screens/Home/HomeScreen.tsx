@@ -18,6 +18,8 @@ import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { restaurantService } from '@/services/restaurant.service';
+import { analyticsService } from '@/services/analytics.service';
+import { AnalyticsScreens, FirebaseStandardEvents, FirebaseStandardParams } from '@/services/analytics.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BANNER_WIDTH = SCREEN_WIDTH - 40; // Fixed banner width with 20px padding on each side
@@ -914,6 +916,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             });
 
             setRestaurantData(transformedRestaurants);
+
+            // Track restaurant list view
+            if (transformedRestaurants.length > 0) {
+              analyticsService.logScreenView(AnalyticsScreens.RESTAURANT_LIST);
+              analyticsService.logEvent(FirebaseStandardEvents.VIEW_ITEM_LIST, {
+                [FirebaseStandardParams.ITEM_LIST_NAME]: 'Restaurant List',
+                [FirebaseStandardParams.ITEM_LIST_ID]: 'home',
+              });
+            }
 
             // Handle pagination metadata
             if (pagination) {

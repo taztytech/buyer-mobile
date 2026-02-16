@@ -19,6 +19,8 @@ import { SearchBar } from '@/components/SearchBar';
 import { homeService, Restaurant } from '@/services/home.service';
 import { useVegMode } from '@/context/VegModeContext';
 import { addressService } from '@/services/address.service';
+import { analyticsService } from '@/services/analytics.service';
+import { AnalyticsScreens, FirebaseStandardEvents, FirebaseStandardParams } from '@/services/analytics.service';
 
 interface CategoryItem {
   id: number | string;
@@ -249,6 +251,15 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         });
 
         setRestaurants(restaurantsData);
+
+        // Track restaurant list view
+        if (restaurantsData.length > 0) {
+          analyticsService.logScreenView(AnalyticsScreens.RESTAURANT_LIST);
+          analyticsService.logEvent(FirebaseStandardEvents.VIEW_ITEM_LIST, {
+            [FirebaseStandardParams.ITEM_LIST_NAME]: 'Restaurant List',
+            [FirebaseStandardParams.ITEM_LIST_ID]: categoryName.toLowerCase().replace(/\s+/g, '_'),
+          });
+        }
 
         // Handle top rated restaurants if available
         if ((response as any).data?.data?.top_rated_restaurants && ((response as any).data.data.top_rated_restaurants as any[]).length > 0) {

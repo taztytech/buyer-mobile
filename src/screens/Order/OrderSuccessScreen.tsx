@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { RibbonAnimation } from '@/components/RibbonAnimation';
+import { analyticsService } from '@/services/analytics.service';
+import { AnalyticsScreens, AnalyticsEvents } from '@/services/analytics.service';
 
 interface OrderSuccessScreenProps {
   onContinue: () => void;
@@ -17,6 +19,14 @@ interface OrderSuccessScreenProps {
 export const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({
   onContinue,
 }) => {
+  useEffect(() => {
+    // Track order success screen view
+    analyticsService.logScreenView(AnalyticsScreens.ORDER_SUCCESS);
+    
+    // Track order success event
+    analyticsService.logEvent(AnalyticsEvents.ORDER_PLACE_SUCCESS);
+  }, []);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="rgba(0, 0, 0, 0.5)" translucent />
