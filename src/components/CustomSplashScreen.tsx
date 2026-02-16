@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Image, StyleSheet, Animated } from 'react-native';
+import { analyticsService } from '@/services/analytics.service';
+import { AnalyticsScreens } from '@/services/analytics.service';
 
 interface CustomSplashScreenProps {
   onFinish: () => void;
@@ -9,6 +11,9 @@ const CustomSplashScreen: React.FC<CustomSplashScreenProps> = ({ onFinish }) => 
   const [fadeAnim] = useState(new Animated.Value(1));
 
   useEffect(() => {
+    // Track splash screen view
+    analyticsService.logScreenView(AnalyticsScreens.SPLASH);
+
     // Show splash for 2 seconds then fade out smoothly
     const timer = setTimeout(() => {
       Animated.timing(fadeAnim, {

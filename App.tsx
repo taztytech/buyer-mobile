@@ -1010,6 +1010,10 @@ function AppContent() {
     setSelectedRestaurantAddress(restaurantAddress || '');
     setCheckoutCameFrom(from);
 
+    // Track cart view
+    analyticsService.logScreenView(AnalyticsScreens.CART);
+    analyticsService.logEvent(AnalyticsEvents.CART_VIEW);
+
     // Reset animation to off-screen position first
     checkoutScreenSlide.setValue(SCREEN_WIDTH);
 

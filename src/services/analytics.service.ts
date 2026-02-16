@@ -131,6 +131,7 @@ export const AnalyticsEvents = {
 
 // Screen names constants
 export const AnalyticsScreens = {
+  SPLASH: 'Splash Screen',
   LOGIN: 'Login',
   OTP_VERIFICATION: 'OTP Verification',
   WELCOME: 'Welcome',
@@ -148,7 +149,13 @@ export const AnalyticsScreens = {
   CATEGORY_RESULTS: 'Category Results',
   RESTAURANT: 'Restaurant',
   RESTAURANT_DETAILS: 'Restaurant Details',
+  RESTAURANT_LIST: 'Restaurant List',
+  PRODUCT_DETAIL: 'Product Detail',
+  CART: 'Cart',
   CHECKOUT: 'Checkout',
+  PAYMENT: 'Payment',
+  ORDER_SUCCESS: 'Order Success',
+  OFFERS: 'Offers',
   EXPLORE_DISHES: 'Explore Dishes',
   PRIVACY_POLICY: 'Privacy Policy',
   TERMS_CONDITIONS: 'Terms & Conditions',

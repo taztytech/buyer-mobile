@@ -24,6 +24,8 @@ import { restaurantService } from '@/services/restaurant.service';
 import { useCart } from '@/context/CartContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
+import { analyticsService } from '@/services/analytics.service';
+import { AnalyticsScreens } from '@/services/analytics.service';
 
 interface CartItem {
   id: string;
@@ -1453,6 +1455,13 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         // Use updated cart summary from backend
         setCartSummary(response.cart_summary);
 
+        // Track offer applied successfully
+        analyticsService.logScreenView(AnalyticsScreens.OFFERS);
+        analyticsService.logEvent('offer_applied', {
+          offer_code: normalizedCode,
+          discount_amount: response.cart_summary.discount_amount || 0,
+        });
+
         // Clear any existing error on success
         setPromoError('');
       } else {
@@ -1948,7 +1957,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               <View style={styles.section}>
                 <TouchableOpacity
                   style={styles.sectionHeader}
-                  onPress={() => setPromoExpanded(!promoExpanded)}
+                  onPress={() => {
+                    const newExpanded = !promoExpanded;
+                    setPromoExpanded(newExpanded);
+                    // Track offers screen view when promo section is expanded
+                    if (newExpanded) {
+                      analyticsService.logScreenView(AnalyticsScreens.OFFERS);
+                    }
+                  }}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.sectionTitle}>Promo Code</Text>

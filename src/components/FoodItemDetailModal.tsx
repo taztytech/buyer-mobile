@@ -15,6 +15,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { OptimizedImage } from '@/components/OptimizedImage';
 import { ItemTiming, formatItemTiming, isItemAvailable } from '@/utils/timing.utils';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
+import { analyticsService } from '@/services/analytics.service';
+import { AnalyticsScreens, FirebaseStandardParams } from '@/services/analytics.service';
 
 interface PreorderCampaign {
   id: string;
@@ -66,6 +68,18 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
 
   useEffect(() => {
     if (visible) {
+      // Track product detail screen view
+      if (item) {
+        analyticsService.logScreenView(AnalyticsScreens.PRODUCT_DETAIL);
+        analyticsService.logViewItem(
+          item.id,
+          item.name,
+          undefined, // category
+          item.price,
+          'INR'
+        );
+      }
+
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
@@ -87,7 +101,7 @@ export const FoodItemDetailModal: React.FC<FoodItemDetailModalProps> = ({
       slideAnim.setValue(1000);
       setIsAdding(false);
     }
-  }, [visible, slideAnim, initialQuantity, resolvedMaxQuantity, item?.isPreorderAvailable]);
+  }, [visible, slideAnim, initialQuantity, resolvedMaxQuantity, item?.isPreorderAvailable, item]);
 
   // Sync quantity when initialQuantity changes (cart updates from API)
   // Only sync if the change came from outside (not from user interaction)
