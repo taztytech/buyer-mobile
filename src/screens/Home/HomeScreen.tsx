@@ -206,8 +206,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         return true;
       }
 
-      const timings = response.data.timings;
-      const isOpen = timings ? homeService.isRestaurantOpen(timings) : true;
+      // Use top-level is_open flag only for store open/close.
+      // Do NOT derive open state from timings.
+      const isOpen =
+        typeof response.data.is_open === 'boolean' ? response.data.is_open : true;
 
       if (!isOpen) {
         showConfirmation({
@@ -884,7 +886,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             // Transform filtered restaurants to match our Restaurant interface
             const transformedRestaurants = filteredRestaurants.map((restaurant: any) => {
               const timings = restaurant.timings || [];
-              const isOpen = homeService.isRestaurantOpen(timings);
+
+              // IMPORTANT:
+              // For store open/close, use ONLY the backend top-level is_open flag.
+              // Do not derive open state from timings.
+              const isOpen: boolean =
+                typeof restaurant.is_open === 'boolean' ? restaurant.is_open : true;
 
               // Format cuisine_tags: if array, join with " • ", otherwise use as string
               let cuisineText = 'Restaurant';
@@ -994,7 +1001,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           // Transform filtered new restaurants
           const transformedRestaurants = filteredRestaurants.map((restaurant: any) => {
             const timings = restaurant.timings || [];
-            const isOpen = homeService.isRestaurantOpen(timings);
+            // For store open/close, use ONLY backend top-level is_open flag.
+            const isOpen: boolean =
+              typeof restaurant.is_open === 'boolean' ? restaurant.is_open : true;
 
             // Format cuisine_tags: if array, join with " • ", otherwise use as string
             let cuisineText = 'Restaurant';

@@ -13,6 +13,9 @@ import {
   Modal,
   ActionSheetIOS,
   Linking,
+  LayoutAnimation,
+  UIManager,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -24,6 +27,7 @@ import { ordersService, CancelReason } from '@/services/orders.service';
 import { exotelService } from '@/services/exotel.service';
 import { authService } from '@/services/auth.service';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
+import { chatHistoryService } from '@/services/chatHistory.service';
 
 interface ChatScreenProps {
   visible?: boolean;
@@ -56,7 +60,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
   helpOptionTitle,
   orderId,
 }) => {
-  const { getOrderById } = useOrders();
+  const { getOrderById, state } = useOrders();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [showOptions, setShowOptions] = useState(true);
@@ -69,11 +73,20 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
   const [showCancelReasonDropdown, setShowCancelReasonDropdown] = useState(false);
   const [loadingCancelReasons, setLoadingCancelReasons] = useState(false);
   const [orderNumber, setOrderNumber] = useState<string>('');
+  const [manualCancelReason, setManualCancelReason] = useState<string>('');
   const [supportPhoneNumber, setSupportPhoneNumber] = useState<string>('');
   const [supportPhoneNumbers, setSupportPhoneNumbers] = useState<string[]>([]);
   const [currentSupportPhoneIndex, setCurrentSupportPhoneIndex] = useState<number>(0);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
   const [showSupportCallButton, setShowSupportCallButton] = useState(false);
+  const [isBotTyping, setIsBotTyping] = useState(false);
+  const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(null);
+  const typingDotAnims = [
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+  ];
+  const typingDotLoopsRef = useRef<Animated.CompositeAnimation[]>([]);
   const [confirmationModal, setConfirmationModal] = useState<{
     visible: boolean;
     title: string;
@@ -92,6 +105,14 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     onCancel: () => {},
   });
   const scrollViewRef = useRef<ScrollView>(null);
+  const historyLoadedRef = useRef(false);
+  const previousOrderIdRef = useRef<string | undefined>(orderId);
+  const previousOrderStatusRef = useRef<string | null>(null);
+
+  // Subscribe to live order updates from OrdersContext (FCM-driven)
+  const contextOrderFromState = orderId ? state.byId[orderId] : undefined;
+  const contextStatus = contextOrderFromState?.status;
+  const contextUpdatedAt = contextOrderFromState?.updated_at;
 
   // Determine if order is before delivery (pending, confirmed) or after (accepted, billed, delivered, etc.)
   const isOrderBeforeDelivery = (status: string | null | undefined): boolean => {
@@ -135,7 +156,49 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
 
   const chatOptions = getChatOptions();
 
-  // Fetch order status
+  // Enable smooth layout animations (especially on Android)
+  useEffect(() => {
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
+
+  // Start/stop wavy animation for typing dots based on typing state
+  useEffect(() => {
+    if (isBotTyping) {
+      // Start looping animations with stagger
+      typingDotAnims.forEach((anim, index) => {
+        const loop = Animated.loop(
+          Animated.sequence([
+            Animated.delay(index * 150),
+            Animated.timing(anim, {
+              toValue: 1,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+            Animated.timing(anim, {
+              toValue: 0,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+          ])
+        );
+        typingDotLoopsRef.current[index] = loop;
+        loop.start();
+      });
+    } else {
+      // Stop and reset animations when not typing
+      typingDotLoopsRef.current.forEach(loop => loop.stop && loop.stop());
+      typingDotLoopsRef.current = [];
+      typingDotAnims.forEach(anim => anim.setValue(0));
+    }
+  }, [isBotTyping, typingDotAnims]);
+
+  const animateLayout = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  };
+
+  // Fetch order status and keep it in sync with live context (FCM updates)
   useEffect(() => {
     const fetchOrderStatus = async () => {
       if (!orderId) {
@@ -167,7 +230,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     if (visible && orderId) {
       fetchOrderStatus();
     }
-  }, [visible, orderId, getOrderById]);
+  }, [visible, orderId, getOrderById, contextStatus, contextUpdatedAt]);
 
   // Fetch support phone numbers
   useEffect(() => {
@@ -195,18 +258,95 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     fetchSupportDetails();
   }, [visible]);
 
+  // Load chat history when screen becomes visible or orderId changes
   useEffect(() => {
-    if (visible) {
-      // Reset messages and options when screen becomes visible
-      setMessages([]);
-      setShowOptions(false);
-      setShowSupportCallButton(false);
-      
-      const statusLower = orderStatus?.toLowerCase() || '';
-      
-      // For cancelled or delivered orders, show call support button directly
-      if (statusLower === 'cancelled' || statusLower === 'delivered') {
-        // Show greeting message for cancelled/delivered orders
+    const loadChatHistory = async () => {
+      if (!visible || !orderId) {
+        // Reset if no orderId (general help chat - no history persistence)
+        if (!orderId && visible) {
+          setMessages([]);
+          setShowOptions(false);
+          setShowSupportCallButton(false);
+          historyLoadedRef.current = false;
+        }
+        return;
+      }
+
+      // Check if orderId changed - reset history loaded flag
+      if (previousOrderIdRef.current !== orderId) {
+        historyLoadedRef.current = false;
+        previousOrderIdRef.current = orderId;
+      }
+
+      // Only load history once per orderId
+      if (historyLoadedRef.current) {
+        return;
+      }
+
+      try {
+        // Try to load existing chat history
+        const savedMessages = await chatHistoryService.getChatHistory(orderId);
+        
+        if (savedMessages && savedMessages.length > 0) {
+          // Restore saved messages
+          setMessages(savedMessages);
+          historyLoadedRef.current = true;
+          
+          // Show options if there are messages (user has interacted before)
+          const statusLower = orderStatus?.toLowerCase() || '';
+          if (statusLower !== 'cancelled' && statusLower !== 'delivered') {
+            setTimeout(() => {
+              setShowOptions(true);
+            }, 300);
+          } else {
+            setTimeout(() => {
+              setShowSupportCallButton(true);
+            }, 300);
+          }
+        } else {
+          // No saved history - show initial greeting
+          historyLoadedRef.current = true;
+          setShowOptions(false);
+          setShowSupportCallButton(false);
+          
+          const statusLower = orderStatus?.toLowerCase() || '';
+          
+          // For cancelled or delivered orders, show call support button directly
+          if (statusLower === 'cancelled' || statusLower === 'delivered') {
+            const greetingMessage: Message = {
+              id: Date.now().toString(),
+              text: "Hi there! I'm here to help you with your order. How can I assist you today?",
+              sender: 'bot',
+              timestamp: new Date(),
+            };
+            setMessages([greetingMessage]);
+            
+            setTimeout(() => {
+              setShowSupportCallButton(true);
+            }, 1000);
+          } else {
+            // For other orders, show greeting and options
+            const greetingMessage: Message = {
+              id: Date.now().toString(),
+              text: "Hi there! I'm here to help you with your order. How can I assist you today?",
+              sender: 'bot',
+              timestamp: new Date(),
+            };
+            setMessages([greetingMessage]);
+            
+            setTimeout(() => {
+              setShowOptions(true);
+            }, 1000);
+          }
+        }
+      } catch (error) {
+        console.error('[ChatScreen] Error loading chat history:', error);
+        // Fallback to default greeting on error
+        historyLoadedRef.current = true;
+        setShowOptions(false);
+        setShowSupportCallButton(false);
+        
+        const statusLower = orderStatus?.toLowerCase() || '';
         const greetingMessage: Message = {
           id: Date.now().toString(),
           text: "Hi there! I'm here to help you with your order. How can I assist you today?",
@@ -215,28 +355,107 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
         };
         setMessages([greetingMessage]);
         
-        // Show call support button after a short delay
-        setTimeout(() => {
-          setShowSupportCallButton(true);
-        }, 1000);
-      } else {
-        // For other orders, show greeting and options
-        const greetingMessage: Message = {
-          id: Date.now().toString(),
-          text: "Hi there! I'm here to help you with your order. How can I assist you today?",
-          sender: 'bot',
-          timestamp: new Date(),
+        if (statusLower === 'cancelled' || statusLower === 'delivered') {
+          setTimeout(() => {
+            setShowSupportCallButton(true);
+          }, 1000);
+        } else {
+          setTimeout(() => {
+            setShowOptions(true);
+          }, 1000);
+        }
+      }
+    };
+
+    loadChatHistory();
+  }, [visible, orderId, orderStatus]);
+
+  // Save chat history whenever messages change (debounced and optimized)
+  useEffect(() => {
+    if (!orderId || !historyLoadedRef.current) {
+      return; // Don't save if no orderId or history not loaded yet
+    }
+
+    // Skip save if messages array is empty (initial state)
+    if (messages.length === 0) {
+      return;
+    }
+
+    // Debounce save operation to avoid too frequent writes
+    // Increased debounce time to 1 second for better performance
+    const saveTimeout = setTimeout(async () => {
+      try {
+        // Only save if messages actually changed (prevent unnecessary saves)
+        await chatHistoryService.saveChatHistory(orderId, messages);
+      } catch (error) {
+        console.error('[ChatScreen] Error saving chat history:', error);
+        // Don't block UI if save fails
+      }
+    }, 1000); // Save after 1 second of no changes (optimized for performance)
+
+    return () => clearTimeout(saveTimeout);
+  }, [messages, orderId]);
+
+  // Monitor order status changes and clear history when delivered or cancelled
+  useEffect(() => {
+    if (!orderId) {
+      return;
+    }
+
+    // Update previous status ref
+    const currentStatus = orderStatus || null;
+    const previousStatus = previousOrderStatusRef.current;
+
+    // Only process if we have a status and it's different from previous
+    if (currentStatus && currentStatus !== previousStatus) {
+      const statusLower = currentStatus.toLowerCase();
+      const previousStatusLower = previousStatus?.toLowerCase() || '';
+
+      // Only clear if status changed to delivered or cancelled
+      // This ensures we only clear once when status transitions to final state
+      if (
+        (statusLower === 'delivered' || statusLower === 'cancelled') &&
+        previousStatusLower !== statusLower &&
+        previousStatusLower !== 'delivered' &&
+        previousStatusLower !== 'cancelled'
+      ) {
+        const clearHistory = async () => {
+          try {
+            await chatHistoryService.clearChatHistory(orderId);
+            console.log(`[ChatScreen] Cleared chat history for order ${orderId} (status changed to: ${statusLower})`);
+            
+            // If currently viewing this order, reset messages to greeting
+            if (visible && previousOrderIdRef.current === orderId) {
+              setShowOptions(false);
+              setShowSupportCallButton(false);
+              
+              const greetingMessage: Message = {
+                id: Date.now().toString(),
+                text: "Hi there! I'm here to help you with your order. How can I assist you today?",
+                sender: 'bot',
+                timestamp: new Date(),
+              };
+              setMessages([greetingMessage]);
+              
+              setTimeout(() => {
+                setShowSupportCallButton(true);
+              }, 1000);
+              
+              // Reset history loaded flag to allow fresh start
+              historyLoadedRef.current = false;
+            }
+          } catch (error) {
+            console.error('[ChatScreen] Error clearing chat history:', error);
+          }
         };
 
-        setMessages([greetingMessage]);
-
-        // After a short delay, show the options
-        setTimeout(() => {
-          setShowOptions(true);
-        }, 1000); // Show options after 1 second
+        clearHistory();
       }
     }
-  }, [visible, orderStatus]);
+
+    // Always update previous status ref
+    previousOrderStatusRef.current = currentStatus;
+  }, [orderStatus, orderId, visible]);
 
   const handlePickImage = async () => {
     try {
@@ -265,6 +484,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       });
 
       if (!result.canceled && result.assets[0]) {
+        animateLayout();
         const userMessage: Message = {
           id: Date.now().toString(),
           text: '',
@@ -273,19 +493,20 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
           imageUri: result.assets[0].uri,
         };
         setMessages((prev) => [...prev, userMessage]);
-        setShowOptions(false);
         setShowAttachmentMenu(false);
         
         // Simulate bot response
         setTimeout(() => {
+          const botMessageId = (Date.now() + 1).toString();
           const botMessage: Message = {
-            id: (Date.now() + 1).toString(),
+            id: botMessageId,
             text: 'Thank you for sharing the image. Our support team will review it and get back to you shortly.',
             sender: 'bot',
             timestamp: new Date(),
           };
           setMessages((prev) => [...prev, botMessage]);
-        }, 1000);
+          setScrollToMessageId(botMessageId);
+        }, 1500);
       }
     } catch (error: any) {
       setConfirmationModal({
@@ -349,6 +570,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       });
 
       if (!result.canceled && result.assets[0]) {
+        animateLayout();
         const userMessage: Message = {
           id: Date.now().toString(),
           text: '',
@@ -357,19 +579,20 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
           imageUri: result.assets[0].uri,
         };
         setMessages((prev) => [...prev, userMessage]);
-        setShowOptions(false);
         setShowAttachmentMenu(false);
         
         // Simulate bot response
         setTimeout(() => {
+          const botMessageId = (Date.now() + 1).toString();
           const botMessage: Message = {
-            id: (Date.now() + 1).toString(),
+            id: botMessageId,
             text: 'Thank you for sharing the photo. Our support team will review it and get back to you shortly.',
             sender: 'bot',
             timestamp: new Date(),
           };
           setMessages((prev) => [...prev, botMessage]);
-        }, 1000);
+          setScrollToMessageId(botMessageId);
+        }, 1500);
       }
     } catch (error: any) {
       setConfirmationModal({
@@ -434,6 +657,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       });
 
       if (!result.canceled && result.assets[0]) {
+        animateLayout();
         const userMessage: Message = {
           id: Date.now().toString(),
           text: 'Video',
@@ -442,19 +666,20 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
           videoUri: result.assets[0].uri,
         };
         setMessages((prev) => [...prev, userMessage]);
-        setShowOptions(false);
         setShowAttachmentMenu(false);
         
         // Simulate bot response
         setTimeout(() => {
+          const botMessageId = (Date.now() + 1).toString();
           const botMessage: Message = {
-            id: (Date.now() + 1).toString(),
+            id: botMessageId,
             text: 'Thank you for sharing the video. Our support team will review it and get back to you shortly.',
             sender: 'bot',
             timestamp: new Date(),
           };
           setMessages((prev) => [...prev, botMessage]);
-        }, 1000);
+          setScrollToMessageId(botMessageId);
+        }, 1500);
       }
     } catch (error: any) {
       setConfirmationModal({
@@ -510,6 +735,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       });
 
       if (!result.canceled && result.assets[0]) {
+        animateLayout();
         const userMessage: Message = {
           id: Date.now().toString(),
           text: 'Video',
@@ -518,19 +744,20 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
           videoUri: result.assets[0].uri,
         };
         setMessages((prev) => [...prev, userMessage]);
-        setShowOptions(false);
         setShowAttachmentMenu(false);
         
         // Simulate bot response
         setTimeout(() => {
+          const botMessageId = (Date.now() + 1).toString();
           const botMessage: Message = {
-            id: (Date.now() + 1).toString(),
+            id: botMessageId,
             text: 'Thank you for sharing the video. Our support team will review it and get back to you shortly.',
             sender: 'bot',
             timestamp: new Date(),
           };
           setMessages((prev) => [...prev, botMessage]);
-        }, 1000);
+          setScrollToMessageId(botMessageId);
+        }, 1500);
       }
     } catch (error: any) {
       setConfirmationModal({
@@ -585,6 +812,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       });
 
       if (!result.canceled && result.assets[0]) {
+        animateLayout();
         const asset = result.assets[0];
         const isVideo = asset.type === 'video';
         const userMessage: Message = {
@@ -598,19 +826,20 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
           videoUri: isVideo ? asset.uri : undefined,
         };
         setMessages((prev) => [...prev, userMessage]);
-        setShowOptions(false);
         setShowAttachmentMenu(false);
         
         // Simulate bot response
         setTimeout(() => {
+          const botMessageId = (Date.now() + 1).toString();
           const botMessage: Message = {
-            id: (Date.now() + 1).toString(),
+            id: botMessageId,
             text: 'Thank you for sharing the file. Our support team will review it and get back to you shortly.',
             sender: 'bot',
             timestamp: new Date(),
           };
           setMessages((prev) => [...prev, botMessage]);
-        }, 1000);
+          setScrollToMessageId(botMessageId);
+        }, 1500);
       }
     } catch (error: any) {
       setConfirmationModal({
@@ -680,6 +909,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
   const handleSendMessage = () => {
     if (!inputText.trim()) return;
 
+    animateLayout();
     const userMessage: Message = {
       id: Date.now().toString(),
       text: inputText.trim(),
@@ -689,18 +919,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
 
     setMessages((prev) => [...prev, userMessage]);
     setInputText('');
-    setShowOptions(false);
 
     // Simulate bot response
     setTimeout(() => {
+      const botMessageId = (Date.now() + 1).toString();
       const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: botMessageId,
         text: 'Thank you for your message. Our support team will get back to you shortly.',
         sender: 'bot',
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, botMessage]);
-    }, 1000);
+      setScrollToMessageId(botMessageId);
+    }, 1500);
   };
 
   // Fetch cancel reasons when modal opens
@@ -973,6 +1204,100 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
   };
 
   const handleCancelOrder = async () => {
+    // Always verify order status via API call before attempting cancellation
+    try {
+      if (!orderId) {
+        setConfirmationModal({
+          visible: true,
+          title: 'Error',
+          message: 'Order ID is missing. Please try again.',
+          confirmText: 'OK',
+          cancelText: '',
+          onConfirm: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+          onCancel: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+        });
+        return;
+      }
+
+      // Make API call to verify current order status
+      const orderIdNum = Number(orderId);
+      const orderResponse = await ordersService.getOrderById(orderIdNum);
+
+      let latestStatus: string | null | undefined = null;
+
+      if (orderResponse.success && orderResponse.data?.status) {
+        latestStatus = orderResponse.data.status;
+      }
+
+      const normalizedStatus = latestStatus?.toLowerCase().trim();
+
+      // Allow cancellation only if order is strictly before "billed" state
+      // Statuses before "billed": pending, confirmed (explicitly only)
+      // Statuses at or after "billed": billed, packed, agent-assigned, picked, out-for-delivery, delivered, etc.
+      // Reject undefined/null/empty - status must be explicitly known
+      const isBeforeBilled =
+        normalizedStatus === 'pending' ||
+        normalizedStatus === 'confirmed';
+
+      if (!isBeforeBilled) {
+        setShowCancelReasonModal(false);
+        setSelectedCancelReason(null);
+        setOrderNumber('');
+        setManualCancelReason('');
+        setShowCancelReasonDropdown(false);
+        setShowOptions(true);
+
+        const errorMessage = normalizedStatus === undefined || normalizedStatus === null || normalizedStatus === ''
+          ? 'Unable to verify order status. Please try again or contact support for assistance.'
+          : 'This order has already moved beyond the billing stage and can no longer be cancelled. Please contact support for further assistance.';
+
+        setConfirmationModal({
+          visible: true,
+          title: 'Unable to cancel order',
+          message: errorMessage,
+          confirmText: 'OK',
+          cancelText: '',
+          onConfirm: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+          onCancel: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+        });
+
+        return;
+      }
+    } catch (error: any) {
+      // If the API call fails, log error and block cancellation
+      console.error('[ChatScreen][CancelOrder] Failed to verify order status:', error);
+
+      setShowCancelReasonModal(false);
+      setSelectedCancelReason(null);
+      setOrderNumber('');
+      setManualCancelReason('');
+      setShowCancelReasonDropdown(false);
+      setShowOptions(true);
+
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: 'Unable to verify order status. Please try again or contact support for assistance.',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
+      return;
+    }
+
     if (!orderNumber) {
       setConfirmationModal({
         visible: true,
@@ -1010,18 +1335,47 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       return;
     }
 
+    // Check if "other" reason is selected and manual reason is required
+    const isOtherReason = selectedCancelReason.code?.toLowerCase().includes('other') || 
+                          selectedCancelReason.reason?.toLowerCase().includes('other');
+    
+    if (isOtherReason && !manualCancelReason.trim()) {
+      setConfirmationModal({
+        visible: true,
+        title: 'Required',
+        message: 'Please provide a reason for cancellation',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
+      return;
+    }
+
     try {
+      // Use manual reason if provided, otherwise use the selected reason
+      const finalReason = isOtherReason && manualCancelReason.trim() 
+        ? manualCancelReason.trim() 
+        : selectedCancelReason.reason;
+
       const response = await ordersService.cancelOrder(
         orderNumber,
         selectedCancelReason.code,
-        selectedCancelReason.reason,
+        finalReason,
         selectedCancelReason.cancelled_by
       );
       
       setShowCancelReasonModal(false);
       setSelectedCancelReason(null);
       setOrderNumber('');
+      setManualCancelReason('');
       setShowSupportCallButton(false);
+      animateLayout();
+      setShowOptions(true);
 
       if (response.success) {
         const botMessage: Message = {
@@ -1033,7 +1387,9 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
         setMessages((prev) => [...prev, botMessage]);
       } else {
         // Show support call button on API failure
+        animateLayout();
         setShowSupportCallButton(true);
+        setShowOptions(true);
         const botMessage: Message = {
           id: (Date.now() + 1).toString(),
           text: response.error || 'Failed to cancel order. Please try again or contact support.',
@@ -1046,8 +1402,11 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       setShowCancelReasonModal(false);
       setSelectedCancelReason(null);
       setOrderNumber('');
+      setManualCancelReason('');
       // Show support call button on error
+      animateLayout();
       setShowSupportCallButton(true);
+      setShowOptions(true);
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: 'An error occurred while canceling your order. Please try again or contact support.',
@@ -1059,6 +1418,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
   };
 
   const handleOptionPress = (option: ChatOption) => {
+    animateLayout();
     const userMessage: Message = {
       id: Date.now().toString(),
       text: option.text,
@@ -1067,29 +1427,125 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    // Hide options while we are "replying"
     setShowOptions(false);
+    // Also hide support call button until reply is shown
+    setShowSupportCallButton(false);
 
     // Handle cancel order separately - show modal for reason
     if (option.id === 'cancel_order') {
-      setSelectedCancelReason(null);
-      setOrderNumber('');
-      setShowSupportCallButton(false);
-      setShowCancelReasonModal(true);
+      // Check order status via API call before showing cancel modal
+      const checkOrderStatusBeforeCancel = async () => {
+        try {
+          if (!orderId) {
+            setConfirmationModal({
+              visible: true,
+              title: 'Error',
+              message: 'Order ID is missing. Please try again.',
+              confirmText: 'OK',
+              cancelText: '',
+              onConfirm: () => {
+                setConfirmationModal(prev => ({ ...prev, visible: false }));
+              },
+              onCancel: () => {
+                setConfirmationModal(prev => ({ ...prev, visible: false }));
+              },
+            });
+            return;
+          }
+
+          // Make API call to verify current order status
+          const orderIdNum = Number(orderId);
+          const orderResponse = await ordersService.getOrderById(orderIdNum);
+
+          let latestStatus: string | null | undefined = null;
+
+          if (orderResponse.success && orderResponse.data?.status) {
+            latestStatus = orderResponse.data.status;
+          }
+
+          const normalizedStatus = latestStatus?.toLowerCase().trim();
+
+          // Allow cancellation only if order is strictly before "billed" state
+          // Statuses before "billed": pending, confirmed (explicitly only)
+          // Reject undefined/null/empty - status must be explicitly known
+          const isBeforeBilled =
+            normalizedStatus === 'pending' ||
+            normalizedStatus === 'confirmed';
+
+          if (!isBeforeBilled) {
+            const errorMessage = normalizedStatus === undefined || normalizedStatus === null || normalizedStatus === ''
+              ? 'Unable to verify order status. Please try again or contact support for assistance.'
+              : 'This order has already moved beyond the billing stage and can no longer be cancelled. Please contact support for further assistance.';
+
+            setConfirmationModal({
+              visible: true,
+              title: 'Unable to cancel order',
+              message: errorMessage,
+              confirmText: 'OK',
+              cancelText: '',
+              onConfirm: () => {
+                setConfirmationModal(prev => ({ ...prev, visible: false }));
+              },
+              onCancel: () => {
+                setConfirmationModal(prev => ({ ...prev, visible: false }));
+              },
+            });
+            return;
+          }
+
+          // If status is before billed, show the cancel modal
+          setSelectedCancelReason(null);
+          setManualCancelReason('');
+          setOrderNumber('');
+          setShowSupportCallButton(false);
+          setShowCancelReasonModal(true);
+        } catch (error: any) {
+          // If the API call fails, log error and block modal
+          console.error('[ChatScreen][CancelOrder] Failed to verify order status (before modal):', error);
+
+          setConfirmationModal({
+            visible: true,
+            title: 'Error',
+            message: 'Unable to verify order status. Please try again or contact support for assistance.',
+            confirmText: 'OK',
+            cancelText: '',
+            onConfirm: () => {
+              setConfirmationModal(prev => ({ ...prev, visible: false }));
+            },
+            onCancel: () => {
+              setConfirmationModal(prev => ({ ...prev, visible: false }));
+            },
+          });
+        }
+      };
+
+      checkOrderStatusBeforeCancel();
       return;
     }
 
-    // Simulate bot response for other options and show call support button
+    // Show typing indicator, then bot reply, then show options again
+    setIsBotTyping(true);
     setTimeout(() => {
+      animateLayout();
+      setIsBotTyping(false);
+      const botMessageId = (Date.now() + 1).toString();
       const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: botMessageId,
         text: 'I understand your concern. Let me connect you with our support team who can assist you better with this issue.',
         sender: 'bot',
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, botMessage]);
-      // Show call support button after bot message for non-cancel options
+      setScrollToMessageId(botMessageId);
+
+      // Show call button and, after a short delay, options again
       setShowSupportCallButton(true);
-    }, 1000);
+      setTimeout(() => {
+        animateLayout();
+        setShowOptions(true);
+      }, 300);
+    }, 1500);
   };
 
   const formatTime = (date: Date) => {
@@ -1100,12 +1556,13 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     });
   };
 
-  useEffect(() => {
-    // Auto scroll to bottom when new messages arrive
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  }, [messages]);
+  // When a specific message should be focused, scroll to its position once it's laid out
+  const handleMessageLayout = (id: string, y: number) => {
+    if (scrollToMessageId !== id) return;
+    const targetY = Math.max(y - 80, 0); // offset so bubble is a bit above bottom
+    scrollViewRef.current?.scrollTo({ y: targetY, animated: true });
+    setScrollToMessageId(null);
+  };
 
   if (!visible) {
     return null;
@@ -1128,7 +1585,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <SafeAreaView style={styles.contentContainer} edges={['bottom']}>
@@ -1138,6 +1595,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
             style={styles.messagesContainer}
             contentContainerStyle={styles.messagesContent}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
             {messages.map((message) => (
               <View
@@ -1146,6 +1604,9 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
                   styles.messageWrapper,
                   message.sender === 'user' ? styles.userMessageWrapper : styles.botMessageWrapper,
                 ]}
+                onLayout={(event) => {
+                  handleMessageLayout(message.id, event.nativeEvent.layout.y);
+                }}
               >
                 {message.sender === 'bot' && (
                   <View style={styles.botAvatar}>
@@ -1215,6 +1676,42 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
               </View>
             ))}
 
+            {/* Bot loading indicator (dot loading) */}
+            {isBotTyping && (
+              <View style={[styles.messageWrapper, styles.botMessageWrapper]}>
+                <View style={styles.botAvatar}>
+                  <MaterialIcons name="support-agent" size={20} color="#FFFFFF" />
+                </View>
+                <View style={[styles.messageBubble, styles.botMessageBubble, styles.typingBubble]}>
+                  <View style={styles.typingDots}>
+                    {typingDotAnims.map((anim, index) => (
+                      <Animated.View
+                        // eslint-disable-next-line react/no-array-index-key
+                        key={index}
+                        style={[
+                          styles.typingDot,
+                          {
+                            transform: [
+                              {
+                                translateY: anim.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [0, -4],
+                                }),
+                              },
+                            ],
+                            opacity: anim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0.3, 1],
+                            }),
+                          },
+                        ]}
+                      />
+                    ))}
+                  </View>
+                </View>
+              </View>
+            )}
+
             {/* Support Call Button - shown when cancel order fails */}
             {showSupportCallButton && (
               <View style={styles.supportCallContainer}>
@@ -1281,6 +1778,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
 
           {/* Input Section */}
           <View style={styles.inputContainer}>
+            {/* Attachment button temporarily hidden */}
+            {/*
             <TouchableOpacity
               style={styles.attachmentButton}
               onPress={showAttachmentOptions}
@@ -1288,6 +1787,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
             >
               <MaterialIcons name="attach-file" size={24} color={colors.primary} />
             </TouchableOpacity>
+            */}
             <TextInput
               style={styles.textInput}
               placeholder="Type your message..."
@@ -1311,7 +1811,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Attachment Menu Modal for Android */}
+          {/* Attachment Menu Modal for Android temporarily hidden */}
+          {/*
           <Modal
             visible={showAttachmentMenu}
             transparent
@@ -1393,6 +1894,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
               </View>
             </TouchableOpacity>
           </Modal>
+          */}
 
           {/* Cancel Order Reason Modal */}
           <Modal
@@ -1402,6 +1904,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
             onRequestClose={() => {
               setShowCancelReasonModal(false);
               setSelectedCancelReason(null);
+              setManualCancelReason('');
               setOrderNumber('');
               setShowCancelReasonDropdown(false);
               setShowSupportCallButton(false);
@@ -1420,6 +1923,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
                   onPress={() => {
                     setShowCancelReasonModal(false);
                     setSelectedCancelReason(null);
+                    setManualCancelReason('');
                     setOrderNumber('');
                     setShowCancelReasonDropdown(false);
                     setShowSupportCallButton(false);
@@ -1483,6 +1987,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
                               onPress={() => {
                                 setSelectedCancelReason(reason);
                                 setShowCancelReasonDropdown(false);
+                                // Clear manual reason when selecting a new reason
+                                setManualCancelReason('');
                               }}
                               activeOpacity={0.7}
                             >
@@ -1511,12 +2017,39 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
                     </View>
                   )}
 
+                  {/* Manual Reason Input - Show when "other" reason is selected */}
+                  {selectedCancelReason && (
+                    (selectedCancelReason.code?.toLowerCase().includes('other') || 
+                     selectedCancelReason.reason?.toLowerCase().includes('other')) && (
+                      <View style={styles.manualReasonContainer}>
+                        <Text style={styles.manualReasonLabel}>
+                          Please provide a reason for cancellation:
+                        </Text>
+                        <TextInput
+                          style={styles.manualReasonInput}
+                          placeholder="Enter your reason..."
+                          placeholderTextColor={colors.textSecondary}
+                          value={manualCancelReason}
+                          onChangeText={setManualCancelReason}
+                          multiline
+                          numberOfLines={4}
+                          maxLength={500}
+                          textAlignVertical="top"
+                        />
+                        <Text style={styles.manualReasonCharCount}>
+                          {manualCancelReason.length}/500
+                        </Text>
+                      </View>
+                    )
+                  )}
+
                   <View style={styles.cancelReasonButtons}>
                     <TouchableOpacity
                       style={[styles.cancelReasonButton, styles.cancelReasonButtonSecondary]}
                       onPress={() => {
                         setShowCancelReasonModal(false);
                         setSelectedCancelReason(null);
+                        setManualCancelReason('');
                         setOrderNumber('');
                         setShowCancelReasonDropdown(false);
                         setShowOptions(true);
@@ -1529,10 +2062,20 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
                       style={[
                         styles.cancelReasonButton,
                         styles.cancelReasonButtonPrimary,
-                        !selectedCancelReason && styles.cancelReasonButtonDisabled,
+                        (!selectedCancelReason || 
+                         (selectedCancelReason && 
+                          (selectedCancelReason.code?.toLowerCase().includes('other') || 
+                           selectedCancelReason.reason?.toLowerCase().includes('other')) && 
+                          !manualCancelReason.trim())) && styles.cancelReasonButtonDisabled,
                       ]}
                       onPress={handleCancelOrder}
-                      disabled={!selectedCancelReason}
+                      disabled={
+                        !selectedCancelReason || 
+                        (selectedCancelReason && 
+                         (selectedCancelReason.code?.toLowerCase().includes('other') || 
+                          selectedCancelReason.reason?.toLowerCase().includes('other')) && 
+                         !manualCancelReason.trim())
+                      }
                       activeOpacity={0.7}
                     >
                       <Text style={styles.cancelReasonButtonTextPrimary}>Submit</Text>
@@ -1593,13 +2136,14 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#00B14F',
+    backgroundColor: '#FFFFFF',
   },
   safeAreaTop: {
     backgroundColor: '#00B14F',
   },
   flex: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   header: {
     backgroundColor: '#00B14F',
@@ -1903,7 +2447,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   cancelReasonModalOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -2060,6 +2604,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginLeft: 8,
   },
+  typingBubble: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  typingDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.textSecondary,
+    marginHorizontal: 2,
+  },
   cancelReasonButtons: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -2087,6 +2647,34 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
     color: '#000000',
+  },
+  manualReasonContainer: {
+    marginBottom: 20,
+  },
+  manualReasonLabel: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#000000',
+    marginBottom: 8,
+  },
+  manualReasonInput: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#000000',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E4E4E4',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  manualReasonCharCount: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'right',
+    marginTop: 4,
   },
 });
 

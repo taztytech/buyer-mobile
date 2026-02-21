@@ -357,11 +357,35 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [defaultAddressCoords, setDefaultAddressCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
-  const restaurantOpeningMessage = useMemo(
-    () => (restaurantData?.timings ? homeService.getRestaurantOpeningMessage(restaurantData.timings) : null),
-    [restaurantData?.timings]
-  );
-  const isRestaurantClosed = Boolean(restaurantOpeningMessage);
+  // Effective restaurant open/closed status:
+  // Use ONLY backend top-level is_open flag for store open/close.
+  // Do NOT derive open state from timings.
+  const isRestaurantOpenEffective = useMemo(() => {
+    return typeof restaurantData?.is_open === 'boolean' ? restaurantData.is_open : true;
+  }, [restaurantData?.is_open, restaurantData?.timings]);
+
+  // Opening message shown when restaurant is closed.
+  // Use timing-based helper, but respect backend is_open when present.
+  const restaurantOpeningMessage = useMemo(() => {
+    if (!restaurantData?.timings || restaurantData.timings.length === 0) {
+      return null;
+    }
+
+    const timingMessage = homeService.getRestaurantOpeningMessage(restaurantData.timings);
+
+    if (typeof restaurantData.is_open === 'boolean') {
+      if (restaurantData.is_open) {
+        // Backend says open → don't show "opens in..." message
+        return null;
+      }
+      // Backend says closed → show timing message if available, otherwise a generic label
+      return timingMessage || 'Currently closed';
+    }
+
+    return timingMessage;
+  }, [restaurantData?.timings, restaurantData?.is_open]);
+
+  const isRestaurantClosed = !isRestaurantOpenEffective;
 
   const showRestaurantClosedAlert = useCallback(() => {
     setShowClosedModal(true);
@@ -947,16 +971,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   // Handle opening detail modal
   const handleImageClick = (item: MenuItem) => {
     // Allow opening modal even if restaurant is closed (to show disabled state)
-    // Check if restaurant is open
-    const isRestaurantOpen = restaurantData?.timings
-      ? homeService.isRestaurantOpen(restaurantData.timings)
-      : true; // Default to open if no timing data
-
     // Check if item is available based on its own timings
     const isItemCurrentlyAvailable = isItemAvailable(item.timings);
 
     // Item is only available if BOTH restaurant is open AND item timing is available
-    const itemAvailable = isRestaurantOpen && isItemCurrentlyAvailable;
+    const itemAvailable = isRestaurantOpenEffective && isItemCurrentlyAvailable;
     
     setSelectedDetailItem(item);
     setSelectedDetailItemAvailable(itemAvailable);
@@ -977,16 +996,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   // Get filtered menu sections based on active dietary filter and global veg mode
   // Helper function to check if item is fully available (considering both restaurant and item timings)
   const isItemFullyAvailable = (item: MenuItem): boolean => {
-    // Check if restaurant is open
-    const isRestaurantOpen = restaurantData?.timings
-      ? homeService.isRestaurantOpen(restaurantData.timings)
-      : true; // Default to open if no timing data
-
     // Check if item is available based on its own timings
     const isItemCurrentlyAvailable = isItemAvailable(item.timings);
 
     // Item is only available if BOTH restaurant is open AND item timing is available
-    return isRestaurantOpen && isItemCurrentlyAvailable;
+    return isRestaurantOpenEffective && isItemCurrentlyAvailable;
   };
 
   const getFilteredMenuSections = (): MenuSection[] => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,24 +9,28 @@ import {
   StatusBar,
   ActivityIndicator,
   Linking,
-  Modal,
+  BackHandler,
   RefreshControl,
   Dimensions,
   Animated,
   PanResponder,
   Pressable,
+  AppState,
+  NativeModules,
+  Platform,
 } from 'react-native';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
+import TrackingWebView from '@/components/TrackingWebView';
 import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
 import { useOrders } from '@/context/OrdersContext';
 import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
 import { exotelService } from '@/services/exotel.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { useAndroidPip } from '@/hooks/useAndroidPip';
 
 interface OrderDetailScreenProps {
   orderId?: string;
@@ -68,6 +72,125 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const lastFetchedStatusRef = useRef<string | null>(null);
   const [showTaxTooltip, setShowTaxTooltip] = useState(false);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
+  const webViewLoadedRef = useRef<boolean>(false);
+  const webViewRef = useRef<any>(null);
+
+  // Memoize the tracking URL so it only recomputes when order data actually changes.
+  // This is critical: it keeps the TrackingWebView source prop stable across any
+  // parent re-renders (isInPipMode toggles, bottom-sheet drags, status polls, etc.)
+  const effectiveTrackingUrl = useMemo(
+    () => {
+      if (!showTrackingWebView) return null;
+      // Prefer trackingOrderData (latest API fetch), fall back to orderData
+      const data = trackingOrderData || orderData;
+      if (!data) return null;
+      if (data.tracking_url) return String(data.tracking_url);
+      const history = data.tracking;
+      if (Array.isArray(history) && history.length > 0) {
+        const lastWithUrl = [...history].reverse().find((e: any) => e?.tracking_url);
+        if (lastWithUrl?.tracking_url) return String(lastWithUrl.tracking_url);
+      }
+      return null;
+    },
+    // Only recompute when the data objects themselves change — NOT on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showTrackingWebView, trackingOrderData, orderData],
+  );
+
+  const { canUsePip, isInPipMode: hookIsInPipMode, enterPip } = useAndroidPip();
+
+  // isEnteringPip: set to true the instant the user presses the PiP button so
+  // the header disappears BEFORE the Android animation starts.  This eliminates
+  // the 1-2 frame white flash caused by the header still being visible while
+  // Android is shrinking the window.
+  //
+  // Race-condition guard — pipNativeConfirmedRef:
+  //   The previous attempt at this flag used a useEffect with [hookIsInPipMode]
+  //   that reset isEnteringPip whenever hookIsInPipMode was false.  That fired
+  //   immediately after setIsEnteringPip(true) because hookIsInPipMode was still
+  //   false at that point, undoing the flag before the animation even started.
+  //   Fix: only clear isEnteringPip when hookIsInPipMode *transitions* (changes
+  //   value), detected via a ref.  The ref update does not cause re-renders, so
+  //   the effect only fires on actual hookIsInPipMode changes, not on every
+  //   render that happens to see hookIsInPipMode === false.
+  const [isEnteringPip, setIsEnteringPip] = useState(false);
+  const pipNativeConfirmedRef = useRef(false); // true after native PiP is active
+
+  useEffect(() => {
+    if (hookIsInPipMode) {
+      // Native confirmed PiP is active → record it, clear the optimistic flag
+      pipNativeConfirmedRef.current = true;
+      setIsEnteringPip(false);
+    } else if (pipNativeConfirmedRef.current) {
+      // PiP just exited (was confirmed, now gone) → full reset
+      pipNativeConfirmedRef.current = false;
+      setIsEnteringPip(false);
+    }
+    // If hookIsInPipMode = false AND pipNativeConfirmedRef = false:
+    // normal non-PiP state — do NOT touch isEnteringPip here to avoid
+    // clearing the optimistic flag before native confirms it.
+  }, [hookIsInPipMode]);
+
+  // isInPipMode: true as soon as user presses button (isEnteringPip) OR native confirms
+  const isInPipMode = showTrackingWebView && (hookIsInPipMode || isEnteringPip);
+
+  // Inform native layer when auto-PiP via home button is allowed.
+  // This keeps the lifecycle fully on the Android side and avoids React-side crashes.
+  useEffect(() => {
+    const pipModule = NativeModules.PipModule;
+    if (Platform.OS !== 'android' || !pipModule || typeof pipModule.setAutoPipEnabled !== 'function') {
+      return;
+    }
+
+    try {
+      pipModule.setAutoPipEnabled(showTrackingWebView);
+    } catch (e) {
+      console.warn('[OrderDetailScreen] Failed to set autoPipEnabled:', e);
+    }
+
+    return () => {
+      try {
+        pipModule.setAutoPipEnabled(false);
+      } catch {
+        // ignore cleanup errors
+      }
+    };
+  }, [showTrackingWebView]);
+
+  // Trigger native PiP from the button in the header.
+  // Sets isEnteringPip immediately so the header hides before the Android
+  // shrink animation starts, preventing the white-screen flash.
+  const handleEnterPip = useCallback(() => {
+    if (!showTrackingWebView) return;
+
+    // Optimistically hide header — native event will confirm & clear this flag
+    setIsEnteringPip(true);
+
+    enterPip().catch(() => {
+      // PiP failed (unsupported device, etc.) — revert the optimistic flag
+      setIsEnteringPip(false);
+    });
+  }, [enterPip, showTrackingWebView]);
+
+  // Handle Android hardware back button while tracking overlay is open.
+  // Replaces the Modal's built-in onRequestClose since we now use a plain View.
+  useEffect(() => {
+    if (!showTrackingWebView) return;
+
+    const backAction = () => {
+      if (!isInPipMode) {
+        setShowTrackingWebView(false);
+        setSelectedOrderIdForTracking(null);
+        setTrackingOrderData(null);
+        webViewLoadedRef.current = false;
+      }
+      // Always intercept — in PiP mode, back should not close the overlay
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [showTrackingWebView, isInPipMode]);
 
   // Safely derive tracking URL from order data.
   // Backend may populate either a top-level tracking_url OR one inside the tracking history.
@@ -1432,73 +1555,113 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         />
       )}
 
-      {/* Tracking WebView Modal */}
-      <Modal
-        visible={showTrackingWebView}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => {
-          setShowTrackingWebView(false);
-          setSelectedOrderIdForTracking(null);
-          setTrackingOrderData(null);
-        }}
-      >
-        <View style={styles.webViewModalContainer}>
-          <SafeAreaView style={styles.webViewContainer} edges={['top']}>
-            <View style={styles.webViewHeader}>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowTrackingWebView(false);
-                  setSelectedOrderIdForTracking(null);
-                  setTrackingOrderData(null);
-                }}
-                style={styles.webViewBackButton}
-              >
-                <MaterialIcons name="close" size={24} color="#001E1F" />
-              </TouchableOpacity>
-              <Text style={styles.webViewHeaderTitle}>Track Order</Text>
-              <View style={styles.webViewBackButton} />
-            </View>
-            {(() => {
-              // Prefer tracking URL from trackingOrderData (latest full data), fall back to orderData
-              const effectiveTrackingUrl = getTrackingUrlFromOrderData(trackingOrderData || orderData);
-              if (!effectiveTrackingUrl) return null;
+      {/* Tracking WebView Overlay
+          Rendered as a plain absolute View inside the activity window — NOT as a
+          Modal / Dialog.  React Native Modals are separate Android Dialog windows
+          that do not correctly track the activity's PiP window boundary during
+          drag, which causes resize / layout glitches in PiP mode.
+          Using an absolute View means it lives in the same view hierarchy as the
+          activity and scales perfectly with the PiP window at all times.
+          Back-button handling is done via BackHandler (see useEffect above). */}
+      {showTrackingWebView && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: '#000000',
+            zIndex: 1000,
+            elevation: 10,
+          }}
+        >
 
-              return (
-                <WebView
-                  source={{ uri: effectiveTrackingUrl }}
-                style={styles.webView}
-                startInLoadingState={true}
-                renderLoading={() => (
-                  <View style={styles.webViewLoadingContainer}>
-                    <ActivityIndicator size="large" color="#00B14F" />
-                  </View>
+          {/* Header — visible in normal mode only.
+              Hiding it (not unmounting WebView) lets the WebView resize naturally
+              without triggering a reload when entering / exiting PiP. */}
+          {!isInPipMode && (
+            <SafeAreaView edges={['top']} style={{ backgroundColor: '#FFFFFF' }}>
+              <View style={styles.webViewHeader}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowTrackingWebView(false);
+                    setSelectedOrderIdForTracking(null);
+                    setTrackingOrderData(null);
+                    webViewLoadedRef.current = false;
+                  }}
+                  style={styles.webViewBackButton}
+                >
+                  <MaterialIcons name="close" size={24} color="#001E1F" />
+                </TouchableOpacity>
+                <Text style={styles.webViewHeaderTitle}>Track Order</Text>
+                {canUsePip && showTrackingWebView ? (
+                  <TouchableOpacity
+                    onPress={handleEnterPip}
+                    style={styles.webViewBackButton}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons name="picture-in-picture-alt" size={22} color="#001E1F" />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.webViewBackButton} />
                 )}
-                onError={(syntheticEvent) => {
-                  const { nativeEvent } = syntheticEvent;
-                  console.error('WebView error:', nativeEvent);
-                }}
-                onHttpError={(syntheticEvent) => {
-                  const { nativeEvent } = syntheticEvent;
-                  console.error('WebView HTTP error:', nativeEvent.statusCode, nativeEvent.description);
-                }}
-                javaScriptEnabled={true}
-                domStorageEnabled={true}
-                  mixedContentMode="always"
-                />
-              );
-            })()}
-          </SafeAreaView>
+              </View>
+            </SafeAreaView>
+          )}
+
+          {/* ── Single WebView (memoized) ─────────────────────────────────────────
+              TrackingWebView is wrapped in React.memo with stable prop references.
+              It will NOT re-render when isInPipMode, bottom-sheet, or any other
+              parent state changes — eliminating the lag on PiP ↔ normal transitions.
+              effectiveTrackingUrl is a useMemo at component level; it only changes
+              when the order's tracking URL actually changes.
+          ──────────────────────────────────────────────────────────────────── */}
+          <View style={{ flex: 1, backgroundColor: '#000000' }}>
+            {effectiveTrackingUrl ? (
+              <TrackingWebView
+                trackingUrl={effectiveTrackingUrl}
+                webViewRef={webViewRef}
+                webViewLoadedRef={webViewLoadedRef}
+              />
+            ) : (
+              <View style={isInPipMode ? styles.webViewLoadingContainerPip : styles.webViewLoadingContainer}>
+                <ActivityIndicator size="large" color="#00B14F" />
+                <Text style={{ marginTop: 16, color: isInPipMode ? '#FFFFFF' : '#666', fontFamily: 'Poppins_400Regular' }}>
+                  Loading tracking map...
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* PiP navigation widget — absolute overlay, only shown in PiP mode */}
+          {isInPipMode && trackingOrderData && (
+            <View style={styles.navigationWidget} pointerEvents="box-none">
+              <View style={styles.navigationInfoBar}>
+                <View style={styles.navigationDirection}>
+                  <MaterialIcons name="arrow-upward" size={14} color="#FFFFFF" />
+                  <Text style={styles.navigationDirectionText} numberOfLines={1} ellipsizeMode="tail">
+                    {trackingOrderData?.restaurant?.name || 'Restaurant'}
+                  </Text>
+                </View>
+                <View style={styles.navigationETA}>
+                  <MaterialIcons name="access-time" size={11} color="#FFFFFF" />
+                  <Text style={styles.navigationETAText}>15m</Text>
+                </View>
+              </View>
+            </View>
+          )}
           
-          {/* Bottom Sheet Overlay */}
-          <Animated.View 
-            style={[
-              styles.trackingBottomSheet,
-              {
-                height: bottomSheetHeight,
-              }
-            ]}
-          >
+          {/* Bottom Sheet Overlay - Hide in PiP mode */}
+          {!isInPipMode && (
+            <Animated.View 
+              style={[
+                styles.trackingBottomSheet,
+                {
+                  height: bottomSheetHeight,
+                }
+              ]}
+            >
             {/* Drag handle at top - always visible, controls open/close */}
             <View 
               style={styles.trackingDragHandleContainer} 
@@ -1831,8 +1994,9 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             )}
             
           </Animated.View>
+          )}
         </View>
-      </Modal>
+      )}
     </View>
   );
 };
@@ -2472,6 +2636,87 @@ const styles = StyleSheet.create({
   webView: {
     flex: 1,
   },
+  webViewPipContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    width: '100%',
+    height: '100%',
+  },
+  webViewWrapperPip: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  webViewPip: {
+    flex: 1,
+    backgroundColor: '#000000',
+    width: '100%',
+    height: '100%',
+  },
+  webViewLoadingContainerPip: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+  },
+  navigationWidget: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    paddingTop: 6,
+    pointerEvents: 'box-none',
+  },
+  navigationInfoBar: {
+    backgroundColor: '#00B14F',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+    minHeight: 40,
+  },
+  navigationDirection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 6,
+  },
+  navigationDirectionText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontFamily: 'Poppins_600SemiBold',
+    marginLeft: 6,
+    flex: 1,
+  },
+  navigationETA: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    minWidth: 60,
+  },
+  navigationETAText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: 'Poppins_600SemiBold',
+    marginLeft: 3,
+  },
   webViewLoadingContainer: {
     position: 'absolute',
     top: 0,
@@ -2520,6 +2765,12 @@ const styles = StyleSheet.create({
   webViewModalContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  webViewModalContainerPip: {
+    flex: 1,
+    backgroundColor: '#000000',
+    width: '100%',
+    height: '100%',
   },
   trackingBottomSheet: {
     position: 'absolute',

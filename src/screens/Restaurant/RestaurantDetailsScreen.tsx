@@ -479,13 +479,19 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                     <Text style={styles.infoTitle}>Timings</Text>
                   </View>
                   <View style={styles.infoContent}>
-                    {restaurantData.is_open && getCurrentDayTiming() && (
-                      <Text style={styles.openNow}>Open now</Text>
-                    )}
-                    {getCurrentDayTiming() && (
-                      <Text style={styles.infoText}>
-                        {restaurantData.is_open ? ' • ' : ''}Closes {formatTime(getCurrentDayTiming()!.close_time)}
-                      </Text>
+                    {restaurantData.is_open ? (
+                      <>
+                        {getCurrentDayTiming() && (
+                          <Text style={styles.openNow}>Open now</Text>
+                        )}
+                        {getCurrentDayTiming() && (
+                          <Text style={styles.infoText}>
+                            {' • '}Closes {formatTime(getCurrentDayTiming()!.close_time)}
+                          </Text>
+                        )}
+                      </>
+                    ) : (
+                      <Text style={styles.infoText}>Closed now</Text>
                     )}
                   </View>
                 </View>

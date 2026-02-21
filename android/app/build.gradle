@@ -85,8 +85,10 @@ def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 android {
     ndkVersion rootProject.ext.ndkVersion
 
-    buildToolsVersion rootProject.ext.buildToolsVersion
-    compileSdk rootProject.ext.compileSdkVersion
+    // Use an explicit modern compileSdk that satisfies React Native 0.81 + AGP 8.x
+    // and third-party libraries like react-native-pip-android.
+    // AGP 8.11 will choose a suitable default Build Tools version (no need to set buildToolsVersion).
+    compileSdk 35
 
     namespace 'in.tazty.buyer'
 
