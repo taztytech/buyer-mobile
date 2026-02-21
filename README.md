@@ -100,6 +100,10 @@ npm run type-check    # Run TypeScript type checking
 npm run build:ios
 # or with EAS
 eas build --platform ios
+
+### iOS start app
+ npx expo install @expo/ngrok
+ npx expo start --tunnel     
 ```
 
 ### Android

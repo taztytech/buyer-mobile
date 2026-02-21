@@ -12,7 +12,8 @@
       "bundleIdentifier": "in.tazty.buyer",
       "infoPlist": {
         "NSUserNotificationsUsageDescription": "This app uses notifications to keep you updated on your orders and special offers."
-      }
+      },
+      "googleServicesFile": "./ios/GoogleService-Info.plist"
     },
     "android": {
       "package": "in.tazty.buyer",
