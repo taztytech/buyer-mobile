@@ -16,6 +16,7 @@ import {
   Dimensions,
   Animated,
   PanResponder,
+  InteractionManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -197,6 +198,50 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   }, [localOrders, dispatch]);
 
+  // Silent background refresh for first page
+  const refreshOrders = useCallback(async () => {
+    try {
+      console.log('🔄 OrdersScreen: Starting background refresh...');
+      isRequestInProgress.current = true;
+      lastRequestedPage.current = 0;
+
+      const response = await ordersService.getOrders(5, 1);
+
+      if (response.success && response.data) {
+        const responseData = response.data as any;
+        const ordersArray =
+          responseData.data ||
+          responseData.orders ||
+          (Array.isArray(responseData) ? responseData : []);
+
+        const total =
+          responseData.total ||
+          responseData.meta?.total ||
+          responseData.data?.total ||
+          responseData.pagination?.total ||
+          responseData.metadata?.total ||
+          ordersArray.length;
+
+        // Update persisted module-level data
+        persistedOrders = ordersArray;
+        persistedCurrentPage = 1;
+        persistedTotalOrders = total;
+        hasPersistedData = true;
+
+        // Update local state - trigger re-render
+        setLocalOrders(ordersArray);
+        setTotalOrders(total);
+        setCurrentPage(1);
+        lastRefreshTimeRef.current = Date.now();
+        console.log('🔄 OrdersScreen: Background refresh successful');
+      }
+    } catch (error) {
+      console.error('🔄 OrdersScreen: Background refresh failed:', error);
+    } finally {
+      isRequestInProgress.current = false;
+    }
+  }, []);
+
   // Handle screen visibility and reset state
   // This effect runs when visible changes or component mounts
   useEffect(() => {
@@ -261,59 +306,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
         // Refresh if enough time has passed (regardless of isReturning)
         if (timeSinceLastRefresh >= MIN_REFRESH_INTERVAL) {
-          const refreshOrders = async () => {
-            try {
-              console.log('🔄 OrdersScreen: Auto-refreshing on visibility...');
-              isRequestInProgress.current = true;
-              lastRequestedPage.current = 0;
-
-              const response = await ordersService.getOrders(5, 1);
-
-              if (response.success && response.data) {
-                const responseData = response.data as any;
-
-                const ordersArray =
-                  responseData.data ||
-                  responseData.orders ||
-                  (Array.isArray(responseData) ? responseData : []);
-
-                const total =
-                  responseData.total ||
-                  responseData.meta?.total ||
-                  responseData.data?.total ||
-                  responseData.pagination?.total ||
-                  responseData.metadata?.total ||
-                  ordersArray.length;
-
-                console.log('🔄 OrdersScreen: Auto-refresh successful, orders count:', ordersArray.length);
-
-                // Update persisted data
-                persistedOrders = ordersArray;
-                persistedCurrentPage = 1;
-                persistedTotalOrders = total;
-                hasPersistedData = true;
-
-                // Update local state with new array reference to trigger re-render
-                setLocalOrders([...ordersArray]);
-                setCurrentPage(1);
-                setTotalOrders(total);
-
-                // Update context
-                dispatch({
-                  type: 'BULK_SET_ORDERS',
-                  payload: ordersArray,
-                });
-
-                lastRefreshTimeRef.current = now;
-              }
-            } catch (error) {
-              console.warn('🔄 OrdersScreen: Auto-refresh failed:', error);
-            } finally {
-              isRequestInProgress.current = false;
-            }
-          };
-
-          // Delay refresh slightly
           const refreshTimer = setTimeout(() => {
             refreshOrders();
           }, 500);
@@ -401,7 +393,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       }
     }
     return undefined;
-  }, [visible, dispatch, localOrders.length, currentPage, totalOrders]);
+  }, [visible, dispatch, localOrders.length, currentPage, totalOrders, refreshOrders]);
 
   // Separate effect to restore scroll position after orders are rendered
   useEffect(() => {
@@ -709,6 +701,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [trackingOrderData, setTrackingOrderData] = useState<any>(null);
   const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
+  const [isClosingTracking, setIsClosingTracking] = useState(false);
 
   // Bottom sheet drag state
   const HALF_SCREEN = SCREEN_HEIGHT * 0.5;
@@ -818,34 +811,37 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         setIsLoadingTrackingData(false);
       }
     }
-  }, []);
+  }, [getTrackingUrlFromOrderData, onTrackOrder]);
 
   // Handle closing the tracking WebView modal and refresh orders
   const handleCloseTrackingWebView = useCallback(() => {
-    setShowTrackingWebView((prev) => {
-      // If already closed (e.g., from button press then onDismiss firing), don't do anything
-      if (!prev) return false;
+    // 1. Guard against redundant calls
+    if (isClosingTracking) return;
 
-      setSelectedOrderIdForTracking(null);
-      setTrackingOrderData(null);
-      setSelectedTrackingUrl(null);
+    // 2. Mark as closing - this immediately unmounts WebView from the tree
+    setIsClosingTracking(true);
+    setShowTrackingWebView(false);
 
-      // Reset bottom sheet to open state when closing modal
-      bottomSheetHeight.setValue(OPEN_HEIGHT);
-      setIsBottomSheetOpen(true);
+    // 3. Cleanup after animation finishes on iOS
+    // InteractionManager ensures we don't start heavy state changes until animations are done
+    setTimeout(() => {
+      InteractionManager.runAfterInteractions(() => {
+        setSelectedOrderIdForTracking(null);
+        setTrackingOrderData(null);
+        setSelectedTrackingUrl(null);
 
-      // Refresh orders when navigating back to My Orders page
-      console.log('🔄 Tracking: Closing modal, refreshing orders...');
-      // Use setTimeout to ensure the modal unmounts fully before triggering an API call and large re-render
-      setTimeout(() => {
-        fetchOrders(1, true).catch((err) => {
-          console.error('Failed to refresh orders after closing tracking:', err);
-        });
-      }, 100);
+        // Reset bottom sheet to open state when closing modal
+        bottomSheetHeight.setValue(OPEN_HEIGHT);
+        setIsBottomSheetOpen(true);
 
-      return false;
-    });
-  }, []);
+        // Refresh orders silently without full loading screen
+        console.log('🔄 Tracking: Closing modal, refreshing orders silently...');
+        refreshOrders();
+
+        setIsClosingTracking(false); // Reset for next time
+      });
+    }, 600);
+  }, [OPEN_HEIGHT, bottomSheetHeight, refreshOrders, isClosingTracking]);
 
   // PanResponder for bottom sheet drag - on drag handle and top section when closed
   const panResponder = useRef(
@@ -1122,14 +1118,20 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       });
 
       if (response.success) {
-        showConfirmation({
-          title: 'Call Initiated',
-          message: 'Your call to the delivery agent is being connected. Please wait for the call.',
-          confirmText: 'OK',
-          cancelText: '',
-          confirmButtonColor: '#00B14F',
-          onConfirm: () => { },
-        });
+        // CLOSE MODAL FIRST to avoid multiple modal contentions on iOS
+        handleCloseTrackingWebView();
+
+        // Show confirmation after modal is dismissed
+        setTimeout(() => {
+          showConfirmation({
+            title: 'Call Initiated',
+            message: 'Your call to the delivery agent is being connected. Please wait for the call.',
+            confirmText: 'OK',
+            cancelText: '',
+            confirmButtonColor: '#00B14F',
+            onConfirm: () => { },
+          });
+        }, 800);
       } else {
         showConfirmation({
           title: 'Call Failed',
@@ -1551,28 +1553,31 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
               <Text style={styles.webViewHeaderTitle}>Track Order</Text>
               <View style={styles.webViewBackButton} />
             </View>
-            {selectedTrackingUrl && (
-              <WebView
-                source={{ uri: selectedTrackingUrl }}
-                style={styles.webView}
-                startInLoadingState={true}
-                renderLoading={() => (
-                  <View style={styles.webViewLoadingContainer}>
-                    <ActivityIndicator size="large" color="#00B14F" />
-                  </View>
-                )}
-                onError={(syntheticEvent) => {
-                  const { nativeEvent } = syntheticEvent;
-                  console.error('WebView error:', nativeEvent);
-                }}
-                onHttpError={(syntheticEvent) => {
-                  const { nativeEvent } = syntheticEvent;
-                  console.error('WebView HTTP error:', nativeEvent.statusCode, nativeEvent.description);
-                }}
-                javaScriptEnabled={true}
-                domStorageEnabled={true}
-                mixedContentMode="always"
-              />
+            {selectedTrackingUrl && !isClosingTracking && (
+              <>
+                {console.log('🌐 WebView Loading URL (Orders):', selectedTrackingUrl)}
+                <WebView
+                  source={{ uri: selectedTrackingUrl }}
+                  style={styles.webView}
+                  startInLoadingState={true}
+                  renderLoading={() => (
+                    <View style={styles.webViewLoadingContainer}>
+                      <ActivityIndicator size="large" color="#00B14F" />
+                    </View>
+                  )}
+                  onError={(syntheticEvent) => {
+                    const { nativeEvent } = syntheticEvent;
+                    console.error('WebView error:', nativeEvent);
+                  }}
+                  onHttpError={(syntheticEvent) => {
+                    const { nativeEvent } = syntheticEvent;
+                    console.error('WebView HTTP error:', nativeEvent.statusCode, nativeEvent.description);
+                  }}
+                  javaScriptEnabled={true}
+                  domStorageEnabled={true}
+                  mixedContentMode="always"
+                />
+              </>
             )}
           </SafeAreaView>
 
@@ -1600,7 +1605,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
               const statusConfig = mapOrderStatusToUI(displayStatus);
 
               // Get agent info from tracking array - find latest entry with agent details
-              const trackingArray = displayOrder?.tracking || [];
+              const rawTrackingArray = displayOrder?.tracking || [];
+              // Sort tracking by timestamp (oldest first for timeline display)
+              const trackingArray = [...rawTrackingArray].sort((a: any, b: any) => {
+                return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+              });
               let agentName: string | null = null;
               let agentPhone: string | null = null;
 
@@ -1866,7 +1875,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                                       {isCompleted || isDelivered ? (
                                         <MaterialIcons name="check" size={8} color="#FFFFFF" />
                                       ) : isCurrent ? (
-                                        <ActivityIndicator size="small" color="#3B82F6" />
+                                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' }} />
                                       ) : (
                                         <MaterialIcons name="radio-button-unchecked" size={8} color="#BFBCBA" />
                                       )}

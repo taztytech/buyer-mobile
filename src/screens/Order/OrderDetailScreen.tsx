@@ -15,6 +15,7 @@ import {
   Animated,
   PanResponder,
   Pressable,
+  InteractionManager,
 } from 'react-native';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -68,6 +69,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const lastFetchedStatusRef = useRef<string | null>(null);
   const [showTaxTooltip, setShowTaxTooltip] = useState(false);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
+  const [isClosingTracking, setIsClosingTracking] = useState(false);
 
   // Safely derive tracking URL from order data.
   // Backend may populate either a top-level tracking_url OR one inside the tracking history.
@@ -147,6 +149,31 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const _contextOrderFromState = orderId ? state.byId[orderId] : undefined;
   const _contextStatus = _contextOrderFromState?.status;
   const _contextUpdatedAt = _contextOrderFromState?.updated_at;
+
+  const handleCloseTrackingWebView = useCallback(() => {
+    // 1. Guard against redundant calls
+    if (isClosingTracking) return;
+
+    // 2. Mark as closing - this will immediately unmount the WebView from the tree
+    setIsClosingTracking(true);
+    setShowTrackingWebView(false);
+
+    // 3. Perform final cleanup after the modal animation has likely finished
+    // InteractionManager ensures the UI thread is free before we perform state changes
+    setTimeout(() => {
+      InteractionManager.runAfterInteractions(() => {
+        setSelectedOrderIdForTracking(null);
+        setTrackingOrderData(null);
+        setIsBottomSheetOpen(true);
+        bottomSheetHeight.setValue(OPEN_HEIGHT);
+
+        // Refresh details silently
+        fetchOrderDetails();
+
+        setIsClosingTracking(false); // Reset for next time
+      });
+    }, 600);
+  }, [OPEN_HEIGHT, bottomSheetHeight, fetchOrderDetails, isClosingTracking]);
 
   useEffect(() => {
     if (!orderId) return;
@@ -551,14 +578,20 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       });
 
       if (response.success) {
-        showConfirmation({
-          title: 'Call Initiated',
-          message: 'Your call to the delivery agent is being connected. Please wait for the call.',
-          confirmText: 'OK',
-          cancelText: '',
-          confirmButtonColor: '#00B14F',
-          onConfirm: () => { },
-        });
+        // CLOSE MODAL FIRST to avoid multiple modal contentions on iOS
+        handleCloseTrackingWebView();
+
+        // Show confirmation after modal is dismissed
+        setTimeout(() => {
+          showConfirmation({
+            title: 'Call Initiated',
+            message: 'Your call to the delivery agent is being connected. Please wait for the call.',
+            confirmText: 'OK',
+            cancelText: '',
+            confirmButtonColor: '#00B14F',
+            onConfirm: () => { },
+          });
+        }, 800);
       } else {
         showConfirmation({
           title: 'Call Failed',
@@ -1437,21 +1470,14 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         visible={showTrackingWebView}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => {
-          setShowTrackingWebView(false);
-          setSelectedOrderIdForTracking(null);
-          setTrackingOrderData(null);
-        }}
+        onRequestClose={handleCloseTrackingWebView}
+        onDismiss={handleCloseTrackingWebView}
       >
         <View style={styles.webViewModalContainer}>
           <SafeAreaView style={styles.webViewContainer} edges={['top']}>
             <View style={styles.webViewHeader}>
               <TouchableOpacity
-                onPress={() => {
-                  setShowTrackingWebView(false);
-                  setSelectedOrderIdForTracking(null);
-                  setTrackingOrderData(null);
-                }}
+                onPress={handleCloseTrackingWebView}
                 style={styles.webViewBackButton}
               >
                 <MaterialIcons name="close" size={24} color="#001E1F" />
@@ -1462,7 +1488,12 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             {(() => {
               // Prefer tracking URL from trackingOrderData (latest full data), fall back to orderData
               const effectiveTrackingUrl = getTrackingUrlFromOrderData(trackingOrderData || orderData);
-              if (!effectiveTrackingUrl) return null;
+              console.log('🌐 WebView Loading URL (OrderDetail):', effectiveTrackingUrl);
+              // CRITICAL FIX: If we are closing, DO NOT render the WebView.
+              // This unmounts the WebView before the modal finishes its dismiss animation,
+              // preventing native-side freezes associated with WebView/Modal lifecycle conflicts.
+              if (!effectiveTrackingUrl || isClosingTracking) return null;
+
 
               return (
                 <WebView
@@ -1609,7 +1640,11 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       const displayStatus = displayOrder?.status;
 
                       // Get agent info from tracking array - find latest entry with agent details
-                      const trackingArray = displayOrder?.tracking || [];
+                      const rawTrackingArray = displayOrder?.tracking || [];
+                      // Sort tracking by timestamp (oldest first for timeline display)
+                      const trackingArray = [...rawTrackingArray].sort((a: any, b: any) => {
+                        return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+                      });
                       let agentName: string | null = null;
                       let agentPhone: string | null = null;
 
@@ -1780,7 +1815,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                                       {isCompleted || isDelivered ? (
                                         <MaterialIcons name="check" size={8} color="#FFFFFF" />
                                       ) : isCurrent ? (
-                                        <ActivityIndicator size="small" color="#3B82F6" />
+                                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' }} />
                                       ) : (
                                         <MaterialIcons name="radio-button-unchecked" size={8} color="#BFBCBA" />
                                       )}
