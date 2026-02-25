@@ -62,13 +62,13 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   // Use props if provided, otherwise fall back to local state for backward compatibility
   const [localSearchQuery, setLocalSearchQuery] = useState('');
   const [localSearchResults, setLocalSearchResults] = useState<SearchSuggestion[]>([]);
-  
+
   const searchQuery = onSearchQueryChange ? propSearchQuery : localSearchQuery;
   const searchResults = onSearchResultsChange ? propSearchResults : localSearchResults;
-  
+
   const setSearchQuery = onSearchQueryChange || setLocalSearchQuery;
   const setSearchResults = onSearchResultsChange || setLocalSearchResults;
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
@@ -142,7 +142,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       try {
         // Pass location if available, otherwise search without location filter
         const response = await searchService.getSearchSuggestions(
-              searchQuery,
+          searchQuery,
           userLocation?.lat,
           userLocation?.lng,
           vegMode
@@ -267,7 +267,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
               <FlatList
                 data={searchResults}
                 renderItem={({ item, index }) => renderSearchResult({ item, index })}
-                keyExtractor={(item) => `${item.type}-${item.id}`}
+                keyExtractor={(item, index) => `${item.type}-${item.id}-${index}`}
                 showsVerticalScrollIndicator={false}
                 nestedScrollEnabled={true}
                 contentContainerStyle={styles.flatListContent}
@@ -281,7 +281,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           )}
 
           {/* Empty State */}
-          {!isLoading && searchQuery && searchResults.length === 0 && (
+          {!isLoading && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
             <View style={styles.emptyState}>
               <MaterialIcons name="search-off" size={64} color="rgba(0, 0, 0, 0.2)" />
               <Text style={styles.emptyText}>No results found</Text>

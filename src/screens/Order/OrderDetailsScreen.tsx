@@ -604,7 +604,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       try {
         console.log(`[OrderDetails] Reactivating cart (attempt ${attempt}/${maxRetries})...`);
         const response = await cartService.updateCart(cartId, { is_active: true });
-        
+
         if (response.success) {
           console.log('[OrderDetails] Cart reactivated successfully');
           return true;
@@ -623,7 +623,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         }
       }
     }
-    
+
     console.error('[OrderDetails] Failed to reactivate cart after all retries');
     return false;
   };
@@ -1557,8 +1557,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         </View>
 
         {/* Main Content */}
-        <ScrollView 
-          style={styles.scrollView} 
+        <ScrollView
+          style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           onScrollBeginDrag={() => setShowTaxTooltip(false)}
         >
@@ -1675,7 +1675,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   {/* Notes */}
                   <View style={styles.notesContainer}>
                     <Text style={styles.notesLabel}>Notes</Text>
-                    <TextInput
+                    <TextInput autoCorrect={false}
                       style={styles.notesInput}
                       placeholder="Add special instructions for your order"
                       placeholderTextColor="rgba(0, 0, 0, 0.4)"
@@ -1902,7 +1902,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                           ]}
                         >
                           <Text style={styles.rupeeSymbol}>₹</Text>
-                          <TextInput
+                          <TextInput autoCorrect={false}
                             ref={customTipInputRef}
                             style={styles.customTipInput}
                             placeholder="0"
@@ -1962,7 +1962,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 {promoExpanded && (
                   <View style={styles.sectionContent}>
                     <View style={styles.promoCodeContainer}>
-                      <TextInput
+                      <TextInput autoCorrect={false}
                         style={styles.promoCodeInput}
                         placeholder="Enter promo code"
                         placeholderTextColor="rgba(0, 0, 0, 0.4)"

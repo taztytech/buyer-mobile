@@ -142,13 +142,13 @@ class FCMNotificationService {
             const hasPermission = await PermissionsAndroid.check(
               PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
             );
-            
+
             if (!hasPermission) {
               console.log('📱 Android 13+: Requesting POST_NOTIFICATIONS permission...');
               const result = await PermissionsAndroid.request(
                 PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
               );
-              
+
               if (result === PermissionsAndroid.RESULTS.GRANTED) {
                 console.log('✅ FCM: Android POST_NOTIFICATIONS permission granted');
                 // Also request FCM permission
@@ -244,14 +244,26 @@ class FCMNotificationService {
         return storedToken;
       }
 
+      // Firebase on iOS requires explicit device registration before fetching the token
+      if (Platform.OS === 'ios') {
+        if (!messaging().isDeviceRegisteredForRemoteMessages) {
+          try {
+            await messaging().registerDeviceForRemoteMessages();
+            console.log('✅ FCM: Registered device for remote messages on iOS');
+          } catch (regError) {
+            console.warn('⚠️ FCM: Failed to register device for remote messages:', regError);
+          }
+        }
+      }
+
       // Request new token from Firebase
       const token = await messaging().getToken();
-      
+
       if (token) {
         this.fcmToken = token;
         await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
-        console.log('✅ FCM: Token obtained:', token.substring(0, 20) + '...');
-        
+        console.log('✅ FCM: Full Token obtained:', token);
+
         // CRITICAL: Only send token to backend if user is logged in
         // On fresh install, user is not logged in yet, so skip backend registration
         // Token will be registered after login via registerTokenAfterLogin()
@@ -265,7 +277,7 @@ class FCMNotificationService {
         } else {
           console.log('ℹ️  FCM: User not logged in, skipping backend registration. Token will be registered after login.');
         }
-        
+
         return token;
       }
 
@@ -283,7 +295,7 @@ class FCMNotificationService {
     try {
       // Try to get existing device ID from storage
       let deviceId = await AsyncStorage.getItem(DEVICE_ID_KEY);
-      
+
       if (!deviceId) {
         // Generate a new device ID (UUID format)
         // Using a simple UUID v4-like generator
@@ -292,12 +304,12 @@ class FCMNotificationService {
           const v = c === 'x' ? r : (r & 0x3 | 0x8);
           return v.toString(16).toUpperCase();
         });
-        
+
         // Store it for future use
         await AsyncStorage.setItem(DEVICE_ID_KEY, deviceId);
         console.log('📱 FCM: Generated new device ID:', deviceId);
       }
-      
+
       return deviceId;
     } catch (error) {
       console.error('❌ FCM: Failed to get device ID:', error);
@@ -325,7 +337,7 @@ class FCMNotificationService {
         console.warn('⚠️  FCM: No token available to register after login');
         return false;
       }
-      
+
       // Send token to backend
       const success = await this.sendTokenToBackend(token);
       if (success) {
@@ -346,7 +358,7 @@ class FCMNotificationService {
     try {
       const deviceId = await this.getDeviceId();
       const appVersion = this.getAppVersion();
-      
+
       const payload = {
         device_token: token,
         platform: Platform.OS, // 'ios' or 'android'
@@ -407,7 +419,7 @@ class FCMNotificationService {
       console.log('   Title:', remoteMessage.notification?.title || 'N/A');
       console.log('   Body:', remoteMessage.notification?.body || 'N/A');
       console.log('   Data:', JSON.stringify(remoteMessage.data || {}, null, 2));
-      
+
       const payload: NotificationPayload = {
         title: remoteMessage.notification?.title,
         body: remoteMessage.notification?.body,
@@ -439,7 +451,7 @@ class FCMNotificationService {
     // Notification opened listener (when user taps notification)
     this.notificationOpenedListener = messaging().onNotificationOpenedApp((remoteMessage: any) => {
       console.log('👆 FCM: Notification opened:', remoteMessage.messageId);
-      
+
       const payload: NotificationPayload = {
         title: remoteMessage.notification?.title,
         body: remoteMessage.notification?.body,
@@ -447,13 +459,13 @@ class FCMNotificationService {
         notificationId: remoteMessage.messageId,
       };
 
-        // Handle order notification updates if dispatch is available
-        if (this.ordersDispatch && remoteMessage.data?.type === 'order') {
-          console.log('✅ FCM: Processing order notification (initial) - Status will be updated');
-          handleOrderNotification(remoteMessage, this.ordersDispatch, true).catch((error) => {
-            console.warn('⚠️  FCM: Failed to handle order notification:', error);
-          });
-        }
+      // Handle order notification updates if dispatch is available
+      if (this.ordersDispatch && remoteMessage.data?.type === 'order') {
+        console.log('✅ FCM: Processing order notification (initial) - Status will be updated');
+        handleOrderNotification(remoteMessage, this.ordersDispatch, true).catch((error) => {
+          console.warn('⚠️  FCM: Failed to handle order notification:', error);
+        });
+      }
 
       this.onNotificationOpened(payload);
     });
@@ -467,7 +479,7 @@ class FCMNotificationService {
           console.log('📨 FCM: Message received from native:', payload);
           this.onForegroundMessage(payload);
         });
-        
+
         eventEmitter.addListener('FCMTokenRefreshed', (data: { token: string }) => {
           console.log('🔄 FCM: Token refreshed from native');
           this.fcmToken = data.token;
@@ -491,10 +503,10 @@ class FCMNotificationService {
 
       // Check FCM initial notification (works for both iOS and Android)
       const remoteMessage = await messaging().getInitialNotification();
-      
+
       if (remoteMessage) {
         console.log('🚀 FCM: App opened from notification:', remoteMessage.messageId);
-        
+
         const payload: NotificationPayload = {
           title: remoteMessage.notification?.title,
           body: remoteMessage.notification?.body,
@@ -536,10 +548,10 @@ class FCMNotificationService {
 
     // Extract orderId from various possible field names
     const orderId = data.orderId || data.order_id || data.orderID || data['order-id'];
-    
+
     if (orderId) {
       console.log('📱 FCM: App opened from notification (intent), orderId:', orderId);
-      
+
       const payload: NotificationPayload = {
         title: data.title,
         body: data.body,
@@ -573,7 +585,7 @@ class FCMNotificationService {
     // This can be overridden or you can listen to events
     console.log('📨 FCM: Foreground message handler called');
     console.log('   Payload:', JSON.stringify(payload, null, 2));
-    
+
     // Emit custom event if needed
     // You can use EventEmitter or any state management solution
   }
@@ -587,9 +599,9 @@ class FCMNotificationService {
       timestamp: new Date().toISOString(),
       receivedAt: Date.now(),
     };
-    
+
     this.recentMessages.unshift(messageWithTimestamp);
-    
+
     // Keep only the most recent messages
     if (this.recentMessages.length > this.MAX_RECENT_MESSAGES) {
       this.recentMessages = this.recentMessages.slice(0, this.MAX_RECENT_MESSAGES);
@@ -617,7 +629,7 @@ class FCMNotificationService {
    */
   private onNotificationOpened(payload: NotificationPayload): void {
     console.log('👆 FCM: Notification opened:', payload);
-    
+
     // Handle navigation based on notification data
     if (payload.data) {
       this.handleNotificationNavigation(payload.data);
@@ -632,7 +644,7 @@ class FCMNotificationService {
     // Extract orderId from notification data
     // Support multiple possible field names: orderId, order_id, orderID, etc.
     let orderId = data.orderId || data.order_id || data.orderID || data['order-id'];
-    
+
     // If no orderId but we have order_number, try to find it using the lookup function
     if (!orderId) {
       const orderNumber = data.order_number || data.orderNumber || data['order-number'];
@@ -646,10 +658,10 @@ class FCMNotificationService {
         orderId = orderNumber; // Use order_number as identifier
       }
     }
-    
+
     if (orderId) {
       console.log('🧭 FCM: Navigating to My Orders for order:', orderId);
-      
+
       // Call navigation callback if set
       if (this.navigationCallback) {
         this.navigationCallback(orderId);
@@ -718,7 +730,7 @@ class FCMNotificationService {
         console.error('   Error message:', error.message);
         console.error('   Error stack:', error.stack);
       }
-      
+
       // Still clear local storage even if API fails
       this.fcmToken = null;
       await AsyncStorage.removeItem(PUSH_TOKEN_KEY);

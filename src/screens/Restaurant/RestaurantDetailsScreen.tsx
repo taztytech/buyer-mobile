@@ -94,7 +94,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
   const handleCall = async () => {
     // Check if phone number is available in restaurant data
     const phoneNumber = (restaurantData as any)?.phone_number || (restaurantData as any)?.contact_number;
-    
+
     if (!phoneNumber) {
       showConfirmation({
         title: 'Error',
@@ -102,7 +102,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -116,7 +116,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -132,7 +132,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -160,7 +160,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
           confirmText: 'OK',
           cancelText: '',
           confirmButtonColor: '#DC2626',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
       }
     } catch (error: any) {
@@ -170,7 +170,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#DC2626',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
     } finally {
       setIsInitiatingCall(false);
@@ -465,73 +465,73 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
               </View>
             )}
 
-          {/* Opening Hours Accordion */}
-          {restaurantData && restaurantData.timings && restaurantData.timings.length > 0 && (
-            <View>
-              <TouchableOpacity
-                style={styles.infoRow}
-                onPress={() => setIsTimingsExpanded(!isTimingsExpanded)}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="access-time" size={24} color="#666666" />
-                <View style={styles.infoContentColumn}>
-                  <View style={styles.infoContent}>
-                    <Text style={styles.infoTitle}>Timings</Text>
-                  </View>
-                  <View style={styles.infoContent}>
-                    {restaurantData.is_open && getCurrentDayTiming() && (
-                      <Text style={styles.openNow}>Open now</Text>
-                    )}
-                    {getCurrentDayTiming() && (
-                      <Text style={styles.infoText}>
-                        {restaurantData.is_open ? ' • ' : ''}Closes {formatTime(getCurrentDayTiming()!.close_time)}
-                      </Text>
-                    )}
-                  </View>
-                </View>
-                <MaterialIcons
-                  name={isTimingsExpanded ? "keyboard-arrow-up" : "keyboard-arrow-down"}
-                  size={24}
-                  color="#666666"
-                />
-              </TouchableOpacity>
-
-              {/* Expanded Timings */}
-              {isTimingsExpanded && (
-                <View style={styles.timingsExpanded}>
-                  {/* Show all 7 days in order (Sunday=0 to Saturday=6) */}
-                  {[1, 2, 3, 4, 5, 6, 7].map((dayNum) => {
-                    const timing = restaurantData.timings.find(t => t.day === dayNum);
-                    // JS getDay(): 0-6, API day: 1-7 (Sunday=1)
-                    const jsToday = new Date().getDay();
-                    const apiToday = jsToday === 0 ? 1 : jsToday + 1;
-                    const isToday = dayNum === apiToday;
-
-                    return (
-                      <View key={dayNum} style={styles.timingRow}>
-                        <Text style={[
-                          styles.timingDay,
-                          isToday && styles.timingDayToday
-                        ]}>
-                          {getDayName(dayNum - 1)}
+            {/* Opening Hours Accordion */}
+            {restaurantData && restaurantData.timings && restaurantData.timings.length > 0 && (
+              <View>
+                <TouchableOpacity
+                  style={styles.infoRow}
+                  onPress={() => setIsTimingsExpanded(!isTimingsExpanded)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="access-time" size={24} color="#666666" />
+                  <View style={styles.infoContentColumn}>
+                    <View style={styles.infoContent}>
+                      <Text style={styles.infoTitle}>Timings</Text>
+                    </View>
+                    <View style={styles.infoContent}>
+                      {restaurantData.is_open && getCurrentDayTiming() && (
+                        <Text style={styles.openNow}>Open now</Text>
+                      )}
+                      {getCurrentDayTiming() && (
+                        <Text style={styles.infoText}>
+                          {restaurantData.is_open ? ' • ' : ''}Closes {formatTime(getCurrentDayTiming()!.close_time)}
                         </Text>
-                        {timing && timing.open_time && timing.close_time ? (
-                          <Text style={styles.timingHours}>
-                            {formatTime(timing.open_time)} - {formatTime(timing.close_time)}
-                          </Text>
-                        ) : (
-                          <Text style={styles.timingClosed}>Closed</Text>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-          )}
+                      )}
+                    </View>
+                  </View>
+                  <MaterialIcons
+                    name={isTimingsExpanded ? "keyboard-arrow-up" : "keyboard-arrow-down"}
+                    size={24}
+                    color="#666666"
+                  />
+                </TouchableOpacity>
 
-          {/* Delivery Service */}
-          {/* {(restaurantData?.delivery_time || restaurantData?.delivery_fee || restaurantData?.min_order_value) && (
+                {/* Expanded Timings */}
+                {isTimingsExpanded && (
+                  <View style={styles.timingsExpanded}>
+                    {/* Show all 7 days in order (Sunday=0 to Saturday=6) */}
+                    {[1, 2, 3, 4, 5, 6, 7].map((dayNum) => {
+                      const timing = restaurantData.timings.find(t => t.day === dayNum);
+                      // JS getDay(): 0-6, API day: 1-7 (Sunday=1)
+                      const jsToday = new Date().getDay();
+                      const apiToday = jsToday === 0 ? 1 : jsToday + 1;
+                      const isToday = dayNum === apiToday;
+
+                      return (
+                        <View key={dayNum} style={styles.timingRow}>
+                          <Text style={[
+                            styles.timingDay,
+                            isToday && styles.timingDayToday
+                          ]}>
+                            {getDayName(dayNum - 1)}
+                          </Text>
+                          {timing && timing.open_time && timing.close_time ? (
+                            <Text style={styles.timingHours}>
+                              {formatTime(timing.open_time)} - {formatTime(timing.close_time)}
+                            </Text>
+                          ) : (
+                            <Text style={styles.timingClosed}>Closed</Text>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Delivery Service */}
+            {/* {(restaurantData?.delivery_time || restaurantData?.delivery_fee || restaurantData?.min_order_value) && (
             <View style={styles.infoRow}>
               <MaterialIcons name="delivery-dining" size={24} color="#666666" />
               <View style={styles.infoContentColumn}>
@@ -556,69 +556,69 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
             </View>
           )} */}
 
-          {/* Photos */}
-          {getRestaurantPhotos().length > 0 && (
-            <View style={styles.photosSection}>
-              <View style={styles.photoHeader}>
-                <MaterialIcons name="photo" size={24} color="#666666" />
-                <Text style={styles.photoTitle}>Photos</Text>
+            {/* Photos */}
+            {getRestaurantPhotos().length > 0 && (
+              <View style={styles.photosSection}>
+                <View style={styles.photoHeader}>
+                  <MaterialIcons name="photo" size={24} color="#666666" />
+                  <Text style={styles.photoTitle}>Photos</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.photosScroll}
+                >
+                  {getRestaurantPhotos().map((photo, index) => (
+                    <Image
+                      key={index}
+                      source={{ uri: photo }}
+                      style={styles.photo}
+                      resizeMode="cover"
+                    />
+                  ))}
+                </ScrollView>
               </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.photosScroll}
-              >
-                {getRestaurantPhotos().map((photo, index) => (
-                  <Image
-                    key={index}
-                    source={{ uri: photo }}
-                    style={styles.photo}
-                    resizeMode="cover"
-                  />
-                ))}
-              </ScrollView>
-            </View>
-          )}
+            )}
 
-          {/* Stats Info */}
-          {restaurantData?.stats && (restaurantData.stats.total_items > 0 || restaurantData.stats.total_categories > 0) && (
-            <View style={styles.infoRow}>
-              <MaterialIcons name="restaurant-menu" size={24} color="#666666" />
-              <Text style={styles.infoTitle}>
-                {restaurantData.stats.total_items > 0 && `${restaurantData.stats.total_items} item${restaurantData.stats.total_items !== 1 ? 's' : ''}`}
-                {restaurantData.stats.total_items > 0 && restaurantData.stats.total_categories > 0 && ' across '}
-                {restaurantData.stats.total_categories > 0 && `${restaurantData.stats.total_categories} categor${restaurantData.stats.total_categories !== 1 ? 'ies' : 'y'}`}
-              </Text>
-            </View>
-          )}
+            {/* Stats Info */}
+            {restaurantData?.stats && (restaurantData.stats.total_items > 0 || restaurantData.stats.total_categories > 0) && (
+              <View style={styles.infoRow}>
+                <MaterialIcons name="restaurant-menu" size={24} color="#666666" />
+                <Text style={styles.infoTitle}>
+                  {restaurantData.stats.total_items > 0 && `${restaurantData.stats.total_items} item${restaurantData.stats.total_items !== 1 ? 's' : ''}`}
+                  {restaurantData.stats.total_items > 0 && restaurantData.stats.total_categories > 0 && ' across '}
+                  {restaurantData.stats.total_categories > 0 && `${restaurantData.stats.total_categories} categor${restaurantData.stats.total_categories !== 1 ? 'ies' : 'y'}`}
+                </Text>
+              </View>
+            )}
 
-          {/* Legal Information */}
-          <View style={styles.legalSection}>
-            {restaurantData?.name && (
-              <>
-                <Text style={styles.legalLabel}>Legal Name</Text>
-                <Text style={styles.legalValue}>{restaurantData.name}</Text>
-              </>
-            )}
-            {restaurantData?.gst_number && (
-              <>
-                <Text style={styles.legalLabel}>GST Number</Text>
-                <Text style={styles.legalValue}>{restaurantData.gst_number}</Text>
-              </>
-            )}
-            {restaurantData?.fssai_license && (
-              <>
-                <Text style={styles.legalLabel}>FSSAI Lic No</Text>
-                <Text style={styles.legalValue}>{restaurantData.fssai_license}</Text>
-              </>
-            )}
-            {/* <Text style={styles.termsText}>
+            {/* Legal Information */}
+            <View style={styles.legalSection}>
+              {restaurantData?.name && (
+                <>
+                  <Text style={styles.legalLabel}>Legal Name</Text>
+                  <Text style={styles.legalValue}>{restaurantData.name}</Text>
+                </>
+              )}
+              {restaurantData?.gst_number && (
+                <>
+                  <Text style={styles.legalLabel}>GST Number</Text>
+                  <Text style={styles.legalValue}>{restaurantData.gst_number}</Text>
+                </>
+              )}
+              {restaurantData?.fssai_license && (
+                <>
+                  <Text style={styles.legalLabel}>FSSAI Lic No</Text>
+                  <Text style={styles.legalValue}>{restaurantData.fssai_license}</Text>
+                </>
+              )}
+              {/* <Text style={styles.termsText}>
               Please review the terms of service for Tazty{' '}
               <Text style={styles.termsLink}>here</Text>
             </Text> */}
-          </View>
+            </View>
 
-        </ScrollView>
+          </ScrollView>
         )}
       </View>
     </View>

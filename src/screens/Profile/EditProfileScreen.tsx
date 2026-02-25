@@ -181,7 +181,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
                     <Text style={styles.countryCode}>+91</Text>
                   </View>
                   <View style={styles.phoneInputBox}>
-                    <TextInput
+                    <TextInput autoCorrect={false}
                       style={styles.phoneInput}
                       value={phone}
                       placeholder="Enter mobile number"
@@ -197,7 +197,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
               {/* Name */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Name</Text>
-                <TextInput
+                <TextInput autoCorrect={false}
                   style={styles.textInput}
                   value={name}
                   onChangeText={(text) => {
@@ -218,7 +218,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
               {/* Email */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Email</Text>
-                <TextInput
+                <TextInput autoCorrect={false}
                   style={styles.textInput}
                   value={email}
                   onChangeText={(text) => {

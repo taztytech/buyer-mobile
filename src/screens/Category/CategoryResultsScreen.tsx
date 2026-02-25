@@ -371,7 +371,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
         // Category width: 74, marginRight: 4, total: 78
         const categoryWidth = 74 + 4; // 78
         const scrollX = selectedIndex * categoryWidth;
-        
+
         // Wait for the ScrollView to be rendered
         setTimeout(() => {
           if (categoryScrollViewRef.current && !hasAutoScrolledRef.current) {
@@ -451,136 +451,136 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           >
             {/* Top Section - Back Button + Search Bar */}
             <SearchBar
-            onBack={onBack}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            showClearButton={true}
-          />
+              onBack={onBack}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              showClearButton={true}
+            />
 
-        {/* Categories Section with Images */}
-        <View style={styles.categorySection}>
-          <ScrollView
-            ref={categoryScrollViewRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryScroll}
-            onScroll={(event) => {
-              setScrollOffset(event.nativeEvent.contentOffset.x);
-            }}
-            scrollEventThrottle={16}
-            scrollEnabled={true}
-            bounces={true}
-            nestedScrollEnabled={false}
-            decelerationRate="fast"
-            directionalLockEnabled={true}
-            keyboardShouldPersistTaps="handled"
-            onScrollBeginDrag={() => {
-              isUserScrollingRef.current = true;
-            }}
-            onScrollEndDrag={() => {
-              // Reset after a delay to allow taps
-              setTimeout(() => {
-                isUserScrollingRef.current = false;
-              }, 100);
-            }}
-            onMomentumScrollEnd={() => {
-              isUserScrollingRef.current = false;
-            }}
-          >
-            {displayCategories.map((category, index) => {
-              // Map category names to their images
-              const categoryImages: { [key: string]: any } = {
-                'Biryani': require('@/assets/biriyani.png'),
-                'South Indian': require('@/assets/idlies.png'),
-                'Pizza': require('@/assets/pizza.png'),
-                'Burger': require('@/assets/burger.png'),
-                'Cakes': require('@/assets/cake.png'),
-              };
+            {/* Categories Section with Images */}
+            <View style={styles.categorySection}>
+              <ScrollView
+                ref={categoryScrollViewRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryScroll}
+                onScroll={(event) => {
+                  setScrollOffset(event.nativeEvent.contentOffset.x);
+                }}
+                scrollEventThrottle={16}
+                scrollEnabled={true}
+                bounces={true}
+                nestedScrollEnabled={false}
+                decelerationRate="fast"
+                directionalLockEnabled={true}
+                keyboardShouldPersistTaps="handled"
+                onScrollBeginDrag={() => {
+                  isUserScrollingRef.current = true;
+                }}
+                onScrollEndDrag={() => {
+                  // Reset after a delay to allow taps
+                  setTimeout(() => {
+                    isUserScrollingRef.current = false;
+                  }, 100);
+                }}
+                onMomentumScrollEnd={() => {
+                  isUserScrollingRef.current = false;
+                }}
+              >
+                {displayCategories.map((category, index) => {
+                  // Map category names to their images
+                  const categoryImages: { [key: string]: any } = {
+                    'Biryani': require('@/assets/biriyani.png'),
+                    'South Indian': require('@/assets/idlies.png'),
+                    'Pizza': require('@/assets/pizza.png'),
+                    'Burger': require('@/assets/burger.png'),
+                    'Cakes': require('@/assets/cake.png'),
+                  };
 
-              // Find the category object to get icon
-              const categoryObj = categories?.find(cat => cat.name === category);
+                  // Find the category object to get icon
+                  const categoryObj = categories?.find(cat => cat.name === category);
 
-              // Determine the image source - use API icon if available, otherwise fallback to local
-              let imageSource;
-              if (categoryObj?.icon) {
-                // Check if icon is a string (URL) or a require() object
-                if (typeof categoryObj.icon === 'string') {
-                  imageSource = { uri: categoryObj.icon };
-                } else {
-                  imageSource = categoryObj.icon;
-                }
-              } else {
-                // Fallback to local images
-                imageSource = categoryImages[category];
-              }
+                  // Determine the image source - use API icon if available, otherwise fallback to local
+                  let imageSource;
+                  if (categoryObj?.icon) {
+                    // Check if icon is a string (URL) or a require() object
+                    if (typeof categoryObj.icon === 'string') {
+                      imageSource = { uri: categoryObj.icon };
+                    } else {
+                      imageSource = categoryObj.icon;
+                    }
+                  } else {
+                    // Fallback to local images
+                    imageSource = categoryImages[category];
+                  }
 
-              return (
-                <View key={`${category}-${index}`} style={styles.categoryItemWrapper}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      // Prevent selection if user just scrolled (wait a bit)
-                      if (isUserScrollingRef.current) {
-                        setTimeout(() => {
-                          setSelectedCategory(category);
-                          handleClearSearch();
-                        }, 150);
-                      } else {
-                        setSelectedCategory(category);
-                        handleClearSearch();
-                      }
-                    }}
-                    style={styles.categoryItem}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                    delayPressIn={0}
-                  >
-                    {imageSource && (
-                      <Image
-                        source={imageSource}
-                        style={styles.categoryFoodImage}
-                        resizeMode="contain"
-                      />
-                    )}
-                    <Text
-                      style={[
-                        styles.categoryText,
-                        !hasSearched && selectedCategory === category && styles.selectedCategoryText,
-                      ]}
-                    >
-                      {category}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-          </ScrollView>
-        </View>
+                  return (
+                    <View key={`${category}-${index}`} style={styles.categoryItemWrapper}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          // Prevent selection if user just scrolled (wait a bit)
+                          if (isUserScrollingRef.current) {
+                            setTimeout(() => {
+                              setSelectedCategory(category);
+                              handleClearSearch();
+                            }, 150);
+                          } else {
+                            setSelectedCategory(category);
+                            handleClearSearch();
+                          }
+                        }}
+                        style={styles.categoryItem}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                        delayPressIn={0}
+                      >
+                        {imageSource && (
+                          <Image
+                            source={imageSource}
+                            style={styles.categoryFoodImage}
+                            resizeMode="contain"
+                          />
+                        )}
+                        <Text
+                          style={[
+                            styles.categoryText,
+                            !hasSearched && selectedCategory === category && styles.selectedCategoryText,
+                          ]}
+                        >
+                          {category}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </View>
 
-        {/* Line separator */}
-        <View style={styles.lineContainer}>
-          <View style={styles.fullLine} />
-          {/* Selected category indicator line */}
-          {!hasSearched && (() => {
-            const selectedIndex = displayCategories.indexOf(selectedCategory);
-            if (selectedIndex === -1) return null;
+            {/* Line separator */}
+            <View style={styles.lineContainer}>
+              <View style={styles.fullLine} />
+              {/* Selected category indicator line */}
+              {!hasSearched && (() => {
+                const selectedIndex = displayCategories.indexOf(selectedCategory);
+                if (selectedIndex === -1) return null;
 
-            // Calculate position based on category index and scroll offset
-            const categoryWidth = 74 + 4; // categoryItemWrapper width + marginRight
-            const leftOffset = 20 + (selectedIndex * categoryWidth) + (74 - 67) / 2 - scrollOffset; // paddingLeft + offset + centering - scroll
+                // Calculate position based on category index and scroll offset
+                const categoryWidth = 74 + 4; // categoryItemWrapper width + marginRight
+                const leftOffset = 20 + (selectedIndex * categoryWidth) + (74 - 67) / 2 - scrollOffset; // paddingLeft + offset + centering - scroll
 
-            return (
-              <View
-                style={[
-                  styles.selectedLine,
-                  { left: leftOffset }
-                ]}
-              />
-            );
-          })()}
-        </View>
+                return (
+                  <View
+                    style={[
+                      styles.selectedLine,
+                      { left: leftOffset }
+                    ]}
+                  />
+                );
+              })()}
+            </View>
 
-        {/* Filter Buttons */}
-        {/* <View style={styles.filterSection}>
+            {/* Filter Buttons */}
+            {/* <View style={styles.filterSection}>
           <TouchableOpacity style={styles.filterButtonActive}>
             <MaterialIcons name="filter-list" size={16} color="#00B14F" />
             <Text style={styles.filterTextActive}>Filters</Text>
@@ -603,8 +603,8 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           </TouchableOpacity>
         </View> */}
 
-        {/* Top Rated Section - Only show when not loading, has data, and not showing search results */}
-        {/* {!hasSearched && !isLoading && topRatedRestaurants.length > 0 ? (
+            {/* Top Rated Section - Only show when not loading, has data, and not showing search results */}
+            {/* {!hasSearched && !isLoading && topRatedRestaurants.length > 0 ? (
           <>
             <View style={styles.sectionTitleContainer}>
               <LinearGradient
@@ -675,70 +675,70 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
           </>
         ) : null} */}
 
-        {/* Search Results Section - Only show title when searching */}
-        {hasSearched && (isSearching || searchResults.length > 0) && (
-          <View style={styles.sectionTitleContainer}>
-            <LinearGradient
-              colors={['rgba(0, 0, 0, 0)', '#000000']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.sectionTitleLine}
-            />
-            <Text style={styles.sectionTitle}>
-              {`Search Results (${searchResults.length})`}
-            </Text>
-            <LinearGradient
-              colors={['#000000', 'rgba(0, 0, 0, 0)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.sectionTitleLine}
-            />
-          </View>
-        )}
+            {/* Search Results Section - Only show title when searching */}
+            {hasSearched && (isSearching || searchResults.length > 0) && (
+              <View style={styles.sectionTitleContainer}>
+                <LinearGradient
+                  colors={['rgba(0, 0, 0, 0)', '#000000']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.sectionTitleLine}
+                />
+                <Text style={styles.sectionTitle}>
+                  {`Search Results (${searchResults.length})`}
+                </Text>
+                <LinearGradient
+                  colors={['#000000', 'rgba(0, 0, 0, 0)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.sectionTitleLine}
+                />
+              </View>
+            )}
 
-        <View style={styles.restaurantList}>
-          {(hasSearched ? isSearching : isLoading) ? (
-            <>
-              <ShimmerRestaurantCard />
-              <ShimmerRestaurantCard />
-              <ShimmerRestaurantCard />
-            </>
-          ) : (hasSearched ? searchResults : restaurants).length === 0 ? (
-            <View style={styles.noResultsContainer}>
-              <MaterialIcons name="search-off" size={64} color="rgba(0, 0, 0, 0.3)" />
-              <Text style={styles.noResultsTitle}>No restaurants found</Text>
-              <Text style={styles.noResultsMessage}>
-                {hasSearched
-                  ? `We couldn't find any restaurants for "${searchQuery}". Try searching for something else.`
-                  : `We couldn't find any restaurants for "${selectedCategory}". Try searching for something else.`
-                }
-              </Text>
-            </View>
-          ) : (
-            <Animated.View
-              style={{
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              }}
-            >
-              {(hasSearched ? searchResults : restaurants).map(restaurant => (
-                <View key={restaurant.id} style={styles.restaurantCardWrapper}>
-                  <RestaurantCard
-                    restaurant={restaurant}
-                    onPress={() => {
-                      if (onNavigateToRestaurant) {
-                        const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
-                        onNavigateToRestaurant(restaurantId, restaurant.name);
-                      }
-                    }}
-                  />
+            <View style={styles.restaurantList}>
+              {(hasSearched ? isSearching : isLoading) ? (
+                <>
+                  <ShimmerRestaurantCard />
+                  <ShimmerRestaurantCard />
+                  <ShimmerRestaurantCard />
+                </>
+              ) : (hasSearched ? searchResults : restaurants).length === 0 ? (
+                <View style={styles.noResultsContainer}>
+                  <MaterialIcons name="search-off" size={64} color="rgba(0, 0, 0, 0.3)" />
+                  <Text style={styles.noResultsTitle}>No restaurants found</Text>
+                  <Text style={styles.noResultsMessage}>
+                    {hasSearched
+                      ? `We couldn't find any restaurants for "${searchQuery}". Try searching for something else.`
+                      : `We couldn't find any restaurants for "${selectedCategory}". Try searching for something else.`
+                    }
+                  </Text>
                 </View>
-              ))}
-            </Animated.View>
-          )}
-        </View>
+              ) : (
+                <Animated.View
+                  style={{
+                    opacity: fadeAnim,
+                    transform: [{ translateY: slideAnim }],
+                  }}
+                >
+                  {(hasSearched ? searchResults : restaurants).map((restaurant, index) => (
+                    <View key={`${restaurant.id}-${index}`} style={styles.restaurantCardWrapper}>
+                      <RestaurantCard
+                        restaurant={restaurant}
+                        onPress={() => {
+                          if (onNavigateToRestaurant) {
+                            const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
+                            onNavigateToRestaurant(restaurantId, restaurant.name);
+                          }
+                        }}
+                      />
+                    </View>
+                  ))}
+                </Animated.View>
+              )}
+            </View>
 
-      </ScrollView>
+          </ScrollView>
         </View>
       </SafeAreaView>
     </View>

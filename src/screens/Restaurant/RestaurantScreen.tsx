@@ -51,7 +51,7 @@ const formatTimeDifference = (minutes: number): string => {
   } else if (minutes < 1440) {
     const hours = Math.floor(minutes / 60);
     const remainingMinutes = minutes % 60;
-    
+
     if (remainingMinutes === 0) {
       return `in ${hours} ${hours === 1 ? 'hr' : 'hrs'}`;
     } else {
@@ -61,7 +61,7 @@ const formatTimeDifference = (minutes: number): string => {
     const days = Math.floor(minutes / 1440);
     const remainingHours = Math.floor((minutes % 1440) / 60);
     const remainingMinutes = minutes % 60;
-    
+
     if (remainingHours === 0 && remainingMinutes === 0) {
       return `in ${days} ${days === 1 ? 'day' : 'days'}`;
     } else if (remainingMinutes === 0) {
@@ -124,7 +124,7 @@ const getNextAvailableTime = (timings?: ItemTiming[]): { timeDifference?: string
       // Normal range (e.g., Mon-Fri)
       for (let day = timing.day_from; day <= timing.day_to; day++) {
         const isToday = day === currentApiDay;
-        
+
         if (isToday && timeFrom > currentTime) {
           // Today, but time hasn't started yet
           todaySlots.push({ day, timeFrom, timeTo, originalTiming: timing });
@@ -134,14 +134,14 @@ const getNextAvailableTime = (timings?: ItemTiming[]): { timeDifference?: string
       // Wraps around week (e.g., Sat-Sun)
       for (let day = timing.day_from; day <= 7; day++) {
         const isToday = day === currentApiDay;
-        
+
         if (isToday && timeFrom > currentTime) {
           todaySlots.push({ day, timeFrom, timeTo, originalTiming: timing });
         }
       }
       for (let day = 1; day <= timing.day_to; day++) {
         const isToday = day === currentApiDay;
-        
+
         if (isToday && timeFrom > currentTime) {
           todaySlots.push({ day, timeFrom, timeTo, originalTiming: timing });
         }
@@ -151,10 +151,10 @@ const getNextAvailableTime = (timings?: ItemTiming[]): { timeDifference?: string
 
   // Sort today's slots by time
   todaySlots.sort((a, b) => a.timeFrom - b.timeFrom);
-  
+
   // If there's a next slot today, return it with time difference
   const nextSlot = todaySlots.length > 0 ? todaySlots[0] : null;
-  
+
   if (nextSlot) {
     // Calculate time difference in minutes (only for today)
     const hours = Math.floor(nextSlot.timeFrom / 100);
@@ -298,11 +298,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const handleAddToCartError = (error: any) => {
     // Extract error message from various possible locations
     let errorMessage = '';
-    
+
     // Check if error has a message property
     if (error?.message) {
       errorMessage = error.message;
-    } 
+    }
     // Check if error has response data with message
     else if (error?.response?.data?.message) {
       errorMessage = error.response.data.message;
@@ -315,7 +315,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     else {
       errorMessage = error?.toString() || 'Failed to add item to cart';
     }
-    
+
     // Show error message popup when success is false (regardless of status code)
     // The error is thrown when backend returns success: false
     showConfirmation({
@@ -324,7 +324,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       confirmText: 'OK',
       cancelText: '', // No cancel button (no close button)
       confirmButtonColor: '#00B14F',
-      onConfirm: () => {},
+      onConfirm: () => { },
     });
   };
   const insets = useSafeAreaInsets();
@@ -419,11 +419,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       prev.map(section =>
         section.id === sectionId
           ? {
-              ...section,
-              items: section.items.map(item =>
-                item.id === itemId ? { ...item, isFavorite: !item.isFavorite } : item
-              ),
-            }
+            ...section,
+            items: section.items.map(item =>
+              item.id === itemId ? { ...item, isFavorite: !item.isFavorite } : item
+            ),
+          }
           : section
       )
     );
@@ -437,11 +437,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           prev.map(section =>
             section.id === sectionId
               ? {
-                  ...section,
-                  items: section.items.map(item =>
-                    item.id === itemId ? { ...item, isFavorite: previousState } : item
-                  ),
-                }
+                ...section,
+                items: section.items.map(item =>
+                  item.id === itemId ? { ...item, isFavorite: previousState } : item
+                ),
+              }
               : section
           )
         );
@@ -452,11 +452,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         prev.map(section =>
           section.id === sectionId
             ? {
-                ...section,
-                items: section.items.map(item =>
-                  item.id === itemId ? { ...item, isFavorite: previousState } : item
-                ),
-              }
+              ...section,
+              items: section.items.map(item =>
+                item.id === itemId ? { ...item, isFavorite: previousState } : item
+              ),
+            }
             : section
         )
       );
@@ -524,9 +524,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
 
     const cartItemCount = Object.keys(cart).length;
-    const hasConflict = cartItemCount > 0 && 
-                       (cartRestaurantId === null || cartRestaurantId !== restaurantId);
-    
+    const hasConflict = cartItemCount > 0 &&
+      (cartRestaurantId === null || cartRestaurantId !== restaurantId);
+
     if (hasConflict) {
       showConfirmation({
         title: 'Replace cart item?',
@@ -616,7 +616,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           confirmText: 'OK',
           cancelText: '',
           confirmButtonColor: '#00B14F',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
         return;
       }
@@ -632,10 +632,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     // For non-customizable items, use ref to get latest quantity (avoids stale reads during rapid clicks)
     const currentQuantity = itemQuantityRefs.current[itemId] || cartItem?.quantity || 0;
     const newQuantity = currentQuantity + 1;
-    
+
     // Update ref immediately for next click
     itemQuantityRefs.current[itemId] = newQuantity;
-    
+
     // Update quantity (will sync with backend)
     updateQuantity(itemId, newQuantity);
   };
@@ -654,14 +654,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     // For non-customizable items, use ref to get latest quantity (avoids stale reads during rapid clicks)
     const currentQuantity = itemQuantityRefs.current[itemId] || cartItem?.quantity || 0;
     const newQuantity = Math.max(0, currentQuantity - 1);
-    
+
     // Update ref immediately for next click
     if (newQuantity > 0) {
       itemQuantityRefs.current[itemId] = newQuantity;
     } else {
       delete itemQuantityRefs.current[itemId];
     }
-    
+
     // Update quantity (updateQuantity will remove if quantity becomes 0)
     updateQuantity(itemId, newQuantity);
   };
@@ -671,9 +671,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       return;
     }
     const cartItemCount = Object.keys(cart).length;
-    const hasConflict = cartItemCount > 0 && 
-                       (cartRestaurantId === null || cartRestaurantId !== restaurantId);
-    
+    const hasConflict = cartItemCount > 0 &&
+      (cartRestaurantId === null || cartRestaurantId !== restaurantId);
+
     if (hasConflict) {
       showConfirmation({
         title: 'Replace cart item?',
@@ -716,7 +716,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           confirmText: 'OK',
           cancelText: '',
           confirmButtonColor: '#00B14F',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
         return;
       }
@@ -727,7 +727,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         const totalQuantity = existingCartItem.isCustomizable && existingCartItem.variants
           ? existingCartItem.variants.reduce((sum, variant) => sum + variant.quantity, 0)
           : existingCartItem.quantity || 0;
-        
+
         if (totalQuantity >= 1) {
           showConfirmation({
             title: 'Preorder Limit',
@@ -735,7 +735,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             confirmText: 'OK',
             cancelText: '',
             confirmButtonColor: '#00B14F',
-            onConfirm: () => {},
+            onConfirm: () => { },
           });
           return;
         }
@@ -875,7 +875,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           confirmText: 'OK',
           cancelText: '',
           confirmButtonColor: '#00B14F',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
         return;
       }
@@ -957,7 +957,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
     // Item is only available if BOTH restaurant is open AND item timing is available
     const itemAvailable = isRestaurantOpen && isItemCurrentlyAvailable;
-    
+
     setSelectedDetailItem(item);
     setSelectedDetailItemAvailable(itemAvailable);
     setShowDetailModal(true);
@@ -1088,7 +1088,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       confirmText: 'OK',
       cancelText: '',
       confirmButtonColor: '#00B14F',
-      onConfirm: () => {},
+      onConfirm: () => { },
     });
   }, [showConfirmation]);
 
@@ -1124,7 +1124,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           confirmText: 'OK',
           cancelText: '',
           confirmButtonColor: '#00B14F',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
         return;
       }
@@ -1134,10 +1134,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     if (safeQuantity <= 0) {
       return;
     }
-    
+
     // Check if item already exists in cart
     const existingCartItem = cart[itemId];
-    
+
     // Check if preorder item is already in cart
     if (item.isPreorderAvailable && existingCartItem && existingCartItem.quantity && existingCartItem.quantity >= 1) {
       showConfirmation({
@@ -1146,11 +1146,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
-    
+
     if (existingCartItem) {
       // For preorder items, don't allow updating quantity if already at 1
       if (item.isPreorderAvailable && existingCartItem.quantity && existingCartItem.quantity >= 1) {
@@ -1160,7 +1160,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           confirmText: 'OK',
           cancelText: '',
           confirmButtonColor: '#00B14F',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
         return;
       }
@@ -1168,12 +1168,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       // Get current quantity and calculate new total quantity (set, not incremental)
       const currentQuantity = existingCartItem.quantity || 0;
       const newQuantity = Math.min(safeQuantity, MAX_ITEM_QUANTITY);
-      
+
       // Only update if the new quantity is different
       if (newQuantity !== currentQuantity) {
         // Mark item as being updated to prevent concurrent updates
         updatingItemsRef.current.add(itemId);
-        
+
         // Call API to update quantity
         updateQuantity(itemId, newQuantity)
           .then(() => {
@@ -1251,12 +1251,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       if (scrollViewRef.current) {
         scrollViewRef.current.scrollTo({ y: 0, animated: false });
       }
-      
+
       if (!cartReloadedRef.current) {
-        reloadCart().catch(() => {});
+        reloadCart().catch(() => { });
         cartReloadedRef.current = true;
       }
-      
+
       // Only fetch restaurant details if we have coordinates (either from default address or fallback)
       // This ensures we use the correct coordinates
       fetchRestaurantDetails();
@@ -1374,11 +1374,11 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           `/api/buyer/restaurants/${restaurantId}?lat=${lat}&lng=${lng}&include_items=true`
         ),
       ];
-      
+
       if (!skipDelay) {
         promises.push(new Promise(resolve => setTimeout(resolve, 1500))); // 1.5 second delay
       }
-      
+
       const [response] = await Promise.all(promises);
 
       // Handle nested data structure: response.data.data.data
@@ -1479,7 +1479,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         }
       }
     } catch (error) {
-    } finally{
+    } finally {
       setIsLoading(false);
     }
   };
@@ -1554,7 +1554,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
-          bounces={false}
           alwaysBounceVertical={true}
           overScrollMode="never"
           removeClippedSubviews={true}
@@ -1573,126 +1572,126 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             />
           }
         >
-        {/* Header Image with Overlay */}
-        {restaurantData?.logo_url ? (
-          <ImageBackground
-            source={{ uri: restaurantData.logo_url }}
-            style={styles.headerImage}
-            resizeMode="cover"
-          >
-            <View style={styles.headerOverlay}>
-            {/* Back Button */}
-            <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-              <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
-            </TouchableOpacity>
+          {/* Header Image with Overlay */}
+          {restaurantData?.logo_url ? (
+            <ImageBackground
+              source={{ uri: restaurantData.logo_url }}
+              style={styles.headerImage}
+              resizeMode="cover"
+            >
+              <View style={styles.headerOverlay}>
+                {/* Back Button */}
+                <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
+                  <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+                </TouchableOpacity>
 
-            {/* Restaurant Info Card */}
-            <View style={styles.restaurantCard}>
-              <View style={styles.restaurantTopRow}>
-                <View style={styles.restaurantNameContainer}>
-                  <TouchableOpacity
-                    style={styles.restaurantNameRow}
-                    onPress={onNavigateToDetails}
-                    activeOpacity={1}
-                    disabled={!onNavigateToDetails}
-                  >
-                    <View style={styles.restaurantNameWithIcon}>
-                      <Text style={styles.restaurantName} numberOfLines={2}>
-                        {restaurantData?.name || restaurantName || 'Restaurant'}
-                      </Text>
-                      {onNavigateToDetails && (
-                        <MaterialIcons name="info-outline" size={18} color="#00B14F" style={styles.infoIcon} />
+                {/* Restaurant Info Card */}
+                <View style={styles.restaurantCard}>
+                  <View style={styles.restaurantTopRow}>
+                    <View style={styles.restaurantNameContainer}>
+                      <TouchableOpacity
+                        style={styles.restaurantNameRow}
+                        onPress={onNavigateToDetails}
+                        activeOpacity={1}
+                        disabled={!onNavigateToDetails}
+                      >
+                        <View style={styles.restaurantNameWithIcon}>
+                          <Text style={styles.restaurantName} numberOfLines={2}>
+                            {restaurantData?.name || restaurantName || 'Restaurant'}
+                          </Text>
+                          {onNavigateToDetails && (
+                            <MaterialIcons name="info-outline" size={18} color="#00B14F" style={styles.infoIcon} />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                      {/* Opening Message */}
+                      {restaurantOpeningMessage && (
+                        <View style={styles.openingMessageContainer}>
+                          <MaterialIcons name="access-time" size={14} color="#FF6B6B" />
+                          <Text style={styles.openingMessage}>{restaurantOpeningMessage}</Text>
+                        </View>
                       )}
                     </View>
-                  </TouchableOpacity>
-                 {/* Opening Message */}
-                 {restaurantOpeningMessage && (
-                   <View style={styles.openingMessageContainer}>
-                     <MaterialIcons name="access-time" size={14} color="#FF6B6B" />
-                     <Text style={styles.openingMessage}>{restaurantOpeningMessage}</Text>
-                   </View>
-                 )}
+                    {/* Only show rating if available */}
+                    {((restaurantData?.stats?.average_rating && restaurantData?.stats?.average_rating > 0) || (restaurantData?.rating && restaurantData?.rating > 0)) && (
+                      <View style={styles.ratingContainer}>
+                        <View style={styles.ratingBadge}>
+                          <MaterialIcons name="star" size={14} color="#00B14F" />
+                          <Text style={styles.ratingText}>
+                            {(restaurantData?.stats?.average_rating || restaurantData?.rating || 0).toFixed(1)}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Dotted Divider */}
+                  <View style={styles.dividerContainer}>
+                    {Array.from({ length: 30 }).map((_, index) => (
+                      <View key={index} style={styles.dash} />
+                    ))}
+                  </View>
+
+                  <View style={styles.restaurantBottomRow}>
+                    <Text style={styles.locationText}>
+                      {restaurantData?.locations?.[0]?.locality ||
+                        restaurantData?.location?.locality ||
+                        'Location'}
+                    </Text>
+                    <Text style={styles.deliveryText}>{restaurantData?.delivery_time || '25-30 mins'}</Text>
+                  </View>
                 </View>
-                {/* Only show rating if available */}
-                {((restaurantData?.stats?.average_rating && restaurantData?.stats?.average_rating > 0) || (restaurantData?.rating && restaurantData?.rating > 0)) && (
-                  <View style={styles.ratingContainer}>
-                    <View style={styles.ratingBadge}>
-                      <MaterialIcons name="star" size={14} color="#00B14F" />
-                      <Text style={styles.ratingText}>
-                        {(restaurantData?.stats?.average_rating || restaurantData?.rating || 0).toFixed(1)}
-                      </Text>
+              </View>
+            </ImageBackground>
+          ) : (
+            <View style={styles.headerImage}>
+              {/* Shimmer for the banner image */}
+              <Shimmer
+                width={SCREEN_WIDTH}
+                height={252}
+                borderRadius={0}
+                backgroundColor="#E8E8E8"
+                style={{ position: 'absolute', top: 0, left: 0 }}
+              />
+              <View style={styles.headerOverlay}>
+                {/* Back Button */}
+                <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
+                  <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+                </TouchableOpacity>
+
+                {/* Restaurant Info Card with Shimmer */}
+                <View style={styles.restaurantCard}>
+                  <View style={styles.restaurantTopRow}>
+                    <View style={styles.restaurantNameRow}>
+                      <Shimmer width={180} height={20} borderRadius={4} backgroundColor="#E8E8E8" />
+                    </View>
+                    <View style={styles.ratingContainer}>
+                      <Shimmer width={80} height={16} borderRadius={4} backgroundColor="#E8E8E8" />
                     </View>
                   </View>
-                )}
-              </View>
 
-              {/* Dotted Divider */}
-              <View style={styles.dividerContainer}>
-                {Array.from({ length: 30 }).map((_, index) => (
-                  <View key={index} style={styles.dash} />
-                ))}
-              </View>
+                  {/* Dotted Divider */}
+                  <View style={styles.dividerContainer}>
+                    {Array.from({ length: 30 }).map((_, index) => (
+                      <View key={index} style={styles.dash} />
+                    ))}
+                  </View>
 
-              <View style={styles.restaurantBottomRow}>
-                <Text style={styles.locationText}>
-                  {restaurantData?.locations?.[0]?.locality ||
-                   restaurantData?.location?.locality ||
-                   'Location'}
-                </Text>
-                <Text style={styles.deliveryText}>{restaurantData?.delivery_time || '25-30 mins'}</Text>
-              </View>
-            </View>
-            </View>
-          </ImageBackground>
-        ) : (
-          <View style={styles.headerImage}>
-            {/* Shimmer for the banner image */}
-            <Shimmer
-              width={SCREEN_WIDTH}
-              height={252}
-              borderRadius={0}
-              backgroundColor="#E8E8E8"
-              style={{ position: 'absolute', top: 0, left: 0 }}
-            />
-            <View style={styles.headerOverlay}>
-            {/* Back Button */}
-            <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-              <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
-            </TouchableOpacity>
-
-            {/* Restaurant Info Card with Shimmer */}
-            <View style={styles.restaurantCard}>
-              <View style={styles.restaurantTopRow}>
-                <View style={styles.restaurantNameRow}>
-                  <Shimmer width={180} height={20} borderRadius={4} backgroundColor="#E8E8E8" />
-                </View>
-                <View style={styles.ratingContainer}>
-                  <Shimmer width={80} height={16} borderRadius={4} backgroundColor="#E8E8E8" />
+                  <View style={styles.restaurantBottomRow}>
+                    <Shimmer width={120} height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+                    <Shimmer width={80} height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+                  </View>
                 </View>
               </View>
-
-              {/* Dotted Divider */}
-              <View style={styles.dividerContainer}>
-                {Array.from({ length: 30 }).map((_, index) => (
-                  <View key={index} style={styles.dash} />
-                ))}
-              </View>
-
-              <View style={styles.restaurantBottomRow}>
-                <Shimmer width={120} height={14} borderRadius={4} backgroundColor="#E8E8E8" />
-                <Shimmer width={80} height={14} borderRadius={4} backgroundColor="#E8E8E8" />
-              </View>
             </View>
-            </View>
-          </View>
-        )}
+          )}
 
-        {/* Filter Buttons with Search - STICKY */}
-        <SafeAreaView edges={['top']} style={styles.filterSafeArea} collapsable={false}>
-          <View style={styles.filterSectionContainer} collapsable={false}>
-            <View style={styles.filterSection} collapsable={false}>
-            <View style={styles.filterButtonsGroup}>
-              {/* <TouchableOpacity
+          {/* Filter Buttons with Search - STICKY */}
+          <SafeAreaView edges={['top']} style={styles.filterSafeArea} collapsable={false}>
+            <View style={styles.filterSectionContainer} collapsable={false}>
+              <View style={styles.filterSection} collapsable={false}>
+                <View style={styles.filterButtonsGroup}>
+                  {/* <TouchableOpacity
                 style={styles.filterButton}
                 onPress={() => setShowFilterModal(true)}
                 activeOpacity={0.7}
@@ -1701,593 +1700,593 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 <Text style={styles.filterText}>Filters</Text>
               </TouchableOpacity> */}
 
-              <TouchableOpacity
-                style={[
-                  styles.filterButton,
-                  activeDietaryFilter === 'veg' && styles.filterButtonActive
-                ]}
-                onPress={() => toggleDietaryFilter('veg')}
-                activeOpacity={0.7}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                {activeDietaryFilter === 'veg' ? (
-                  <MaterialIcons name="close" size={14} color="#000000" />
-                ) : (
-                  <View style={styles.vegIcon}>
-                    <View style={styles.vegDot} />
-                  </View>
-                )}
-                <Text style={[
-                  styles.filterText,
-                  activeDietaryFilter === 'veg' && styles.filterTextActive
-                ]}>
-                  Veg
-                </Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.filterButton,
+                      activeDietaryFilter === 'veg' && styles.filterButtonActive
+                    ]}
+                    onPress={() => toggleDietaryFilter('veg')}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    {activeDietaryFilter === 'veg' ? (
+                      <MaterialIcons name="close" size={14} color="#000000" />
+                    ) : (
+                      <View style={styles.vegIcon}>
+                        <View style={styles.vegDot} />
+                      </View>
+                    )}
+                    <Text style={[
+                      styles.filterText,
+                      activeDietaryFilter === 'veg' && styles.filterTextActive
+                    ]}>
+                      Veg
+                    </Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.filterButton,
-                  activeDietaryFilter === 'non-veg' && styles.filterButtonActive
-                ]}
-                onPress={() => toggleDietaryFilter('non-veg')}
-                activeOpacity={0.7}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                {activeDietaryFilter === 'non-veg' ? (
-                  <MaterialIcons name="close" size={14} color="#000000" />
-                ) : (
-                  <View style={styles.nonVegIcon}>
-                    <View style={styles.nonVegDot} />
-                  </View>
-                )}
-                <Text style={[
-                  styles.filterText,
-                  activeDietaryFilter === 'non-veg' && styles.filterTextActive
-                ]}>
-                  Non - Veg
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Search Button - right aligned */}
-            {!isRestaurantClosed && (
-              <TouchableOpacity
-                style={styles.searchButton}
-                onPress={() => setShowSearch(true)}
-                activeOpacity={0.7}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <MaterialIcons name="search" size={24} color="#00B14F" />
-              </TouchableOpacity>
-            )}
-          </View>
-          </View>
-        </SafeAreaView>
-
-        {/* Menu Sections */}
-        <View style={[
-          styles.menuContent,
-          totalCartItems > 0 && {
-            paddingBottom: 120 + Math.max(insets.bottom, 0)
-          }
-        ]}>
-        {isLoading ? (
-          // Show shimmer loading cards while data is loading
-          <View style={styles.loadingMenuContainer}>
-            {[1, 2].map((sectionIndex) => (
-              <View key={`shimmer-section-${sectionIndex}`} style={styles.menuSection}>
-                {/* Section Header Shimmer */}
-                <View style={styles.sectionHeader}>
-                  <Shimmer width={150} height={18} borderRadius={4} backgroundColor="#E8E8E8" />
-                  <Shimmer width={24} height={24} borderRadius={12} backgroundColor="#E8E8E8" />
+                  <TouchableOpacity
+                    style={[
+                      styles.filterButton,
+                      activeDietaryFilter === 'non-veg' && styles.filterButtonActive
+                    ]}
+                    onPress={() => toggleDietaryFilter('non-veg')}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    {activeDietaryFilter === 'non-veg' ? (
+                      <MaterialIcons name="close" size={14} color="#000000" />
+                    ) : (
+                      <View style={styles.nonVegIcon}>
+                        <View style={styles.nonVegDot} />
+                      </View>
+                    )}
+                    <Text style={[
+                      styles.filterText,
+                      activeDietaryFilter === 'non-veg' && styles.filterTextActive
+                    ]}>
+                      Non - Veg
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
-                {/* Menu Items Shimmer */}
-                {[1, 2, 3].map((itemIndex) => (
-                  <View key={`shimmer-item-${sectionIndex}-${itemIndex}`}>
-                    <View style={styles.menuItem}>
-                      <View style={styles.shimmerItemLeft}>
-                        <Shimmer width={120} height={12} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
-                        <Shimmer width={100} height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 6 }} />
-                        <Shimmer width={70} height={14} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
-                        <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
-                        <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" />
-                      </View>
-                      <View style={styles.itemRight}>
-                        <Shimmer width={155} height={137} borderRadius={16} backgroundColor="#E8E8E8" />
+                {/* Search Button - right aligned */}
+                {!isRestaurantClosed && (
+                  <TouchableOpacity
+                    style={styles.searchButton}
+                    onPress={() => setShowSearch(true)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <MaterialIcons name="search" size={24} color="#00B14F" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </SafeAreaView>
+
+          {/* Menu Sections */}
+          <View style={[
+            styles.menuContent,
+            totalCartItems > 0 && {
+              paddingBottom: 120 + Math.max(insets.bottom, 0)
+            }
+          ]}>
+            {isLoading ? (
+              // Show shimmer loading cards while data is loading
+              <View style={styles.loadingMenuContainer}>
+                {[1, 2].map((sectionIndex) => (
+                  <View key={`shimmer-section-${sectionIndex}`} style={styles.menuSection}>
+                    {/* Section Header Shimmer */}
+                    <View style={styles.sectionHeader}>
+                      <Shimmer width={150} height={18} borderRadius={4} backgroundColor="#E8E8E8" />
+                      <Shimmer width={24} height={24} borderRadius={12} backgroundColor="#E8E8E8" />
                     </View>
-                  </View>
+
+                    {/* Menu Items Shimmer */}
+                    {[1, 2, 3].map((itemIndex) => (
+                      <View key={`shimmer-item-${sectionIndex}-${itemIndex}`}>
+                        <View style={styles.menuItem}>
+                          <View style={styles.shimmerItemLeft}>
+                            <Shimmer width={120} height={12} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
+                            <Shimmer width={100} height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 6 }} />
+                            <Shimmer width={70} height={14} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
+                            <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                            <Shimmer width={130} height={10} borderRadius={4} backgroundColor="#E8E8E8" />
+                          </View>
+                          <View style={styles.itemRight}>
+                            <Shimmer width={155} height={137} borderRadius={16} backgroundColor="#E8E8E8" />
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                    {/* Line after shimmer items */}
+                    <View style={styles.categoryEndLine} />
                   </View>
                 ))}
-                {/* Line after shimmer items */}
-                <View style={styles.categoryEndLine} />
               </View>
-            ))}
+            ) : hasNoItemsAtAll ? (
+              <View style={styles.noItemsContainer}>
+                <MaterialIcons name="restaurant" size={48} color="rgba(0, 0, 0, 0.3)" />
+                <Text style={styles.noItemsTitle}>No menu available</Text>
+                <Text style={styles.noItemsMessage}>
+                  This restaurant hasn't added any menu items yet. Please check back later.
+                </Text>
+              </View>
+            ) : hasNoVegItems ? (
+              <View style={styles.noItemsContainer}>
+                <MaterialIcons name="eco" size={48} color="#00B14F" />
+                <Text style={styles.noItemsTitle}>No vegetarian items</Text>
+                <Text style={styles.noItemsMessage}>
+                  This restaurant doesn't have vegetarian items. Turn off veg mode to see all items.
+                </Text>
+                <TouchableOpacity
+                  style={styles.turnOffVegModeButton}
+                  onPress={async () => {
+                    await setVegMode('off');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.turnOffVegModeButtonText}>Turn Off Veg Mode</Text>
+                </TouchableOpacity>
+              </View>
+            ) : hasNoFilteredItems ? (
+              <View style={styles.noItemsContainer}>
+                <MaterialIcons name="search-off" size={48} color="rgba(0, 0, 0, 0.3)" />
+                <Text style={styles.noItemsTitle}>No items found</Text>
+                <Text style={styles.noItemsMessage}>
+                  No {activeDietaryFilter === 'veg' ? 'vegetarian' : 'non-vegetarian'} items available in this restaurant.
+                </Text>
+              </View>
+            ) : (
+              filteredMenuSections.map((section) => (
+                <View
+                  key={section.id}
+                  style={styles.menuSection}
+                  ref={(ref) => {
+                    sectionRefs.current[section.id] = ref;
+                  }}
+                  onLayout={(event) => handleSectionLayout(section.id, event)}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.sectionHeader,
+                      section.isExpanded && styles.sectionHeaderExpanded
+                    ]}
+                    onPress={() => toggleSection(section.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.sectionTitle}>{section.title}</Text>
+                    <MaterialIcons
+                      name="arrow-drop-down"
+                      size={24}
+                      color="#000000"
+                      style={[
+                        styles.arrowIcon,
+                        section.isExpanded && styles.arrowIconExpanded,
+                      ]}
+                    />
+                  </TouchableOpacity>
+
+                  {section.isExpanded && section.items.map((item) => {
+                    // Check if item is available based on its own timings
+                    const isItemCurrentlyAvailable = isItemAvailable(item.timings);
+
+                    // Item is only available if BOTH restaurant is open AND item timing is available
+                    const itemAvailable = !isRestaurantClosed && isItemCurrentlyAvailable;
+
+                    // Get next available time slot to check if available today
+                    const nextAvailableTime = getNextAvailableTime(item.timings);
+
+                    // Format delivery date for display
+                    const formatDeliveryDate = (dateString: string) => {
+                      try {
+                        const date = new Date(dateString);
+                        const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+                        return date.toLocaleDateString('en-US', options);
+                      } catch {
+                        return '';
+                      }
+                    };
+
+                    return (
+                      <View key={item.id}>
+                        <View style={styles.menuItem}>
+                          <View style={styles.itemLeft}>
+                            {/* Veg/Non-Veg Icon and Spicy Badge */}
+                            <View style={styles.itemBadges}>
+                              <View style={[
+                                styles.vegIconLarge,
+                                !item.isVeg && styles.nonVegIconLarge
+                              ]}>
+                                <View style={[
+                                  styles.vegDotLarge,
+                                  !item.isVeg && styles.nonVegDotLarge
+                                ]} />
+                              </View>
+                              {item.isSpicy && (
+                                <View style={styles.spicyBadge}>
+                                  <MaterialIcons name="local-fire-department" size={9} color="#FF0000" />
+                                  <Text style={styles.spicyText}>Spicy</Text>
+                                </View>
+                              )}
+                            </View>
+
+                            {/* Item Name */}
+                            <Text style={styles.itemName}>{item.name}</Text>
+
+                            {/* Best Seller Badge */}
+                            {item.isBestSeller && (
+                              <View style={styles.bestSellerBadge}>
+                                <MaterialIcons name="star" size={8} color="#FFC529" />
+                                <Text style={styles.bestSellerText}>Best Seller</Text>
+                              </View>
+                            )}
+
+                            {/* Price */}
+                            {item.isPreorderAvailable && item.preorderCampaign && parseFloat(item.preorderCampaign.discount_amount || '0') > 0 ? (
+                              <View style={styles.priceContainer}>
+                                <Text style={[styles.itemPrice, styles.strikethroughPrice]}>₹ {item.price.toFixed(2)}</Text>
+                                <Text style={[styles.itemPrice, styles.discountedPrice]}>
+                                  ₹ {(item.price - parseFloat(item.preorderCampaign.discount_amount || '0')).toFixed(2)}
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text style={styles.itemPrice}>₹ {item.price.toFixed(2)}</Text>
+                            )}
+
+                            {/* Description */}
+                            <View style={styles.descriptionContainer}>
+                              <Text
+                                style={styles.itemDescription}
+                                numberOfLines={expandedDescriptions.has(item.id) ? undefined : 2}
+                              >
+                                {item.description}
+                              </Text>
+                              {SHOW_DESCRIPTION_MORE_BUTTON && item.description && item.description.length > 80 && (
+                                <TouchableOpacity
+                                  onPress={() => toggleDescription(item.id)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Text style={styles.moreButton}>
+                                    {expandedDescriptions.has(item.id) ? 'Less' : 'More'}
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+
+                          <View style={styles.itemRight}>
+                            {/* Item Image with Shimmer or No Image Box */}
+                            <TouchableOpacity
+                              style={styles.itemImageContainer}
+                              onPress={() => handleImageClick(item)}
+                              activeOpacity={0.9}
+                            >
+                              {item.image ? (
+                                <>
+                                  <OptimizedImage
+                                    source={item.image}
+                                    style={styles.itemImage}
+                                    contentFit="cover"
+                                    onLoad={() => handleImageLoad(item.id)}
+                                    shimmerWidth={166}
+                                    shimmerHeight={137}
+                                    shimmerBorderRadius={16}
+                                    transition={200}
+                                    priority="normal"
+                                    cachePolicy="memory-disk"
+                                  />
+
+                                  {/* Top Gradient Overlay */}
+                                  <LinearGradient
+                                    colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 0, y: 1 }}
+                                    style={styles.itemGradientOverlayTop}
+                                  />
+
+                                  {/* Preorder Badge Overlay on Image - Top Left */}
+                                  {item.isPreorderAvailable && (
+                                    <View style={styles.preorderImageBadge}>
+                                      <LinearGradient
+                                        colors={['#00B14F', '#00A048']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={styles.preorderImageBadgeGradient}
+                                      >
+                                        <MaterialIcons name="schedule" size={12} color="#FFFFFF" />
+                                        <Text style={styles.preorderImageBadgeText}>Preorder</Text>
+                                      </LinearGradient>
+                                    </View>
+                                  )}
+
+                                  {/* Heart Button Overlay */}
+                                  <TouchableOpacity
+                                    style={styles.itemHeartButton}
+                                    onPress={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleFavoriteItem(section.id, item.id);
+                                    }}
+                                    disabled={togglingFavoriteItemId === item.id}
+                                    activeOpacity={0.7}
+                                  >
+                                    {togglingFavoriteItemId === item.id ? (
+                                      <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                      <MaterialIcons
+                                        name={item.isFavorite ? 'favorite' : 'favorite-border'}
+                                        size={24}
+                                        color={item.isFavorite ? '#FF0000' : '#FFFFFF'}
+                                      />
+                                    )}
+                                  </TouchableOpacity>
+
+                                  {/* Gray Overlay for Unavailable Items - Only on image */}
+                                  {!itemAvailable && (
+                                    <View style={styles.unavailableOverlay} />
+                                  )}
+                                </>
+                              ) : (
+                                <View style={styles.noImageContainer}>
+                                  <Text style={styles.noImageText}>No Image Available</Text>
+
+                                  {/* Gray Overlay for Unavailable Items - Also on no image container */}
+                                  {!itemAvailable && (
+                                    <View style={styles.unavailableOverlay} />
+                                  )}
+
+                                  {/* Preorder Badge Overlay on No Image - Top Left */}
+                                  {item.isPreorderAvailable && (
+                                    <View style={styles.preorderImageBadge}>
+                                      <LinearGradient
+                                        colors={['#00B14F', '#00A048']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={styles.preorderImageBadgeGradient}
+                                      >
+                                        <MaterialIcons name="schedule" size={12} color="#FFFFFF" />
+                                        <Text style={styles.preorderImageBadgeText}>Preorder</Text>
+                                      </LinearGradient>
+                                    </View>
+                                  )}
+
+                                  {/* Heart Button Overlay - Same as when image exists */}
+                                  <TouchableOpacity
+                                    style={styles.itemHeartButton}
+                                    onPress={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleFavoriteItem(section.id, item.id);
+                                    }}
+                                    disabled={togglingFavoriteItemId === item.id}
+                                    activeOpacity={0.7}
+                                  >
+                                    {togglingFavoriteItemId === item.id ? (
+                                      <ActivityIndicator size="small" color="#000000" />
+                                    ) : (
+                                      <MaterialIcons
+                                        name={item.isFavorite ? 'favorite' : 'favorite-border'}
+                                        size={24}
+                                        color={item.isFavorite ? '#FF0000' : '#9E9E9E'}
+                                      />
+                                    )}
+                                  </TouchableOpacity>
+                                </View>
+                              )}
+
+                              {/* Availability Badge - Bottom Left (like RestaurantCard design) */}
+                              {!itemAvailable && (
+                                <View style={styles.availabilityBadge}>
+                                  {nextAvailableTime?.availableTime ? (
+                                    // Item will be available today - show timing with AM/PM and "today" on same line
+                                    <Text style={styles.availabilityTimeTextMain}>
+                                      Available at {nextAvailableTime.availableTime}
+                                      <Text style={styles.availabilityTimeTextSub}> today</Text>
+                                    </Text>
+                                  ) : (
+                                    // Not available today - show simple message
+                                    <Text style={styles.availabilityTimeTextMain}>
+                                      Not available
+                                    </Text>
+                                  )}
+                                </View>
+                              )}
+                            </TouchableOpacity>
+
+                            {/* Add Button or Increment/Decrement Controls */}
+                            {/* Only show when item is available and image is loaded (or no image) */}
+                            {itemAvailable && (loadedImages.has(item.id) || !item.image) && (
+                              <>
+                                {cart[item.id] ? (
+                                  // Show increment/decrement controls if item is in cart
+                                  <View style={styles.quantityControl}>
+                                    <TouchableOpacity
+                                      style={styles.quantityButton}
+                                      onPress={() => decrementItem(item.id)}
+                                      activeOpacity={0.7}
+                                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    >
+                                      <Text style={styles.quantityButtonText}>-</Text>
+                                    </TouchableOpacity>
+                                    <Text style={styles.quantityText}>{getItemQuantity(item.id)}</Text>
+                                    <TouchableOpacity
+                                      style={[
+                                        styles.quantityButton,
+                                        item.isPreorderAvailable && getItemQuantity(item.id) >= 1 && styles.quantityButtonDisabled
+                                      ]}
+                                      onPress={() => incrementItem(item.id)}
+                                      activeOpacity={0.7}
+                                      disabled={item.isPreorderAvailable && getItemQuantity(item.id) >= 1}
+                                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    >
+                                      <Text style={[
+                                        styles.quantityButtonText,
+                                        item.isPreorderAvailable && getItemQuantity(item.id) >= 1 && styles.quantityButtonTextDisabled
+                                      ]}>+</Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                ) : (
+                                  // Show Add button
+                                  <TouchableOpacity
+                                    style={styles.addButton}
+                                    onPress={() => {
+                                      if (item.isCustomizable) {
+                                        // Open customization modal for customizable items
+                                        handleCustomizableItemClick(item);
+                                      } else {
+                                        // Add directly to cart for non-customizable items
+                                        addToCart(item);
+                                      }
+                                    }}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Text style={styles.addButtonPlus}>+</Text>
+                                    <Text style={styles.addButtonText}>Add</Text>
+                                  </TouchableOpacity>
+                                )}
+                              </>
+                            )}
+
+                            {/* Customizable Text */}
+                            {loadedImages.has(item.id) && item.isCustomizable && (
+                              <Text style={styles.customizableText}>Customisable</Text>
+                            )}
+                          </View>
+                        </View>
+                      </View>
+                    )
+                  })}
+                </View>
+              ))
+            )}
           </View>
-        ) : hasNoItemsAtAll ? (
-          <View style={styles.noItemsContainer}>
-            <MaterialIcons name="restaurant" size={48} color="rgba(0, 0, 0, 0.3)" />
-            <Text style={styles.noItemsTitle}>No menu available</Text>
-            <Text style={styles.noItemsMessage}>
-              This restaurant hasn't added any menu items yet. Please check back later.
-            </Text>
-          </View>
-        ) : hasNoVegItems ? (
-          <View style={styles.noItemsContainer}>
-            <MaterialIcons name="eco" size={48} color="#00B14F" />
-            <Text style={styles.noItemsTitle}>No vegetarian items</Text>
-            <Text style={styles.noItemsMessage}>
-              This restaurant doesn't have vegetarian items. Turn off veg mode to see all items.
-            </Text>
+
+          <AppFooter />
+        </ScrollView>
+
+        {/* Bottom Cart Bar */}
+        {totalCartItems > 0 && (
+          <View style={[styles.cartBar, { bottom: 0, paddingBottom: insets.bottom }]}>
             <TouchableOpacity
-              style={styles.turnOffVegModeButton}
-              onPress={async () => {
-                await setVegMode('off');
+              style={styles.cartButton}
+              onPress={() => {
+                // Navigate to checkout page only if restaurant is open
+                if (!onNavigateToCheckout) {
+                  return;
+                }
+
+                if (!ensureRestaurantOpen()) {
+                  return;
+                }
+
+                // Build restaurant address from current restaurant data
+                const restaurantAddress =
+                  restaurantData?.locations?.[0]?.address ||
+                  restaurantData?.location?.address ||
+                  [
+                    restaurantData?.locations?.[0]?.locality || restaurantData?.location?.locality,
+                    restaurantData?.locations?.[0]?.city || restaurantData?.location?.city,
+                  ]
+                    .filter(Boolean)
+                    .join(', ') ||
+                  'Restaurant Address';
+
+                // Use the current restaurant screen context so that back navigation
+                // from checkout returns to this restaurant, even if the cart belongs
+                // to a different restaurant.
+                onNavigateToCheckout(restaurantId, restaurantName || '', restaurantAddress, 'restaurant');
               }}
               activeOpacity={0.8}
             >
-              <Text style={styles.turnOffVegModeButtonText}>Turn Off Veg Mode</Text>
+              <Text style={styles.cartItemCount}>
+                {totalCartItems} Item{totalCartItems > 1 ? 's' : ''} Added
+              </Text>
+              <View style={styles.viewCartButton}>
+                <Text style={styles.viewCartText}>View Cart</Text>
+                <MaterialIcons name="arrow-forward" size={16} color="#181C2E" />
+              </View>
             </TouchableOpacity>
           </View>
-        ) : hasNoFilteredItems ? (
-          <View style={styles.noItemsContainer}>
-            <MaterialIcons name="search-off" size={48} color="rgba(0, 0, 0, 0.3)" />
-            <Text style={styles.noItemsTitle}>No items found</Text>
-            <Text style={styles.noItemsMessage}>
-              No {activeDietaryFilter === 'veg' ? 'vegetarian' : 'non-vegetarian'} items available in this restaurant.
-            </Text>
-          </View>
-        ) : (
-          filteredMenuSections.map((section) => (
-            <View
-              key={section.id}
-              style={styles.menuSection}
-              ref={(ref) => {
-                sectionRefs.current[section.id] = ref;
-              }}
-              onLayout={(event) => handleSectionLayout(section.id, event)}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.sectionHeader,
-                  section.isExpanded && styles.sectionHeaderExpanded
-                ]}
-                onPress={() => toggleSection(section.id)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                <MaterialIcons
-                  name="arrow-drop-down"
-                  size={24}
-                  color="#000000"
-                  style={[
-                    styles.arrowIcon,
-                    section.isExpanded && styles.arrowIconExpanded,
-                  ]}
-                />
-              </TouchableOpacity>
-
-            {section.isExpanded && section.items.map((item) => {
-              // Check if item is available based on its own timings
-              const isItemCurrentlyAvailable = isItemAvailable(item.timings);
-
-              // Item is only available if BOTH restaurant is open AND item timing is available
-              const itemAvailable = !isRestaurantClosed && isItemCurrentlyAvailable;
-
-              // Get next available time slot to check if available today
-              const nextAvailableTime = getNextAvailableTime(item.timings);
-
-              // Format delivery date for display
-              const formatDeliveryDate = (dateString: string) => {
-                try {
-                  const date = new Date(dateString);
-                  const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-                  return date.toLocaleDateString('en-US', options);
-                } catch {
-                  return '';
-                }
-              };
-
-              return (
-              <View key={item.id}>
-              <View style={styles.menuItem}>
-                <View style={styles.itemLeft}>
-                  {/* Veg/Non-Veg Icon and Spicy Badge */}
-                  <View style={styles.itemBadges}>
-                    <View style={[
-                      styles.vegIconLarge,
-                      !item.isVeg && styles.nonVegIconLarge
-                    ]}>
-                      <View style={[
-                        styles.vegDotLarge,
-                        !item.isVeg && styles.nonVegDotLarge
-                      ]} />
-                    </View>
-                    {item.isSpicy && (
-                      <View style={styles.spicyBadge}>
-                        <MaterialIcons name="local-fire-department" size={9} color="#FF0000" />
-                        <Text style={styles.spicyText}>Spicy</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Item Name */}
-                  <Text style={styles.itemName}>{item.name}</Text>
-
-                  {/* Best Seller Badge */}
-                  {item.isBestSeller && (
-                    <View style={styles.bestSellerBadge}>
-                      <MaterialIcons name="star" size={8} color="#FFC529" />
-                      <Text style={styles.bestSellerText}>Best Seller</Text>
-                    </View>
-                  )}
-
-                  {/* Price */}
-                  {item.isPreorderAvailable && item.preorderCampaign && parseFloat(item.preorderCampaign.discount_amount || '0') > 0 ? (
-                    <View style={styles.priceContainer}>
-                      <Text style={[styles.itemPrice, styles.strikethroughPrice]}>₹ {item.price.toFixed(2)}</Text>
-                      <Text style={[styles.itemPrice, styles.discountedPrice]}>
-                        ₹ {(item.price - parseFloat(item.preorderCampaign.discount_amount || '0')).toFixed(2)}
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.itemPrice}>₹ {item.price.toFixed(2)}</Text>
-                  )}
-
-                  {/* Description */}
-                  <View style={styles.descriptionContainer}>
-                    <Text
-                      style={styles.itemDescription}
-                      numberOfLines={expandedDescriptions.has(item.id) ? undefined : 2}
-                    >
-                      {item.description}
-                    </Text>
-                    {SHOW_DESCRIPTION_MORE_BUTTON && item.description && item.description.length > 80 && (
-                      <TouchableOpacity
-                        onPress={() => toggleDescription(item.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.moreButton}>
-                          {expandedDescriptions.has(item.id) ? 'Less' : 'More'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-
-                <View style={styles.itemRight}>
-                  {/* Item Image with Shimmer or No Image Box */}
-                  <TouchableOpacity
-                    style={styles.itemImageContainer}
-                    onPress={() => handleImageClick(item)}
-                    activeOpacity={0.9}
-                  >
-                    {item.image ? (
-                      <>
-                        <OptimizedImage
-                          source={item.image}
-                          style={styles.itemImage}
-                          contentFit="cover"
-                          onLoad={() => handleImageLoad(item.id)}
-                          shimmerWidth={166}
-                          shimmerHeight={137}
-                          shimmerBorderRadius={16}
-                          transition={200}
-                          priority="normal"
-                          cachePolicy="memory-disk"
-                        />
-
-                        {/* Top Gradient Overlay */}
-                        <LinearGradient
-                          colors={['rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.1)', 'transparent']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 0, y: 1 }}
-                          style={styles.itemGradientOverlayTop}
-                        />
-
-                        {/* Preorder Badge Overlay on Image - Top Left */}
-                        {item.isPreorderAvailable && (
-                          <View style={styles.preorderImageBadge}>
-                            <LinearGradient
-                              colors={['#00B14F', '#00A048']}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={styles.preorderImageBadgeGradient}
-                            >
-                              <MaterialIcons name="schedule" size={12} color="#FFFFFF" />
-                              <Text style={styles.preorderImageBadgeText}>Preorder</Text>
-                            </LinearGradient>
-                          </View>
-                        )}
-
-                        {/* Heart Button Overlay */}
-                        <TouchableOpacity
-                          style={styles.itemHeartButton}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleToggleFavoriteItem(section.id, item.id);
-                          }}
-                          disabled={togglingFavoriteItemId === item.id}
-                          activeOpacity={0.7}
-                        >
-                          {togglingFavoriteItemId === item.id ? (
-                            <ActivityIndicator size="small" color="#FFFFFF" />
-                          ) : (
-                            <MaterialIcons
-                              name={item.isFavorite ? 'favorite' : 'favorite-border'}
-                              size={24}
-                              color={item.isFavorite ? '#FF0000' : '#FFFFFF'}
-                            />
-                          )}
-                        </TouchableOpacity>
-
-                        {/* Gray Overlay for Unavailable Items - Only on image */}
-                        {!itemAvailable && (
-                          <View style={styles.unavailableOverlay} />
-                        )}
-                      </>
-                    ) : (
-                      <View style={styles.noImageContainer}>
-                        <Text style={styles.noImageText}>No Image Available</Text>
-                        
-                        {/* Gray Overlay for Unavailable Items - Also on no image container */}
-                        {!itemAvailable && (
-                          <View style={styles.unavailableOverlay} />
-                        )}
-                        
-                        {/* Preorder Badge Overlay on No Image - Top Left */}
-                        {item.isPreorderAvailable && (
-                          <View style={styles.preorderImageBadge}>
-                            <LinearGradient
-                              colors={['#00B14F', '#00A048']}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={styles.preorderImageBadgeGradient}
-                            >
-                              <MaterialIcons name="schedule" size={12} color="#FFFFFF" />
-                              <Text style={styles.preorderImageBadgeText}>Preorder</Text>
-                            </LinearGradient>
-                          </View>
-                        )}
-
-                        {/* Heart Button Overlay - Same as when image exists */}
-                        <TouchableOpacity
-                          style={styles.itemHeartButton}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleToggleFavoriteItem(section.id, item.id);
-                          }}
-                          disabled={togglingFavoriteItemId === item.id}
-                          activeOpacity={0.7}
-                        >
-                          {togglingFavoriteItemId === item.id ? (
-                            <ActivityIndicator size="small" color="#000000" />
-                          ) : (
-                            <MaterialIcons
-                              name={item.isFavorite ? 'favorite' : 'favorite-border'}
-                              size={24}
-                              color={item.isFavorite ? '#FF0000' : '#9E9E9E'}
-                            />
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    )}
-
-                    {/* Availability Badge - Bottom Left (like RestaurantCard design) */}
-                    {!itemAvailable && (
-                      <View style={styles.availabilityBadge}>
-                        {nextAvailableTime?.availableTime ? (
-                          // Item will be available today - show timing with AM/PM and "today" on same line
-                          <Text style={styles.availabilityTimeTextMain}>
-                            Available at {nextAvailableTime.availableTime}
-                            <Text style={styles.availabilityTimeTextSub}> today</Text>
-                          </Text>
-                        ) : (
-                          // Not available today - show simple message
-                          <Text style={styles.availabilityTimeTextMain}>
-                            Not available
-                          </Text>
-                        )}
-                      </View>
-                    )}
-                  </TouchableOpacity>
-
-                  {/* Add Button or Increment/Decrement Controls */}
-                  {/* Only show when item is available and image is loaded (or no image) */}
-                  {itemAvailable && (loadedImages.has(item.id) || !item.image) && (
-                    <>
-                      {cart[item.id] ? (
-                        // Show increment/decrement controls if item is in cart
-                        <View style={styles.quantityControl}>
-                          <TouchableOpacity
-                            style={styles.quantityButton}
-                            onPress={() => decrementItem(item.id)}
-                            activeOpacity={0.7}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          >
-                            <Text style={styles.quantityButtonText}>-</Text>
-                          </TouchableOpacity>
-                          <Text style={styles.quantityText}>{getItemQuantity(item.id)}</Text>
-                          <TouchableOpacity
-                            style={[
-                              styles.quantityButton,
-                              item.isPreorderAvailable && getItemQuantity(item.id) >= 1 && styles.quantityButtonDisabled
-                            ]}
-                            onPress={() => incrementItem(item.id)}
-                            activeOpacity={0.7}
-                            disabled={item.isPreorderAvailable && getItemQuantity(item.id) >= 1}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          >
-                            <Text style={[
-                              styles.quantityButtonText,
-                              item.isPreorderAvailable && getItemQuantity(item.id) >= 1 && styles.quantityButtonTextDisabled
-                            ]}>+</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ) : (
-                        // Show Add button
-                        <TouchableOpacity
-                          style={styles.addButton}
-                          onPress={() => {
-                            if (item.isCustomizable) {
-                              // Open customization modal for customizable items
-                              handleCustomizableItemClick(item);
-                            } else {
-                              // Add directly to cart for non-customizable items
-                              addToCart(item);
-                            }
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.addButtonPlus}>+</Text>
-                          <Text style={styles.addButtonText}>Add</Text>
-                        </TouchableOpacity>
-                      )}
-                    </>
-                  )}
-
-                  {/* Customizable Text */}
-                  {loadedImages.has(item.id) && item.isCustomizable && (
-                    <Text style={styles.customizableText}>Customisable</Text>
-                  )}
-                </View>
-              </View>
-              </View>
-              )
-            })}
-          </View>
-          ))
         )}
-        </View>
 
-        <AppFooter />
-      </ScrollView>
-
-      {/* Bottom Cart Bar */}
-      {totalCartItems > 0 && (
-        <View style={[styles.cartBar, { bottom: 0, paddingBottom: insets.bottom }]}>
+        {/* Floating Menu Button - Toggle (only show when menu is closed) */}
+        {!showQuickMenu && (
           <TouchableOpacity
-            style={styles.cartButton}
-            onPress={() => {
-              // Navigate to checkout page only if restaurant is open
-              if (!onNavigateToCheckout) {
-                return;
-              }
+            style={[
+              styles.floatingMenuButton,
+              totalCartItems > 0 && styles.floatingMenuButtonWithCart,
+              { bottom: totalCartItems > 0 ? 145 : 45 }
+            ]}
+            onPress={() => setShowQuickMenu(true)}
+          >
+            <MaterialIcons name="restaurant-menu" size={20} color="#000000" />
+          </TouchableOpacity>
+        )}
 
-              if (!ensureRestaurantOpen()) {
-                return;
-              }
+        {/* Overlay - closes menu when clicking outside */}
+        {showQuickMenu && (
+          <TouchableOpacity
+            style={styles.menuOverlay}
+            activeOpacity={1}
+            onPress={() => setShowQuickMenu(false)}
+          />
+        )}
 
-              // Build restaurant address from current restaurant data
-              const restaurantAddress =
-                restaurantData?.locations?.[0]?.address ||
-                restaurantData?.location?.address ||
-                [
-                  restaurantData?.locations?.[0]?.locality || restaurantData?.location?.locality,
-                  restaurantData?.locations?.[0]?.city || restaurantData?.location?.city,
-                ]
-                  .filter(Boolean)
-                  .join(', ') ||
-                'Restaurant Address';
-
-              // Use the current restaurant screen context so that back navigation
-              // from checkout returns to this restaurant, even if the cart belongs
-              // to a different restaurant.
-              onNavigateToCheckout(restaurantId, restaurantName || '', restaurantAddress, 'restaurant');
-            }}
+        {/* Close Menu Button (only show when menu is open) */}
+        {showQuickMenu && (
+          <TouchableOpacity
+            style={[
+              styles.closeMenuButton,
+              totalCartItems > 0 && styles.closeMenuButtonWithCart,
+              { bottom: totalCartItems > 0 ? 125 : 45 }
+            ]}
+            onPress={() => setShowQuickMenu(false)}
             activeOpacity={0.8}
           >
-            <Text style={styles.cartItemCount}>
-              {totalCartItems} Item{totalCartItems > 1 ? 's' : ''} Added
-            </Text>
-            <View style={styles.viewCartButton}>
-              <Text style={styles.viewCartText}>View Cart</Text>
-              <MaterialIcons name="arrow-forward" size={16} color="#181C2E" />
-            </View>
+            <MaterialIcons name="close" size={16} color="#000000" />
+            <Text style={styles.closeMenuText}>Menu</Text>
           </TouchableOpacity>
-        </View>
-      )}
+        )}
 
-      {/* Floating Menu Button - Toggle (only show when menu is closed) */}
-      {!showQuickMenu && (
-        <TouchableOpacity
-          style={[
-            styles.floatingMenuButton,
-            totalCartItems > 0 && styles.floatingMenuButtonWithCart,
-            { bottom: totalCartItems > 0 ? 145 : 45 }
-          ]}
-          onPress={() => setShowQuickMenu(true)}
-        >
-          <MaterialIcons name="restaurant-menu" size={20} color="#000000" />
-        </TouchableOpacity>
-      )}
-
-      {/* Overlay - closes menu when clicking outside */}
-      {showQuickMenu && (
-        <TouchableOpacity
-          style={styles.menuOverlay}
-          activeOpacity={1}
-          onPress={() => setShowQuickMenu(false)}
-        />
-      )}
-
-      {/* Close Menu Button (only show when menu is open) */}
-      {showQuickMenu && (
-        <TouchableOpacity
-          style={[
-            styles.closeMenuButton,
-            totalCartItems > 0 && styles.closeMenuButtonWithCart,
-            { bottom: totalCartItems > 0 ? 125 : 45 }
-          ]}
-          onPress={() => setShowQuickMenu(false)}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="close" size={16} color="#000000" />
-          <Text style={styles.closeMenuText}>Menu</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Quick Menu Panel */}
-      {showQuickMenu && menuSections.length > 0 && (
-        <View style={[
-          styles.quickMenuPanel,
-          totalCartItems > 0 && styles.quickMenuPanelWithCart,
-          { bottom: totalCartItems > 0 ? 180 : 100 }
-        ]}>
-          <ScrollView style={styles.quickMenuScroll} showsVerticalScrollIndicator={false}>
-            {menuSections.map((section) => (
-              <TouchableOpacity
-                key={section.id}
-                style={[
-                  styles.quickMenuItem,
-                  activeCategoryId === section.id && styles.quickMenuItemActive
-                ]}
-                onPress={() => scrollToCategory(section.id)}
-                activeOpacity={0.7}
-              >
-                <Text
+        {/* Quick Menu Panel */}
+        {showQuickMenu && menuSections.length > 0 && (
+          <View style={[
+            styles.quickMenuPanel,
+            totalCartItems > 0 && styles.quickMenuPanelWithCart,
+            { bottom: totalCartItems > 0 ? 180 : 100 }
+          ]}>
+            <ScrollView style={styles.quickMenuScroll} showsVerticalScrollIndicator={false}>
+              {menuSections.map((section) => (
+                <TouchableOpacity
+                  key={section.id}
                   style={[
-                    styles.quickMenuText,
-                    activeCategoryId === section.id && styles.quickMenuTextActive
+                    styles.quickMenuItem,
+                    activeCategoryId === section.id && styles.quickMenuItemActive
                   ]}
-                  numberOfLines={1}
+                  onPress={() => scrollToCategory(section.id)}
+                  activeOpacity={0.7}
                 >
-                  {section.title}
-                </Text>
-                <Text
-                  style={[
-                    styles.quickMenuCount,
-                    activeCategoryId === section.id && styles.quickMenuCountActive
-                  ]}
-                >
-                  {section.items.length}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
+                  <Text
+                    style={[
+                      styles.quickMenuText,
+                      activeCategoryId === section.id && styles.quickMenuTextActive
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {section.title}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.quickMenuCount,
+                      activeCategoryId === section.id && styles.quickMenuCountActive
+                    ]}
+                  >
+                    {section.items.length}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
       </Animated.View>
 
       {/* Customization Modal */}

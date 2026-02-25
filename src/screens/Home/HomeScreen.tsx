@@ -1349,7 +1349,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           style={styles.container}
           stickyHeaderIndices={[3]}
           testID="home-screen"
-          bounces={false}
           alwaysBounceVertical={true}
           overScrollMode="never"
           showsVerticalScrollIndicator={false}

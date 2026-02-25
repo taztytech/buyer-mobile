@@ -458,7 +458,7 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
               <Text style={styles.ratingLabel}>Rate Food</Text>
               {renderStars(foodRating, setFoodRating)}
             </View>
-            <TextInput
+            <TextInput autoCorrect={false}
               style={styles.commentInput}
               value={foodComment}
               onChangeText={setFoodComment}

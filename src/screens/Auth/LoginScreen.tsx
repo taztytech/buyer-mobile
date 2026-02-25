@@ -115,7 +115,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               </View>
 
               {/* Phone Number Input */}
-              <TextInput
+              <TextInput autoCorrect={false}
                 style={styles.phoneInput}
                 placeholder="Mobile Number"
                 placeholderTextColor="#999"

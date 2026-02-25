@@ -38,7 +38,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
 
   useEffect(() => {
     if (timer <= 0) {
-      return () => {};
+      return () => { };
     }
 
     const interval = setInterval(() => {
@@ -177,10 +177,10 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
       } else {
         // Check if OTP is expired or invalid
         const errorMessage = response.error || response.message || '';
-        const isExpired = errorMessage.toLowerCase().includes('expired') || 
-                         errorMessage.toLowerCase().includes('expire') ||
-                         errorMessage.toLowerCase().includes('expiration');
-        
+        const isExpired = errorMessage.toLowerCase().includes('expired') ||
+          errorMessage.toLowerCase().includes('expire') ||
+          errorMessage.toLowerCase().includes('expiration');
+
         const detailedMessage = isExpired
           ? 'Code expired. Please click on Resend OTP.'
           : 'Incorrect OTP. Please enter the 4-digit code.';
@@ -268,7 +268,7 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
             {/* OTP Input Row */}
             <View style={styles.otpInputRow}>
               {otp.map((digit, index) => (
-                <TextInput
+                <TextInput autoCorrect={false}
                   key={index}
                   ref={inputRefs[index]}
                   style={[
