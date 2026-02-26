@@ -8,18 +8,17 @@ import {
   Image,
   StatusBar,
   ActivityIndicator,
-  Linking,
   Modal,
   RefreshControl,
   Dimensions,
   Animated,
   PanResponder,
   Pressable,
-  InteractionManager,
+  Platform,
 } from 'react-native';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { ordersService } from '@/services/orders.service';
@@ -47,21 +46,22 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   visible = false,
   onBack,
   onThankDriver,
-  onRateOrder,
-  onReorder,
+  onRateOrder: _onRateOrder,
+  onReorder: _onReorder,
   onTrackOrder,
-  onDownloadInvoice,
+  onDownloadInvoice: _onDownloadInvoice,
   onContactUs,
   onHelp,
 }) => {
   const { getOrderById, state } = useOrders();
+  const insets = useSafeAreaInsets();
   const { showConfirmation } = useConfirmation();
   const [contextOrder, setContextOrder] = useState<any>(null);
   const [orderData, setOrderData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState<string>('');
-  const [supportNumber, setSupportNumber] = useState<string>('');
+  const [_supportNumber, setSupportNumber] = useState<string>('');
   const [showTrackingWebView, setShowTrackingWebView] = useState(false);
   const [selectedOrderIdForTracking, setSelectedOrderIdForTracking] = useState<string | null>(null);
   const [trackingOrderData, setTrackingOrderData] = useState<any>(null);
@@ -100,6 +100,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const OPEN_HEIGHT = HALF_SCREEN;
   // Use height animation instead of translateY - CLOSED_HEIGHT = closed, OPEN_HEIGHT = open
   const bottomSheetHeight = useRef(new Animated.Value(OPEN_HEIGHT)).current; // Start open
+  const dragStartHeight = useRef(OPEN_HEIGHT);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(true); // Start open
   const lastFetchedAtRef = useRef<number>(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -178,8 +179,9 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       setTrackingOrderData(null);
 
       // Reset bottom sheet to open state for next use
-      setIsBottomSheetOpen(true);
+      bottomSheetHeight.flattenOffset();
       bottomSheetHeight.setValue(OPEN_HEIGHT);
+      setIsBottomSheetOpen(true);
 
       // Refresh main order details silently to reflect any status changes that happened during tracking
       fetchOrderDetails();
@@ -313,33 +315,32 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => false, // Let children have a chance, but we'll take it if they don't
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only respond to vertical drags
+        // More sensitive threshold
+        return Math.abs(gestureState.dy) > 2;
+      },
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+        // Capture if it's a significant vertical move
         return Math.abs(gestureState.dy) > 5;
       },
       onPanResponderGrant: () => {
-        // Set offset to current value
-        bottomSheetHeight.setOffset((bottomSheetHeight as any)._value);
-        bottomSheetHeight.setValue(0);
+        // Capture initial height and simplify state by flattening any existing offset
+        const currentHeight = (bottomSheetHeight as any)._value + ((bottomSheetHeight as any)._offset || 0);
+        dragStartHeight.current = currentHeight;
+        bottomSheetHeight.flattenOffset();
+        bottomSheetHeight.setValue(currentHeight);
       },
       onPanResponderMove: (_, gestureState) => {
-        const currentOffset = (bottomSheetHeight as any)._offset || 0;
-        // When dragging down (positive dy), reduce height (negative change)
-        // When dragging up (negative dy), increase height (positive change)
-        const heightChange = -gestureState.dy;
-        const newHeight = currentOffset + heightChange;
+        // Calculate new height based on delta from start height
+        const nextHeight = dragStartHeight.current - gestureState.dy;
 
-        // Restrict movement: can't go below CLOSED_HEIGHT or above OPEN_HEIGHT
-        const minHeight = CLOSED_HEIGHT;
-        const maxHeight = OPEN_HEIGHT;
-        const clampedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
-        bottomSheetHeight.setValue(clampedHeight - currentOffset);
+        // Clamp height between CLOSED and OPEN thresholds
+        const clampedHeight = Math.max(CLOSED_HEIGHT, Math.min(OPEN_HEIGHT, nextHeight));
+        bottomSheetHeight.setValue(clampedHeight);
       },
-      onPanResponderRelease: (_, gestureState) => {
-        bottomSheetHeight.flattenOffset();
-        const currentValue = (bottomSheetHeight as any)._value;
-        const currentOffset = (bottomSheetHeight as any)._offset || 0;
-        const totalHeight = currentValue + currentOffset;
+      onPanResponderRelease: (_, _gestureState) => {
+        const totalHeight = (bottomSheetHeight as any)._value;
 
         // Threshold: if height is more than halfway between closed and open, snap to open
         const threshold = (CLOSED_HEIGHT + OPEN_HEIGHT) / 2;
@@ -362,6 +363,31 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           friction: 8, // Increased for smoother, less bouncy animation
         }).start();
       },
+      onPanResponderTerminate: (_: any, _gestureState: any) => {
+        // Handle termination (e.g., system dialog, modal swipe) by snapping back to valid state
+        const totalHeight = (bottomSheetHeight as any)._value;
+        const threshold = (CLOSED_HEIGHT + OPEN_HEIGHT) / 2;
+        const targetHeight = totalHeight > threshold ? OPEN_HEIGHT : CLOSED_HEIGHT;
+        setIsBottomSheetOpen(totalHeight > threshold);
+        Animated.spring(bottomSheetHeight, {
+          toValue: targetHeight,
+          useNativeDriver: false,
+        }).start();
+      },
+    })
+  ).current;
+
+  // Dedicated PanResponder for the notch itself - aggressive capture to stop iOS modal dismissal
+  const notchPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true, // Winner for the notch area
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 2,
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dy) > 5,
+      onPanResponderGrant: panResponder.panHandlers.onResponderGrant as any,
+      onPanResponderMove: panResponder.panHandlers.onResponderMove as any,
+      onPanResponderRelease: panResponder.panHandlers.onResponderRelease as any,
+      onPanResponderTerminate: panResponder.panHandlers.onResponderRelease as any,
     })
   ).current;
 
@@ -530,7 +556,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     fetchSupportDetails();
   }, [visible]);
 
-  const handleCallSupport = () => {
+  const _handleCallSupport = () => {
     // Navigate to Contact Us page instead of directly calling
     if (onContactUs) {
       onContactUs();
@@ -1221,7 +1247,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               <Text style={styles.sectionTitle}>Item Details</Text>
               <View style={styles.itemDetailsContainer}>
                 {orderData.items.map((item: any, index: number) => {
-                  const isVeg = item.is_veg !== false; // Default to veg if not specified
+                  const _isVeg = item.is_veg !== false; // Default to veg if not specified
                   const imageUrl = item.image_url || item.image || null;
 
                   return (
@@ -1484,57 +1510,63 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       <Modal
         visible={showTrackingWebView}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : 'fullScreen'}
+        transparent={Platform.OS === 'ios'}
         onRequestClose={handleCloseTrackingWebView}
         onDismiss={handleCloseTrackingWebView}
+        onShow={() => {
+          // Reset bottom sheet to open state when modal opens
+          bottomSheetHeight.flattenOffset();
+          bottomSheetHeight.setValue(OPEN_HEIGHT);
+          setIsBottomSheetOpen(true);
+        }}
       >
         <View style={styles.webViewModalContainer}>
-          <SafeAreaView style={styles.webViewContainer} edges={['top']}>
-            <View style={styles.webViewHeader}>
-              <TouchableOpacity
-                onPress={handleCloseTrackingWebView}
-                style={styles.webViewBackButton}
-              >
-                <MaterialIcons name="close" size={24} color="#001E1F" />
-              </TouchableOpacity>
-              <Text style={styles.webViewHeaderTitle}>Track Order</Text>
-              <View style={styles.webViewBackButton} />
-            </View>
-            {(() => {
-              // Prefer tracking URL from trackingOrderData (latest full data), fall back to orderData
-              const effectiveTrackingUrl = getTrackingUrlFromOrderData(trackingOrderData || orderData);
-              console.log('🌐 WebView Loading URL (OrderDetail):', effectiveTrackingUrl);
-              // CRITICAL FIX: If we are closing, DO NOT render the WebView.
-              // This unmounts the WebView before the modal finishes its dismiss animation,
-              // preventing native-side freezes associated with WebView/Modal lifecycle conflicts.
-              if (!effectiveTrackingUrl || isClosingTracking || !showTrackingWebView) return null;
+          {Platform.OS === 'ios' && <View style={{ height: insets.top, backgroundColor: '#FFFFFF' }} />}
+          <StatusBar barStyle="dark-content" />
+          <View style={styles.webViewHeader}>
+            <TouchableOpacity
+              onPress={handleCloseTrackingWebView}
+              style={styles.webViewBackButton}
+            >
+              <MaterialIcons name="close" size={24} color="#001E1F" />
+            </TouchableOpacity>
+            <Text style={styles.webViewHeaderTitle}>Track Order</Text>
+            <View style={styles.webViewBackButton} />
+          </View>
+          {(() => {
+            // Prefer tracking URL from trackingOrderData (latest full data), fall back to orderData
+            const effectiveTrackingUrl = getTrackingUrlFromOrderData(trackingOrderData || orderData);
+            console.log('🌐 WebView Loading URL (OrderDetail):', effectiveTrackingUrl);
+            // CRITICAL FIX: If we are closing, DO NOT render the WebView.
+            // This unmounts the WebView before the modal finishes its dismiss animation,
+            // preventing native-side freezes associated with WebView/Modal lifecycle conflicts.
+            if (!effectiveTrackingUrl || isClosingTracking || !showTrackingWebView) return null;
 
-
-              return (
-                <WebView
-                  source={{ uri: effectiveTrackingUrl }}
-                  style={styles.webView}
-                  startInLoadingState={true}
-                  renderLoading={() => (
-                    <View style={styles.webViewLoadingContainer}>
-                      <ActivityIndicator size="large" color="#00B14F" />
-                    </View>
-                  )}
-                  onError={(syntheticEvent) => {
-                    const { nativeEvent } = syntheticEvent;
-                    console.error('WebView error:', nativeEvent);
-                  }}
-                  onHttpError={(syntheticEvent) => {
-                    const { nativeEvent } = syntheticEvent;
-                    console.error('WebView HTTP error:', nativeEvent.statusCode, nativeEvent.description);
-                  }}
-                  javaScriptEnabled={true}
-                  domStorageEnabled={true}
-                  mixedContentMode="always"
-                />
-              );
-            })()}
-          </SafeAreaView>
+            return (
+              <WebView
+                source={{ uri: effectiveTrackingUrl }}
+                style={styles.webView}
+                startInLoadingState={true}
+                renderLoading={() => (
+                  <View style={styles.webViewLoadingContainer}>
+                    <ActivityIndicator size="large" color="#00B14F" />
+                  </View>
+                )}
+                onError={(syntheticEvent) => {
+                  const { nativeEvent } = syntheticEvent;
+                  console.error('WebView error:', nativeEvent);
+                }}
+                onHttpError={(syntheticEvent) => {
+                  const { nativeEvent } = syntheticEvent;
+                  console.error('WebView HTTP error:', nativeEvent.statusCode, nativeEvent.description);
+                }}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                mixedContentMode="always"
+              />
+            );
+          })()}
 
           {/* Bottom Sheet Overlay */}
           <Animated.View
@@ -1548,7 +1580,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             {/* Drag handle at top - always visible, controls open/close */}
             <View
               style={styles.trackingDragHandleContainer}
-              {...(isBottomSheetOpen ? panResponder.panHandlers : {})}
+              {...notchPanResponder.panHandlers}
             >
               <View style={styles.trackingDragHandleBar} />
             </View>
@@ -1562,7 +1594,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               // Get agent info from tracking array - find latest entry with agent details
               const trackingArray = displayOrder?.tracking || [];
               let agentName: string | null = null;
-              let agentPhone: string | null = null;
+              let _agentPhone: string | null = null;
 
               // Find the latest tracking entry with agent_name or agent_phone
               // Iterate from the end to get the most recent agent assignment
@@ -1572,13 +1604,13 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   // If we find an entry with agent_name, use it
                   if (trackingEntry.agent_name) {
                     agentName = trackingEntry.agent_name;
-                    agentPhone = trackingEntry.agent_phone || null;
+                    _agentPhone = trackingEntry.agent_phone || null;
                     break;
                   }
                   // If we find an entry with agent_phone but no name, still use it
                   if (trackingEntry.agent_phone && !agentName) {
                     agentName = null;
-                    agentPhone = trackingEntry.agent_phone;
+                    _agentPhone = trackingEntry.agent_phone;
                   }
                 }
               }
@@ -1586,7 +1618,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               return (
                 <View
                   style={styles.trackingTopSection}
-                  {...(!isBottomSheetOpen ? panResponder.panHandlers : {})}
+                  {...panResponder.panHandlers}
                 >
                   <View style={styles.trackingLeftContent}>
                     <View style={styles.trackingRestaurantRow}>
@@ -1700,8 +1732,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
                       const deliveryTime = formatDeliveryTime(displayOrder?.estimated_delivery_time);
 
-                      // Get status config
-                      const statusConfig = mapOrderStatusToUI(displayStatus);
+
 
                       // Normalize status for helper conditions
                       const normalizedStatus = (displayStatus || '').toLowerCase().replace(/[_\s]+/g, '-');
@@ -1883,7 +1914,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           </Animated.View>
         </View>
       </Modal>
-    </View>
+    </View >
   );
 };
 
@@ -2589,7 +2620,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
-    elevation: 15, // Android shadow
+    zIndex: 1000,
+    elevation: 20, // Android shadow and layering
   },
   trackingDragHandleContainer: {
     width: '100%',
