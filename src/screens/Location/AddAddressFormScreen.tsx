@@ -281,15 +281,18 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
 
   // Listen to keyboard events
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const keyboardShowListener = Keyboard.addListener(
+      showEvent,
       (e) => {
         setKeyboardVisible(true);
         setKeyboardHeight(e.endCoordinates.height);
       }
     );
-    const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
+    const keyboardHideListener = Keyboard.addListener(
+      hideEvent,
       () => {
         setKeyboardVisible(false);
         setKeyboardHeight(0);
@@ -297,8 +300,8 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     );
 
     return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
+      keyboardShowListener.remove();
+      keyboardHideListener.remove();
     };
   }, []);
 
@@ -493,40 +496,36 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
       statusBarTranslucent={true}
       onRequestClose={handleClose}
     >
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={handleClose}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <Snackbar
-          visible={localToastVisible}
-          message={localToastMessage}
-          type="error"
-          onDismiss={() => setLocalToastVisible(false)}
-        />
-
-        <Animated.View
-          style={[
-            styles.bottomSheetWrapper,
-            keyboardVisible && { bottom: Platform.OS === 'android' ? keyboardHeight : 0 },
-          ]}
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={handleClose}
         >
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Animated.View
-              style={[
-                styles.bottomSheet,
-                {
-                  transform: [{ translateY: slideAnim }],
-                }
-              ]}
+          <Snackbar
+            visible={localToastVisible}
+            message={localToastMessage}
+            type="error"
+            onDismiss={() => setLocalToastVisible(false)}
+          />
+
+          <View style={styles.bottomSheetWrapper}>
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={{ flex: 1 }}
             >
-              <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.keyboardAvoidingView}
-                enabled
+              <Animated.View
+                style={[
+                  styles.bottomSheet,
+                  {
+                    transform: [{ translateY: slideAnim }],
+                  }
+                ]}
               >
                 <ScrollView
                   ref={scrollViewRef}
@@ -803,11 +802,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                     )}
                   </TouchableOpacity>
                 </View>
-              </KeyboardAvoidingView>
-            </Animated.View>
-          </TouchableOpacity>
-        </Animated.View>
-      </TouchableOpacity>
+              </Animated.View>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -823,10 +822,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    maxHeight: '75%',
-  },
-  bottomSheetWrapperWithKeyboard: {
-    maxHeight: '90%',
+    maxHeight: '85%', // Increased fixed height for smoother transitions
   },
   bottomSheet: {
     backgroundColor: '#FFFFFF',

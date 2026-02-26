@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ImageBackground, ScrollView, FlatList, Dimensions, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ScrollView, FlatList, Dimensions, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
@@ -139,6 +139,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   React.useEffect(() => {
     // selectedLocation tracking
   }, [selectedLocation]);
+
+  const scrollYAnimated = React.useRef(new Animated.Value(0)).current;
+
   const [isCategorySectionSticky, setIsCategorySectionSticky] = React.useState(false);
   const [showCategoryModal, setShowCategoryModal] = React.useState(false);
   const flatListRef = React.useRef<FlatList>(null);
@@ -1310,6 +1313,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const layoutHeight = event.nativeEvent.layoutMeasurement.height;
     const contentHeight = event.nativeEvent.contentSize.height;
 
+    // Sync animated value for header background stay-put effect on pull
+    scrollYAnimated.setValue(scrollY);
+
     // Save scroll position for restoration after refresh
     scrollPositionRef.current = scrollY;
 
@@ -1341,8 +1347,41 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [restaurantId, restaurantName, hasCartItems, onNavigateToCheckout, ensureCartRestaurantOpen]);
 
   return (
-    <View style={styles.outerContainer}>
+    <View style={[styles.outerContainer, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+      {/* Top background filler for pull-to-refresh overscroll - Layer 1 (Back) */}
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 600, backgroundColor: '#00B14F' }} pointerEvents="none" />
+
+      {/* Animated Header Image - Layer 2 (Middle) */}
+      <Animated.Image
+        source={require('@/assets/home_app_bar.png')}
+        style={[
+          styles.headerBackgroundImage,
+          {
+            position: 'absolute',
+            top: -10,
+            left: 0,
+            right: 0,
+            width: '100%',
+            height: Dimensions.get('window').height * 0.35,
+            transform: [
+              {
+                translateY: scrollYAnimated.interpolate({
+                  inputRange: [0, 500],
+                  outputRange: [0, -500],
+                  extrapolateLeft: 'clamp',
+                  extrapolateRight: 'clamp',
+                }),
+              },
+            ],
+          },
+        ]}
+        resizeMode="cover"
+        pointerEvents="none"
+      />
+
+      {/* SafeAreaView and Content - Layer 3 (Front) */}
       <SafeAreaView style={styles.safeArea} edges={[]}>
         <ScrollView
           ref={scrollViewRef}
@@ -1350,7 +1389,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           stickyHeaderIndices={[3]}
           testID="home-screen"
           alwaysBounceVertical={true}
-          overScrollMode="never"
+          overScrollMode="always"
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
@@ -1362,18 +1401,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={handleRefresh}
-              colors={['#00B14F']}
-              tintColor="#00B14F"
-              progressBackgroundColor="#FFFFFF"
+              colors={['#FFFFFF']}
+              tintColor="#FFFFFF"
+              progressBackgroundColor="#00B14F"
+              {...(Platform.OS === 'android' ? { progressViewOffset: insets.top + 30 } : {})}
             />
           }
         >
 
-          {/* Header with Background Image */}
-          <ImageBackground
-            source={require('@/assets/home_app_bar.png')}
-            style={[styles.headerBackground, { paddingTop: insets.top + 20 }]}
-            imageStyle={styles.headerBackgroundImage}
+          {/* Header Content Wrapper */}
+          <View
+            style={[styles.headerBackground, { paddingTop: insets.top + 10, backgroundColor: 'transparent' }]}
             testID="header-background"
           >
             {/* Location Section */}
@@ -1566,171 +1604,174 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 </>
               )}
             </View>
-          </ImageBackground>
+          </View>
 
-          {/* Unserviceable Location Error Screen */}
-          {!isLocationServiceable && !isLoadingBanners && !isLoadingCategories && !isLoadingRestaurants && (
-            <View style={styles.unserviceableContainer}>
-              <View style={styles.unserviceableIconContainer}>
-                <MaterialIcons name="location-off" size={80} color="#CCCCCC" />
+          {/* Solid background for everything after the header */}
+          <View style={{ backgroundColor: colors.background, flex: 1 }}>
+
+            {/* Unserviceable Location Error Screen */}
+            {!isLocationServiceable && !isLoadingBanners && !isLoadingCategories && !isLoadingRestaurants && (
+              <View style={styles.unserviceableContainer}>
+                <View style={styles.unserviceableIconContainer}>
+                  <MaterialIcons name="location-off" size={80} color="#CCCCCC" />
+                </View>
+                <Text style={styles.unserviceableTitle}>Sorry!</Text>
+                <Text style={styles.unserviceableMessage}>
+                  We are not yet serviceable at your location
+                </Text>
+                <Text style={styles.unserviceableSubtext}>
+                  Currently, we only serve in Madurai city. Stay tuned for expansion to your area!
+                </Text>
               </View>
-              <Text style={styles.unserviceableTitle}>Sorry!</Text>
-              <Text style={styles.unserviceableMessage}>
-                We are not yet serviceable at your location
-              </Text>
-              <Text style={styles.unserviceableSubtext}>
-                Currently, we only serve in Madurai city. Stay tuned for expansion to your area!
-              </Text>
-            </View>
-          )}
+            )}
 
-          {/* Ad Banner Carousel or Closed Banner */}
-          {isLocationServiceable && (
-            <>
-              <View style={styles.carouselContainer}>
-                {appOperationStatus && !appOperationStatus.is_open ? (
-                  // Show closed banner when app is not open
-                  <View style={styles.closedBannerContainer}>
-                    <Image
-                      source={require('@../../../assets/Closed Banner.webp')}
-                      style={styles.closedBannerImage}
-                      resizeMode="contain"
-                    />
-                    {appOperationStatus.message && (
-                      <View style={styles.closedBannerMessageContainer}>
-                        <Text style={styles.closedBannerMessage}>
-                          {appOperationStatus.message}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                ) : showBannerShimmer ? (
-                  <View style={styles.loadingContainer}>
-
-                    <Shimmer width="100%" height={149} borderRadius={20} backgroundColor="#00BEC8" />
-                  </View>
-                ) : (
-                  <>
-                    <View style={styles.carouselWrapper}>
-                      <FlatList
-                        ref={flatListRef}
-                        data={carouselData}
-                        renderItem={renderCarouselItem}
-                        keyExtractor={(item) => item.id}
-                        horizontal
-                        pagingEnabled
-                        showsHorizontalScrollIndicator={false}
-                        onViewableItemsChanged={onViewRef.current}
-                        viewabilityConfig={viewConfigRef.current}
-                        decelerationRate="fast"
-                        snapToAlignment="start"
-                        snapToInterval={SCREEN_WIDTH}
-                        disableIntervalMomentum={true}
-                        removeClippedSubviews={false}
-                        bounces={false}
-                        overScrollMode="never"
-                        scrollEventThrottle={16}
-                        getItemLayout={(_data, index) => ({
-                          length: SCREEN_WIDTH,
-                          offset: SCREEN_WIDTH * index,
-                          index,
-                        })}
-                        onScrollToIndexFailed={(info) => {
-                          // Handle scroll to index failure
-                          const wait = new Promise(resolve => setTimeout(resolve, 500));
-                          wait.then(() => {
-                            flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
-                          });
-                        }}
+            {/* Ad Banner Carousel or Closed Banner */}
+            {isLocationServiceable && (
+              <>
+                <View style={styles.carouselContainer}>
+                  {appOperationStatus && !appOperationStatus.is_open ? (
+                    // Show closed banner when app is not open
+                    <View style={styles.closedBannerContainer}>
+                      <Image
+                        source={require('@../../../assets/Closed Banner.webp')}
+                        style={styles.closedBannerImage}
+                        resizeMode="contain"
                       />
+                      {appOperationStatus.message && (
+                        <View style={styles.closedBannerMessageContainer}>
+                          <Text style={styles.closedBannerMessage}>
+                            {appOperationStatus.message}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : showBannerShimmer ? (
+                    <View style={styles.loadingContainer}>
 
-                      {/* Navigation Buttons - removed but functionality preserved (manual sliding and auto-slide still work) */}
+                      <Shimmer width="100%" height={149} borderRadius={20} backgroundColor="#00BEC8" />
+                    </View>
+                  ) : (
+                    <>
+                      <View style={styles.carouselWrapper}>
+                        <FlatList
+                          ref={flatListRef}
+                          data={carouselData}
+                          renderItem={renderCarouselItem}
+                          keyExtractor={(item) => item.id}
+                          horizontal
+                          pagingEnabled
+                          showsHorizontalScrollIndicator={false}
+                          onViewableItemsChanged={onViewRef.current}
+                          viewabilityConfig={viewConfigRef.current}
+                          decelerationRate="fast"
+                          snapToAlignment="start"
+                          snapToInterval={SCREEN_WIDTH}
+                          disableIntervalMomentum={true}
+                          removeClippedSubviews={false}
+                          bounces={false}
+                          overScrollMode="never"
+                          scrollEventThrottle={16}
+                          getItemLayout={(_data, index) => ({
+                            length: SCREEN_WIDTH,
+                            offset: SCREEN_WIDTH * index,
+                            index,
+                          })}
+                          onScrollToIndexFailed={(info) => {
+                            // Handle scroll to index failure
+                            const wait = new Promise(resolve => setTimeout(resolve, 500));
+                            wait.then(() => {
+                              flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
+                            });
+                          }}
+                        />
+
+                        {/* Navigation Buttons - removed but functionality preserved (manual sliding and auto-slide still work) */}
+                      </View>
+                    </>
+                  )}
+                </View>
+
+                {/* What's On Your Mind Section - Only show if there's data or still loading, and when app is open */}
+                {appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0) && (
+                  <>
+                    <View style={[
+                      styles.sectionTitleContainer,
+                      carouselData.length <= 1 && styles.sectionTitleContainerCompact
+                    ]}>
+                      <LinearGradient
+                        colors={['rgba(0, 0, 0, 0)', '#000000']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.sectionTitleLine}
+                      />
+                      <Text style={styles.sectionTitle}>What's On Your Mind?</Text>
+                      <LinearGradient
+                        colors={['#000000', 'rgba(0, 0, 0, 0)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.sectionTitleLine}
+                      />
+                    </View>
+
+                    {/* Category List */}
+                    <View style={[
+                      styles.categoryListContainer,
+                      isCategorySectionSticky && styles.categoryListContainerSticky
+                    ]}>
+                      {showCategoryShimmer ? (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.categoryListContent}
+                        >
+                          {/* Render 6 shimmer category items */}
+                          {[1, 2, 3, 4, 5, 6].map((item) => (
+                            <View key={item} style={styles.categoryItem}>
+                              {/* Image Shimmer */}
+                              <View style={styles.categoryImageContainer}>
+                                <Shimmer width={50} height={50} borderRadius={25} backgroundColor="#E8E8E8" />
+                              </View>
+                              {/* Text Shimmer */}
+                              <Shimmer width={50} height={10} borderRadius={5} backgroundColor="#E8E8E8" />
+                            </View>
+                          ))}
+                        </ScrollView>
+                      ) : (
+                        <FlatList
+                          data={categoryData}
+                          renderItem={renderCategoryItem}
+                          keyExtractor={(item) => item.id.toString()}
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.categoryListContent}
+                          testID="category-list"
+                        />
+                      )}
                     </View>
                   </>
                 )}
-              </View>
 
-              {/* What's On Your Mind Section - Only show if there's data or still loading, and when app is open */}
-              {appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0) && (
-                <>
-                  <View style={[
-                    styles.sectionTitleContainer,
-                    carouselData.length <= 1 && styles.sectionTitleContainerCompact
-                  ]}>
+                {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
+                {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
+                  <View style={styles.restaurantsSectionTitleContainer}>
                     <LinearGradient
                       colors={['rgba(0, 0, 0, 0)', '#000000']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
-                      style={styles.sectionTitleLine}
+                      style={styles.restaurantsTitleLine}
                     />
-                    <Text style={styles.sectionTitle}>What's On Your Mind?</Text>
+                    <Text style={styles.restaurantsTitle}>Restaurants Near You</Text>
                     <LinearGradient
                       colors={['#000000', 'rgba(0, 0, 0, 0)']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
-                      style={styles.sectionTitleLine}
+                      style={styles.restaurantsTitleLine}
                     />
                   </View>
+                )}
 
-                  {/* Category List */}
-                  <View style={[
-                    styles.categoryListContainer,
-                    isCategorySectionSticky && styles.categoryListContainerSticky
-                  ]}>
-                    {showCategoryShimmer ? (
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.categoryListContent}
-                      >
-                        {/* Render 6 shimmer category items */}
-                        {[1, 2, 3, 4, 5, 6].map((item) => (
-                          <View key={item} style={styles.categoryItem}>
-                            {/* Image Shimmer */}
-                            <View style={styles.categoryImageContainer}>
-                              <Shimmer width={50} height={50} borderRadius={25} backgroundColor="#E8E8E8" />
-                            </View>
-                            {/* Text Shimmer */}
-                            <Shimmer width={50} height={10} borderRadius={5} backgroundColor="#E8E8E8" />
-                          </View>
-                        ))}
-                      </ScrollView>
-                    ) : (
-                      <FlatList
-                        data={categoryData}
-                        renderItem={renderCategoryItem}
-                        keyExtractor={(item) => item.id.toString()}
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.categoryListContent}
-                        testID="category-list"
-                      />
-                    )}
-                  </View>
-                </>
-              )}
-
-              {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
-              {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
-                <View style={styles.restaurantsSectionTitleContainer}>
-                  <LinearGradient
-                    colors={['rgba(0, 0, 0, 0)', '#000000']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.restaurantsTitleLine}
-                  />
-                  <Text style={styles.restaurantsTitle}>Restaurants Near You</Text>
-                  <LinearGradient
-                    colors={['#000000', 'rgba(0, 0, 0, 0)']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.restaurantsTitleLine}
-                  />
-                </View>
-              )}
-
-              {/* Filter Buttons - Hidden */}
-              {/* <View style={styles.filterContainer}>
+                {/* Filter Buttons - Hidden */}
+                {/* <View style={styles.filterContainer}>
         {showRestaurantShimmer ? (
           <ScrollView
             horizontal
@@ -1773,126 +1814,126 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         )}
       </View> */}
 
-              {/* Restaurant List - Only show if there's data, still loading, or error states */}
-              {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
-                <View style={[
-                  styles.restaurantListContainer,
-                  totalCartItems > 0 && {
-                    paddingBottom: 160 + Math.max(insets.bottom, 0)
-                  }
-                ]}>
-                  {showRestaurantShimmer ? (
-                    <>
-                      {/* Shimmer for 2 restaurant cards */}
-                      {[1, 2].map((item) => (
-                        <View key={item} style={styles.restaurantCardWrapper}>
-                          <View style={styles.restaurantCardShimmer}>
-                            {/* Left Side - Image Shimmer */}
-                            <Shimmer width={130} height={160} borderRadius={16} backgroundColor="#E8E8E8" style={styles.restaurantImageShimmer} />
+                {/* Restaurant List - Only show if there's data, still loading, or error states */}
+                {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
+                  <View style={[
+                    styles.restaurantListContainer,
+                    totalCartItems > 0 && {
+                      paddingBottom: 160 + Math.max(insets.bottom, 0)
+                    }
+                  ]}>
+                    {showRestaurantShimmer ? (
+                      <>
+                        {/* Shimmer for 2 restaurant cards */}
+                        {[1, 2].map((item) => (
+                          <View key={item} style={styles.restaurantCardWrapper}>
+                            <View style={styles.restaurantCardShimmer}>
+                              {/* Left Side - Image Shimmer */}
+                              <Shimmer width={130} height={160} borderRadius={16} backgroundColor="#E8E8E8" style={styles.restaurantImageShimmer} />
 
-                            {/* Right Side - Details Shimmer */}
-                            <View style={styles.restaurantDetailsShimmer}>
-                              {/* Pure Veg Badge */}
-                              <Shimmer width={80} height={18} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                              {/* Right Side - Details Shimmer */}
+                              <View style={styles.restaurantDetailsShimmer}>
+                                {/* Pure Veg Badge */}
+                                <Shimmer width={80} height={18} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
-                              {/* Restaurant Name */}
-                              <Shimmer width="90%" height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                                {/* Restaurant Name */}
+                                <Shimmer width="90%" height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
-                              {/* Rating and Delivery Time */}
-                              <Shimmer width="70%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                                {/* Rating and Delivery Time */}
+                                <Shimmer width="70%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
-                              {/* Cuisine */}
-                              <Shimmer width="85%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
+                                {/* Cuisine */}
+                                <Shimmer width="85%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
 
-                              {/* Location and Distance */}
-                              <Shimmer width="60%" height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+                                {/* Location and Distance */}
+                                <Shimmer width="60%" height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+                              </View>
                             </View>
                           </View>
-                        </View>
-                      ))}
-                    </>
-                  ) : noRestaurantsFound ? (
-                    <View style={styles.noRestaurantsContainer}>
-                      <MaterialIcons name="store" size={64} color="rgba(0, 0, 0, 0.2)" />
-                      <Text style={styles.noRestaurantsTitle}>No Restaurants Nearby</Text>
-                      <Text style={styles.noRestaurantsMessage}>
-                        We couldn't find any restaurants within 10km of your location. Try changing your delivery address or check back later.
-                      </Text>
-                      <TouchableOpacity
-                        style={styles.retryButton}
-                        onPress={handleRefresh}
-                        activeOpacity={0.7}
-                      >
-                        <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
-                        <Text style={styles.retryButtonText}>Retry</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : hasNetworkError ? (
-                    <View style={styles.networkErrorContainer}>
-                      <MaterialIcons name="cloud-off" size={64} color="rgba(0, 0, 0, 0.2)" />
-                      <Text style={styles.networkErrorTitle}>Network Error</Text>
-                      <Text style={styles.networkErrorMessage}>
-                        Unable to load restaurants. Please check your connection and try again.
-                      </Text>
-                      <TouchableOpacity
-                        style={styles.retryButton}
-                        onPress={handleRefresh}
-                        activeOpacity={0.7}
-                      >
-                        <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
-                        <Text style={styles.retryButtonText}>Retry</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <FlatList
-                      data={restaurantData}
-                      renderItem={({ item: restaurant }) => (
-                        <View style={styles.restaurantCardWrapper}>
-                          <RestaurantCard
-                            restaurant={restaurant}
-                            layoutMode={restaurantCardStyle}
-                            onPress={() => {
-                              if (onNavigateToRestaurant) {
-                                const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
-                                onNavigateToRestaurant(restaurantId, restaurant.name);
-                              }
-                            }}
-                            onImageLoad={() => {
-                              setLoadedRestaurantImages(prev => new Set(prev).add(restaurant.id.toString()));
-                            }}
-                          />
-                        </View>
-                      )}
-                      keyExtractor={(restaurant) => restaurant.id.toString()}
-                      scrollEnabled={false}
-                      removeClippedSubviews={true}
-                      maxToRenderPerBatch={3}
-                      windowSize={3}
-                      initialNumToRender={2}
-                      updateCellsBatchingPeriod={100}
-                      getItemLayout={(data, index) => ({
-                        length: 166, // Approximate card height with margin
-                        offset: 166 * index,
-                        index,
-                      })}
-                    />
-                  )}
+                        ))}
+                      </>
+                    ) : noRestaurantsFound ? (
+                      <View style={styles.noRestaurantsContainer}>
+                        <MaterialIcons name="store" size={64} color="rgba(0, 0, 0, 0.2)" />
+                        <Text style={styles.noRestaurantsTitle}>No Restaurants Nearby</Text>
+                        <Text style={styles.noRestaurantsMessage}>
+                          We couldn't find any restaurants within 10km of your location. Try changing your delivery address or check back later.
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.retryButton}
+                          onPress={handleRefresh}
+                          activeOpacity={0.7}
+                        >
+                          <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
+                          <Text style={styles.retryButtonText}>Retry</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : hasNetworkError ? (
+                      <View style={styles.networkErrorContainer}>
+                        <MaterialIcons name="cloud-off" size={64} color="rgba(0, 0, 0, 0.2)" />
+                        <Text style={styles.networkErrorTitle}>Network Error</Text>
+                        <Text style={styles.networkErrorMessage}>
+                          Unable to load restaurants. Please check your connection and try again.
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.retryButton}
+                          onPress={handleRefresh}
+                          activeOpacity={0.7}
+                        >
+                          <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
+                          <Text style={styles.retryButtonText}>Retry</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <FlatList
+                        data={restaurantData}
+                        renderItem={({ item: restaurant }) => (
+                          <View style={styles.restaurantCardWrapper}>
+                            <RestaurantCard
+                              restaurant={restaurant}
+                              layoutMode={restaurantCardStyle}
+                              onPress={() => {
+                                if (onNavigateToRestaurant) {
+                                  const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
+                                  onNavigateToRestaurant(restaurantId, restaurant.name);
+                                }
+                              }}
+                              onImageLoad={() => {
+                                setLoadedRestaurantImages(prev => new Set(prev).add(restaurant.id.toString()));
+                              }}
+                            />
+                          </View>
+                        )}
+                        keyExtractor={(restaurant) => restaurant.id.toString()}
+                        scrollEnabled={false}
+                        removeClippedSubviews={true}
+                        maxToRenderPerBatch={3}
+                        windowSize={3}
+                        initialNumToRender={2}
+                        updateCellsBatchingPeriod={100}
+                        getItemLayout={(data, index) => ({
+                          length: 166, // Approximate card height with margin
+                          offset: 166 * index,
+                          index,
+                        })}
+                      />
+                    )}
 
-                  {/* Loading More Indicator */}
-                  {isLoadingMore && (
-                    <View style={styles.loadingMoreContainer}>
-                      <ActivityIndicator size="large" color="#00B14F" />
-                      <Text style={styles.loadingMoreText}>Loading more restaurants...</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-            </>
-          )}
+                    {/* Loading More Indicator */}
+                    {isLoadingMore && (
+                      <View style={styles.loadingMoreContainer}>
+                        <ActivityIndicator size="large" color="#00B14F" />
+                        <Text style={styles.loadingMoreText}>Loading more restaurants...</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </>
+            )}
 
-          {/* Location Permission Modal */}
-          {/* COMMENTED OUT: Custom location permission modal disabled */}
-          {/* <Modal
+            {/* Location Permission Modal */}
+            {/* COMMENTED OUT: Custom location permission modal disabled */}
+            {/* <Modal
         visible={showLocationPopup}
         transparent={true}
         animationType="fade"
@@ -1936,84 +1977,85 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </BlurView>
       </Modal> */}
 
-          {/* VEG Mode Selection Modal */}
-          <Modal
-            visible={showVegModePopup}
-            transparent={true}
-            animationType="none"
-            statusBarTranslucent={true}
-            onRequestClose={handleCloseVegModal}
-          >
-            <View style={styles.vegModalOverlay}>
-              <Animated.View
-                style={[
-                  styles.vegModalContent,
-                  {
-                    transform: [{ translateY: vegModalSlideAnim }],
-                    opacity: vegModalOpacityAnim
-                  }
-                ]}
-              >
-                {/* Close Button */}
-                <TouchableOpacity
-                  style={styles.vegModalCloseButton}
-                  onPress={handleCloseVegModal}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            {/* VEG Mode Selection Modal */}
+            <Modal
+              visible={showVegModePopup}
+              transparent={true}
+              animationType="none"
+              statusBarTranslucent={true}
+              onRequestClose={handleCloseVegModal}
+            >
+              <View style={styles.vegModalOverlay}>
+                <Animated.View
+                  style={[
+                    styles.vegModalContent,
+                    {
+                      transform: [{ translateY: vegModalSlideAnim }],
+                      opacity: vegModalOpacityAnim
+                    }
+                  ]}
                 >
-                  <MaterialIcons name="close" size={24} color="#666666" />
-                </TouchableOpacity>
+                  {/* Close Button */}
+                  <TouchableOpacity
+                    style={styles.vegModalCloseButton}
+                    onPress={handleCloseVegModal}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <MaterialIcons name="close" size={24} color="#666666" />
+                  </TouchableOpacity>
 
-                {/* Title with Icon */}
-                <View style={styles.vegModalHeader}>
-                  <View style={styles.vegModalTitleContainer}>
-                    <Text style={styles.vegModalTitle}>I want to see veg{'\n'}choices from</Text>
+                  {/* Title with Icon */}
+                  <View style={styles.vegModalHeader}>
+                    <View style={styles.vegModalTitleContainer}>
+                      <Text style={styles.vegModalTitle}>I want to see veg{'\n'}choices from</Text>
+                    </View>
+                    <Text style={styles.vegModalIcon}>🥗</Text>
                   </View>
-                  <Text style={styles.vegModalIcon}>🥗</Text>
-                </View>
 
-                {/* Divider */}
-                <View style={styles.vegModalDivider} />
+                  {/* Divider */}
+                  <View style={styles.vegModalDivider} />
 
-                {/* All restaurants Option */}
-                <TouchableOpacity
-                  style={styles.vegOption}
-                  onPress={() => setTempVegSelection('all')}
-                  testID="veg-option-all"
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.vegOptionText}>All restaurants</Text>
-                  <View style={styles.radioButton}>
-                    {tempVegSelection === 'all' && <View style={styles.radioButtonSelected} />}
-                  </View>
-                </TouchableOpacity>
+                  {/* All restaurants Option */}
+                  <TouchableOpacity
+                    style={styles.vegOption}
+                    onPress={() => setTempVegSelection('all')}
+                    testID="veg-option-all"
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.vegOptionText}>All restaurants</Text>
+                    <View style={styles.radioButton}>
+                      {tempVegSelection === 'all' && <View style={styles.radioButtonSelected} />}
+                    </View>
+                  </TouchableOpacity>
 
-                {/* Pure Veg Option */}
-                <TouchableOpacity
-                  style={styles.vegOption}
-                  onPress={() => setTempVegSelection('pure')}
-                  testID="veg-option-pure"
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.vegOptionText}>Pure veg restaurants only</Text>
-                  <View style={styles.radioButton}>
-                    {tempVegSelection === 'pure' && <View style={styles.radioButtonSelected} />}
-                  </View>
-                </TouchableOpacity>
+                  {/* Pure Veg Option */}
+                  <TouchableOpacity
+                    style={styles.vegOption}
+                    onPress={() => setTempVegSelection('pure')}
+                    testID="veg-option-pure"
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.vegOptionText}>Pure veg restaurants only</Text>
+                    <View style={styles.radioButton}>
+                      {tempVegSelection === 'pure' && <View style={styles.radioButtonSelected} />}
+                    </View>
+                  </TouchableOpacity>
 
-                {/* Show Restaurants Button */}
-                <TouchableOpacity
-                  style={styles.vegApplyButton}
-                  onPress={handleApplyVegMode}
-                  testID="veg-apply-button"
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.vegApplyButtonText}>Show restaurants</Text>
-                </TouchableOpacity>
-              </Animated.View>
-            </View>
-          </Modal>
+                  {/* Show Restaurants Button */}
+                  <TouchableOpacity
+                    style={styles.vegApplyButton}
+                    onPress={handleApplyVegMode}
+                    testID="veg-apply-button"
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.vegApplyButtonText}>Show restaurants</Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              </View>
+            </Modal>
 
-          <AppFooter />
+            <AppFooter />
+          </View>
         </ScrollView>
       </SafeAreaView>
 
@@ -2056,15 +2098,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: '#00B14F',
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
-    backgroundColor: '#00B14F',
+    backgroundColor: 'transparent',
   },
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
   },
   // Header styles
   headerBackground: {
@@ -2078,6 +2120,7 @@ const styles = StyleSheet.create({
     width: '120%',
     height: Dimensions.get('window').height * 0.28, // Adjust height based on screen height for better aspect ratio
     resizeMode: 'cover',
+    backgroundColor: '#00B14F',
     left: 0,
     top: 0,
   },

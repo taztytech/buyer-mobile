@@ -198,10 +198,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
   }, [localOrders, dispatch]);
 
-  // Silent background refresh for first page
+  // Background refresh for first page - now shows indicator per user request
   const refreshOrders = useCallback(async () => {
     try {
       console.log('🔄 OrdersScreen: Starting background refresh...');
+      setIsLoading(true);
       isRequestInProgress.current = true;
       lastRequestedPage.current = 0;
 
@@ -239,6 +240,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       console.error('🔄 OrdersScreen: Background refresh failed:', error);
     } finally {
       isRequestInProgress.current = false;
+      setIsLoading(false);
     }
   }, []);
 
@@ -324,11 +326,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         console.log('🔄 OrdersScreen: Returning detected, time since last refresh:', timeSinceLastRefresh);
 
         if (timeSinceLastRefresh >= MIN_REFRESH_INTERVAL) {
-          // Refresh first page in background to get any new orders
-          // Don't show loading state - just silently update
+          // Refresh first page in background to get any new orders - now shows indicator
           const refreshOrders = async () => {
             try {
               console.log('🔄 OrdersScreen: Starting refresh...');
+              setIsRefreshing(true);
               isRequestInProgress.current = true;
               lastRequestedPage.current = 0; // Reset to allow fetching page 1
 
@@ -378,6 +380,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
               console.warn('🔄 OrdersScreen: Failed to refresh orders on return:', error);
             } finally {
               isRequestInProgress.current = false;
+              setIsRefreshing(false);
             }
           };
 
@@ -736,6 +739,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   const handleTrackOrder = (orderId: string) => {
     if (!orderId) return;
+    // Reset closing state immediately if we re-track before cleanup finished
+    setIsClosingTracking(false);
     setSelectedOrderIdForTracking(orderId);
     // Always fetch full order details; fetchTrackingOrderData will decide whether to open WebView or fallback
     fetchTrackingOrderData(orderId);
@@ -822,26 +827,28 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     setIsClosingTracking(true);
     setShowTrackingWebView(false);
 
-    // 3. Cleanup after animation finishes on iOS
-    // InteractionManager ensures we don't start heavy state changes until animations are done
+    // 3. Cleanup after animation finishes (standard modal dismiss is ~300ms)
     setTimeout(() => {
       InteractionManager.runAfterInteractions(() => {
-        setSelectedOrderIdForTracking(null);
-        setTrackingOrderData(null);
-        setSelectedTrackingUrl(null);
+        // Only clear data if we are still in "closing" state (haven't re-opened)
+        setIsClosingTracking((stillClosing) => {
+          if (stillClosing) {
+            setSelectedOrderIdForTracking(null);
+            setTrackingOrderData(null);
+            setSelectedTrackingUrl(null);
 
-        // Reset bottom sheet to open state when closing modal
-        bottomSheetHeight.setValue(OPEN_HEIGHT);
-        setIsBottomSheetOpen(true);
+            // Reset bottom sheet to open state when closing modal
+            bottomSheetHeight.setValue(OPEN_HEIGHT);
+            setIsBottomSheetOpen(true);
 
-        // Refresh orders silently without full loading screen
-        console.log('🔄 Tracking: Closing modal, refreshing orders silently...');
-        refreshOrders();
-
-        setIsClosingTracking(false); // Reset for next time
+            console.log('🔄 Tracking: Cleanup complete');
+            return false;
+          }
+          return stillClosing;
+        });
       });
-    }, 600);
-  }, [OPEN_HEIGHT, bottomSheetHeight, refreshOrders, isClosingTracking]);
+    }, 350);
+  }, [OPEN_HEIGHT, bottomSheetHeight, isClosingTracking]);
 
   // PanResponder for bottom sheet drag - on drag handle and top section when closed
   const panResponder = useRef(
@@ -1537,6 +1544,19 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         }}
         onDismiss={() => {
           handleCloseTrackingWebView();
+        }}
+        onShow={() => {
+          // Ensure WebView is fully unmounted and state is reset before showing again
+          if (isClosingTracking) {
+            setIsClosingTracking(false);
+            setSelectedTrackingUrl(null);
+            setTrackingOrderData(null);
+            setSelectedOrderIdForTracking(null);
+            setTimeout(() => {
+              bottomSheetHeight.setValue(OPEN_HEIGHT);
+              setIsBottomSheetOpen(true);
+            }, 100);
+          }
         }}
       >
         <View style={styles.webViewModalContainer}>
@@ -2335,8 +2355,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     overflow: 'hidden',
     // Enhanced shadow for better visibility
     shadowColor: '#000',

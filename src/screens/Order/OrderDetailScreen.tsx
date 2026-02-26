@@ -150,29 +150,44 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const _contextStatus = _contextOrderFromState?.status;
   const _contextUpdatedAt = _contextOrderFromState?.updated_at;
 
+  // Ref-based guard for closing tracking to prevent redundant calls and race conditions
+  const isClosingTrackingRef = useRef(false);
+
   const handleCloseTrackingWebView = useCallback(() => {
-    // 1. Guard against redundant calls
-    if (isClosingTracking) return;
+    // 1. Guard against redundant calls using both state and ref
+    if (isClosingTracking || isClosingTrackingRef.current) {
+      console.log('🛡️ Tracking: Close already in progress, ignoring call');
+      return;
+    }
+
+    console.log('🛡️ Tracking: Initiating close sequence');
 
     // 2. Mark as closing - this will immediately unmount the WebView from the tree
+    // We set the ref immediately to block any other close calls in the same frame
+    isClosingTrackingRef.current = true;
     setIsClosingTracking(true);
     setShowTrackingWebView(false);
 
-    // 3. Perform final cleanup after the modal animation has likely finished
-    // InteractionManager ensures the UI thread is free before we perform state changes
+    // 3. Perform final cleanup after the modal animation has definitely finished (~300-400ms on iOS)
+    // We use a safe margin of 800ms.
     setTimeout(() => {
-      InteractionManager.runAfterInteractions(() => {
-        setSelectedOrderIdForTracking(null);
-        setTrackingOrderData(null);
-        setIsBottomSheetOpen(true);
-        bottomSheetHeight.setValue(OPEN_HEIGHT);
+      console.log('🛡️ Tracking: Performing final cleanup after modal dismissal');
 
-        // Refresh details silently
-        fetchOrderDetails();
+      // Clear data and reset bottom sheet state
+      setSelectedOrderIdForTracking(null);
+      setTrackingOrderData(null);
 
-        setIsClosingTracking(false); // Reset for next time
-      });
-    }, 600);
+      // Reset bottom sheet to open state for next use
+      setIsBottomSheetOpen(true);
+      bottomSheetHeight.setValue(OPEN_HEIGHT);
+
+      // Refresh main order details silently to reflect any status changes that happened during tracking
+      fetchOrderDetails();
+
+      // Reset guards for next time
+      setIsClosingTracking(false);
+      isClosingTrackingRef.current = false;
+    }, 800);
   }, [OPEN_HEIGHT, bottomSheetHeight, fetchOrderDetails, isClosingTracking]);
 
   useEffect(() => {
@@ -1158,7 +1173,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                             !isTrackingEnabled && styles.disabledButton
                           ]}
                           onPress={() => {
-                            if (!isTrackingEnabled) return;
+                            if (!isTrackingEnabled || showTrackingWebView || isClosingTracking) return;
 
                             // Prefer web tracking when any tracking_url is available (top-level or in history)
                             const trackingUrl = getTrackingUrlFromOrderData(orderData);
@@ -1492,7 +1507,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               // CRITICAL FIX: If we are closing, DO NOT render the WebView.
               // This unmounts the WebView before the modal finishes its dismiss animation,
               // preventing native-side freezes associated with WebView/Modal lifecycle conflicts.
-              if (!effectiveTrackingUrl || isClosingTracking) return null;
+              if (!effectiveTrackingUrl || isClosingTracking || !showTrackingWebView) return null;
 
 
               return (
@@ -2510,14 +2525,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   webViewLoadingContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
+  },
+  webViewLoadingText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginTop: 12,
   },
   trackingDisabledMessage: {
     fontFamily: 'Poppins',

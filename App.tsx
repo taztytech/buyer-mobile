@@ -1981,7 +1981,7 @@ function AppContent() {
 
   return (
     <>
-      <SafeAreaProvider>
+      <>
         {/* Show Network Status Screen when offline on any screen */}
         {!isCheckingAuth && !isNetworkOnline ? (
           <NetworkStatusScreen selectedLocation={selectedLocation} />
@@ -2518,7 +2518,7 @@ function AppContent() {
           message={forcedUpdateMessage || "A new version of the app is available. Please update to continue using the app."}
           updateButtonText="Update Now"
         />
-      </SafeAreaProvider>
+      </>
     </>
   );
 }
@@ -2539,11 +2539,13 @@ export default function App() {
       <VegModeProvider>
         <CartProvider>
           <ConfirmationProvider>
-            <SnackbarProvider>
-              <OrdersProvider>
-                <AppContent />
-              </OrdersProvider>
-            </SnackbarProvider>
+            <SafeAreaProvider>
+              <SnackbarProvider>
+                <OrdersProvider>
+                  <AppContent />
+                </OrdersProvider>
+              </SnackbarProvider>
+            </SafeAreaProvider>
           </ConfirmationProvider>
         </CartProvider>
       </VegModeProvider>
