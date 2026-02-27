@@ -11,7 +11,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "in.tazty.buyer",
       "infoPlist": {
-        "NSUserNotificationsUsageDescription": "This app uses notifications to keep you updated on your orders and special offers."
+        "NSUserNotificationsUsageDescription": "This app uses notifications to keep you updated on your orders and special offers.",
+        "NSPhotoLibraryUsageDescription": "This app requires access to your photo library to let you upload a profile picture and share images for order support.",
+        "NSCameraUsageDescription": "This app requires access to your camera to let you take a profile picture and photos for order support.",
+        "NSMicrophoneUsageDescription": "This app requires access to your microphone if you choose to record a video for order support."
       },
       "googleServicesFile": "./ios/GoogleService-Info.plist"
     },
