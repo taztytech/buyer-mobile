@@ -860,8 +860,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               }
             ] : sortedCategories;
 
-            setCategoryData(categoriesWithViewAll);
-            onCategoriesLoaded?.(categoriesWithViewAll);
+            // Deduplicate categories by ID
+            const uniqueCategories = Array.from(
+              new Map(categoriesWithViewAll.map(item => [item.id.toString(), item])).values()
+            );
+
+            setCategoryData(uniqueCategories);
+            onCategoriesLoaded?.(uniqueCategories);
           }
         } else {
           setCategoryData([]);
@@ -916,7 +921,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             };
           });
 
-          setRestaurantData(transformedRestaurants);
+          // Deduplicate restaurants by ID
+          const uniqueRestaurants = Array.from(
+            new Map(transformedRestaurants.map(item => [item.id.toString(), item])).values()
+          );
+
+          setRestaurantData(uniqueRestaurants);
 
           // Handle pagination metadata
           if (pagination) {
@@ -1026,8 +1036,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             };
           });
 
-          // Append new restaurants to existing list
-          setRestaurantData(prevData => [...prevData, ...transformedRestaurants]);
+          // Append new restaurants to existing list with deduplication
+          setRestaurantData(prevData => {
+            const combined = [...prevData, ...transformedRestaurants];
+            return Array.from(
+              new Map(combined.map(item => [item.id.toString(), item])).values()
+            );
+          });
           setCurrentPage(nextPage);
 
           // Update pagination state
