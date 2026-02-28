@@ -1551,6 +1551,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         <ScrollView
           ref={scrollViewRef}
           style={styles.scrollContainer}
+          contentContainerStyle={{
+            paddingBottom: totalCartItems > 0 ? 90 + insets.bottom : 0
+          }}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
@@ -1579,7 +1582,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               style={styles.headerImage}
               resizeMode="cover"
             >
-              <View style={styles.headerOverlay}>
+              <View style={[styles.headerOverlay, { paddingTop: insets.top + 10 }]}>
                 {/* Back Button */}
                 <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
                   <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
@@ -1653,7 +1656,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 backgroundColor="#E8E8E8"
                 style={{ position: 'absolute', top: 0, left: 0 }}
               />
-              <View style={styles.headerOverlay}>
+              <View style={[styles.headerOverlay, { paddingTop: insets.top + 10 }]}>
                 {/* Back Button */}
                 <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
                   <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
@@ -1765,12 +1768,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           </SafeAreaView>
 
           {/* Menu Sections */}
-          <View style={[
-            styles.menuContent,
-            totalCartItems > 0 && {
-              paddingBottom: 120 + Math.max(insets.bottom, 0)
-            }
-          ]}>
+          <View style={styles.menuContent}>
             {isLoading ? (
               // Show shimmer loading cards while data is loading
               <View style={styles.loadingMenuContainer}>
@@ -1878,15 +1876,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     const nextAvailableTime = getNextAvailableTime(item.timings);
 
                     // Format delivery date for display
-                    const formatDeliveryDate = (dateString: string) => {
-                      try {
-                        const date = new Date(dateString);
-                        const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-                        return date.toLocaleDateString('en-US', options);
-                      } catch {
-                        return '';
-                      }
-                    };
 
                     return (
                       <View key={item.id}>
@@ -2165,7 +2154,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
         {/* Bottom Cart Bar */}
         {totalCartItems > 0 && (
-          <View style={[styles.cartBar, { bottom: 0, paddingBottom: insets.bottom }]}>
+          <View style={[styles.cartBar, { bottom: 0, paddingBottom: insets.bottom + 10 }]}>
             <TouchableOpacity
               style={styles.cartButton}
               onPress={() => {
@@ -2446,7 +2435,7 @@ const styles = StyleSheet.create({
   },
   headerImage: {
     width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT * 0.3,
+    height: SCREEN_HEIGHT * 0.32,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
     overflow: 'hidden',
@@ -2455,7 +2444,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
     paddingHorizontal: 20,
-    paddingTop: 50,
     paddingBottom: 20,
     justifyContent: 'space-between',
   },
@@ -2468,7 +2456,6 @@ const styles = StyleSheet.create({
     borderColor: '#E4E4E4',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10,
   },
   restaurantCard: {
     backgroundColor: '#FFFFFF',
@@ -2493,7 +2480,7 @@ const styles = StyleSheet.create({
   restaurantNameWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   restaurantName: {
     fontFamily: 'Poppins_700Bold',

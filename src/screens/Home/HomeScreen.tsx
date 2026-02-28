@@ -1409,6 +1409,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <ScrollView
           ref={scrollViewRef}
           style={styles.container}
+          contentContainerStyle={{
+            paddingBottom: totalCartItems > 0 ? 100 + insets.bottom : 0
+          }}
           stickyHeaderIndices={[3]}
           testID="home-screen"
           alwaysBounceVertical={true}
@@ -1839,12 +1842,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
                 {/* Restaurant List - Only show if there's data, still loading, or error states */}
                 {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
-                  <View style={[
-                    styles.restaurantListContainer,
-                    totalCartItems > 0 && {
-                      paddingBottom: 160 + Math.max(insets.bottom, 0)
-                    }
-                  ]}>
+                  <View style={styles.restaurantListContainer}>
                     {showRestaurantShimmer ? (
                       <>
                         {/* Shimmer for 2 restaurant cards */}

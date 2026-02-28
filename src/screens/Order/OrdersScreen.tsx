@@ -179,13 +179,21 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       }
     }
 
-    // Add any new context orders that aren't in local orders
+    // Add any new context orders that aren't in local orders at the beginning (newest first)
+    const newContextOrders: OrderListItem[] = [];
     contextOrderMap.forEach((order) => {
-      merged.push(order);
+      newContextOrders.push(order);
     });
 
-    return merged;
-  }, [contextOrders, localOrders, state.byId]);
+    // Sort new orders by id or created_at if possible to ensure newest is at top
+    newContextOrders.sort((a, b) => {
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    return [...newContextOrders, ...merged];
+  }, [localOrders, contextOrders, state.byId]);
 
   // Sync localOrders to context store after state updates
   useEffect(() => {
@@ -301,104 +309,21 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       // Reset the restore flag when screen becomes visible with persisted data
       hasRestoredScroll.current = false;
 
-      // Always try to refresh when screen becomes visible (if enough time has passed)
-      // This ensures we get the latest data even if isReturning detection fails
-      if (!isRequestInProgress.current) {
-        const now = Date.now();
-        const timeSinceLastRefresh = now - (lastRefreshTimeRef.current || 0);
-        const MIN_REFRESH_INTERVAL = 1000; // 1 second
+      // If returning from another screen, just ensure the data is displayed
+      if (hasPersistedData && persistedOrders.length > 0) {
+        // Sync context from persisted orders
+        dispatch({
+          type: 'BULK_SET_ORDERS',
+          payload: persistedOrders,
+        });
 
-        // Refresh if enough time has passed (regardless of isReturning)
-        if (timeSinceLastRefresh >= MIN_REFRESH_INTERVAL) {
-          const refreshTimer = setTimeout(() => {
-            refreshOrders();
-          }, 500);
-
-          return () => clearTimeout(refreshTimer);
-        }
-      }
-
-      // If returning from another screen (e.g., Order Details, Rate Order), refresh orders to get new ones
-      // Only refresh if it's been at least 1 second since last refresh to avoid excessive API calls
-      if (isReturning && !isRequestInProgress.current) {
-        const now = Date.now();
-        const timeSinceLastRefresh = now - (lastRefreshTimeRef.current || 0);
-        const MIN_REFRESH_INTERVAL = 1000; // 1 second (reduced for faster updates after rating)
-
-        console.log('🔄 OrdersScreen: Returning detected, time since last refresh:', timeSinceLastRefresh);
-
-        if (timeSinceLastRefresh >= MIN_REFRESH_INTERVAL) {
-          // Refresh first page in background to get any new orders - now shows indicator
-          const refreshOrders = async () => {
-            try {
-              console.log('🔄 OrdersScreen: Starting refresh...');
-              setIsRefreshing(true);
-              isRequestInProgress.current = true;
-              lastRequestedPage.current = 0; // Reset to allow fetching page 1
-
-              const response = await ordersService.getOrders(5, 1);
-
-              if (response.success && response.data) {
-                // Handle different response structures (same as fetchOrders)
-                const responseData = response.data as any;
-
-                const ordersArray =
-                  responseData.data ||
-                  responseData.orders ||
-                  (Array.isArray(responseData) ? responseData : []);
-
-                const total =
-                  responseData.total ||
-                  responseData.meta?.total ||
-                  responseData.data?.total ||
-                  responseData.pagination?.total ||
-                  responseData.metadata?.total ||
-                  ordersArray.length;
-
-                console.log('🔄 OrdersScreen: Refresh successful, orders count:', ordersArray.length);
-
-                // Update persisted data
-                persistedOrders = ordersArray;
-                persistedCurrentPage = 1;
-                persistedTotalOrders = total;
-                hasPersistedData = true;
-
-                // Update local state - this will trigger re-render
-                setLocalOrders([...ordersArray]); // Use spread to ensure new array reference
-                setCurrentPage(1);
-                setTotalOrders(total);
-
-                // Update context with fresh orders
-                dispatch({
-                  type: 'BULK_SET_ORDERS',
-                  payload: ordersArray,
-                });
-
-                lastRefreshTimeRef.current = now;
-              } else {
-                console.warn('🔄 OrdersScreen: Refresh failed:', response.error);
-              }
-            } catch (error) {
-              console.warn('🔄 OrdersScreen: Failed to refresh orders on return:', error);
-            } finally {
-              isRequestInProgress.current = false;
-              setIsRefreshing(false);
-            }
-          };
-
-          // Delay refresh slightly to ensure smooth transition
-          const refreshTimer = setTimeout(() => {
-            refreshOrders();
-          }, 300);
-
-          return () => clearTimeout(refreshTimer);
-        } else {
-          console.log('🔄 OrdersScreen: Refresh skipped, too soon since last refresh');
+        if (localOrders.length === 0 || localOrders.length !== persistedOrders.length) {
+          setLocalOrders(persistedOrders);
         }
       }
     }
     return undefined;
-  }, [visible, dispatch, localOrders.length, currentPage, totalOrders, refreshOrders]);
+  }, [visible, dispatch, localOrders.length]);
 
   // Separate effect to restore scroll position after orders are rendered
   useEffect(() => {
@@ -430,11 +355,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         highlightedOrderRef.current = highlightOrderId;
         // Scroll to order after a short delay to ensure layout is complete
         setTimeout(() => {
+          // Improve scroll calculation: if it's the first few items, scroll to top
+          // Otherwise use a slightly more generous offset
+          const scrollY = orderIndex === 0 ? 0 : Math.max(0, orderIndex * 240 - 50);
           scrollViewRef.current?.scrollTo({
-            y: orderIndex * 250, // Approximate height per card
+            y: scrollY,
             animated: true,
           });
-        }, 500);
+        }, 600);
       }
     }
   }, [highlightOrderId, orders]);
@@ -1222,8 +1150,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     const statusConfig = mapOrderStatusToUI(statusToMap);
 
     // Check if this order should be highlighted
-    // Check if this order should be highlighted (by id or order_number)
-    const isHighlighted = highlightOrderId === order.id.toString() || highlightOrderId === order.order_number;
+    // Priority: If it matches by order_number, it's very likely the target from a notification
+    // If highlightOrderId matches an id but we also have an order_number match elsewhere, 
+    // we should be careful. But for UI state, we'll highlight any match.
+    const isHighlighted = highlightOrderId ? (
+      order.order_number === highlightOrderId || order.id.toString() === highlightOrderId
+    ) : false;
 
     // Show order number from API response (e.g., "ORD-20251208-084")
     // The API returns "order_number" field, so we use it directly
