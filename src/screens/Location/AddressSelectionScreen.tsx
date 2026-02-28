@@ -12,6 +12,7 @@ import {
   Platform,
   Alert,
   Linking,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -489,89 +490,92 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         </View>
       </SafeAreaView>
 
-      <View style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <View style={styles.container}>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Search Bar */}
-          <View style={styles.searchContainer}>
-            <MaterialIcons name="search" size={24} color="#00B14F" />
-            <TextInput
-              style={styles.searchInput}
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholder="Search for area, street name..."
-              placeholderTextColor="#999"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus={false}
-              returnKeyType="search"
-              onSubmitEditing={handleSearchSubmit}
-            />
-          </View>
+          <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+              <MaterialIcons name="search" size={24} color="#00B14F" />
+              <TextInput autoCorrect={false}
+                style={styles.searchInput}
+                value={searchText}
+                onChangeText={setSearchText}
+                placeholder="Search for area, street name..."
+                placeholderTextColor="#999"
+                autoCapitalize="none"
+                autoFocus={false}
+                returnKeyType="search"
+                onSubmitEditing={handleSearchSubmit}
+              />
+            </View>
 
-          {/* Main Options Group */}
-          <View style={styles.optionsGroup}>
-            {/* Add Address */}
-            <TouchableOpacity
-              style={[
-                styles.optionItem,
-                isAddingAddress && { opacity: 0.7 },
-              ]}
-              onPress={handleAddAddressPress}
-              activeOpacity={0.7}
-              disabled={isAddingAddress}
-            >
-              <View style={styles.optionLeft}>
-                <View style={styles.optionIconContainer}>
-                  <MaterialIcons name="add" size={24} color="#00B14F" />
+            {/* Main Options Group */}
+            <View style={styles.optionsGroup}>
+              {/* Add Address */}
+              <TouchableOpacity
+                style={[
+                  styles.optionItem,
+                  isAddingAddress && { opacity: 0.7 },
+                ]}
+                onPress={handleAddAddressPress}
+                activeOpacity={0.7}
+                disabled={isAddingAddress}
+              >
+                <View style={styles.optionLeft}>
+                  <View style={styles.optionIconContainer}>
+                    <MaterialIcons name="add" size={24} color="#00B14F" />
+                  </View>
+                  <View>
+                    <Text style={styles.optionText}>
+                      {isAddingAddress ? 'Getting location…' : 'Add address'}
+                    </Text>
+                    <Text style={styles.optionSubtext}>
+                      {isAddingAddress ? 'Please wait a moment' : currentLocationName}
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={styles.optionText}>
-                    {isAddingAddress ? 'Getting location…' : 'Add address'}
-                  </Text>
-                  <Text style={styles.optionSubtext}>
-                    {isAddingAddress ? 'Please wait a moment' : currentLocationName}
-                  </Text>
+                {isAddingAddress ? (
+                  <ActivityIndicator size="small" color="#00B14F" />
+                ) : (
+                  <MaterialIcons name="chevron-right" size={24} color="#999" />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Saved Addresses */}
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#00B14F" />
+                <Text style={styles.loadingText}>Loading addresses...</Text>
+              </View>
+            ) : savedAddresses.length > 0 ? (
+              <View style={styles.recentSection}>
+                <Text style={styles.recentTitle}>SAVED ADDRESSES</Text>
+
+                <View style={styles.recentList}>
+                  <FlatList
+                    data={savedAddresses}
+                    keyExtractor={(item, index) => `${item.id}-${index}`}
+                    renderItem={renderAddressItem}
+                    scrollEnabled={false}
+                    ItemSeparatorComponent={() => <View style={styles.divider} />}
+                  />
                 </View>
               </View>
-              {isAddingAddress ? (
-                <ActivityIndicator size="small" color="#00B14F" />
-              ) : (
-                <MaterialIcons name="chevron-right" size={24} color="#999" />
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Saved Addresses */}
-          {isLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#00B14F" />
-              <Text style={styles.loadingText}>Loading addresses...</Text>
-            </View>
-          ) : savedAddresses.length > 0 ? (
-            <View style={styles.recentSection}>
-              <Text style={styles.recentTitle}>SAVED ADDRESSES</Text>
-
-              <View style={styles.recentList}>
-                <FlatList
-                  data={savedAddresses}
-                  keyExtractor={(item, index) => `${item.id}-${index}`}
-                  renderItem={renderAddressItem}
-                  scrollEnabled={false}
-                  ItemSeparatorComponent={() => <View style={styles.divider} />}
-                />
+            ) : (
+              <View style={styles.emptyContainer}>
+                <MaterialIcons name="location-off" size={48} color="#CCC" />
+                <Text style={styles.emptyText}>No saved addresses yet</Text>
+                <Text style={styles.emptySubtext}>Add a new address to get started</Text>
               </View>
-            </View>
-          ) : (
-            <View style={styles.emptyContainer}>
-              <MaterialIcons name="location-off" size={48} color="#CCC" />
-              <Text style={styles.emptyText}>No saved addresses yet</Text>
-              <Text style={styles.emptySubtext}>Add a new address to get started</Text>
-            </View>
-          )}
-        </ScrollView>
-
-      </View>
+            )}
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 };

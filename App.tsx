@@ -93,6 +93,7 @@ function AppContent() {
   const [locationSelectionCameFrom, setLocationSelectionCameFrom] = React.useState<'home' | 'addressSelection' | 'myAddresses'>('home');
   const [orderTrackingCameFrom, setOrderTrackingCameFrom] = React.useState<'orders' | 'checkout' | 'orderDetail'>('orders');
   const [ordersCameFrom, setOrdersCameFrom] = React.useState<'profile' | 'orderDetail'>('profile');
+  const [orderDetailCameFrom, setOrderDetailCameFrom] = React.useState<'orders' | 'checkout'>('orders');
   const [editingAddress, setEditingAddress] = React.useState<any>(null);
   const [helpOrderData, setHelpOrderData] = React.useState<OrderListItem | null>(null);
   const [_isRegistrationFlow, setIsRegistrationFlow] = React.useState(false);
@@ -1127,6 +1128,7 @@ function AppContent() {
     orderDetailScreenSlide.setValue(0);
 
     // Close checkout screen with animation first, then navigate to order detail
+    setOrderDetailCameFrom('checkout');
     Animated.timing(checkoutScreenSlide, {
       toValue: SCREEN_WIDTH,
       duration: 200,
@@ -1248,6 +1250,7 @@ function AppContent() {
 
   // Order Detail Navigation
   const handleNavigateToOrderDetail = (orderId: string) => {
+    setOrderDetailCameFrom('orders');
     setSelectedOrderId(orderId);
     setCurrentScreen('orderDetail');
     // Reset order detail screen position to show it
@@ -1258,7 +1261,11 @@ function AppContent() {
     // Track that we're going to orders from orderDetail
     // If we came from checkout (orderDetail was accessed via handleOrderSuccessFromCheckout),
     // we need to track this so orders can go back to home
-    setOrdersCameFrom('orderDetail');
+    if (orderDetailCameFrom === 'checkout') {
+      setOrdersCameFrom('orderDetail');
+    } else {
+      setOrdersCameFrom('profile');
+    }
 
     // Animate order detail screen out
     Animated.timing(orderDetailScreenSlide, {

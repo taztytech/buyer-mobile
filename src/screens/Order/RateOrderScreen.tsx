@@ -143,12 +143,12 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
       console.log('orderItems', orderItems);
       console.log('foodRating:', foodRating);
       console.log('itemRatings:', itemRatings);
-      
+
       // Prepare food ratings array with comments only if they exist
       const food_ratings = orderItems.map((item) => {
         const itemId = item.item_id || 0;
         const itemRating = itemRatings[itemId];
-        
+
         // For single item: use foodRating if itemRatings is empty
         // For multiple items: use itemRatings[itemId]?.rating, fallback to foodRating
         let rating = itemRating?.rating || 0;
@@ -156,7 +156,7 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
           // If no item-specific rating but foodRating is set, use foodRating
           rating = foodRating;
         }
-        
+
         const foodItem: any = {
           item_id: itemId,
           rating: rating,
@@ -436,9 +436,9 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
 
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardAvoidingView}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 76 : 0}
         >
           <ScrollView
             style={styles.scrollView}
@@ -446,42 +446,43 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-          {/* Overall Rating */}
-          <View style={styles.overallRatingSection}>
-            <Text style={styles.overallRatingTitle}>Overall Rating</Text>
-            {renderStars(overallRating, setOverallRating, true)}
-          </View>
-
-          {/* Rate Food */}
-          <View style={styles.ratingSectionContainer}>
-            <View style={styles.ratingSection}>
-              <Text style={styles.ratingLabel}>Rate Food</Text>
-              {renderStars(foodRating, setFoodRating)}
+            {/* Overall Rating */}
+            <View style={styles.overallRatingSection}>
+              <Text style={styles.overallRatingTitle}>Overall Rating</Text>
+              {renderStars(overallRating, setOverallRating, true)}
             </View>
-            <TextInput autoCorrect={false}
-              style={styles.commentInput}
-              value={foodComment}
-              onChangeText={setFoodComment}
-              placeholder="Type Here..."
-              placeholderTextColor="rgba(0, 0, 0, 0.3)"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-          </View>
 
-          {/* Rate Restaurant */}
-          <View style={[styles.ratingSection, styles.rateRestaurantSection]}>
-            <Text style={styles.ratingLabel}>Rate Restaurant</Text>
-            {renderStars(restaurantRating, setRestaurantRating)}
-          </View>
+            {/* Rate Food */}
+            <View style={styles.ratingSectionContainer}>
+              <View style={styles.ratingSection}>
+                <Text style={styles.ratingLabel}>Rate Food</Text>
+                {renderStars(foodRating, setFoodRating)}
+              </View>
+              <TextInput autoCorrect={false}
+                style={styles.commentInput}
+                value={foodComment}
+                onChangeText={setFoodComment}
+                placeholder="Type Here..."
+                placeholderTextColor="rgba(0, 0, 0, 0.3)"
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
 
-          {/* Rate Delivery Partner */}
-          <View style={[styles.ratingSection, styles.rateDeliveryPartnerSection]}>
-            <Text style={styles.ratingLabel}>Rate Delivery Partner</Text>
-            {renderStars(deliveryPartnerRating, setDeliveryPartnerRating)}
-          </View>
-        </ScrollView>
+            {/* Rate Restaurant */}
+            <View style={[styles.ratingSection, styles.rateRestaurantSection]}>
+              <Text style={styles.ratingLabel}>Rate Restaurant</Text>
+              {renderStars(restaurantRating, setRestaurantRating)}
+            </View>
+
+            {/* Rate Delivery Partner */}
+            <View style={[styles.ratingSection, styles.rateDeliveryPartnerSection]}>
+              <Text style={styles.ratingLabel}>Rate Delivery Partner</Text>
+              {renderStars(deliveryPartnerRating, setDeliveryPartnerRating)}
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
 
         {/* Submit Button - Fixed at bottom */}
         <View style={styles.bottomButtonContainer}>
@@ -504,7 +505,6 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
             )}
           </TouchableOpacity>
         </View>
-        </KeyboardAvoidingView>
       </SafeAreaView>
 
       {/* Food Rating Modal */}
@@ -535,7 +535,7 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
                   const itemName = item.name || item.item_name || 'Unknown Item';
                   const itemRating = itemRatings[itemId]?.rating || 0;
                   const isLastItem = index === orderItems.length - 1;
-                  
+
                   return (
                     <View key={itemId}>
                       <View style={styles.foodItemCard}>

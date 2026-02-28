@@ -69,7 +69,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [selectedTag, setSelectedTag] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [houseNoError, setHouseNoError] = useState('');
   const [buildingError, setBuildingError] = useState('');
   const [localityError, setLocalityError] = useState('');
@@ -286,16 +285,14 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
 
     const keyboardShowListener = Keyboard.addListener(
       showEvent,
-      (e) => {
+      () => {
         setKeyboardVisible(true);
-        setKeyboardHeight(e.endCoordinates.height);
       }
     );
     const keyboardHideListener = Keyboard.addListener(
       hideEvent,
       () => {
         setKeyboardVisible(false);
-        setKeyboardHeight(0);
       }
     );
 
@@ -496,43 +493,41 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
       statusBarTranslucent={true}
       onRequestClose={handleClose}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      <TouchableOpacity
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={handleClose}
       >
-        <TouchableOpacity
-          style={styles.overlay}
-          activeOpacity={1}
-          onPress={handleClose}
-        >
-          <Snackbar
-            visible={localToastVisible}
-            message={localToastMessage}
-            type="error"
-            onDismiss={() => setLocalToastVisible(false)}
-          />
+        <Snackbar
+          visible={localToastVisible}
+          message={localToastMessage}
+          type="error"
+          onDismiss={() => setLocalToastVisible(false)}
+        />
 
-          <View style={styles.bottomSheetWrapper}>
-            <TouchableOpacity
-              activeOpacity={1}
-              onPress={(e) => e.stopPropagation()}
-              style={{ flex: 1 }}
+        <View style={styles.bottomSheetWrapper}>
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Animated.View
+              style={[
+                styles.bottomSheet,
+                {
+                  transform: [{ translateY: slideAnim }],
+                }
+              ]}
             >
-              <Animated.View
-                style={[
-                  styles.bottomSheet,
-                  {
-                    transform: [{ translateY: slideAnim }],
-                  }
-                ]}
+              <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={{ flex: 1 }}
               >
                 <ScrollView
                   ref={scrollViewRef}
                   style={styles.scrollView}
                   contentContainerStyle={[
                     styles.scrollContent,
-                    keyboardVisible && styles.scrollContentWithKeyboard
+                    keyboardVisible && { paddingBottom: 60 }
                   ]}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
@@ -783,30 +778,30 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                     </View>
                   </View>
                 </ScrollView>
+              </KeyboardAvoidingView>
 
-                {/* Continue Button */}
-                <View style={styles.footer}>
-                  <TouchableOpacity
-                    style={[styles.continueButton, loading && styles.continueButtonDisabled]}
-                    onPress={handleContinue}
-                    activeOpacity={0.8}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <Text style={styles.continueButtonText}>{editMode ? 'Update' : 'Continue'}</Text>
-                        <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </Animated.View>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </KeyboardAvoidingView>
+              {/* Continue Button */}
+              <View style={styles.footer}>
+                <TouchableOpacity
+                  style={[styles.continueButton, loading && styles.continueButtonDisabled]}
+                  onPress={handleContinue}
+                  activeOpacity={0.8}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Text style={styles.continueButtonText}>{editMode ? 'Update' : 'Continue'}</Text>
+                      <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
     </Modal>
   );
 };
@@ -818,11 +813,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   bottomSheetWrapper: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    maxHeight: '85%', // Increased fixed height for smoother transitions
+    width: '100%',
+    maxHeight: '85%',
   },
   bottomSheet: {
     backgroundColor: '#FFFFFF',
@@ -834,7 +826,6 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 10,
     paddingTop: 12,
-    flex: 1,
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -860,7 +851,7 @@ const styles = StyleSheet.create({
   locationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 6,
     height: 30,
   },
   backButton: {
@@ -868,7 +859,6 @@ const styles = StyleSheet.create({
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: -4,
   },
   locationInfo: {
     flex: 1,
