@@ -60,7 +60,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
       <View style={styles.searchBar}>
         <MaterialIcons name="search" size={20} color="#00B14F" />
-        <TextInput
+        <TextInput autoCorrect={false}
           style={styles.searchInput}
           placeholder={placeholder}
           placeholderTextColor="#999999"

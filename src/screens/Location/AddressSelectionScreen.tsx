@@ -12,6 +12,7 @@ import {
   Platform,
   Alert,
   Linking,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -176,10 +177,10 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
       if (response.success) {
         // Refresh addresses to get updated list
         await fetchAddresses();
-        
+
         // Update the address object to reflect the change
         const updatedAddress = { ...address, isDefault: true };
-        
+
         // Proceed with address selection
         if (onSelectAddress) {
           onSelectAddress(updatedAddress);
@@ -190,7 +191,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
           message: response.error || 'Failed to update address. Please try again.',
           confirmText: 'OK',
           cancelText: 'Close',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
       }
     } catch (error: any) {
@@ -199,7 +200,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         message: error.message || 'An unexpected error occurred. Please try again.',
         confirmText: 'OK',
         cancelText: 'Close',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
     } finally {
       setUpdatingAddressId(null);
@@ -208,7 +209,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
 
   const renderAddressItem = ({ item }: { item: SavedAddress }) => {
     const isUpdating = updatingAddressId === item.id;
-    
+
     return (
       <TouchableOpacity
         style={styles.addressItem}
@@ -216,27 +217,27 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         activeOpacity={0.7}
         disabled={isUpdating}
       >
-      <View style={styles.addressIconContainer}>
-        <MaterialIcons name={getIconForType(item.type)} size={24} color="#00B14F" />
-      </View>
-      <View style={styles.addressInfo}>
-        <View style={styles.addressNameRow}>
-          <Text style={styles.addressName}>{formatAddressType(item.type)}</Text>
-          {item.isDefault && (
-            <View style={styles.defaultBadge}>
-              <Text style={styles.defaultBadgeText}>Default</Text>
-            </View>
-          )}
-          {isUpdating && (
-            <ActivityIndicator size="small" color="#00B14F" style={styles.updatingIndicator} />
-          )}
+        <View style={styles.addressIconContainer}>
+          <MaterialIcons name={getIconForType(item.type)} size={24} color="#00B14F" />
         </View>
-        <Text style={styles.addressCity}>{item.address}</Text>
-      </View>
-      {item.distance && (
-        <Text style={styles.addressDistance}>{item.distance}</Text>
-      )}
-    </TouchableOpacity>
+        <View style={styles.addressInfo}>
+          <View style={styles.addressNameRow}>
+            <Text style={styles.addressName}>{formatAddressType(item.type)}</Text>
+            {item.isDefault && (
+              <View style={styles.defaultBadge}>
+                <Text style={styles.defaultBadgeText}>Default</Text>
+              </View>
+            )}
+            {isUpdating && (
+              <ActivityIndicator size="small" color="#00B14F" style={styles.updatingIndicator} />
+            )}
+          </View>
+          <Text style={styles.addressCity}>{item.address}</Text>
+        </View>
+        {item.distance && (
+          <Text style={styles.addressDistance}>{item.distance}</Text>
+        )}
+      </TouchableOpacity>
     );
   };
 
@@ -300,7 +301,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         message: `You can save up to ${MAX_ADDRESSES} delivery addresses. Please delete one before adding a new address.`,
         confirmText: 'OK',
         cancelText: '',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       setIsAddingAddress(false);
       return;
@@ -310,7 +311,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
     // This MUST be done before requesting permission to accurately detect first launch
     let initialStatus: string = 'undetermined';
     let isFirstLaunch = true; // Default to true to be safe
-    
+
     try {
       const initialPermission = await Location.getForegroundPermissionsAsync();
       initialStatus = initialPermission.status || 'undetermined';
@@ -358,7 +359,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
           Alert.alert(
             'Enable Location Access',
             'To add an address using your current location, please enable location access for Tazty in your device settings.\n\n' +
-              getLocationSettingsGuide(),
+            getLocationSettingsGuide(),
             [
               { text: 'Not now', style: 'cancel' },
               {
@@ -378,7 +379,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
           Alert.alert(
             'Location Permission Required',
             'To add an address using your current location, please allow Tazty to access your location. Turn on device location and choose "While using this app" or "Allow all the time" when prompted.\n\n' +
-              getLocationSettingsGuide()
+            getLocationSettingsGuide()
           );
         }
         return; // Don't navigate if permission is not granted
@@ -390,13 +391,13 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
       try {
         // Check if location services are enabled
         const isLocationEnabled = await Location.hasServicesEnabledAsync();
-        
+
         if (!isLocationEnabled) {
           // Permission granted but location services are disabled - show alert
           Alert.alert(
             'Turn on Location',
             'Location permission is granted, but location services are turned off. Please turn on location services in your device settings to add an address using your current location.\n\n' +
-              getLocationSettingsGuide(),
+            getLocationSettingsGuide(),
             [
               { text: 'Cancel', style: 'cancel' },
               {
@@ -439,7 +440,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
     } catch (error) {
       // ANY error - check if this might be first launch and navigate accordingly
       console.error('Error in permission check:', error);
-      
+
       // If we couldn't determine first launch status, assume it is and navigate
       // This ensures first launch users can always access the map
       if (isFirstLaunch) {
@@ -489,89 +490,92 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         </View>
       </SafeAreaView>
 
-      <View style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <View style={styles.container}>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Search Bar */}
-          <View style={styles.searchContainer}>
-            <MaterialIcons name="search" size={24} color="#00B14F" />
-            <TextInput
-              style={styles.searchInput}
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholder="Search for area, street name..."
-              placeholderTextColor="#999"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus={false}
-              returnKeyType="search"
-              onSubmitEditing={handleSearchSubmit}
-            />
-          </View>
+          <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+              <MaterialIcons name="search" size={24} color="#00B14F" />
+              <TextInput autoCorrect={false}
+                style={styles.searchInput}
+                value={searchText}
+                onChangeText={setSearchText}
+                placeholder="Search for area, street name..."
+                placeholderTextColor="#999"
+                autoCapitalize="none"
+                autoFocus={false}
+                returnKeyType="search"
+                onSubmitEditing={handleSearchSubmit}
+              />
+            </View>
 
-          {/* Main Options Group */}
-          <View style={styles.optionsGroup}>
-            {/* Add Address */}
-            <TouchableOpacity
-              style={[
-                styles.optionItem,
-                isAddingAddress && { opacity: 0.7 },
-              ]}
-              onPress={handleAddAddressPress}
-              activeOpacity={0.7}
-              disabled={isAddingAddress}
-            >
-              <View style={styles.optionLeft}>
-                <View style={styles.optionIconContainer}>
-                  <MaterialIcons name="add" size={24} color="#00B14F" />
+            {/* Main Options Group */}
+            <View style={styles.optionsGroup}>
+              {/* Add Address */}
+              <TouchableOpacity
+                style={[
+                  styles.optionItem,
+                  isAddingAddress && { opacity: 0.7 },
+                ]}
+                onPress={handleAddAddressPress}
+                activeOpacity={0.7}
+                disabled={isAddingAddress}
+              >
+                <View style={styles.optionLeft}>
+                  <View style={styles.optionIconContainer}>
+                    <MaterialIcons name="add" size={24} color="#00B14F" />
+                  </View>
+                  <View>
+                    <Text style={styles.optionText}>
+                      {isAddingAddress ? 'Getting location…' : 'Add address'}
+                    </Text>
+                    <Text style={styles.optionSubtext}>
+                      {isAddingAddress ? 'Please wait a moment' : currentLocationName}
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={styles.optionText}>
-                    {isAddingAddress ? 'Getting location…' : 'Add address'}
-                  </Text>
-                  <Text style={styles.optionSubtext}>
-                    {isAddingAddress ? 'Please wait a moment' : currentLocationName}
-                  </Text>
+                {isAddingAddress ? (
+                  <ActivityIndicator size="small" color="#00B14F" />
+                ) : (
+                  <MaterialIcons name="chevron-right" size={24} color="#999" />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Saved Addresses */}
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#00B14F" />
+                <Text style={styles.loadingText}>Loading addresses...</Text>
+              </View>
+            ) : savedAddresses.length > 0 ? (
+              <View style={styles.recentSection}>
+                <Text style={styles.recentTitle}>SAVED ADDRESSES</Text>
+
+                <View style={styles.recentList}>
+                  <FlatList
+                    data={savedAddresses}
+                    keyExtractor={(item, index) => `${item.id}-${index}`}
+                    renderItem={renderAddressItem}
+                    scrollEnabled={false}
+                    ItemSeparatorComponent={() => <View style={styles.divider} />}
+                  />
                 </View>
               </View>
-              {isAddingAddress ? (
-                <ActivityIndicator size="small" color="#00B14F" />
-              ) : (
-                <MaterialIcons name="chevron-right" size={24} color="#999" />
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Saved Addresses */}
-          {isLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#00B14F" />
-              <Text style={styles.loadingText}>Loading addresses...</Text>
-            </View>
-          ) : savedAddresses.length > 0 ? (
-            <View style={styles.recentSection}>
-              <Text style={styles.recentTitle}>SAVED ADDRESSES</Text>
-
-              <View style={styles.recentList}>
-                <FlatList
-                  data={savedAddresses}
-                  keyExtractor={(item) => item.id}
-                  renderItem={renderAddressItem}
-                  scrollEnabled={false}
-                  ItemSeparatorComponent={() => <View style={styles.divider} />}
-                />
+            ) : (
+              <View style={styles.emptyContainer}>
+                <MaterialIcons name="location-off" size={48} color="#CCC" />
+                <Text style={styles.emptyText}>No saved addresses yet</Text>
+                <Text style={styles.emptySubtext}>Add a new address to get started</Text>
               </View>
-            </View>
-          ) : (
-            <View style={styles.emptyContainer}>
-              <MaterialIcons name="location-off" size={48} color="#CCC" />
-              <Text style={styles.emptyText}>No saved addresses yet</Text>
-              <Text style={styles.emptySubtext}>Add a new address to get started</Text>
-            </View>
-          )}
-        </ScrollView>
-
-      </View>
+            )}
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 };

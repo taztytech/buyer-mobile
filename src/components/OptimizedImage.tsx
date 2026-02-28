@@ -16,7 +16,7 @@ interface OptimizedImageProps {
   transition?: number;
   priority?: 'low' | 'normal' | 'high';
   cachePolicy?: 'none' | 'disk' | 'memory' | 'memory-disk';
-  contentFit?: 'cover' | 'contain' | 'fill' | 'none' | 'scaleDown';
+  contentFit?: 'cover' | 'contain' | 'fill' | 'none' | 'scale-down';
   animatedOpacity?: Animated.AnimatedValue;
   testID?: string;
 }
@@ -58,7 +58,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
 
   const handleLoad = () => {
     setIsLoading(false);
-    
+
     // Animate opacity fade-in
     const opacityValue = animatedOpacity || opacity;
     Animated.timing(opacityValue, {
@@ -66,7 +66,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
       duration: transition,
       useNativeDriver: true,
     }).start();
-    
+
     if (onLoad) {
       onLoad();
     }
@@ -75,7 +75,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   const handleError = () => {
     setIsLoading(false);
     setHasError(true);
-    
+
     // Still animate even on error
     const opacityValue = animatedOpacity || opacity;
     Animated.timing(opacityValue, {
@@ -83,7 +83,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
       duration: transition,
       useNativeDriver: true,
     }).start();
-    
+
     if (onError) {
       onError();
     }
@@ -124,7 +124,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
           />
         </View>
       )}
-      
+
       <Animated.View
         style={[
           styles.imageWrapper,

@@ -8,17 +8,17 @@ import {
   Image,
   StatusBar,
   ActivityIndicator,
-  Linking,
   Modal,
   RefreshControl,
   Dimensions,
   Animated,
   PanResponder,
   Pressable,
+  Platform,
 } from 'react-native';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { ordersService } from '@/services/orders.service';
@@ -46,21 +46,22 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   visible = false,
   onBack,
   onThankDriver,
-  onRateOrder,
-  onReorder,
+  onRateOrder: _onRateOrder,
+  onReorder: _onReorder,
   onTrackOrder,
-  onDownloadInvoice,
+  onDownloadInvoice: _onDownloadInvoice,
   onContactUs,
   onHelp,
 }) => {
   const { getOrderById, state } = useOrders();
+  const insets = useSafeAreaInsets();
   const { showConfirmation } = useConfirmation();
   const [contextOrder, setContextOrder] = useState<any>(null);
   const [orderData, setOrderData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState<string>('');
-  const [supportNumber, setSupportNumber] = useState<string>('');
+  const [_supportNumber, setSupportNumber] = useState<string>('');
   const [showTrackingWebView, setShowTrackingWebView] = useState(false);
   const [selectedOrderIdForTracking, setSelectedOrderIdForTracking] = useState<string | null>(null);
   const [trackingOrderData, setTrackingOrderData] = useState<any>(null);
@@ -68,6 +69,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const lastFetchedStatusRef = useRef<string | null>(null);
   const [showTaxTooltip, setShowTaxTooltip] = useState(false);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
+  const [isClosingTracking, setIsClosingTracking] = useState(false);
 
   // Safely derive tracking URL from order data.
   // Backend may populate either a top-level tracking_url OR one inside the tracking history.
@@ -98,6 +100,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const OPEN_HEIGHT = HALF_SCREEN;
   // Use height animation instead of translateY - CLOSED_HEIGHT = closed, OPEN_HEIGHT = open
   const bottomSheetHeight = useRef(new Animated.Value(OPEN_HEIGHT)).current; // Start open
+  const dragStartHeight = useRef(OPEN_HEIGHT);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(true); // Start open
   const lastFetchedAtRef = useRef<number>(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -147,7 +150,48 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const _contextOrderFromState = orderId ? state.byId[orderId] : undefined;
   const _contextStatus = _contextOrderFromState?.status;
   const _contextUpdatedAt = _contextOrderFromState?.updated_at;
-  
+
+  // Ref-based guard for closing tracking to prevent redundant calls and race conditions
+  const isClosingTrackingRef = useRef(false);
+
+  const handleCloseTrackingWebView = useCallback(() => {
+    // 1. Guard against redundant calls using both state and ref
+    if (isClosingTracking || isClosingTrackingRef.current) {
+      console.log('🛡️ Tracking: Close already in progress, ignoring call');
+      return;
+    }
+
+    console.log('🛡️ Tracking: Initiating close sequence');
+
+    // 2. Mark as closing - this will immediately unmount the WebView from the tree
+    // We set the ref immediately to block any other close calls in the same frame
+    isClosingTrackingRef.current = true;
+    setIsClosingTracking(true);
+    setShowTrackingWebView(false);
+
+    // 3. Perform final cleanup after the modal animation has definitely finished (~300-400ms on iOS)
+    // We use a safe margin of 800ms.
+    setTimeout(() => {
+      console.log('🛡️ Tracking: Performing final cleanup after modal dismissal');
+
+      // Clear data and reset bottom sheet state
+      setSelectedOrderIdForTracking(null);
+      setTrackingOrderData(null);
+
+      // Reset bottom sheet to open state for next use
+      bottomSheetHeight.flattenOffset();
+      bottomSheetHeight.setValue(OPEN_HEIGHT);
+      setIsBottomSheetOpen(true);
+
+      // Refresh main order details silently to reflect any status changes that happened during tracking
+      fetchOrderDetails();
+
+      // Reset guards for next time
+      setIsClosingTracking(false);
+      isClosingTrackingRef.current = false;
+    }, 800);
+  }, [OPEN_HEIGHT, bottomSheetHeight, fetchOrderDetails, isClosingTracking]);
+
   useEffect(() => {
     if (!orderId) return;
     // Watch state.byId directly - this updates when FCM notifications arrive
@@ -217,7 +261,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       if (!silent) {
         setIsLoadingTrackingData(true);
       }
-      
+
       const response = await ordersService.getOrderById(Number(orderId));
 
       if (response.success && response.data) {
@@ -228,14 +272,14 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           hasFullData: true,
           silent,
         });
-        
+
         // Always update trackingOrderData when API response arrives
         // This ensures bottom sheet reloads with latest data
         setTrackingOrderData((prevData: any) => {
           // Check if API response has newer data than what we have
-          if (!prevData || 
-              response.data.updated_at !== prevData.updated_at ||
-              response.data.status !== prevData.status) {
+          if (!prevData ||
+            response.data.updated_at !== prevData.updated_at ||
+            response.data.status !== prevData.status) {
             console.log('✅ Tracking: API response has updated data - Reloading bottom sheet', {
               orderId,
               oldStatus: prevData?.status,
@@ -248,7 +292,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             // Return new data - this triggers bottom sheet reload
             return response.data;
           }
-          
+
           // Even if status hasn't changed, update with latest API data to ensure we have full data
           console.log('📦 Tracking: API response received - Updating with latest full data', {
             orderId,
@@ -271,37 +315,36 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => false, // Let children have a chance, but we'll take it if they don't
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only respond to vertical drags
+        // More sensitive threshold
+        return Math.abs(gestureState.dy) > 2;
+      },
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+        // Capture if it's a significant vertical move
         return Math.abs(gestureState.dy) > 5;
       },
       onPanResponderGrant: () => {
-        // Set offset to current value
-        bottomSheetHeight.setOffset((bottomSheetHeight as any)._value);
-        bottomSheetHeight.setValue(0);
+        // Capture initial height and simplify state by flattening any existing offset
+        const currentHeight = (bottomSheetHeight as any)._value + ((bottomSheetHeight as any)._offset || 0);
+        dragStartHeight.current = currentHeight;
+        bottomSheetHeight.flattenOffset();
+        bottomSheetHeight.setValue(currentHeight);
       },
       onPanResponderMove: (_, gestureState) => {
-        const currentOffset = (bottomSheetHeight as any)._offset || 0;
-        // When dragging down (positive dy), reduce height (negative change)
-        // When dragging up (negative dy), increase height (positive change)
-        const heightChange = -gestureState.dy;
-        const newHeight = currentOffset + heightChange;
-        
-        // Restrict movement: can't go below CLOSED_HEIGHT or above OPEN_HEIGHT
-        const minHeight = CLOSED_HEIGHT;
-        const maxHeight = OPEN_HEIGHT;
-        const clampedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
-        bottomSheetHeight.setValue(clampedHeight - currentOffset);
+        // Calculate new height based on delta from start height
+        const nextHeight = dragStartHeight.current - gestureState.dy;
+
+        // Clamp height between CLOSED and OPEN thresholds
+        const clampedHeight = Math.max(CLOSED_HEIGHT, Math.min(OPEN_HEIGHT, nextHeight));
+        bottomSheetHeight.setValue(clampedHeight);
       },
-      onPanResponderRelease: (_, gestureState) => {
-        bottomSheetHeight.flattenOffset();
-        const currentValue = (bottomSheetHeight as any)._value;
-        const currentOffset = (bottomSheetHeight as any)._offset || 0;
-        const totalHeight = currentValue + currentOffset;
-        
+      onPanResponderRelease: (_, _gestureState) => {
+        const totalHeight = (bottomSheetHeight as any)._value;
+
         // Threshold: if height is more than halfway between closed and open, snap to open
         const threshold = (CLOSED_HEIGHT + OPEN_HEIGHT) / 2;
-        
+
         let targetHeight: number;
         if (totalHeight > threshold) {
           // Snap to open (OPEN_HEIGHT)
@@ -312,7 +355,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           targetHeight = CLOSED_HEIGHT;
           setIsBottomSheetOpen(false);
         }
-        
+
         Animated.spring(bottomSheetHeight, {
           toValue: targetHeight,
           useNativeDriver: false, // Height animation doesn't support native driver
@@ -320,21 +363,46 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           friction: 8, // Increased for smoother, less bouncy animation
         }).start();
       },
+      onPanResponderTerminate: (_: any, _gestureState: any) => {
+        // Handle termination (e.g., system dialog, modal swipe) by snapping back to valid state
+        const totalHeight = (bottomSheetHeight as any)._value;
+        const threshold = (CLOSED_HEIGHT + OPEN_HEIGHT) / 2;
+        const targetHeight = totalHeight > threshold ? OPEN_HEIGHT : CLOSED_HEIGHT;
+        setIsBottomSheetOpen(totalHeight > threshold);
+        Animated.spring(bottomSheetHeight, {
+          toValue: targetHeight,
+          useNativeDriver: false,
+        }).start();
+      },
+    })
+  ).current;
+
+  // Dedicated PanResponder for the notch itself - aggressive capture to stop iOS modal dismissal
+  const notchPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true, // Winner for the notch area
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 2,
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dy) > 5,
+      onPanResponderGrant: panResponder.panHandlers.onResponderGrant as any,
+      onPanResponderMove: panResponder.panHandlers.onResponderMove as any,
+      onPanResponderRelease: panResponder.panHandlers.onResponderRelease as any,
+      onPanResponderTerminate: panResponder.panHandlers.onResponderRelease as any,
     })
   ).current;
 
   // Subscribe to FCM updates for tracking order
   // Get the order directly from state.byId - this will update when FCM notifications arrive
   const trackingContextOrder = selectedOrderIdForTracking ? state.byId[selectedOrderIdForTracking] : undefined;
-  
+
   // Get status and updated_at as separate values for reliable change detection
   const contextStatus = trackingContextOrder?.status;
   const contextUpdatedAt = trackingContextOrder?.updated_at;
-  
+
   // LOG: Track order status watching - log current status values
   useEffect(() => {
     if (!selectedOrderIdForTracking) return;
-    
+
     console.log('📊 TRACK ORDER STATUS WATCH (OrderDetail):', {
       orderId: selectedOrderIdForTracking,
       fcmStatus: contextStatus || 'N/A',
@@ -346,7 +414,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       hasAPIData: !!trackingOrderData,
     });
   }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, trackingOrderData?.status, trackingOrderData?.updated_at]);
-  
+
   // FCM LISTENER + API WATCHER: Listen to FCM updates AND watch API response data
   // When FCM status update arrives:
   // 1. Immediately update UI with FCM status (fast, real-time) - triggers bottom sheet reload
@@ -359,7 +427,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
     // Get the latest order from state.byId (this updates when FCM arrives)
     const latestContextOrder = state.byId[selectedOrderIdForTracking];
-    
+
     // If context order exists (from FCM), sync it to local state AND fetch latest API data
     if (latestContextOrder) {
       setTrackingOrderData((prevData: any) => {
@@ -377,7 +445,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         // No status is restricted - any status update from FCM will automatically update the UI
         const statusChanged = prevData.status !== latestContextOrder.status;
         const updatedAtChanged = prevData.updated_at !== latestContextOrder.updated_at;
-        
+
         if (statusChanged || updatedAtChanged) {
           console.log('✅ Tracking: FCM update detected - Updating UI and fetching latest API data', {
             orderId: selectedOrderIdForTracking,
@@ -388,7 +456,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             source: 'FCM',
             note: 'This handles ANY status update automatically',
           });
-          
+
           // LOG: Status change detected - works for ALL status types
           console.log('📊 TRACK ORDER STATUS CHANGE (OrderDetail):', {
             orderId: selectedOrderIdForTracking,
@@ -399,7 +467,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             statusType: 'ANY_STATUS_UPDATE', // Confirms we handle all status types
             timestamp: new Date().toISOString(),
           });
-          
+
           // Step 1: Immediately update UI with FCM data (fast, real-time)
           // This triggers bottom sheet reload with FCM status
           const updatedData = {
@@ -410,13 +478,13 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             // Preserve restaurant details if they exist in prevData but not in context
             restaurant: latestContextOrder.restaurant || prevData.restaurant,
           };
-          
+
           // Step 2: Fetch latest full order data from API (silent fetch - no loading indicator)
           // When API response arrives, it will update trackingOrderData which triggers bottom sheet reload
           fetchTrackingOrderData(selectedOrderIdForTracking, true).catch((err) => {
             console.error('Failed to fetch latest API data after FCM update:', err);
           });
-          
+
           return updatedData;
         }
 
@@ -425,7 +493,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       });
     }
   }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, state.byId, fetchTrackingOrderData]);
-  
+
   // API RESPONSE WATCHER: Watch for changes in API response data and reload bottom sheet
   // This ensures whenever the API response updates (status/timeline), the bottom sheet reflects changes
   useEffect(() => {
@@ -441,7 +509,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       updatedAt: apiUpdatedAt,
       source: 'API',
     });
-    
+
     // LOG: API status update
     console.log('📊 TRACK ORDER API STATUS UPDATE (OrderDetail):', {
       orderId: selectedOrderIdForTracking,
@@ -488,7 +556,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     fetchSupportDetails();
   }, [visible]);
 
-  const handleCallSupport = () => {
+  const _handleCallSupport = () => {
     // Navigate to Contact Us page instead of directly calling
     if (onContactUs) {
       onContactUs();
@@ -505,7 +573,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -519,7 +587,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -535,7 +603,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -547,18 +615,24 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       const response = await exotelService.initiateCall({
         order_id: orderNumber,
         from: userPhone,
-        to: agentPhoneClean,        
+        to: agentPhoneClean,
       });
 
       if (response.success) {
-        showConfirmation({
-          title: 'Call Initiated',
-          message: 'Your call to the delivery agent is being connected. Please wait for the call.',
-          confirmText: 'OK',
-          cancelText: '',
-          confirmButtonColor: '#00B14F',
-          onConfirm: () => {},
-        });
+        // CLOSE MODAL FIRST to avoid multiple modal contentions on iOS
+        handleCloseTrackingWebView();
+
+        // Show confirmation after modal is dismissed
+        setTimeout(() => {
+          showConfirmation({
+            title: 'Call Initiated',
+            message: 'Your call to the delivery agent is being connected. Please wait for the call.',
+            confirmText: 'OK',
+            cancelText: '',
+            confirmButtonColor: '#00B14F',
+            onConfirm: () => { },
+          });
+        }, 800);
       } else {
         showConfirmation({
           title: 'Call Failed',
@@ -566,7 +640,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           confirmText: 'OK',
           cancelText: '',
           confirmButtonColor: '#DC2626',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
       }
     } catch (error: any) {
@@ -576,7 +650,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#DC2626',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
     } finally {
       setIsInitiatingCall(false);
@@ -596,13 +670,13 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   // Helper function to format estimated delivery time
   const formatEstimatedDeliveryTime = (timeString: string | null | undefined): string | null => {
     if (!timeString) return null;
-    
+
     try {
       const date = new Date(timeString);
       if (isNaN(date.getTime())) {
         return null;
       }
-      
+
       // Format as "Dec 12, 2025 at 12:00 PM"
       const formattedDate = date.toLocaleDateString('en-US', {
         month: 'short',
@@ -614,7 +688,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         minute: '2-digit',
         hour12: true,
       });
-      
+
       return `${formattedDate} at ${formattedTime}`;
     } catch (error) {
       return null;
@@ -646,9 +720,9 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
   // Calculate bill details from items if summary is missing or zero
   const calculateBillFromItems = (orderData: any) => {
-    
+
     if (!orderData.items || !Array.isArray(orderData.items)) {
-      
+
       return {
         subtotal: 0,
         tax_amount: 0,
@@ -671,7 +745,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
     // If summary exists and has values, use it; otherwise calculate from items
     const summary = orderData.summary || {};
-    
+
     const tax_amount = summary.tax_amount || summary.tax || 0;
     const delivery_fee = summary.delivery_fee || 0;
     const discount_amount = summary.discount_amount || summary.discount || 0;
@@ -684,7 +758,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     const delivery_fee_tax = summary.delivery_fee_tax || 0;
     const platform_fee_tax = summary.platform_fee_tax || 0;
     const total_tax_amount = summary.total_tax_amount || 0;
-    
+
     const finalSubtotal = summarySubtotal || subtotal;
 
     const bill = {
@@ -708,18 +782,18 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const getStatusDisplay = (status: string, orderData?: any) => {
     // Check for payment failed status - priority check
     let actualStatus = status;
-    
+
     // Check payment_status field first - if payment failed, show payment failed regardless of order status
-    if (orderData?.payment_status?.toLowerCase() === 'failed' || 
-        orderData?.payment_status?.toLowerCase() === 'payment_failed' ||
-        status?.toLowerCase() === 'payment_failed') {
+    if (orderData?.payment_status?.toLowerCase() === 'failed' ||
+      orderData?.payment_status?.toLowerCase() === 'payment_failed' ||
+      status?.toLowerCase() === 'payment_failed') {
       actualStatus = 'payment_failed';
-    } else if (status === 'cancelled' && orderData?.payment_method === 'online' && 
-        orderData?.cancellation_reason?.toLowerCase().includes('payment failed')) {
+    } else if (status === 'cancelled' && orderData?.payment_method === 'online' &&
+      orderData?.cancellation_reason?.toLowerCase().includes('payment failed')) {
       actualStatus = 'payment_failed';
-    } else if (orderData?.payment_method === 'online' && 
-               orderData?.payment_status?.toLowerCase() === 'pending' && 
-               (status?.toLowerCase() === 'pending' || status?.toLowerCase() === 'cancelled')) {
+    } else if (orderData?.payment_method === 'online' &&
+      orderData?.payment_status?.toLowerCase() === 'pending' &&
+      (status?.toLowerCase() === 'pending' || status?.toLowerCase() === 'cancelled')) {
       // If payment is pending but order is cancelled/pending for online payment, it's likely a payment failure
       actualStatus = 'payment_failed';
     }
@@ -729,61 +803,61 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
     // Status messages from API configuration
     const statusMessages: { [key: string]: { title: string; color: string } } = {
-      'billed': { 
-        title: 'Your order has been billed and is being processed.', 
-        color: '#00B14F' 
+      'billed': {
+        title: 'Your order has been billed and is being processed.',
+        color: '#00B14F'
       },
-      'packed': { 
-        title: 'Your order has been packed and is ready for pickup.', 
-        color: '#F59E0B' 
+      'packed': {
+        title: 'Your order has been packed and is ready for pickup.',
+        color: '#F59E0B'
       },
-      'agent_assigned': { 
-        title: 'A delivery partner has been assigned to your order.', 
-        color: '#3B82F6' 
+      'agent_assigned': {
+        title: 'A delivery partner has been assigned to your order.',
+        color: '#3B82F6'
       },
-      'agent-assigned': { 
-        title: 'A delivery partner has been assigned to your order.', 
-        color: '#3B82F6' 
+      'agent-assigned': {
+        title: 'A delivery partner has been assigned to your order.',
+        color: '#3B82F6'
       },
-      'agent_arrived_restaurant': { 
-        title: 'The delivery partner has arrived at the restaurant to pick up your order.', 
-        color: '#3B82F6' 
+      'agent_arrived_restaurant': {
+        title: 'The delivery partner has arrived at the restaurant to pick up your order.',
+        color: '#3B82F6'
       },
-      'agent-arrived-restaurant': { 
-        title: 'The delivery partner has arrived at the restaurant to pick up your order.', 
-        color: '#3B82F6' 
+      'agent-arrived-restaurant': {
+        title: 'The delivery partner has arrived at the restaurant to pick up your order.',
+        color: '#3B82F6'
       },
-      'picked': { 
-        title: 'Your order has been picked up by the delivery partner.', 
-        color: '#3B82F6' 
+      'picked': {
+        title: 'Your order has been picked up by the delivery partner.',
+        color: '#3B82F6'
       },
-      'out_for_delivery': { 
-        title: 'Your order is on the way to your location.', 
-        color: '#F59E0B' 
+      'out_for_delivery': {
+        title: 'Your order is on the way to your location.',
+        color: '#F59E0B'
       },
-      'out-for-delivery': { 
-        title: 'Your order is on the way to your location.', 
-        color: '#F59E0B' 
+      'out-for-delivery': {
+        title: 'Your order is on the way to your location.',
+        color: '#F59E0B'
       },
-      'delivered': { 
-        title: 'Your order has been delivered.', 
-        color: '#00B14F' 
+      'delivered': {
+        title: 'Your order has been delivered.',
+        color: '#00B14F'
       },
-      'completed': { 
-        title: 'Your order has been delivered.', 
-        color: '#00B14F' 
+      'completed': {
+        title: 'Your order has been delivered.',
+        color: '#00B14F'
       },
-      'cancelled': { 
-        title: 'Your order has been cancelled.', 
-        color: '#DC2626' 
+      'cancelled': {
+        title: 'Your order has been cancelled.',
+        color: '#DC2626'
       },
-      'canceled': { 
-        title: 'Your order has been cancelled.', 
-        color: '#DC2626' 
+      'canceled': {
+        title: 'Your order has been cancelled.',
+        color: '#DC2626'
       },
-      'rejected': { 
-        title: 'Your order has been cancelled.', 
-        color: '#DC2626' 
+      'rejected': {
+        title: 'Your order has been cancelled.',
+        color: '#DC2626'
       },
     };
 
@@ -801,31 +875,31 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       'payment_pending': { title: 'Payment pending', color: '#DC2626' },
       'pending': { title: 'Order pending', color: '#F59E0B' },
     };
-    
+
     return statusMap[normalizedStatus] || { title: 'Order status', color: '#00B14F' };
   };
 
   const statusDisplay = orderData ? getStatusDisplay(orderData.status, orderData) : null;
-  
+
   // Get status config for consistent colors (same as Orders page)
   // Use the actual status for color mapping, but handle payment_failed specially
   const getStatusForColorMapping = (status: string, orderData?: any): string => {
     // Check payment_status field first - if payment failed, show payment failed regardless of order status
-    if (orderData?.payment_status?.toLowerCase() === 'failed' || 
-        orderData?.payment_status?.toLowerCase() === 'payment_failed' ||
-        status?.toLowerCase() === 'payment_failed') {
+    if (orderData?.payment_status?.toLowerCase() === 'failed' ||
+      orderData?.payment_status?.toLowerCase() === 'payment_failed' ||
+      status?.toLowerCase() === 'payment_failed') {
       return 'payment_failed';
-    } else if (status === 'cancelled' && orderData?.payment_method === 'online' && 
-        orderData?.cancellation_reason?.toLowerCase().includes('payment failed')) {
+    } else if (status === 'cancelled' && orderData?.payment_method === 'online' &&
+      orderData?.cancellation_reason?.toLowerCase().includes('payment failed')) {
       return 'payment_failed';
-    } else if (orderData?.payment_method === 'online' && 
-               orderData?.payment_status?.toLowerCase() === 'pending' && 
-               (status?.toLowerCase() === 'pending' || status?.toLowerCase() === 'cancelled')) {
+    } else if (orderData?.payment_method === 'online' &&
+      orderData?.payment_status?.toLowerCase() === 'pending' &&
+      (status?.toLowerCase() === 'pending' || status?.toLowerCase() === 'cancelled')) {
       return 'payment_failed';
     }
     return status;
   };
-  
+
   const statusConfig = orderData ? mapOrderStatusToUI(getStatusForColorMapping(orderData.status, orderData)) : null;
 
   return (
@@ -901,23 +975,23 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               />
             }
           >
-          {/* Delivery Status Card - Illustration + Banner */}
-          <View style={[styles.card, styles.statusCard]}>
-            <View style={styles.statusIllustrationContainer}>
-              <Image
-                source={require('../../../assets/delivery_man.png')}
-                style={styles.statusIllustration}
-                resizeMode="contain"
-              />
-            </View>
+            {/* Delivery Status Card - Illustration + Banner */}
+            <View style={[styles.card, styles.statusCard]}>
+              <View style={styles.statusIllustrationContainer}>
+                <Image
+                  source={require('../../../assets/delivery_man.png')}
+                  style={styles.statusIllustration}
+                  resizeMode="contain"
+                />
+              </View>
 
-            <View
-              style={[
-                styles.statusBanner,
-                { backgroundColor: statusConfig?.bgColor || '#FACC15' },
-              ]}
-            >
-              {/* <MaterialIcons
+              <View
+                style={[
+                  styles.statusBanner,
+                  { backgroundColor: statusConfig?.bgColor || '#FACC15' },
+                ]}
+              >
+                {/* <MaterialIcons
                 name={
                   orderData.status === 'delivered'
                     ? 'check-circle'
@@ -930,138 +1004,138 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 size={22}
                 color="#111827"
               /> */}
-              <View style={styles.statusBannerTextContainer}>
-                <View style={styles.statusBannerTitleRow}>
+                <View style={styles.statusBannerTextContainer}>
+                  <View style={styles.statusBannerTitleRow}>
+                    <Text style={[
+                      styles.statusBannerTitle,
+                      { color: statusConfig?.color || '#111827' }
+                    ]}>
+                      {statusDisplay?.title || 'Order status'}
+                    </Text>
+                  </View>
                   <Text style={[
-                    styles.statusBannerTitle,
+                    styles.statusBannerSubtitle,
                     { color: statusConfig?.color || '#111827' }
                   ]}>
-                    {statusDisplay?.title || 'Order status'}
+                    Order id #{orderData.order_number}
                   </Text>
                 </View>
-                <Text style={[
-                  styles.statusBannerSubtitle,
-                  { color: statusConfig?.color || '#111827' }
-                ]}>
-                  Order id #{orderData.order_number}
+              </View>
+
+              {/* Driver Info - only show if tracking data available */}
+              {orderData.tracking &&
+                orderData.tracking.length > 0 &&
+                orderData.tracking[0].agent_name && (
+                  <>
+                    <View style={styles.driverSection}>
+                      {orderData.tracking[0].agent_photo_url ? (
+                        <Image
+                          source={{ uri: orderData.tracking[0].agent_photo_url }}
+                          style={styles.driverAvatar}
+                        />
+                      ) : (
+                        <View
+                          style={[
+                            styles.driverAvatar,
+                            styles.driverAvatarPlaceholder,
+                          ]}
+                        >
+                          <MaterialIcons name="person" size={32} color="#999" />
+                        </View>
+                      )}
+                      <View style={styles.driverInfo}>
+                        <Text style={styles.driverName}>
+                          {orderData.tracking[0].agent_name}
+                        </Text>
+                        <Text style={styles.driverLabel}>Your delivery driver</Text>
+                        {orderData.tracking[0].agent_phone && (
+                          <Text style={styles.driverPhone}>
+                            {orderData.tracking[0].agent_phone}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Thank Driver Button - only show for delivered orders */}
+                    {orderData.status === 'delivered' && (
+                      <TouchableOpacity
+                        style={styles.thankButton}
+                        onPress={onThankDriver}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons name="thumb-up" size={20} color="#FFFFFF" />
+                        <Text style={styles.thankButtonText}>Thank Driver</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
+            </View>
+
+            {/* Cancellation Reason Card - only show for cancelled orders */}
+            {orderData.status === 'cancelled' && orderData.cancel_reason && (
+              <View style={[styles.card, styles.cancellationCard]}>
+                <View style={styles.cancellationHeader}>
+                  <MaterialIcons name="cancel" size={24} color="#DC2626" />
+                  <Text style={styles.cancellationTitle}>Order Cancellation</Text>
+                </View>
+
+                <Text style={styles.cancellationReason}>
+                  {orderData.cancel_reason.reason || 'Order has been cancelled'}
                 </Text>
               </View>
-            </View>
+            )}
 
-            {/* Driver Info - only show if tracking data available */}
-            {orderData.tracking &&
-              orderData.tracking.length > 0 &&
-              orderData.tracking[0].agent_name && (
-                <>
-                  <View style={styles.driverSection}>
-                    {orderData.tracking[0].agent_photo_url ? (
-                      <Image
-                        source={{ uri: orderData.tracking[0].agent_photo_url }}
-                        style={styles.driverAvatar}
-                      />
-                    ) : (
-                      <View
-                        style={[
-                          styles.driverAvatar,
-                          styles.driverAvatarPlaceholder,
-                        ]}
-                      >
-                        <MaterialIcons name="person" size={32} color="#999" />
-                      </View>
-                    )}
-                    <View style={styles.driverInfo}>
-                      <Text style={styles.driverName}>
-                        {orderData.tracking[0].agent_name}
-                      </Text>
-                      <Text style={styles.driverLabel}>Your delivery driver</Text>
-                      {orderData.tracking[0].agent_phone && (
-                        <Text style={styles.driverPhone}>
-                          {orderData.tracking[0].agent_phone}
-                        </Text>
-                      )}
-                    </View>
+            {/* Restaurant Info Card */}
+            <View style={styles.card}>
+              <View style={styles.orderHeaderContainer}>
+                {/* Restaurant Logo */}
+                <Image
+                  source={{ uri: orderData.restaurant.logo_url }}
+                  style={styles.restaurantLogo}
+                  defaultSource={require('@/assets/dummy-restaurent.png')}
+                />
+
+                {/* Text Content */}
+                <View style={styles.orderHeaderContent}>
+                  {/* First Row: Restaurant Name + Price */}
+                  <View style={styles.orderHeaderRow}>
+                    <Text style={styles.restaurantName}>{orderData.restaurant.name}</Text>
+                    <Text style={styles.orderAmount}>₹{(() => {
+                      const bill = calculateBillFromItems(orderData);
+                      return bill.total_amount.toFixed(2);
+                    })()}</Text>
                   </View>
 
-                  {/* Thank Driver Button - only show for delivered orders */}
-                  {orderData.status === 'delivered' && (
-                    <TouchableOpacity
-                      style={styles.thankButton}
-                      onPress={onThankDriver}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialIcons name="thumb-up" size={20} color="#FFFFFF" />
-                      <Text style={styles.thankButtonText}>Thank Driver</Text>
-                    </TouchableOpacity>
-                  )}
-                </>
-              )}
-          </View>
-
-          {/* Cancellation Reason Card - only show for cancelled orders */}
-          {orderData.status === 'cancelled' && orderData.cancel_reason && (
-            <View style={[styles.card, styles.cancellationCard]}>
-              <View style={styles.cancellationHeader}>
-                <MaterialIcons name="cancel" size={24} color="#DC2626" />
-                <Text style={styles.cancellationTitle}>Order Cancellation</Text>
-              </View>
-              
-              <Text style={styles.cancellationReason}>
-                {orderData.cancel_reason.reason || 'Order has been cancelled'}
-              </Text>
-            </View>
-          )}
-
-          {/* Restaurant Info Card */}
-          <View style={styles.card}>
-            <View style={styles.orderHeaderContainer}>
-              {/* Restaurant Logo */}
-              <Image
-                source={{ uri: orderData.restaurant.logo_url }}
-                style={styles.restaurantLogo}
-                defaultSource={require('@/assets/dummy-restaurent.png')}
-              />
-              
-              {/* Text Content */}
-              <View style={styles.orderHeaderContent}>
-                {/* First Row: Restaurant Name + Price */}
-                <View style={styles.orderHeaderRow}>
-                  <Text style={styles.restaurantName}>{orderData.restaurant.name}</Text>
-                  <Text style={styles.orderAmount}>₹{(() => {
-                    const bill = calculateBillFromItems(orderData);
-                    return bill.total_amount.toFixed(2);
-                  })()}</Text>
-                </View>
-
-                {/* Second Row: Location + Date */}
-                <View style={styles.orderHeaderRow}>
-                  <Text style={styles.restaurantLocation}>
-                    {orderData.delivery_address?.city || 'Location'}
-                  </Text>
-                  <Text style={styles.orderDate}>{formatDate(orderData.created_at)}</Text>
+                  {/* Second Row: Location + Date */}
+                  <View style={styles.orderHeaderRow}>
+                    <Text style={styles.restaurantLocation}>
+                      {orderData.delivery_address?.city || 'Location'}
+                    </Text>
+                    <Text style={styles.orderDate}>{formatDate(orderData.created_at)}</Text>
+                  </View>
                 </View>
               </View>
-            </View>
 
-            {/* Action Buttons */}
-            <View style={styles.actionButtons}>
-              {orderData.overall_rating && orderData.overall_rating > 0 ? (
-                <View style={styles.ratingDisplay}>
-                  <MaterialIcons name="star" size={20} color="#F59E0B" />
-                  <Text style={styles.ratingText}>{orderData.overall_rating.toFixed(1)}</Text>
-                </View>
-              ) : orderData.status === 'delivered' ? (
-                <>
-                </>
-                // <TouchableOpacity
-                //   style={styles.rateButton}
-                //   onPress={() => onRateOrder && onRateOrder(orderId || '', orderData)}
-                //   activeOpacity={0.7}
-                // >
-                //   <MaterialIcons name="star-outline" size={20} color="#001E1F" />
-                //   <Text style={styles.rateButtonText}>Rate Order</Text>
-                // </TouchableOpacity>
-              ) : null}
-              {/* {orderData.status === 'delivered' || orderData.status === 'cancelled' ? (
+              {/* Action Buttons */}
+              <View style={styles.actionButtons}>
+                {orderData.overall_rating && orderData.overall_rating > 0 ? (
+                  <View style={styles.ratingDisplay}>
+                    <MaterialIcons name="star" size={20} color="#F59E0B" />
+                    <Text style={styles.ratingText}>{orderData.overall_rating.toFixed(1)}</Text>
+                  </View>
+                ) : orderData.status === 'delivered' ? (
+                  <>
+                  </>
+                  // <TouchableOpacity
+                  //   style={styles.rateButton}
+                  //   onPress={() => onRateOrder && onRateOrder(orderId || '', orderData)}
+                  //   activeOpacity={0.7}
+                  // >
+                  //   <MaterialIcons name="star-outline" size={20} color="#001E1F" />
+                  //   <Text style={styles.rateButtonText}>Rate Order</Text>
+                  // </TouchableOpacity>
+                ) : null}
+                {/* {orderData.status === 'delivered' || orderData.status === 'cancelled' ? (
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={onReorder}
@@ -1071,14 +1145,14 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <Text style={styles.reorderButtonText}>Reorder</Text>
                 </TouchableOpacity>
               ) : ( */}
-                { orderData.status !== 'delivered' && <View style={styles.trackOrderContainer}>
+                {orderData.status !== 'delivered' && <View style={styles.trackOrderContainer}>
                   {(() => {
                     // Track Order is enabled for: packed, agent-assigned, agent-arrived-restaurant, picked, out-for-delivery, on-the-way, delivered
                     // Disabled for: confirmed (order placed), billed (order accepted)
                     const rawStatus = (orderData?.status || '').toString().toLowerCase();
                     // Normalize: underscores/spaces to hyphen
                     const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
-                    
+
                     // Explicitly disabled statuses - tracking is NOT allowed for these
                     const disabledStatuses = [
                       'confirmed',
@@ -1094,7 +1168,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       'pending_payment',
                       'preparing'
                     ];
-                    
+
                     // Define enabled statuses - tracking works from "packed" / "agent-assigned" status onward
                     const enabledStatuses = [
                       'packed',
@@ -1110,13 +1184,13 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       'delivered',
                       'completed'
                     ];
-                    
+
                     // Check if status is explicitly disabled first - force disable
                     const isExplicitlyDisabled = disabledStatuses.includes(normalizedStatus);
-                    
+
                     // Enable tracking only if status is in enabled list AND not explicitly disabled
                     const isTrackingEnabled = !isExplicitlyDisabled && enabledStatuses.includes(normalizedStatus);
-                    
+
                     return (
                       <>
                         <TouchableOpacity
@@ -1125,11 +1199,11 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                             !isTrackingEnabled && styles.disabledButton
                           ]}
                           onPress={() => {
-                            if (!isTrackingEnabled) return;
+                            if (!isTrackingEnabled || showTrackingWebView || isClosingTracking) return;
 
                             // Prefer web tracking when any tracking_url is available (top-level or in history)
                             const trackingUrl = getTrackingUrlFromOrderData(orderData);
-                            
+
                             if (trackingUrl && orderId) {
                               // Set order ID for tracking and fetch data for bottom sheet
                               setSelectedOrderIdForTracking(orderId);
@@ -1143,10 +1217,10 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                           activeOpacity={!isTrackingEnabled ? 1 : 0.8}
                           disabled={!isTrackingEnabled}
                         >
-                          <MaterialIcons 
-                            name="location-on" 
-                            size={20} 
-                            color={!isTrackingEnabled ? "#CCCCCC" : "#FFFFFF"} 
+                          <MaterialIcons
+                            name="location-on"
+                            size={20}
+                            color={!isTrackingEnabled ? "#CCCCCC" : "#FFFFFF"}
                           />
                           <Text style={[
                             styles.reorderButtonText,
@@ -1164,35 +1238,35 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                     );
                   })()}
                 </View>}
-              {/* )} */}
+                {/* )} */}
+              </View>
             </View>
-          </View>
 
-          {/* Item Details Card */}
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Item Details</Text>
-            <View style={styles.itemDetailsContainer}>
-              {orderData.items.map((item: any, index: number) => {
-                const isVeg = item.is_veg !== false; // Default to veg if not specified
-                const imageUrl = item.image_url || item.image || null;
-                
-                return (
-                  <View key={item.id}>
-                    <View style={styles.itemDetailRow}>
-                      {/* Product Image */}
-                      {imageUrl && (
-                        <Image
-                          source={{ uri: imageUrl }}
-                          style={styles.itemDetailImage}
-                          resizeMode="cover"
-                          defaultSource={require('@/assets/dummy-restaurent.png')}
-                        />
-                      )}
-                      
-                      <View style={styles.itemDetailLeft}>
-                        <View style={styles.itemDetailNameRow}>
-                          {/* Veg/Non-veg Icon */}
-                          {/* <View style={[
+            {/* Item Details Card */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Item Details</Text>
+              <View style={styles.itemDetailsContainer}>
+                {orderData.items.map((item: any, index: number) => {
+                  const _isVeg = item.is_veg !== false; // Default to veg if not specified
+                  const imageUrl = item.image_url || item.image || null;
+
+                  return (
+                    <View key={item.id}>
+                      <View style={styles.itemDetailRow}>
+                        {/* Product Image */}
+                        {imageUrl && (
+                          <Image
+                            source={{ uri: imageUrl }}
+                            style={styles.itemDetailImage}
+                            resizeMode="cover"
+                            defaultSource={require('@/assets/dummy-restaurent.png')}
+                          />
+                        )}
+
+                        <View style={styles.itemDetailLeft}>
+                          <View style={styles.itemDetailNameRow}>
+                            {/* Veg/Non-veg Icon */}
+                            {/* <View style={[
                             styles.vegIndicator,
                             !isVeg && styles.nonVegIndicator
                           ]}>
@@ -1201,101 +1275,101 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                               !isVeg && styles.nonVegDot
                             ]} />
                           </View> */}
-                          {/* Product Name and Quantity */}
-                          <Text style={styles.itemDetailName}>
-                            {item.item_name} × {item.quantity}
-                          </Text>
+                            {/* Product Name and Quantity */}
+                            <Text style={styles.itemDetailName}>
+                              {item.item_name} × {item.quantity}
+                            </Text>
+                          </View>
+                          {item.customizations && item.customizations.length > 0 && (
+                            <View style={styles.customizationsContainer}>
+                              {item.customizations.map((customization: any, idx: number) => (
+                                <Text key={idx} style={styles.customizationText}>
+                                  {customization.customization_group_name}:{' '}
+                                  {customization.selected_options.map((opt: any) => opt.name).join(', ')}
+                                </Text>
+                              ))}
+                            </View>
+                          )}
+                          {item.variants && item.variants.length > 0 && (
+                            <View style={styles.customizationsContainer}>
+                              {item.variants.map((variant: any, idx: number) => (
+                                <Text key={idx} style={styles.customizationText}>
+                                  {variant.variant_group_name}: {variant.selected_variant.name}
+                                </Text>
+                              ))}
+                            </View>
+                          )}
+                          {item.special_instructions && (
+                            <Text style={styles.specialInstructionsText}>
+                              Note: {item.special_instructions}
+                            </Text>
+                          )}
                         </View>
-                        {item.customizations && item.customizations.length > 0 && (
-                          <View style={styles.customizationsContainer}>
-                            {item.customizations.map((customization: any, idx: number) => (
-                              <Text key={idx} style={styles.customizationText}>
-                                {customization.customization_group_name}:{' '}
-                                {customization.selected_options.map((opt: any) => opt.name).join(', ')}
-                              </Text>
-                            ))}
-                          </View>
-                        )}
-                        {item.variants && item.variants.length > 0 && (
-                          <View style={styles.customizationsContainer}>
-                            {item.variants.map((variant: any, idx: number) => (
-                              <Text key={idx} style={styles.customizationText}>
-                                {variant.variant_group_name}: {variant.selected_variant.name}
-                              </Text>
-                            ))}
-                          </View>
-                        )}
-                        {item.special_instructions && (
-                          <Text style={styles.specialInstructionsText}>
-                            Note: {item.special_instructions}
-                          </Text>
-                        )}
+                        <Text style={styles.itemDetailPrice}>₹{item.total_price}</Text>
                       </View>
-                      <Text style={styles.itemDetailPrice}>₹{item.total_price}</Text>
+                      {index < orderData.items.length - 1 && <View style={styles.itemDivider} />}
                     </View>
-                    {index < orderData.items.length - 1 && <View style={styles.itemDivider} />}
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Notes Section - only show if notes exist */}
-          {orderData.notes && orderData.notes.trim() !== '' && (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Notes</Text>
-              <View style={styles.notesContainer}>
-                <MaterialIcons name="note" size={24} color="#00B14F" />
-                <Text style={styles.notesText}>{orderData.notes}</Text>
+                  );
+                })}
               </View>
             </View>
-          )}
 
-          {/* Delivery Address Card */}
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Delivery Address</Text>
-            <View style={styles.addressRow}>
-              <MaterialIcons name="location-on" size={24} color="#00B14F" />
-              <Text style={styles.addressText}>
-                {[
-                  orderData.delivery_address?.address1,
-                  orderData.delivery_address?.address2,
-                  orderData.delivery_address?.address3,
-                  orderData.delivery_address?.city,
-                  orderData.delivery_address?.state,
-                  orderData.delivery_address?.pincode,
-                ]
-                  .filter(Boolean)
-                  .join(', ')}
-              </Text>
-            </View>
-            <View style={styles.dashedDivider} />
-            <View style={styles.addressRow}>
-              <MaterialIcons name="phone" size={24} color="#00B14F" />
-              <Text style={styles.addressText}>
-                {orderData.delivery_address?.alternate_phone_number || userPhoneNumber || 'N/A'}
-              </Text>
-            </View>
-            {/* Show delivery time - handle preorder vs normal orders */}
-            {deliveryTimeValue && orderData.status !== 'delivered' && (
-              <>
-                <View style={styles.dashedDivider} />
-                <View style={styles.addressRow}>
-                  <MaterialIcons name="access-time" size={24} color="#00B14F" />
-                  <View style={styles.estimatedDeliveryContainer}>
-                    <Text style={styles.estimatedDeliveryLabel}>{deliveryTimeLabel}</Text>
-                    <Text style={styles.estimatedDeliveryValue}>{deliveryTimeValue}</Text>
-                  </View>
+            {/* Notes Section - only show if notes exist */}
+            {orderData.notes && orderData.notes.trim() !== '' && (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Notes</Text>
+                <View style={styles.notesContainer}>
+                  <MaterialIcons name="note" size={24} color="#00B14F" />
+                  <Text style={styles.notesText}>{orderData.notes}</Text>
                 </View>
-              </>
+              </View>
             )}
-          </View>
 
-          {/* Bill Summary Card */}
-          <View style={styles.card}>
-            <View style={styles.billHeader}>
-              <Text style={styles.sectionTitle}>Bill Summary</Text>
-              {/* {orderData.invoice?.available && (
+            {/* Delivery Address Card */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Delivery Address</Text>
+              <View style={styles.addressRow}>
+                <MaterialIcons name="location-on" size={24} color="#00B14F" />
+                <Text style={styles.addressText}>
+                  {[
+                    orderData.delivery_address?.address1,
+                    orderData.delivery_address?.address2,
+                    orderData.delivery_address?.address3,
+                    orderData.delivery_address?.city,
+                    orderData.delivery_address?.state,
+                    orderData.delivery_address?.pincode,
+                  ]
+                    .filter(Boolean)
+                    .join(', ')}
+                </Text>
+              </View>
+              <View style={styles.dashedDivider} />
+              <View style={styles.addressRow}>
+                <MaterialIcons name="phone" size={24} color="#00B14F" />
+                <Text style={styles.addressText}>
+                  {orderData.delivery_address?.alternate_phone_number || userPhoneNumber || 'N/A'}
+                </Text>
+              </View>
+              {/* Show delivery time - handle preorder vs normal orders */}
+              {deliveryTimeValue && orderData.status !== 'delivered' && (
+                <>
+                  <View style={styles.dashedDivider} />
+                  <View style={styles.addressRow}>
+                    <MaterialIcons name="access-time" size={24} color="#00B14F" />
+                    <View style={styles.estimatedDeliveryContainer}>
+                      <Text style={styles.estimatedDeliveryLabel}>{deliveryTimeLabel}</Text>
+                      <Text style={styles.estimatedDeliveryValue}>{deliveryTimeValue}</Text>
+                    </View>
+                  </View>
+                </>
+              )}
+            </View>
+
+            {/* Bill Summary Card */}
+            <View style={styles.card}>
+              <View style={styles.billHeader}>
+                <Text style={styles.sectionTitle}>Bill Summary</Text>
+                {/* {orderData.invoice?.available && (
                 <TouchableOpacity
                   style={styles.invoiceButton}
                   onPress={onDownloadInvoice}
@@ -1305,122 +1379,122 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <Text style={styles.invoiceButtonText}>Invoice</Text>
                 </TouchableOpacity>
               )} */}
-            </View>
+              </View>
 
-            {(() => {
-              const bill = calculateBillFromItems(orderData);
-              return (
-                <>
-                  <View style={styles.billItems}>
-                    <View style={styles.billRow}>
-                      <Text style={styles.billLabel}>Subtotal</Text>
-                      <Text style={styles.billValue}>₹{bill.subtotal.toFixed(2)}</Text>
-                    </View>
-                    <View style={styles.billRow}>
-                      <Text style={styles.billLabel}>Delivery Fee</Text>
-                      <Text style={styles.billValue}>₹{bill.delivery_fee.toFixed(2)}</Text>
-                    </View>
-                    <View style={styles.billRow}>
-                      <Text style={styles.billLabel}>Platform Fee</Text>
-                      <Text style={
-                        styles.billValue 
-                        // (bill.include_platform_fee || bill.platform_fee === 0) 
-                        //   ? styles.billValue 
-                        //   : styles.billValueStrikethrough
-                      }>
-                        ₹{bill.platform_fee.toFixed(2)}
-                      </Text>
-                    </View>
-                    <View style={styles.billRow}>
-                      <Text style={styles.billLabel}>Delivery Partner tip</Text>
-                      <Text style={styles.billValue}>₹{bill.tip_amount.toFixed(2)}</Text>
-                    </View>
-                    {/* <View style={styles.billRow}>
+              {(() => {
+                const bill = calculateBillFromItems(orderData);
+                return (
+                  <>
+                    <View style={styles.billItems}>
+                      <View style={styles.billRow}>
+                        <Text style={styles.billLabel}>Subtotal</Text>
+                        <Text style={styles.billValue}>₹{bill.subtotal.toFixed(2)}</Text>
+                      </View>
+                      <View style={styles.billRow}>
+                        <Text style={styles.billLabel}>Delivery Fee</Text>
+                        <Text style={styles.billValue}>₹{bill.delivery_fee.toFixed(2)}</Text>
+                      </View>
+                      <View style={styles.billRow}>
+                        <Text style={styles.billLabel}>Platform Fee</Text>
+                        <Text style={
+                          styles.billValue
+                          // (bill.include_platform_fee || bill.platform_fee === 0) 
+                          //   ? styles.billValue 
+                          //   : styles.billValueStrikethrough
+                        }>
+                          ₹{bill.platform_fee.toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={styles.billRow}>
+                        <Text style={styles.billLabel}>Delivery Partner tip</Text>
+                        <Text style={styles.billValue}>₹{bill.tip_amount.toFixed(2)}</Text>
+                      </View>
+                      {/* <View style={styles.billRow}>
                       <Text style={styles.billLabel}>GST and Charges</Text>
                       <Text style={styles.billValue}>₹{bill.tax_amount.toFixed(2)}</Text>
                     </View> */}
-                    <View style={styles.billRow}>
-                      <View style={styles.billLabelContainer}>
-                        <Text style={styles.billLabel}>Tax And Charges</Text>
-                        <View style={styles.infoIconWrapper}>
-                          <TouchableOpacity
-                            onPress={() => setShowTaxTooltip(!showTaxTooltip)}
-                            activeOpacity={0.7}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          >
-                            <MaterialIcons name="info" size={16} color="rgba(0, 0, 0, 0.6)" />
-                          </TouchableOpacity>
-                          {showTaxTooltip && (
-                            <View style={styles.taxTooltip}>
-                              <View style={styles.taxTooltipContent}>
-                                <View style={styles.taxTooltipRow}>
-                                  <Text style={styles.taxTooltipLabel}>Delivery Fee Tax</Text>
-                                  <Text style={styles.taxTooltipValue}>
-                                    ₹{bill.delivery_fee_tax.toFixed(2)}
-                                  </Text>
-                                </View>
-                                <View style={styles.taxTooltipRow}>
-                                  <Text style={styles.taxTooltipLabel}>Platform Fee Tax</Text>
-                                  <Text style={styles.taxTooltipValue}>
-                                    ₹{bill.platform_fee_tax.toFixed(2)}
-                                  </Text>
-                                </View>
-                                <View style={styles.taxTooltipRow}>
-                                  <Text style={styles.taxTooltipLabel}>Tax Amount</Text>
-                                  <Text style={styles.taxTooltipValue}>
-                                    ₹{bill.tax_amount.toFixed(2)}
-                                  </Text>
-                                </View>
-                              </View>
-                              <View style={styles.taxTooltipArrow} />
-                            </View>
-                          )}
-                        </View>
-                      </View>
-                      <Text style={styles.billValue}>₹{bill?.total_tax_amount?.toFixed(2)}</Text>
-                    </View>
-                    {bill.discount_amount > 0 && (
                       <View style={styles.billRow}>
-                        <Text style={styles.billLabel}>Discount</Text>
-                        <Text style={[styles.billValue, { color: '#00B14F' }]}>
-                          -₹{bill.discount_amount.toFixed(2)}
-                        </Text>
+                        <View style={styles.billLabelContainer}>
+                          <Text style={styles.billLabel}>Tax And Charges</Text>
+                          <View style={styles.infoIconWrapper}>
+                            <TouchableOpacity
+                              onPress={() => setShowTaxTooltip(!showTaxTooltip)}
+                              activeOpacity={0.7}
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                              <MaterialIcons name="info" size={16} color="rgba(0, 0, 0, 0.6)" />
+                            </TouchableOpacity>
+                            {showTaxTooltip && (
+                              <View style={styles.taxTooltip}>
+                                <View style={styles.taxTooltipContent}>
+                                  <View style={styles.taxTooltipRow}>
+                                    <Text style={styles.taxTooltipLabel}>Delivery Fee Tax</Text>
+                                    <Text style={styles.taxTooltipValue}>
+                                      ₹{bill.delivery_fee_tax.toFixed(2)}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.taxTooltipRow}>
+                                    <Text style={styles.taxTooltipLabel}>Platform Fee Tax</Text>
+                                    <Text style={styles.taxTooltipValue}>
+                                      ₹{bill.platform_fee_tax.toFixed(2)}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.taxTooltipRow}>
+                                    <Text style={styles.taxTooltipLabel}>Tax Amount</Text>
+                                    <Text style={styles.taxTooltipValue}>
+                                      ₹{bill.tax_amount.toFixed(2)}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <View style={styles.taxTooltipArrow} />
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                        <Text style={styles.billValue}>₹{bill?.total_tax_amount?.toFixed(2)}</Text>
                       </View>
-                    )}
-                  </View>
+                      {bill.discount_amount > 0 && (
+                        <View style={styles.billRow}>
+                          <Text style={styles.billLabel}>Discount</Text>
+                          <Text style={[styles.billValue, { color: '#00B14F' }]}>
+                            -₹{bill.discount_amount.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
 
-                  <View style={styles.dashedDivider} />
+                    <View style={styles.dashedDivider} />
 
-                  <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>Total</Text>
-                    <Text style={styles.totalValue}>₹{bill.total_amount.toFixed(2)}</Text>
-                  </View>
-                </>
-              );
-            })()}
-          </View>
-
-          {/* Payment Method Card */}
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Payment Method</Text>
-            <View style={styles.paymentRow}>
-              <View style={styles.paymentIcon}>
-                <MaterialIcons
-                  name={orderData.payment_method === 'cod' ? 'money' : 'account-balance-wallet'}
-                  size={24}
-                  color="#00B14F"
-                />
-              </View>
-              <Text style={styles.paymentText}>
-                {orderData.payment_method === 'cod' ? 'Cash on Delivery' :
-                 orderData.payment_method === 'online' ? 'Online' :
-                 orderData.payment_method === 'upi' ? 'Paid by UPI' :
-                 orderData.payment_method.toUpperCase()}
-                {orderData.payment_status && ` (${orderData.payment_status})`}
-              </Text>
+                    <View style={styles.totalRow}>
+                      <Text style={styles.totalLabel}>Total</Text>
+                      <Text style={styles.totalValue}>₹{bill.total_amount.toFixed(2)}</Text>
+                    </View>
+                  </>
+                );
+              })()}
             </View>
-          </View>
-        </ScrollView>
+
+            {/* Payment Method Card */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Payment Method</Text>
+              <View style={styles.paymentRow}>
+                <View style={styles.paymentIcon}>
+                  <MaterialIcons
+                    name={orderData.payment_method === 'cod' ? 'money' : 'account-balance-wallet'}
+                    size={24}
+                    color="#00B14F"
+                  />
+                </View>
+                <Text style={styles.paymentText}>
+                  {orderData.payment_method === 'cod' ? 'Cash on Delivery' :
+                    orderData.payment_method === 'online' ? 'Online' :
+                      orderData.payment_method === 'upi' ? 'Paid by UPI' :
+                        orderData.payment_method.toUpperCase()}
+                  {orderData.payment_status && ` (${orderData.payment_status})`}
+                </Text>
+              </View>
+            </View>
+          </ScrollView>
         )}
       </SafeAreaView>
 
@@ -1436,37 +1510,42 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       <Modal
         visible={showTrackingWebView}
         animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => {
-          setShowTrackingWebView(false);
-          setSelectedOrderIdForTracking(null);
-          setTrackingOrderData(null);
+        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : 'fullScreen'}
+        transparent={Platform.OS === 'ios'}
+        onRequestClose={handleCloseTrackingWebView}
+        onDismiss={handleCloseTrackingWebView}
+        onShow={() => {
+          // Reset bottom sheet to open state when modal opens
+          bottomSheetHeight.flattenOffset();
+          bottomSheetHeight.setValue(OPEN_HEIGHT);
+          setIsBottomSheetOpen(true);
         }}
       >
         <View style={styles.webViewModalContainer}>
-          <SafeAreaView style={styles.webViewContainer} edges={['top']}>
-            <View style={styles.webViewHeader}>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowTrackingWebView(false);
-                  setSelectedOrderIdForTracking(null);
-                  setTrackingOrderData(null);
-                }}
-                style={styles.webViewBackButton}
-              >
-                <MaterialIcons name="close" size={24} color="#001E1F" />
-              </TouchableOpacity>
-              <Text style={styles.webViewHeaderTitle}>Track Order</Text>
-              <View style={styles.webViewBackButton} />
-            </View>
-            {(() => {
-              // Prefer tracking URL from trackingOrderData (latest full data), fall back to orderData
-              const effectiveTrackingUrl = getTrackingUrlFromOrderData(trackingOrderData || orderData);
-              if (!effectiveTrackingUrl) return null;
+          {Platform.OS === 'ios' && <View style={{ height: insets.top, backgroundColor: '#FFFFFF' }} />}
+          <StatusBar barStyle="dark-content" />
+          <View style={styles.webViewHeader}>
+            <TouchableOpacity
+              onPress={handleCloseTrackingWebView}
+              style={styles.webViewBackButton}
+            >
+              <MaterialIcons name="close" size={24} color="#001E1F" />
+            </TouchableOpacity>
+            <Text style={styles.webViewHeaderTitle}>Track Order</Text>
+            <View style={styles.webViewBackButton} />
+          </View>
+          {(() => {
+            // Prefer tracking URL from trackingOrderData (latest full data), fall back to orderData
+            const effectiveTrackingUrl = getTrackingUrlFromOrderData(trackingOrderData || orderData);
+            console.log('🌐 WebView Loading URL (OrderDetail):', effectiveTrackingUrl);
+            // CRITICAL FIX: If we are closing, DO NOT render the WebView.
+            // This unmounts the WebView before the modal finishes its dismiss animation,
+            // preventing native-side freezes associated with WebView/Modal lifecycle conflicts.
+            if (!effectiveTrackingUrl || isClosingTracking || !showTrackingWebView) return null;
 
-              return (
-                <WebView
-                  source={{ uri: effectiveTrackingUrl }}
+            return (
+              <WebView
+                source={{ uri: effectiveTrackingUrl }}
                 style={styles.webView}
                 startInLoadingState={true}
                 renderLoading={() => (
@@ -1484,14 +1563,13 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 }}
                 javaScriptEnabled={true}
                 domStorageEnabled={true}
-                  mixedContentMode="always"
-                />
-              );
-            })()}
-          </SafeAreaView>
-          
+                mixedContentMode="always"
+              />
+            );
+          })()}
+
           {/* Bottom Sheet Overlay */}
-          <Animated.View 
+          <Animated.View
             style={[
               styles.trackingBottomSheet,
               {
@@ -1500,24 +1578,24 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             ]}
           >
             {/* Drag handle at top - always visible, controls open/close */}
-            <View 
-              style={styles.trackingDragHandleContainer} 
-              {...(isBottomSheetOpen ? panResponder.panHandlers : {})}
+            <View
+              style={styles.trackingDragHandleContainer}
+              {...notchPanResponder.panHandlers}
             >
               <View style={styles.trackingDragHandleBar} />
             </View>
-            
+
             {/* Top Section: Always visible (restaurant info, status, address3) - draggable when closed */}
             {trackingOrderData && !isLoadingTrackingData && (() => {
               const displayOrder = trackingContextOrder || trackingOrderData;
               const displayStatus = displayOrder?.status;
               const statusConfig = mapOrderStatusToUI(displayStatus);
-              
+
               // Get agent info from tracking array - find latest entry with agent details
               const trackingArray = displayOrder?.tracking || [];
               let agentName: string | null = null;
-              let agentPhone: string | null = null;
-              
+              let _agentPhone: string | null = null;
+
               // Find the latest tracking entry with agent_name or agent_phone
               // Iterate from the end to get the most recent agent assignment
               for (let i = trackingArray.length - 1; i >= 0; i--) {
@@ -1526,21 +1604,21 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   // If we find an entry with agent_name, use it
                   if (trackingEntry.agent_name) {
                     agentName = trackingEntry.agent_name;
-                    agentPhone = trackingEntry.agent_phone || null;
+                    _agentPhone = trackingEntry.agent_phone || null;
                     break;
                   }
                   // If we find an entry with agent_phone but no name, still use it
                   if (trackingEntry.agent_phone && !agentName) {
                     agentName = null;
-                    agentPhone = trackingEntry.agent_phone;
+                    _agentPhone = trackingEntry.agent_phone;
                   }
                 }
               }
-              
+
               return (
-                <View 
+                <View
                   style={styles.trackingTopSection}
-                  {...(!isBottomSheetOpen ? panResponder.panHandlers : {})}
+                  {...panResponder.panHandlers}
                 >
                   <View style={styles.trackingLeftContent}>
                     <View style={styles.trackingRestaurantRow}>
@@ -1569,10 +1647,10 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   </View>
                   <View style={styles.trackingRightContent}>
                     <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
-                      <MaterialIcons 
-                        name={statusConfig.iconName as any} 
-                        size={16} 
-                        color={statusConfig.color} 
+                      <MaterialIcons
+                        name={statusConfig.iconName as any}
+                        size={16}
+                        color={statusConfig.color}
                       />
                       <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
                         {statusConfig.label}
@@ -1582,131 +1660,134 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 </View>
               );
             })()}
-            
+
             {/* Scrollable content - only shown when open */}
             {isBottomSheetOpen && (
               <>
-              {isLoadingTrackingData ? (
-              <View style={styles.trackingLoadingContainer}>
-                <ActivityIndicator size="large" color="#00B14F" />
-                <Text style={styles.trackingLoadingText}>Loading order status...</Text>
-              </View>
-            ) : trackingOrderData ? (
-              <ScrollView
-                style={styles.trackingBottomSheetContent}
-                contentContainerStyle={styles.trackingBottomSheetContentContainer}
-                showsVerticalScrollIndicator={true}
-                scrollEnabled={isBottomSheetOpen}
-                nestedScrollEnabled={true}
-              >
-                {(() => {
-                  // WATCHING BOTH:
-                  // 1. trackingContextOrder = FCM updates (real-time status from notifications)
-                  // 2. trackingOrderData = API response (full order data with updated status from API)
-                  // Priority: FCM (real-time) > API (full data)
-                  // Both have the updated status - FCM is faster, API has complete data
-                  const displayOrder = trackingContextOrder || trackingOrderData;
-                  const displayStatus = displayOrder?.status;
-                  
-                  // Get agent info from tracking array - find latest entry with agent details
-                  const trackingArray = displayOrder?.tracking || [];
-                  let agentName: string | null = null;
-                  let agentPhone: string | null = null;
-                  
-                  // Find the latest tracking entry with agent_name or agent_phone
-                  // Iterate from the end to get the most recent agent assignment
-                  for (let i = trackingArray.length - 1; i >= 0; i--) {
-                    const trackingEntry = trackingArray[i];
-                    if (trackingEntry) {
-                      // If we find an entry with agent_name, use it
-                      if (trackingEntry.agent_name) {
-                        agentName = trackingEntry.agent_name;
-                        agentPhone = trackingEntry.agent_phone || null;
-                        break;
-                      }
-                      // If we find an entry with agent_phone but no name, still use it
-                      if (trackingEntry.agent_phone && !agentName) {
-                        agentName = null;
-                        agentPhone = trackingEntry.agent_phone;
-                      }
-                    }
-                  }
-                  
-                  // Format estimated delivery time - extract only time from ISO string
-                  const formatDeliveryTime = (dateString: string | null | undefined): string => {
-                    if (!dateString) return '';
-                    try {
-                      const date = new Date(dateString);
-                      if (isNaN(date.getTime())) return '';
-                      return date.toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true,
-                      });
-                    } catch {
-                      return '';
-                    }
-                  };
-                  
-                  const deliveryTime = formatDeliveryTime(displayOrder?.estimated_delivery_time);
-                  
-                  // Get status config
-                  const statusConfig = mapOrderStatusToUI(displayStatus);
+                {isLoadingTrackingData ? (
+                  <View style={styles.trackingLoadingContainer}>
+                    <ActivityIndicator size="large" color="#00B14F" />
+                    <Text style={styles.trackingLoadingText}>Loading order status...</Text>
+                  </View>
+                ) : trackingOrderData ? (
+                  <ScrollView
+                    style={styles.trackingBottomSheetContent}
+                    contentContainerStyle={styles.trackingBottomSheetContentContainer}
+                    showsVerticalScrollIndicator={true}
+                    scrollEnabled={isBottomSheetOpen}
+                    nestedScrollEnabled={true}
+                  >
+                    {(() => {
+                      // WATCHING BOTH:
+                      // 1. trackingContextOrder = FCM updates (real-time status from notifications)
+                      // 2. trackingOrderData = API response (full order data with updated status from API)
+                      // Priority: FCM (real-time) > API (full data)
+                      // Both have the updated status - FCM is faster, API has complete data
+                      const displayOrder = trackingContextOrder || trackingOrderData;
+                      const displayStatus = displayOrder?.status;
 
-                  // Normalize status for helper conditions
-                  const normalizedStatus = (displayStatus || '').toLowerCase().replace(/[_\s]+/g, '-');
-                  const isAgentAssignedish =
-                    normalizedStatus === 'agent-assigned' ||
-                    normalizedStatus === 'agent-arrived-restaurant' ||
-                    normalizedStatus === 'picked' ||
-                    normalizedStatus === 'out-for-delivery' ||
-                    normalizedStatus === 'on-the-way';
-
-                  // If status says agent is involved but we don't yet have name from API,
-                  // show a friendly placeholder instead of "No Delivery Agent Assigned"
-                  let agentDisplayName = agentName;
-                  if (!agentDisplayName && isAgentAssignedish) {
-                    agentDisplayName = 'Delivery partner is on the way';
-                  }
-                  
-                  // Check if order is delivered
-                  const isDelivered = (displayStatus || '').toLowerCase().trim() === 'delivered' || 
-                                      (displayStatus || '').toLowerCase().trim() === 'completed';
-                  
-                  // Format timestamp to show only time
-                  const formatTimestamp = (timestamp: string | null | undefined): string => {
-                    if (!timestamp) return '';
-                    try {
-                      const date = new Date(timestamp);
-                      if (isNaN(date.getTime())) return '';
-                      return date.toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true,
+                      // Get agent info from tracking array - find latest entry with agent details
+                      const rawTrackingArray = displayOrder?.tracking || [];
+                      // Sort tracking by timestamp (oldest first for timeline display)
+                      const trackingArray = [...rawTrackingArray].sort((a: any, b: any) => {
+                        return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
                       });
-                    } catch {
-                      return '';
-                    }
-                  };
-                  
-                  // Determine timeline state for each tracking entry
-                  // If delivered, all items are completed. Otherwise, last entry is current
-                  const getTimelineState = (index: number, totalItems: number) => {
-                    if (isDelivered) {
-                      // If delivered, all items are completed
-                      return 'completed';
-                    }
-                    if (index < totalItems - 1) {
-                      return 'completed'; // All previous items are completed
-                    } else {
-                      return 'current'; // Last item is current
-                    }
-                  };
-                  
-                  return (
-                    <>
-                      {/* Items List - Commented out per requirements */}
-                      {/* {displayOrder.items && displayOrder.items.length > 0 && (
+                      let agentName: string | null = null;
+                      let agentPhone: string | null = null;
+
+                      // Find the latest tracking entry with agent_name or agent_phone
+                      // Iterate from the end to get the most recent agent assignment
+                      for (let i = trackingArray.length - 1; i >= 0; i--) {
+                        const trackingEntry = trackingArray[i];
+                        if (trackingEntry) {
+                          // If we find an entry with agent_name, use it
+                          if (trackingEntry.agent_name) {
+                            agentName = trackingEntry.agent_name;
+                            agentPhone = trackingEntry.agent_phone || null;
+                            break;
+                          }
+                          // If we find an entry with agent_phone but no name, still use it
+                          if (trackingEntry.agent_phone && !agentName) {
+                            agentName = null;
+                            agentPhone = trackingEntry.agent_phone;
+                          }
+                        }
+                      }
+
+                      // Format estimated delivery time - extract only time from ISO string
+                      const formatDeliveryTime = (dateString: string | null | undefined): string => {
+                        if (!dateString) return '';
+                        try {
+                          const date = new Date(dateString);
+                          if (isNaN(date.getTime())) return '';
+                          return date.toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          });
+                        } catch {
+                          return '';
+                        }
+                      };
+
+                      const deliveryTime = formatDeliveryTime(displayOrder?.estimated_delivery_time);
+
+
+
+                      // Normalize status for helper conditions
+                      const normalizedStatus = (displayStatus || '').toLowerCase().replace(/[_\s]+/g, '-');
+                      const isAgentAssignedish =
+                        normalizedStatus === 'agent-assigned' ||
+                        normalizedStatus === 'agent-arrived-restaurant' ||
+                        normalizedStatus === 'picked' ||
+                        normalizedStatus === 'out-for-delivery' ||
+                        normalizedStatus === 'on-the-way';
+
+                      // If status says agent is involved but we don't yet have name from API,
+                      // show a friendly placeholder instead of "No Delivery Agent Assigned"
+                      let agentDisplayName = agentName;
+                      if (!agentDisplayName && isAgentAssignedish) {
+                        agentDisplayName = 'Delivery partner is on the way';
+                      }
+
+                      // Check if order is delivered
+                      const isDelivered = (displayStatus || '').toLowerCase().trim() === 'delivered' ||
+                        (displayStatus || '').toLowerCase().trim() === 'completed';
+
+                      // Format timestamp to show only time
+                      const formatTimestamp = (timestamp: string | null | undefined): string => {
+                        if (!timestamp) return '';
+                        try {
+                          const date = new Date(timestamp);
+                          if (isNaN(date.getTime())) return '';
+                          return date.toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          });
+                        } catch {
+                          return '';
+                        }
+                      };
+
+                      // Determine timeline state for each tracking entry
+                      // If delivered, all items are completed. Otherwise, last entry is current
+                      const getTimelineState = (index: number, totalItems: number) => {
+                        if (isDelivered) {
+                          // If delivered, all items are completed
+                          return 'completed';
+                        }
+                        if (index < totalItems - 1) {
+                          return 'completed'; // All previous items are completed
+                        } else {
+                          return 'current'; // Last item is current
+                        }
+                      };
+
+                      return (
+                        <>
+                          {/* Items List - Commented out per requirements */}
+                          {/* {displayOrder.items && displayOrder.items.length > 0 && (
                         <View style={styles.trackingItemsContainer}>
                           {displayOrder.items.map((item: any, index: number) => (
                             <Text key={index} style={styles.trackingItemText}>
@@ -1715,125 +1796,125 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                           ))}
                         </View>
                       )} */}
-                      
-                      {/* Divider */}
-                      <View style={styles.trackingDivider} />
-                      
-                      {/* Agent Details - above estimated delivery time */}
-                      <View style={styles.trackingAgentRowInScroll}>
-                        <View style={styles.trackingAgentInfoContainer}>
-                          <Text style={styles.trackingAgentNameInScroll}>
-                            {agentDisplayName || 'No Delivery Agent Assigned'}
-                          </Text>
-                          {agentDisplayName && agentName && (
-                            <View style={styles.trackingAgentTag}>
-                              <Text style={styles.trackingAgentTagText}>Delivery Partner</Text>
-                            </View>
-                          )}
-                        </View>
-                        {agentPhone && (
-                          <TouchableOpacity
-                            style={styles.trackingCallButtonInScroll}
-                            onPress={() => handleCallDeliveryAgent(displayOrder.order_number, agentPhone)}
-                            disabled={isInitiatingCall}
-                            activeOpacity={0.7}
-                          >
-                            {isInitiatingCall ? (
-                              <ActivityIndicator size="small" color="#00B14F" />
-                            ) : (
-                              <MaterialIcons name="phone" size={18} color="#00B14F" />
-                            )}
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                      
-                      {/* Estimated Delivery Time or Completed Status */}
-                      {isDelivered ? (
-                        <View style={styles.trackingCompletedContainer}>
-                          <MaterialIcons name="check-circle" size={64} color="#00B14F" />
-                          <Text style={styles.trackingCompletedText}>Completed</Text>
-                        </View>
-                      ) : deliveryTime ? (
-                        <View style={styles.trackingDeliveryTimeContainer}>
-                          <Text style={styles.trackingDeliveryTimeValue}>{deliveryTime}</Text>
-                          <Text style={styles.trackingDeliveryTimeLabel}>ESTIMATED DELIVERY TIME</Text>
-                        </View>
-                      ) : null}
-                      
-                      {/* Vertical Timeline */}
-                      <View style={styles.trackingTimelineVerticalContainer}>
-                        {trackingArray.map((trackingEntry: any, index: number) => {
-                          const state = getTimelineState(index, trackingArray.length);
-                          const isCompleted = state === 'completed';
-                          const isCurrent = state === 'current';
-                          
-                          return (
-                            <View key={trackingEntry.id || index} style={styles.trackingTimelineItem}>
-                              <View style={styles.trackingTimelineItemContent}>
-                                {/* Icon */}
-                                <View style={[
-                                  styles.trackingTimelineIcon,
-                                  isCompleted && styles.trackingTimelineIconCompleted,
-                                  isCurrent && !isDelivered && styles.trackingTimelineIconCurrent,
-                                  !isCompleted && !isCurrent && styles.trackingTimelineIconUpcoming,
-                                ]}>
-                                  {isCompleted || isDelivered ? (
-                                    <MaterialIcons name="check" size={8} color="#FFFFFF" />
-                                  ) : isCurrent ? (
-                                    <ActivityIndicator size="small" color="#3B82F6" />
-                                  ) : (
-                                    <MaterialIcons name="radio-button-unchecked" size={8} color="#BFBCBA" />
-                                  )}
+
+                          {/* Divider */}
+                          <View style={styles.trackingDivider} />
+
+                          {/* Agent Details - above estimated delivery time */}
+                          <View style={styles.trackingAgentRowInScroll}>
+                            <View style={styles.trackingAgentInfoContainer}>
+                              <Text style={styles.trackingAgentNameInScroll}>
+                                {agentDisplayName || 'No Delivery Agent Assigned'}
+                              </Text>
+                              {agentDisplayName && agentName && (
+                                <View style={styles.trackingAgentTag}>
+                                  <Text style={styles.trackingAgentTagText}>Delivery Partner</Text>
                                 </View>
-                                
-                                {/* Connector line (except for last item) */}
-                                {index < trackingArray.length - 1 && (
-                                  <View style={[
-                                    styles.trackingTimelineConnector,
-                                    isCompleted && styles.trackingTimelineConnectorCompleted,
-                                    !isCompleted && styles.trackingTimelineConnectorUpcoming,
-                                  ]} />
-                                )}
-                              </View>
-                              
-                              {/* Label - Display message from tracking array */}
-                              <View style={styles.trackingTimelineLabelContainer}>
-                                <Text style={[
-                                  styles.trackingTimelineLabel,
-                                  isCurrent && !isDelivered && styles.trackingTimelineLabelCurrent,
-                                  !isCurrent && styles.trackingTimelineLabelDefault,
-                                ]}>
-                                  {trackingEntry.message || 'Status update'}
-                                </Text>
-                                {/* Timestamp below message */}
-                                {trackingEntry.timestamp && (
-                                  <Text style={styles.trackingTimelineTimestamp}>
-                                    {formatTimestamp(trackingEntry.timestamp)}
-                                  </Text>
-                                )}
-                              </View>
+                              )}
                             </View>
-                          );
-                        })}
-                      </View>
-                      
-                      {/* Divider */}
-                      <View style={styles.trackingDivider} />
-                      
-                      {/* Bottom spacing - two lines */}
-                      <View style={styles.trackingBottomSpacing} />
-                    </>
-                  );
-                })()}
-              </ScrollView>
-            ) : null}
+                            {agentPhone && (
+                              <TouchableOpacity
+                                style={styles.trackingCallButtonInScroll}
+                                onPress={() => handleCallDeliveryAgent(displayOrder.order_number, agentPhone)}
+                                disabled={isInitiatingCall}
+                                activeOpacity={0.7}
+                              >
+                                {isInitiatingCall ? (
+                                  <ActivityIndicator size="small" color="#00B14F" />
+                                ) : (
+                                  <MaterialIcons name="phone" size={18} color="#00B14F" />
+                                )}
+                              </TouchableOpacity>
+                            )}
+                          </View>
+
+                          {/* Estimated Delivery Time or Completed Status */}
+                          {isDelivered ? (
+                            <View style={styles.trackingCompletedContainer}>
+                              <MaterialIcons name="check-circle" size={64} color="#00B14F" />
+                              <Text style={styles.trackingCompletedText}>Completed</Text>
+                            </View>
+                          ) : deliveryTime ? (
+                            <View style={styles.trackingDeliveryTimeContainer}>
+                              <Text style={styles.trackingDeliveryTimeValue}>{deliveryTime}</Text>
+                              <Text style={styles.trackingDeliveryTimeLabel}>ESTIMATED DELIVERY TIME</Text>
+                            </View>
+                          ) : null}
+
+                          {/* Vertical Timeline */}
+                          <View style={styles.trackingTimelineVerticalContainer}>
+                            {trackingArray.map((trackingEntry: any, index: number) => {
+                              const state = getTimelineState(index, trackingArray.length);
+                              const isCompleted = state === 'completed';
+                              const isCurrent = state === 'current';
+
+                              return (
+                                <View key={trackingEntry.id || index} style={styles.trackingTimelineItem}>
+                                  <View style={styles.trackingTimelineItemContent}>
+                                    {/* Icon */}
+                                    <View style={[
+                                      styles.trackingTimelineIcon,
+                                      isCompleted && styles.trackingTimelineIconCompleted,
+                                      isCurrent && !isDelivered && styles.trackingTimelineIconCurrent,
+                                      !isCompleted && !isCurrent && styles.trackingTimelineIconUpcoming,
+                                    ]}>
+                                      {isCompleted || isDelivered ? (
+                                        <MaterialIcons name="check" size={8} color="#FFFFFF" />
+                                      ) : isCurrent ? (
+                                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' }} />
+                                      ) : (
+                                        <MaterialIcons name="radio-button-unchecked" size={8} color="#BFBCBA" />
+                                      )}
+                                    </View>
+
+                                    {/* Connector line (except for last item) */}
+                                    {index < trackingArray.length - 1 && (
+                                      <View style={[
+                                        styles.trackingTimelineConnector,
+                                        isCompleted && styles.trackingTimelineConnectorCompleted,
+                                        !isCompleted && styles.trackingTimelineConnectorUpcoming,
+                                      ]} />
+                                    )}
+                                  </View>
+
+                                  {/* Label - Display message from tracking array */}
+                                  <View style={styles.trackingTimelineLabelContainer}>
+                                    <Text style={[
+                                      styles.trackingTimelineLabel,
+                                      isCurrent && !isDelivered && styles.trackingTimelineLabelCurrent,
+                                      !isCurrent && styles.trackingTimelineLabelDefault,
+                                    ]}>
+                                      {trackingEntry.message || 'Status update'}
+                                    </Text>
+                                    {/* Timestamp below message */}
+                                    {trackingEntry.timestamp && (
+                                      <Text style={styles.trackingTimelineTimestamp}>
+                                        {formatTimestamp(trackingEntry.timestamp)}
+                                      </Text>
+                                    )}
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </View>
+
+                          {/* Divider */}
+                          <View style={styles.trackingDivider} />
+
+                          {/* Bottom spacing - two lines */}
+                          <View style={styles.trackingBottomSpacing} />
+                        </>
+                      );
+                    })()}
+                  </ScrollView>
+                ) : null}
               </>
             )}
-            
+
           </Animated.View>
         </View>
       </Modal>
-    </View>
+    </View >
   );
 };
 
@@ -2454,6 +2535,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E4E4E4',
     backgroundColor: '#FFFFFF',
+    zIndex: 999,
+    elevation: 10,
   },
   webViewBackButton: {
     width: 40,
@@ -2473,14 +2556,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   webViewLoadingContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
+  },
+  webViewLoadingText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: 'rgba(0, 30, 31, 0.6)',
+    marginTop: 12,
   },
   trackingDisabledMessage: {
     fontFamily: 'Poppins',
@@ -2535,7 +2620,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
-    elevation: 15, // Android shadow
+    zIndex: 1000,
+    elevation: 20, // Android shadow and layering
   },
   trackingDragHandleContainer: {
     width: '100%',
@@ -2544,7 +2630,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 8,
     paddingBottom: 8,
-    zIndex: 10,
+    zIndex: 999,
+    elevation: 10,
   },
   trackingDragHandleBar: {
     width: 40,

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 
@@ -19,8 +19,9 @@ export const Snackbar: React.FC<SnackbarProps> = ({
   duration = 3000,
   onDismiss,
 }) => {
-  const slideAnim = useRef(new Animated.Value(-100)).current;
+  const slideAnim = useRef(new Animated.Value(-200)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (visible) {
@@ -56,7 +57,7 @@ export const Snackbar: React.FC<SnackbarProps> = ({
   const hideSnackbar = () => {
     Animated.parallel([
       Animated.timing(slideAnim, {
-        toValue: -100,
+        toValue: -200,
         duration: 250,
         useNativeDriver: true,
       }),
@@ -98,12 +99,13 @@ export const Snackbar: React.FC<SnackbarProps> = ({
       style={[
         styles.container,
         {
+          top: Math.max(insets.top, 20),
           transform: [{ translateY: slideAnim }],
           opacity: opacityAnim,
         },
       ]}
     >
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
+      <View style={styles.snackbarWrapper}>
         <View style={styles.snackbarContainer}>
           <View style={[styles.snackbar, { backgroundColor: getBackgroundColor() }]}>
             <MaterialIcons name={getIcon()} size={20} color="#FFFFFF" style={styles.icon} />
@@ -115,7 +117,7 @@ export const Snackbar: React.FC<SnackbarProps> = ({
             )}
           </View>
         </View>
-      </SafeAreaView>
+      </View>
     </Animated.View>
   );
 };
@@ -128,7 +130,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 9999,
   },
-  safeArea: {
+  snackbarWrapper: {
     paddingHorizontal: 16,
     paddingTop: 8,
   },
