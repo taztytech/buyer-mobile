@@ -35,75 +35,75 @@ export const ViewCartBar: React.FC<ViewCartBarProps> = ({
     <View style={[styles.cartBarWrapper, { bottom: 0 }]}>
       <View style={[styles.cartBar, { paddingBottom: insets.bottom }]}>
         <View style={styles.cartContainer}>
-        {/* Header Row: Restaurant Info and Checkout Button */}
-        <View style={styles.headerRow}>
-          <View style={styles.restaurantInfo}>
-            {/* Restaurant Logo */}
-            <View style={styles.logoContainer}>
-              {restaurantLogo ? (
-                <Image
-                  source={typeof restaurantLogo === 'string' ? { uri: restaurantLogo } : restaurantLogo}
-                  style={styles.restaurantLogo}
-                  resizeMode="cover"
-                  defaultSource={require('@/assets/dummy-restaurent.png')}
-                />
-              ) : (
-                <MaterialIcons name="restaurant" size={24} color="#00B14F" />
-              )}
+          {/* Header Row: Restaurant Info and Checkout Button */}
+          <View style={styles.headerRow}>
+            <View style={styles.restaurantInfo}>
+              {/* Restaurant Logo */}
+              <View style={styles.logoContainer}>
+                {restaurantLogo ? (
+                  <Image
+                    source={typeof restaurantLogo === 'string' ? { uri: restaurantLogo } : restaurantLogo}
+                    style={styles.restaurantLogo}
+                    resizeMode="cover"
+                    defaultSource={require('@/assets/dummy-restaurent.png')}
+                  />
+                ) : (
+                  <MaterialIcons name="restaurant" size={24} color="#00B14F" />
+                )}
+              </View>
+
+              {/* Restaurant Name and View Full Menu */}
+              <View style={styles.restaurantTextContainer}>
+                <Text style={styles.restaurantName} numberOfLines={1}>
+                  {restaurantName || 'Restaurant'}
+                </Text>
+                <TouchableOpacity
+                  onPress={onViewMenu || onPress}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.viewMenuText}>View full menu</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
-            {/* Restaurant Name and View Full Menu */}
-            <View style={styles.restaurantTextContainer}>
-              <Text style={styles.restaurantName} numberOfLines={1}>
-                {restaurantName || 'Restaurant'}
+            {/* Checkout Button */}
+            <TouchableOpacity
+              style={styles.checkoutButton}
+              onPress={onPress}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.checkoutButtonText}>Checkout</Text>
+              <MaterialIcons name="arrow-forward" size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Bottom Row: Location, Order Details, and Delete Icon */}
+          <View style={styles.bottomRow}>
+            {/* Location Section */}
+            <View style={styles.locationSection}>
+              <MaterialIcons name="location-on" size={18} color="#00B14F" />
+              <Text style={styles.locationText} numberOfLines={1}>{deliveryLocation}</Text>
+            </View>
+
+            {/* Order Items Details */}
+            <View style={styles.orderDetailsRow}>
+              <Text style={styles.cartItemCount}>
+                {totalCartItems} Item{totalCartItems > 1 ? 's' : ''}
               </Text>
-              <TouchableOpacity
-                onPress={onViewMenu || onPress}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.viewMenuText}>View full menu</Text>
-              </TouchableOpacity>
+              <Text style={styles.priceSeparator}>|</Text>
+              <Text style={styles.cartTotalPrice}>₹{totalPrice}</Text>
             </View>
-          </View>
 
-          {/* Checkout Button */}
-          <TouchableOpacity
-            style={styles.checkoutButton}
-            onPress={onPress}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.checkoutButtonText}>Checkout</Text>
-            <MaterialIcons name="arrow-forward" size={16} color="#FFFFFF" />
-          </TouchableOpacity>
+            {/* Delete Icon */}
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={handleDelete}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="delete-outline" size={22} color="#FF3B30" />
+            </TouchableOpacity>
+          </View>
         </View>
-
-        {/* Bottom Row: Location, Order Details, and Delete Icon */}
-        <View style={styles.bottomRow}>
-          {/* Location Section */}
-          <View style={styles.locationSection}>
-            <MaterialIcons name="location-on" size={18} color="#00B14F" />
-            <Text style={styles.locationText} numberOfLines={1}>{deliveryLocation}</Text>
-          </View>
-
-          {/* Order Items Details */}
-          <View style={styles.orderDetailsRow}>
-            <Text style={styles.cartItemCount}>
-              {totalCartItems} Item{totalCartItems > 1 ? 's' : ''}
-            </Text>
-            <Text style={styles.priceSeparator}>|</Text>
-            <Text style={styles.cartTotalPrice}>₹{totalPrice}</Text>
-          </View>
-
-          {/* Delete Icon */}
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={handleDelete}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="delete-outline" size={22} color="#FF3B30" />
-          </TouchableOpacity>
-        </View>
-      </View>
       </View>
     </View>
   );

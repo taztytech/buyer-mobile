@@ -38,7 +38,7 @@ import { useConfirmation } from '@/context/ConfirmationContext';
 import { ItemTiming as ImportedItemTiming, isItemAvailable } from '@/utils/timing.utils';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 /**
  * Format time difference in a user-friendly way
@@ -2446,7 +2446,7 @@ const styles = StyleSheet.create({
   },
   headerImage: {
     width: SCREEN_WIDTH,
-    height: 252,
+    height: SCREEN_HEIGHT * 0.3,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
     overflow: 'hidden',

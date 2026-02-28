@@ -19,7 +19,7 @@ import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { restaurantService } from '@/services/restaurant.service';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BANNER_WIDTH = SCREEN_WIDTH - 40; // Fixed banner width with 20px padding on each side
 
 interface HomeScreenProps {
@@ -1366,11 +1366,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Top background filler for pull-to-refresh overscroll - Layer 1 (Back) */}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 600, backgroundColor: '#00B14F' }} pointerEvents="none" />
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: SCREEN_HEIGHT * 0.6, backgroundColor: '#00B14F' }} pointerEvents="none" />
 
       {/* Animated Header Image - Layer 2 (Middle) */}
-      <Animated.Image
-        source={require('@/assets/home_app_bar.png')}
+      <View
+        pointerEvents="none"
         style={[
           styles.headerBackgroundImage,
           {
@@ -1379,22 +1379,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             left: 0,
             right: 0,
             width: '100%',
-            height: Dimensions.get('window').height * 0.35,
-            transform: [
-              {
-                translateY: scrollYAnimated.interpolate({
-                  inputRange: [0, 500],
-                  outputRange: [0, -500],
-                  extrapolateLeft: 'clamp',
-                  extrapolateRight: 'clamp',
-                }),
-              },
-            ],
+            height: SCREEN_HEIGHT * 0.28,
           },
         ]}
-        resizeMode="cover"
-        pointerEvents="none"
-      />
+      >
+        <Animated.Image
+          source={require('@/assets/home_app_bar.png')}
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              transform: [
+                {
+                  translateY: scrollYAnimated.interpolate({
+                    inputRange: [0, 500],
+                    outputRange: [0, -500],
+                    extrapolateLeft: 'clamp',
+                    extrapolateRight: 'clamp',
+                  }),
+                },
+              ],
+            },
+          ]}
+          resizeMode="cover"
+        />
+      </View>
 
       {/* SafeAreaView and Content - Layer 3 (Front) */}
       <SafeAreaView style={styles.safeArea} edges={[]}>
@@ -2127,9 +2135,9 @@ const styles = StyleSheet.create({
   headerBackground: {
     width: '100%',
     paddingHorizontal: 20,
-    paddingBottom: 20,
-    gap: 18,
-    minHeight: 240,
+    paddingBottom: 15,
+    gap: 12,
+    minHeight: 180,
   },
   headerBackgroundImage: {
     width: '120%',
@@ -2145,7 +2153,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     width: '100%',
-    height: 50,
+    minHeight: 44,
   },
   locationInfo: {
     flexDirection: 'column',
@@ -2153,7 +2161,6 @@ const styles = StyleSheet.create({
     padding: 0,
     gap: 2,
     width: 326,
-    height: 44,
     flex: 1,
   },
   cityRow: {
@@ -2253,12 +2260,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    height: 60,
+    height: 50,
     gap: 11,
   },
   searchBar: {
     flex: 1,
-    height: 60,
+    height: 50,
     borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
@@ -2282,7 +2289,7 @@ const styles = StyleSheet.create({
   },
   vegModeContainer: {
     width: 46,
-    height: 60,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,

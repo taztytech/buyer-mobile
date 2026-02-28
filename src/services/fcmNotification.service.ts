@@ -58,6 +58,8 @@ class FCMNotificationService {
   private tokenRefreshListener: (() => void) | null = null;
   private messageListener: (() => void) | null = null;
   private notificationOpenedListener: (() => void) | null = null;
+  private lastProcessedMessageId: string | null = null;
+  private lastProcessedTime: number = 0;
   private recentMessages: NotificationPayload[] = [];
   private readonly MAX_RECENT_MESSAGES = 50;
   private navigationCallback: NotificationNavigationCallback | null = null;
@@ -628,6 +630,21 @@ class FCMNotificationService {
    * Override this or listen to events
    */
   private onNotificationOpened(payload: NotificationPayload): void {
+    // Prevent duplicate processing of the same notification within a short window (2 seconds)
+    // iOS sometimes triggers both getInitialNotification and onNotificationOpenedApp
+    const now = Date.now();
+    if (
+      payload.notificationId &&
+      payload.notificationId === this.lastProcessedMessageId &&
+      (now - this.lastProcessedTime) < 2000
+    ) {
+      console.log('ℹ️  FCM: Notification already processed recently, skipping:', payload.notificationId);
+      return;
+    }
+
+    this.lastProcessedMessageId = payload.notificationId || null;
+    this.lastProcessedTime = now;
+
     console.log('👆 FCM: Notification opened:', payload);
 
     // Handle navigation based on notification data
