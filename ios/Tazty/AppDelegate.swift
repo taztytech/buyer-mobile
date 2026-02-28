@@ -50,6 +50,17 @@ FirebaseApp.configure()
     completionHandler([[.banner, .list, .sound, .badge]])
   }
 
+  public func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    // This is called when a user taps a notification
+    // Firebase Messaging will also catch this via swizzling, 
+    // but we must call the completion handler to avoid hangs.
+    completionHandler()
+  }
+
   // Linking API
   public override func application(
     _ app: UIApplication,

@@ -129,13 +129,14 @@ function AppContent() {
   // Set Poppins as default font for all Text components
   React.useEffect(() => {
     if (fontsLoaded) {
-      // Set default font family for all Text components
-      // This applies Poppins as the default font across the entire app
-      // Note: defaultProps is deprecated but still works in React Native
       if (!(Text as any).defaultProps) {
         (Text as any).defaultProps = {};
       }
-      (Text as any).defaultProps.style = { fontFamily: 'Poppins' };
+      (Text as any).defaultProps.style = {
+        ...(Text as any).defaultProps.style,
+        fontFamily: 'Poppins',
+        paddingRight: 2, // Prevent horizontal clipping of custom fonts on iOS
+      };
     }
   }, [fontsLoaded]);
 
@@ -241,6 +242,16 @@ function AppContent() {
     // Navigate to My Orders screen and highlight the order
     fcmNotificationService.setNavigationCallback((orderId: string) => {
       console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
+
+      // Batch all screen position resets together to ensure Orders screen is visible
+      // and not covered by other overlays (like restaurant or checkout)
+      ordersScreenSlide.setValue(0);
+      orderDetailScreenSlide.setValue(SCREEN_WIDTH);
+      restaurantScreenSlide.setValue(SCREEN_WIDTH);
+      checkoutScreenSlide.setValue(SCREEN_WIDTH);
+      profileScreenSlide.setValue(SCREEN_WIDTH);
+      searchScreenSlide.setValue(SCREEN_WIDTH);
+
       setHighlightOrderId(orderId);
       setCurrentScreen('orders');
 
