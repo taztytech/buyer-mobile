@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { View, StyleSheet, ActivityIndicator, Animated } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 interface TrackingWebViewProps {
@@ -32,19 +32,33 @@ interface TrackingWebViewProps {
 const TrackingWebView: React.FC<TrackingWebViewProps> = React.memo(
   ({ trackingUrl, webViewRef, webViewLoadedRef }) => {
 
+    const [showOverlay, setShowOverlay] = useState(!webViewLoadedRef.current);
+    const overlayOpacity = useRef(new Animated.Value(showOverlay ? 1 : 0)).current;
+
     // Stable source object — new reference ONLY when the URI actually changes
     const source = useMemo(() => ({ uri: trackingUrl }), [trackingUrl]);
 
     const handleLoad = useCallback(() => {
       console.log('[TrackingWebView] Map loaded successfully');
       webViewLoadedRef.current = true;
-    }, [webViewLoadedRef]);
+      if (showOverlay) {
+        Animated.timing(overlayOpacity, {
+          toValue: 0,
+          duration: 220,
+          useNativeDriver: true,
+        }).start(() => {
+          setShowOverlay(false);
+        });
+      }
+    }, [overlayOpacity, showOverlay, webViewLoadedRef]);
 
     const handleLoadStart = useCallback(() => {
-      if (!webViewLoadedRef.current) {
+      if (!webViewLoadedRef.current && !showOverlay) {
         console.log('[TrackingWebView] Map loading started');
+        overlayOpacity.setValue(1);
+        setShowOverlay(true);
       }
-    }, [webViewLoadedRef]);
+    }, [overlayOpacity, showOverlay, webViewLoadedRef]);
 
     const handleError = useCallback((e: any) => {
       console.error('[TrackingWebView] Error:', e.nativeEvent);
@@ -54,40 +68,77 @@ const TrackingWebView: React.FC<TrackingWebViewProps> = React.memo(
       console.error('[TrackingWebView] HTTP Error:', e.nativeEvent.statusCode, e.nativeEvent.description);
     }, []);
 
-    // Loading overlay — neutral dark background that works in both normal and PiP mode.
-    // This is intentionally NOT mode-aware so the prop reference stays stable.
-    const renderLoadingView = useCallback(() => (
-      <View style={styles.loadingOverlay}>
-        <ActivityIndicator size="large" color="#00B14F" />
-      </View>
-    ), []);
+    const injectedTrackingLayoutScript = `
+      (function() {
+        function fixLayout() {
+          try {
+            var docEl = document.documentElement;
+            var body = document.body || docEl;
+            docEl.style.height = '100vh';
+            body.style.height = '100vh';
+
+            var candidates = document.querySelectorAll('.gm-style, #map, [id*="map"], [class*="map"]');
+            var vh = window.innerHeight || docEl.clientHeight || body.clientHeight || 0;
+
+            for (var i = 0; i < candidates.length; i++) {
+              var el = candidates[i];
+              el.style.height = vh + 'px';
+              el.style.maxHeight = '100vh';
+            }
+
+            try {
+              var evt = new Event('resize');
+              window.dispatchEvent(evt);
+            } catch (e) {}
+          } catch (e) {}
+        }
+
+        window.__taztyFixTrackingLayout = fixLayout;
+
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+          setTimeout(fixLayout, 50);
+        } else {
+          document.addEventListener('DOMContentLoaded', function() { setTimeout(fixLayout, 50); });
+        }
+
+        window.addEventListener('resize', function() {
+          setTimeout(fixLayout, 50);
+        });
+      })();
+      true;
+    `;
 
     return (
-      <WebView
-        ref={webViewRef}
-        source={source}
-        style={styles.webView}
-        startInLoadingState={!webViewLoadedRef.current}
-        renderLoading={webViewLoadedRef.current ? undefined : renderLoadingView}
-        onLoad={handleLoad}
-        onLoadStart={handleLoadStart}
-        onError={handleError}
-        onHttpError={handleHttpError}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        thirdPartyCookiesEnabled={true}
-        sharedCookiesEnabled={true}
-        mixedContentMode="always"
-        allowsInlineMediaPlayback={true}
-        mediaPlaybackRequiresUserAction={false}
-        showsHorizontalScrollIndicator={false}
-        showsVerticalScrollIndicator={false}
-        androidHardwareAccelerationDisabled={false}
-        geolocationEnabled={true}
-        cacheEnabled={true}
-        incognito={false}
-        containerStyle={styles.container}
-      />
+      <View style={styles.container}>
+        <WebView
+          ref={webViewRef}
+          source={source}
+          style={styles.webView}
+          injectedJavaScript={injectedTrackingLayoutScript}
+          onLoad={handleLoad}
+          onLoadStart={handleLoadStart}
+          onError={handleError}
+          onHttpError={handleHttpError}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          thirdPartyCookiesEnabled={true}
+          sharedCookiesEnabled={true}
+          mixedContentMode="always"
+          allowsInlineMediaPlayback={true}
+          mediaPlaybackRequiresUserAction={false}
+          showsHorizontalScrollIndicator={false}
+          showsVerticalScrollIndicator={false}
+          androidHardwareAccelerationDisabled={false}
+          geolocationEnabled={true}
+          cacheEnabled={true}
+          incognito={false}
+        />
+        {showOverlay && (
+          <Animated.View style={[styles.loadingOverlay, { opacity: overlayOpacity }]}>
+            <ActivityIndicator size="large" color="#00B14F" />
+          </Animated.View>
+        )}
+      </View>
     );
   },
 );
@@ -108,7 +159,7 @@ const styles = StyleSheet.create({
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000000',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
     justifyContent: 'center',
     alignItems: 'center',
   },

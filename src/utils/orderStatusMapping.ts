@@ -94,6 +94,12 @@ function getStatusConfig(status: string): StatusConfig {
       bgColor: 'rgba(59, 130, 246, 0.1)',
       iconName: 'person',
     },
+    'agent-arrived-restaurant': {
+      label: 'Partner at restaurant',
+      color: '#3B82F6',
+      bgColor: 'rgba(59, 130, 246, 0.1)',
+      iconName: 'restaurant',
+    },
     picked: {
       label: 'Picked up',
       color: '#3B82F6',
@@ -139,5 +145,67 @@ export function isOngoingStatus(status: string | null | undefined): boolean {
   const completedStatuses = ['delivered', 'completed', 'cancelled', 'canceled', 'rejected', 'payment_failed', 'payment-failed'];
 
   return !completedStatuses.includes(normalizedStatus);
+}
+
+/** Timeline step for fallback when API returns no tracking array (e.g. agent_assigned) */
+export interface TrackingTimelineEntry {
+  id: string;
+  message: string;
+  timestamp: string | null;
+  status?: string;
+}
+
+/** Ordered status keys for tracking timeline (earliest to latest) */
+const TRACKING_STATUS_ORDER: string[] = [
+  'confirmed',
+  'billed',
+  'packed',
+  'agent-assigned',
+  'agent-arrived-restaurant',
+  'picked',
+  'out-for-delivery',
+  'delivered',
+];
+
+/**
+ * Normalize backend status to a key that exists in TRACKING_STATUS_ORDER
+ */
+function normalizeStatusForTimeline(status: string | null | undefined): string | null {
+  if (!status) return null;
+  const n = status.toLowerCase().trim().replace(/[_\s]+/g, '-');
+  const aliases: Record<string, string> = {
+    'agent_assigned': 'agent-assigned',
+    'agent_arrived_restaurant': 'agent-arrived-restaurant',
+    'out_for_delivery': 'out-for-delivery',
+    'on_the_way': 'out-for-delivery',
+    'on-the-way': 'out-for-delivery',
+    'completed': 'delivered',
+  };
+  return aliases[n] ?? n;
+}
+
+/**
+ * Returns a fallback timeline for the bottom sheet when API tracking array is empty.
+ * Shows the same steps as other statuses (Order Placed → … → Agent Assigned / Delivered).
+ */
+export function getFallbackTimelineForStatus(currentStatus: string | null | undefined): TrackingTimelineEntry[] {
+  const normalized = normalizeStatusForTimeline(currentStatus);
+  if (!normalized) {
+    return [{ id: '0', message: 'Order Placed', timestamp: null, status: 'confirmed' }];
+  }
+
+  const currentIndex = TRACKING_STATUS_ORDER.indexOf(normalized);
+  const endIndex = currentIndex >= 0 ? currentIndex : TRACKING_STATUS_ORDER.length - 1;
+  const stepsToShow = TRACKING_STATUS_ORDER.slice(0, endIndex + 1);
+
+  return stepsToShow.map((statusKey, index) => {
+    const config = getStatusConfig(statusKey);
+    return {
+      id: `fallback-${statusKey}-${index}`,
+      message: config.label,
+      timestamp: null,
+      status: statusKey,
+    };
+  });
 }
 

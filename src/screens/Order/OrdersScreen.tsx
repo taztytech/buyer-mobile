@@ -25,7 +25,7 @@ import TrackingWebView from '@/components/TrackingWebView';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import { Shimmer } from '@/components/Shimmer';
 import { useOrders } from '@/context/OrdersContext';
-import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
+import { mapOrderStatusToUI, getFallbackTimelineForStatus } from '@/utils/orderStatusMapping';
 import { authService } from '@/services/auth.service';
 import { exotelService } from '@/services/exotel.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
@@ -93,7 +93,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   onOrderDetails,
   onReorder: _onReorder, // Unused but kept for API compatibility
   onRateOrder,
-  onTrackOrder,
+  onTrackOrder: _onTrackOrder, // Unused but kept for API compatibility
   onHelp: _onHelp, // Unused but kept for API compatibility
   onViewMore: _onViewMore, // Unused but kept for API compatibility
   onContactUs,
@@ -729,6 +729,34 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   //   render that happens to see hookIsInPipMode === false.
   const [isEnteringPip, setIsEnteringPip] = useState(false);
   const pipNativeConfirmedRef = useRef(false); // true after native PiP is active
+  const prevIsInPipModeRef = useRef(false);
+
+  // isInPipMode: true as soon as user presses button (isEnteringPip) OR native confirms
+  const isInPipMode = showTrackingWebView && (hookIsInPipMode || isEnteringPip);
+
+  const forceTrackingWebViewResize = useCallback(() => {
+    if (!webViewRef.current || typeof webViewRef.current.injectJavaScript !== 'function') {
+      return;
+    }
+
+    try {
+      webViewRef.current.injectJavaScript(`
+        (function() {
+          try {
+            if (typeof window.__taztyFixTrackingLayout === 'function') {
+              window.__taztyFixTrackingLayout();
+            } else {
+              var evt = new Event('resize');
+              window.dispatchEvent(evt);
+            }
+          } catch (e) {}
+        })();
+        true;
+      `);
+    } catch (e) {
+      console.warn('[OrdersScreen] Failed to inject resize script into tracking WebView', e);
+    }
+  }, []);
 
   useEffect(() => {
     if (hookIsInPipMode) {
@@ -745,8 +773,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     // clearing the optimistic flag before native confirms it.
   }, [hookIsInPipMode]);
 
-  // isInPipMode: true as soon as user presses button (isEnteringPip) OR native confirms
-  const isInPipMode = showTrackingWebView && (hookIsInPipMode || isEnteringPip);
+  // When entering or exiting PiP, force the underlying tracking page to recalculate its layout
+  // so the map uses the full available height for both the compact PiP window and normal screen.
+  useEffect(() => {
+    const wasInPip = prevIsInPipModeRef.current;
+    if (wasInPip !== isInPipMode && showTrackingWebView) {
+      forceTrackingWebViewResize();
+    }
+    prevIsInPipModeRef.current = isInPipMode;
+  }, [isInPipMode, showTrackingWebView, forceTrackingWebViewResize]);
 
   // Stable tracking URL memo — the TrackingWebView source prop must NOT change
   // during PiP ↔ normal transitions, bottom-sheet drags, or any other parent
@@ -757,6 +792,44 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     () => (selectedTrackingUrl && selectedTrackingUrl.length > 0 ? selectedTrackingUrl : null),
     [selectedTrackingUrl],
   );
+
+  const getPipEtaLabelForTracking = (order: any): string => {
+    if (!order) return 'Tracking';
+
+    const rawStatus = (order.status || '').toString().toLowerCase().trim();
+    const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
+
+    if (normalizedStatus === 'delivered' || normalizedStatus === 'completed') {
+      return 'Delivered';
+    }
+
+    if (normalizedStatus === 'cancelled' || normalizedStatus === 'canceled') {
+      return 'Cancelled';
+    }
+
+    const etaSource =
+      order.estimated_delivery_time ||
+      order.preorder_delivery_date ||
+      null;
+
+    if (etaSource) {
+      try {
+        const etaDate = new Date(etaSource);
+        if (!Number.isNaN(etaDate.getTime())) {
+          const diffMs = etaDate.getTime() - Date.now();
+          const diffMins = Math.max(0, Math.round(diffMs / 60000));
+
+          if (diffMins > 0) {
+            return `${diffMins} min${diffMins === 1 ? '' : 's'}`;
+          }
+        }
+      } catch {
+        // ignore parse errors and fall back
+      }
+    }
+
+    return 'On the way';
+  };
 
   // Inform native layer when auto-PiP via home button is allowed.
   // This keeps the lifecycle fully on the Android side and avoids React-side crashes.
@@ -796,23 +869,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     });
   }, [enterPip, showTrackingWebView]);
 
-  // Handle Android hardware back button while tracking overlay is open.
-  // Replaces the Modal's built-in onRequestClose since we now use a plain View.
-  useEffect(() => {
-    if (!showTrackingWebView) return;
-
-    const backAction = () => {
-      if (!isInPipMode) {
-        handleCloseTrackingWebView();
-        webViewLoadedRef.current = false;
-      }
-      // Always intercept — in PiP mode, back should not close the overlay
-      return true;
-    };
-
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-    return () => backHandler.remove();
-  }, [showTrackingWebView, isInPipMode, handleCloseTrackingWebView]);
+  // Back handler for tracking overlay is registered after the close handler is
+  // defined, to avoid using it before declaration (see effect below).
 
   // Bottom sheet drag state
   const HALF_SCREEN = SCREEN_HEIGHT * 0.5;
@@ -847,9 +905,27 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   const handleTrackOrder = (orderId: string) => {
     if (!orderId) return;
+
     setSelectedOrderIdForTracking(orderId);
-    // Always fetch full order details; fetchTrackingOrderData will decide whether to open WebView or fallback
-    fetchTrackingOrderData(orderId);
+
+    // Optimistically seed tracking data and URL from the existing orders list
+    // so the tracking overlay and map can appear immediately, without waiting
+    // for the full detail API response.
+    const shallowOrder = orders.find(o => o.id?.toString() === orderId.toString());
+    if (shallowOrder) {
+      setTrackingOrderData((prev: any) => prev ?? shallowOrder);
+      const initialUrl = getTrackingUrlFromOrderData(shallowOrder);
+      if (initialUrl) {
+        setSelectedTrackingUrl(initialUrl);
+      }
+    }
+
+    // Show the tracking overlay right away for a faster first-time experience.
+    setShowTrackingWebView(true);
+
+    // Still fetch full order details in the background; this will refresh the
+    // bottom sheet and tracking URL when the API response arrives.
+    fetchTrackingOrderData(orderId, true);
   };
 
   // Fetch order details for tracking bottom sheet from API
@@ -903,16 +979,16 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           return response.data;
         });
 
+        // Always keep the tracking URL in sync with the latest full order data,
+        // regardless of whether this was a silent refresh or an initial load.
+        const trackingUrl = getTrackingUrlFromOrderData(response.data);
+        if (trackingUrl) {
+          setSelectedTrackingUrl(trackingUrl);
+        }
+
         if (!silent) {
-          // Prefer opening WebView with tracking URL when available
-          const trackingUrl = getTrackingUrlFromOrderData(response.data);
-          if (trackingUrl) {
-            setSelectedTrackingUrl(trackingUrl);
-            setShowTrackingWebView(true);
-          } else if (onTrackOrder) {
-            // Fallback to parent handler (internal tracking screen) only when no tracking URL exists
-            onTrackOrder(orderId);
-          }
+          // For non-silent calls, ensure the overlay is visible.
+          setShowTrackingWebView(true);
         }
       }
     } catch (err: any) {
@@ -942,6 +1018,24 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       console.error('Failed to refresh orders after closing tracking:', err);
     });
   }, []);
+
+  // Handle Android hardware back button while tracking overlay is open.
+  // Replaces the Modal's built-in onRequestClose since we now use a plain View.
+  useEffect(() => {
+    if (!showTrackingWebView) return;
+
+    const backAction = () => {
+      if (!isInPipMode) {
+        handleCloseTrackingWebView();
+        webViewLoadedRef.current = false;
+      }
+      // Always intercept — in PiP mode, back should not close the overlay
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [showTrackingWebView, isInPipMode, handleCloseTrackingWebView]);
   
   // PanResponder for bottom sheet drag - on drag handle and top section when closed
   const panResponder = useRef(
@@ -969,7 +1063,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         const clampedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
         bottomSheetHeight.setValue(clampedHeight - currentOffset);
       },
-      onPanResponderRelease: (_, gestureState) => {
+      onPanResponderRelease: () => {
         bottomSheetHeight.flattenOffset();
         const currentValue = (bottomSheetHeight as any)._value;
         const currentOffset = (bottomSheetHeight as any)._offset || 0;
@@ -1006,10 +1100,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // Get status and updated_at as separate values for reliable change detection
   const contextStatus = trackingContextOrder?.status;
   const contextUpdatedAt = trackingContextOrder?.updated_at;
-  
-  // Create a serialized key from status and updated_at to detect changes
-  const contextStatusKey = `${contextStatus}-${contextUpdatedAt}`;
-  
+
   // LOG: Track order status watching - log current status values
   useEffect(() => {
     if (!selectedOrderIdForTracking) return;
@@ -1141,6 +1232,43 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     // The UI uses displayOrder = trackingContextOrder || trackingOrderData
     // So when trackingOrderData updates, the bottom sheet reloads with new data
   }, [selectedOrderIdForTracking, trackingOrderData?.status, trackingOrderData?.updated_at]);
+
+  // Auto-close tracking overlay in PiP mode when order reaches a terminal status
+  useEffect(() => {
+    if (!showTrackingWebView || !isInPipMode) return;
+
+    const displayOrder = trackingContextOrder || trackingOrderData;
+    const rawStatus = (displayOrder?.status || '').toString().toLowerCase().trim();
+    const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
+
+    const isTerminalStatus =
+      normalizedStatus === 'delivered' ||
+      normalizedStatus === 'completed' ||
+      normalizedStatus === 'cancelled' ||
+      normalizedStatus === 'canceled';
+
+    if (!isTerminalStatus) {
+      return;
+    }
+
+    handleCloseTrackingWebView();
+    webViewLoadedRef.current = false;
+
+    const pipModule = NativeModules.PipModule;
+    if (Platform.OS === 'android' && pipModule && typeof pipModule.setAutoPipEnabled === 'function') {
+      try {
+        pipModule.setAutoPipEnabled(false);
+      } catch {
+        // ignore native errors
+      }
+    }
+  }, [
+    showTrackingWebView,
+    isInPipMode,
+    trackingContextOrder?.status,
+    trackingOrderData?.status,
+    handleCloseTrackingWebView,
+  ]);
   
   // API RESPONSE WATCHER: Also watch the trackingOrderData itself for any changes
   // This ensures we catch updates from the initial API response or any subsequent API calls
@@ -1305,11 +1433,17 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         {/* Header Row */}
         <View style={styles.orderHeader}>
           <View style={styles.restaurantInfo}>
-            <Image
-              source={{ uri: order.restaurant?.logo_url || '' }}
-              style={styles.restaurantLogo}
-              defaultSource={require('@/assets/dummy-restaurent.png')}
-            />
+            {order.restaurant?.logo_url?.trim?.() ? (
+              <Image
+                source={{ uri: order.restaurant.logo_url.trim() }}
+                style={styles.restaurantLogo}
+                defaultSource={require('@/assets/dummy-restaurent.png')}
+              />
+            ) : (
+              <View style={[styles.restaurantLogo, { backgroundColor: '#E5E5E5', justifyContent: 'center', alignItems: 'center' }]}>
+                <MaterialIcons name="restaurant" size={20} color="#999" />
+              </View>
+            )}
             <View style={styles.restaurantDetails}>
               <Text style={styles.restaurantName}>{order.restaurant?.name || 'Unknown Restaurant'}</Text>
               <Text style={styles.restaurantLocation}>{orderNumber}</Text>
@@ -1710,7 +1844,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 </View>
                 <View style={styles.navigationETA}>
                   <MaterialIcons name="access-time" size={11} color="#FFFFFF" />
-                  <Text style={styles.navigationETAText}>15m</Text>
+                  <Text style={styles.navigationETAText}>
+                    {getPipEtaLabelForTracking(trackingContextOrder || trackingOrderData)}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -1736,33 +1872,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             
             {/* Top Section: Always visible (restaurant info, status, address3) - draggable when closed */}
             {trackingOrderData && !isLoadingTrackingData && (() => {
+              const orderForFullDetails = trackingOrderData || trackingContextOrder;
               const displayOrder = trackingContextOrder || trackingOrderData;
               const displayStatus = displayOrder?.status;
               const statusConfig = mapOrderStatusToUI(displayStatus);
-              
-              // Get agent info from tracking array - find latest entry with agent details
-              const trackingArray = displayOrder?.tracking || [];
-              let agentName: string | null = null;
-              let agentPhone: string | null = null;
-              
-              // Find the latest tracking entry with agent_name or agent_phone
-              // Iterate from the end to get the most recent agent assignment
-              for (let i = trackingArray.length - 1; i >= 0; i--) {
-                const trackingEntry = trackingArray[i];
-                if (trackingEntry) {
-                  // If we find an entry with agent_name, use it
-                  if (trackingEntry.agent_name) {
-                    agentName = trackingEntry.agent_name;
-                    agentPhone = trackingEntry.agent_phone || null;
-                    break;
-                  }
-                  // If we find an entry with agent_phone but no name, still use it
-                  if (trackingEntry.agent_phone && !agentName) {
-                    agentName = null;
-                    agentPhone = trackingEntry.agent_phone;
-                  }
-                }
-              }
               
               return (
                 <View 
@@ -1771,9 +1884,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 >
                   <View style={styles.trackingLeftContent}>
                     <View style={styles.trackingRestaurantRow}>
-                      {displayOrder.restaurant?.logo_url ? (
+                      {(orderForFullDetails?.restaurant?.logo_url?.trim?.()) ? (
                         <Image
-                          source={{ uri: displayOrder.restaurant.logo_url }}
+                          source={{ uri: orderForFullDetails.restaurant.logo_url.trim() }}
                           style={styles.trackingRestaurantLogo}
                           defaultSource={require('@/assets/dummy-restaurent.png')}
                         />
@@ -1784,13 +1897,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                       )}
                       <View style={styles.trackingRestaurantDetails}>
                         <Text style={styles.trackingRestaurantName}>
-                          {displayOrder.restaurant?.name || 'Unknown Restaurant'}
+                          {orderForFullDetails?.restaurant?.name || 'Unknown Restaurant'}
                         </Text>
-                        {displayOrder.delivery_address?.address3 && (
+                        {orderForFullDetails?.delivery_address?.address3 ? (
                           <Text style={styles.trackingRestaurantAddress}>
-                            {displayOrder.delivery_address.address3}
+                            {orderForFullDetails.delivery_address.address3}
                           </Text>
-                        )}
+                        ) : null}
                       </View>
                     </View>
                   </View>
@@ -1828,36 +1941,33 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 bounces={false}
               >
                 {(() => {
-                  // WATCHING BOTH:
-                  // 1. trackingContextOrder = FCM updates (real-time status from notifications)
-                  // 2. trackingOrderData = API response (full order data with updated status from API)
-                  // Priority: FCM (real-time) > API (full data)
-                  // Both have the updated status - FCM is faster, API has complete data
+                  // Use API order (trackingOrderData) for full details so we always show API tracking/delivery/restaurant.
+                  // Use displayOrder for status so FCM live status is reflected.
+                  const orderForFullDetails = trackingOrderData || trackingContextOrder;
                   const displayOrder = trackingContextOrder || trackingOrderData;
                   const displayStatus = displayOrder?.status;
-                  // Get agent info from tracking array - find latest entry with agent details
-                  const trackingArray = displayOrder?.tracking || [];
+                  const trackingArray = orderForFullDetails?.tracking ?? [];
                   let agentName: string | null = null;
                   let agentPhone: string | null = null;
-                  
-                  // Find the latest tracking entry with agent_name or agent_phone
-                  // Iterate from the end to get the most recent agent assignment
                   for (let i = trackingArray.length - 1; i >= 0; i--) {
                     const trackingEntry = trackingArray[i];
                     if (trackingEntry) {
-                      // If we find an entry with agent_name, use it
                       if (trackingEntry.agent_name) {
                         agentName = trackingEntry.agent_name;
                         agentPhone = trackingEntry.agent_phone || null;
                         break;
                       }
-                      // If we find an entry with agent_phone but no name, still use it
                       if (trackingEntry.agent_phone && !agentName) {
                         agentName = null;
                         agentPhone = trackingEntry.agent_phone;
                       }
                     }
                   }
+                  // Use API tracking when available; otherwise fallback timeline (e.g. agent_assigned with no tracking array)
+                  const sortedApiTracking = [...trackingArray].sort((a: any, b: any) =>
+                    new Date(a.timestamp || a.created_at || 0).getTime() - new Date(b.timestamp || b.created_at || 0).getTime()
+                  );
+                  const timelineEntries = sortedApiTracking.length > 0 ? sortedApiTracking : getFallbackTimelineForStatus(displayStatus);
                   
                   // Format estimated delivery time - extract only time from ISO string
                   const formatDeliveryTime = (dateString: string | null | undefined): string => {
@@ -1875,7 +1985,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                     }
                   };
                   
-                  const deliveryTime = formatDeliveryTime(displayOrder?.estimated_delivery_time);
+                  const deliveryTime = formatDeliveryTime(orderForFullDetails?.estimated_delivery_time);
                   
                   // Get status config
                   const statusConfig = mapOrderStatusToUI(displayStatus);
@@ -1894,10 +2004,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                     normalizedStatus === 'on-the-way';
 
                   // If status says agent is involved but we don't yet have name from API,
-                  // show a friendly placeholder instead of "No Delivery Agent Assigned"
+                  // show status-appropriate label (same as timeline) instead of generic "on the way"
                   let agentDisplayName = agentName;
                   if (!agentDisplayName && isAgentAssignedish) {
-                    agentDisplayName = 'Delivery partner is on the way';
+                    agentDisplayName = statusConfig.label;
                   }
                   
                   // Format timestamp to show only time
@@ -1916,34 +2026,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                     }
                   };
                   
-                  // Determine timeline state for each tracking entry
-                  // If delivered, all items are completed. Otherwise, last entry is current
                   const getTimelineState = (index: number, totalItems: number) => {
-                    if (isDelivered) {
-                      // If delivered, all items are completed
-                      return 'completed';
-                    }
-                    if (index < totalItems - 1) {
-                      return 'completed'; // All previous items are completed
-                    } else {
-                      return 'current'; // Last item is current
-                    }
+                    if (isDelivered) return 'completed';
+                    if (index < totalItems - 1) return 'completed';
+                    return 'current';
                   };
                   
                   return (
                     <>
-                      {/* Items List - Commented out per requirements */}
-                      {/* {displayOrder.items && displayOrder.items.length > 0 && (
-                        <View style={styles.trackingItemsContainer}>
-                          {displayOrder.items.map((item: any, index: number) => (
-                            <Text key={index} style={styles.trackingItemText}>
-                              {item.quantity || 1}× {item.item_name || 'Item'}
-                            </Text>
-                          ))}
-                        </View>
-                      )} */}
-                      
-                      {/* Divider */}
                       <View style={styles.trackingDivider} />
                       
                       {/* Agent Details - above estimated delivery time */}
@@ -1961,7 +2051,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                         {agentPhone && (
                           <TouchableOpacity
                             style={styles.trackingCallButtonInScroll}
-                            onPress={() => handleCallDeliveryAgent(displayOrder.order_number, agentPhone)}
+                            onPress={() => handleCallDeliveryAgent((orderForFullDetails || displayOrder)?.order_number, agentPhone)}
                             disabled={isInitiatingCall}
                             activeOpacity={0.7}
                           >
@@ -1974,7 +2064,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                         )}
                       </View>
                       
-                      {/* Estimated Delivery Time or Completed Status */}
                       {isDelivered ? (
                         <View style={styles.trackingCompletedContainer}>
                           <MaterialIcons name="check-circle" size={64} color="#00B14F" />
@@ -1987,10 +2076,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                         </View>
                       ) : null}
                       
-                      {/* Vertical Timeline */}
+                      {/* Vertical Timeline - same structure for all statuses (API tracking or fallback) */}
                       <View style={styles.trackingTimelineVerticalContainer}>
-                        {trackingArray.map((trackingEntry: any, index: number) => {
-                          const state = getTimelineState(index, trackingArray.length);
+                        {timelineEntries.map((trackingEntry: any, index: number) => {
+                          const state = getTimelineState(index, timelineEntries.length);
                           const isCompleted = state === 'completed';
                           const isCurrent = state === 'current';
                           
@@ -2014,7 +2103,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                                 </View>
                                 
                                 {/* Connector line (except for last item) */}
-                                {index < trackingArray.length - 1 && (
+                                {index < timelineEntries.length - 1 && (
                                   <View style={[
                                     styles.trackingTimelineConnector,
                                     isCompleted && styles.trackingTimelineConnectorCompleted,
@@ -2030,24 +2119,20 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                                   isCurrent && !isDelivered && styles.trackingTimelineLabelCurrent,
                                   !isCurrent && styles.trackingTimelineLabelDefault,
                                 ]}>
-                                  {trackingEntry.message || 'Status update'}
+                                  {trackingEntry.message || (trackingEntry.status ? mapOrderStatusToUI(trackingEntry.status).label : 'Status update')}
                                 </Text>
-                                {/* Timestamp below message */}
-                                {trackingEntry.timestamp && (
+                                {(trackingEntry.timestamp || trackingEntry.created_at) ? (
                                   <Text style={styles.trackingTimelineTimestamp}>
-                                    {formatTimestamp(trackingEntry.timestamp)}
+                                    {formatTimestamp(trackingEntry.timestamp || trackingEntry.created_at)}
                                   </Text>
-                                )}
+                                ) : null}
                               </View>
                             </View>
                           );
                         })}
                       </View>
                       
-                      {/* Divider */}
                       <View style={styles.trackingDivider} />
-                      
-                      {/* Bottom spacing - two lines */}
                       <View style={styles.trackingBottomSpacing} />
                     </>
                   );
@@ -2487,8 +2572,8 @@ const styles = StyleSheet.create({
   navigationInfoBar: {
     backgroundColor: '#00B14F',
     borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -2497,7 +2582,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 3,
     elevation: 4,
-    minHeight: 40,
+    minHeight: 32,
   },
   navigationDirection: {
     flexDirection: 'row',
@@ -2507,10 +2592,11 @@ const styles = StyleSheet.create({
   },
   navigationDirectionText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 9,
     fontFamily: 'Poppins_600SemiBold',
     marginLeft: 6,
     flex: 1,
+    lineHeight: 12,
   },
   navigationETA: {
     flexDirection: 'row',
@@ -2523,7 +2609,7 @@ const styles = StyleSheet.create({
   },
   navigationETAText: {
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: 'Poppins_600SemiBold',
     marginLeft: 3,
   },

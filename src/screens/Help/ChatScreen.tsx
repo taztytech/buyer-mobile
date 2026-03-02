@@ -1203,6 +1203,47 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     }
   };
 
+  const handleEmailPress = async () => {
+    try {
+      const email = 'support@tazty.in';
+      const url = `mailto:${email}`;
+
+      const canOpen = await Linking.canOpenURL(url);
+
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        setConfirmationModal({
+          visible: true,
+          title: 'Email not supported',
+          message: 'Unable to open your email app on this device.',
+          confirmText: 'OK',
+          cancelText: '',
+          onConfirm: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+          onCancel: () => {
+            setConfirmationModal(prev => ({ ...prev, visible: false }));
+          },
+        });
+      }
+    } catch (error) {
+      setConfirmationModal({
+        visible: true,
+        title: 'Error',
+        message: 'Something went wrong while trying to open your email app.',
+        confirmText: 'OK',
+        cancelText: '',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+        onCancel: () => {
+          setConfirmationModal(prev => ({ ...prev, visible: false }));
+        },
+      });
+    }
+  };
+
   const handleCancelOrder = async () => {
     // Always verify order status via API call before attempting cancellation
     try {
@@ -1772,7 +1813,9 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
           <View style={styles.emailSection}>
             <Text style={styles.emailText}>
               In case of further queries, please drop an email to{' '}
-              <Text style={styles.emailLink}>support@tazty.in</Text>
+              <Text style={styles.emailLink} onPress={handleEmailPress}>
+                support@tazty.in
+              </Text>
             </Text>
           </View>
 

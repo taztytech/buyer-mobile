@@ -32,6 +32,7 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const lastStatusRef = React.useRef<string | null>(null);
+  const lastUpdatedAtRef = React.useRef<string | null>(null);
 
   // Fetch order details from API
   const fetchOrderDetails = useCallback(async () => {
@@ -45,9 +46,12 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
 
       if (response.success && response.data) {
         setOrderData(response.data);
-        // Initialize status ref with fetched status
+        // Initialize refs with fetched data so we detect future changes
         if (response.data.status) {
           lastStatusRef.current = response.data.status;
+        }
+        if (response.data.updated_at) {
+          lastUpdatedAtRef.current = response.data.updated_at;
         }
       } else {
         setError(response.error || 'Failed to load order details');
@@ -67,23 +71,25 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
   }, [orderId, fetchOrderDetails]);
 
   // Subscribe to FCM updates via OrdersContext
-  // This will automatically update when FCM sends status updates
-  // Watch the specific order in state.byId to detect when it's updated via FCM
+  // Refetch when status OR updated_at changes so tracking details refresh even when
+  // status stays the same (e.g. "Agent Assigned" with new tracking/map updates).
   const contextOrder = orderId ? state.byId[orderId] : undefined;
-  
+
   useEffect(() => {
     if (!orderId || !contextOrder || !orderData) return undefined;
 
-    // Check if status has actually changed
     const currentContextStatus = contextOrder.status;
-    const currentContextUpdatedAt = contextOrder.updated_at;
+    const currentContextUpdatedAt = contextOrder.updated_at ?? null;
     const previousStatus = lastStatusRef.current;
-    
-    // Update ref with current status
-    if (previousStatus !== currentContextStatus) {
+    const previousUpdatedAt = lastUpdatedAtRef.current;
+
+    const statusChanged = previousStatus !== currentContextStatus;
+    const updatedAtChanged = previousUpdatedAt !== currentContextUpdatedAt;
+
+    if (statusChanged || updatedAtChanged) {
       lastStatusRef.current = currentContextStatus;
-      
-      // Update status immediately from context
+      lastUpdatedAtRef.current = currentContextUpdatedAt;
+
       setOrderData((prevData: any) => {
         if (!prevData) {
           return contextOrder;
@@ -95,18 +101,16 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
           ...(contextOrder.restaurant && { restaurant: contextOrder.restaurant }),
         };
       });
-      
-      // Refetch order details to get updated tracking array
-      // Use a small delay to avoid race conditions
+
       const refetchTimer = setTimeout(() => {
         fetchOrderDetails();
       }, 500);
-      
+
       return () => clearTimeout(refetchTimer);
     }
-    
+
     return undefined;
-  }, [orderId, contextOrder?.status, contextOrder?.updated_at, orderData]);
+  }, [orderId, contextOrder?.status, contextOrder?.updated_at, orderData, fetchOrderDetails]);
 
   // Get current status from orderData
   const currentStatus = orderData?.status || null;
