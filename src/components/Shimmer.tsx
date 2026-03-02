@@ -4,12 +4,14 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { View, Animated, StyleSheet, ViewStyle } from 'react-native';
+import { View, Animated, StyleSheet, ViewStyle, Dimensions, DimensionValue } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ShimmerProps {
   width?: number | string;
-  height?: number;
+  height?: number | string;
   borderRadius?: number;
   backgroundColor?: string;
   style?: ViewStyle;
@@ -19,7 +21,7 @@ export const Shimmer: React.FC<ShimmerProps> = ({
   width = '100%',
   height = 20,
   borderRadius = 4,
-  backgroundColor = 'rgba(255, 255, 255, 0.2)',
+  backgroundColor = '#F5F5F7',
   style,
 }) => {
   const animatedValue = useRef(new Animated.Value(0)).current;
@@ -28,7 +30,7 @@ export const Shimmer: React.FC<ShimmerProps> = ({
     const animation = Animated.loop(
       Animated.timing(animatedValue, {
         toValue: 1,
-        duration: 1200,
+        duration: 1500, // Slightly slower, more premium feel
         useNativeDriver: true,
       })
     );
@@ -42,7 +44,7 @@ export const Shimmer: React.FC<ShimmerProps> = ({
 
   const translateX = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: [-400, 400],
+    outputRange: [-SCREEN_WIDTH, SCREEN_WIDTH], // Dynamic range based on screen width
   });
 
   return (
@@ -68,13 +70,13 @@ export const Shimmer: React.FC<ShimmerProps> = ({
       >
         <LinearGradient
           colors={[
-            'transparent',
-            'rgba(255, 255, 255, 0.3)',
-            'rgba(255, 255, 255, 0.8)',
-            'rgba(255, 255, 255, 0.3)',
-            'transparent',
+            'rgba(255, 255, 255, 0)',
+            'rgba(255, 255, 255, 0.15)',
+            'rgba(255, 255, 255, 0.4)',
+            'rgba(255, 255, 255, 0.15)',
+            'rgba(255, 255, 255, 0)',
           ]}
-          locations={[0, 0.3, 0.5, 0.7, 1]}
+          locations={[0, 0.35, 0.5, 0.65, 1]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={styles.gradient}
