@@ -35,16 +35,16 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>This app requires access to your camera to let you take a profile picture and photos for order support.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>This app uses your location in the background to provide location-based features.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app uses your location to show nearby restaurants and improve your experience.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app requires access to your photo library to let you upload a profile picture and share images for order support.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>This app requires access to your camera to let you take a profile picture and photos for order support.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app requires access to your microphone if you choose to record a video for order support.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app requires access to your photo library to let you upload a profile picture and share images for order support.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>
@@ -63,8 +63,12 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+		<string>UIInterfaceOrientationPortrait</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>

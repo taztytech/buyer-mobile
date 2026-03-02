@@ -240,123 +240,128 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
-          bounces={false}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+      <View style={styles.whiteBackgroundWrapper}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
         >
-          <View style={styles.mainContainer}>
-            {/* Green Background Section */}
-            <View style={styles.greenSection}>
-              {/* Verification Title */}
-              <Text style={styles.title}>Verification</Text>
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1 }}
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.mainContainer}>
+              {/* Green Background Section */}
+              <View style={styles.greenSection}>
+                {/* Verification Title */}
+                <Text style={styles.title}>Verification</Text>
 
-              {/* Subtitle */}
-              <Text style={styles.subtitle}>
-                We have sent a 4 digit code to your number
-              </Text>
+                {/* Subtitle */}
+                <Text style={styles.subtitle}>
+                  We have sent a 4 digit code to your number
+                </Text>
 
-              {/* OTP Illustration */}
-              <Image
-                source={require('@/assets/OTP-asset.png')}
-                style={styles.illustrationImage}
-                resizeMode="contain"
-              />
-            </View>
-
-            {/* White Bottom Sheet */}
-            <View style={styles.bottomSheet}>
-              <View style={styles.formContainer}>
-                {/* Verification Code Label */}
-                <Text style={styles.inputLabel}>ENTER VERIFICATION CODE</Text>
-
-                {/* OTP Input Row */}
-                <View style={styles.otpInputRow}>
-                  {otp.map((digit, index) => (
-                    <TextInput autoCorrect={false}
-                      key={index}
-                      ref={inputRefs[index]}
-                      style={[
-                        styles.otpBox,
-                        digit ? styles.otpBoxFilled : null,
-                      ]}
-                      value={digit}
-                      onChangeText={(value) => handleOtpChange(value, index)}
-                      onKeyPress={(e) => handleKeyPress(e, index)}
-                      keyboardType="number-pad"
-                      maxLength={6}
-                      textAlign="center"
-                      textContentType={index === 0 ? 'oneTimeCode' : 'none'}
-                      autoComplete={index === 0 ? 'sms-otp' : 'off'}
-                      importantForAutofill={index === 0 ? 'yes' : 'no'}
-                    />
-                  ))}
-                </View>
-
-                {/* Inline status messages */}
-                {error ? <Text style={styles.errorText}>{error}</Text> : null}
-                {info ? <Text style={styles.infoText}>{info}</Text> : null}
-
-                {/* Bottom Action Row - Timer and Resend Code */}
-                <View style={styles.resendRow}>
-                  <View style={styles.resendRightGroup}>
-                    <TouchableOpacity
-                      onPress={handleResendCode}
-                      disabled={timer > 0 || isResending}
-                    >
-                      <Text style={[
-                        styles.resendText,
-                        timer === 0 && !isResending && styles.resendTextActive
-                      ]}>
-                        {isResending ? 'Sending...' : 'Resend Code'}
-                      </Text>
-                    </TouchableOpacity>
-                    <Text style={styles.timerText}>0.{timer.toString().padStart(2, '0')} s</Text>
-                  </View>
-                </View>
-
-                {/* VERIFY & PROCEED Button */}
-                <TouchableOpacity
-                  style={[styles.verifyButton, isVerifying && styles.verifyButtonDisabled]}
-                  onPress={handleVerify}
-                  activeOpacity={0.8}
-                  disabled={isVerifying}
-                >
-                  <View style={styles.verifyButtonContent}>
-                    <Text style={styles.verifyButtonText}>
-                      {isVerifying ? 'VERIFYING...' : 'VERIFY & PROCEED'}
-                    </Text>
-                    {!isVerifying && <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />}
-                  </View>
-                </TouchableOpacity>
+                {/* OTP Illustration */}
+                <Image
+                  source={require('@/assets/OTP-asset.png')}
+                  style={styles.illustrationImage}
+                  resizeMode="contain"
+                />
               </View>
 
-              {/* Terms & Privacy */}
-              <Text style={styles.termsText}>
-                By Clicking, You agree our{' '}
-                <Text
-                  style={styles.termsLink}
-                  onPress={onOpenTerms}
-                >
-                  T&C
-                </Text>
-                {' and '}
-                <Text
-                  style={styles.termsLink}
-                  onPress={onOpenPrivacy}
-                >
-                  Privacy Policy
-                </Text>
-              </Text>
+              {/* White Bottom Sheet */}
+              <View style={styles.bottomSheet}>
+                <View style={styles.formContainer}>
+                  {/* Verification Code Label */}
+                  <Text style={styles.inputLabel}>ENTER VERIFICATION CODE</Text>
+
+                  {/* OTP Input Row */}
+                  <View style={styles.otpInputRow}>
+                    {otp.map((digit, index) => (
+                      <TextInput
+                        autoCorrect={false}
+                        key={index}
+                        ref={inputRefs[index]}
+                        style={[
+                          styles.otpBox,
+                          digit ? styles.otpBoxFilled : null,
+                        ]}
+                        value={digit}
+                        onChangeText={(value) => handleOtpChange(value, index)}
+                        onKeyPress={(e) => handleKeyPress(e, index)}
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        textAlign="center"
+                        textContentType={index === 0 ? 'oneTimeCode' : 'none'}
+                        autoComplete={index === 0 ? 'sms-otp' : 'off'}
+                        importantForAutofill={index === 0 ? 'yes' : 'no'}
+                      />
+                    ))}
+                  </View>
+
+                  {/* Inline status messages */}
+                  {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                  {info ? <Text style={styles.infoText}>{info}</Text> : null}
+
+                  {/* Bottom Action Row - Timer and Resend Code */}
+                  <View style={styles.resendRow}>
+                    <View style={styles.resendRightGroup}>
+                      <TouchableOpacity
+                        onPress={handleResendCode}
+                        disabled={timer > 0 || isResending}
+                      >
+                        <Text style={[
+                          styles.resendText,
+                          timer === 0 && !isResending && styles.resendTextActive
+                        ]}>
+                          {isResending ? 'Sending...' : 'Resend Code'}
+                        </Text>
+                      </TouchableOpacity>
+                      <Text style={styles.timerText}>0.{timer.toString().padStart(2, '0')} s</Text>
+                    </View>
+                  </View>
+
+                  {/* VERIFY & PROCEED Button */}
+                  <TouchableOpacity
+                    style={[styles.verifyButton, isVerifying && styles.verifyButtonDisabled]}
+                    onPress={handleVerify}
+                    activeOpacity={0.8}
+                    disabled={isVerifying}
+                  >
+                    <View style={styles.verifyButtonContent}>
+                      <Text style={styles.verifyButtonText}>
+                        {isVerifying ? 'VERIFYING...' : 'VERIFY & PROCEED'}
+                      </Text>
+                      {!isVerifying && <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />}
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+
+        {/* Terms & Privacy - Fixed to bottom */}
+        <View style={styles.bottomTermsContainer}>
+          <Text style={styles.termsText}>
+            By Clicking, You agree our{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={onOpenTerms}
+            >
+              T&C
+            </Text>
+            {' and '}
+            <Text
+              style={styles.termsLink}
+              onPress={onOpenPrivacy}
+            >
+              Privacy Policy
+            </Text>
+          </Text>
+        </View>
+      </View>
     </SafeAreaView>
   );
 };
@@ -366,8 +371,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#00B14F',
   },
+  whiteBackgroundWrapper: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   mainContainer: {
     flex: 1,
+  },
+  bottomTermsContainer: {
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
   },
   greenSection: {
     height: 258,
@@ -406,6 +420,7 @@ const styles = StyleSheet.create({
     height: 255,
   },
   bottomSheet: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
@@ -531,11 +546,11 @@ const styles = StyleSheet.create({
   termsText: {
     width: '100%',
     fontFamily: 'Poppins_400Regular',
-    fontSize: 14,
-    lineHeight: 24,
+    fontSize: 13,
+    lineHeight: 20,
     textAlign: 'center',
     color: 'rgba(0, 30, 31, 0.5)',
-    marginBottom: 30,
+    marginBottom: 8,
   },
   termsLink: {
     fontFamily: 'Poppins_600SemiBold',
