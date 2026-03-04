@@ -14,8 +14,92 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ordersService } from '@/services/orders.service';
 import { useOrders } from '@/context/OrdersContext';
 import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
+import { isExpoGo } from '@/utils/platform.util';
+
+// Conditionally import maps for standalone/dev-client builds only.
+let MapView: any;
+let Marker: any;
+let Polyline: any;
+if (!isExpoGo()) {
+  try {
+    const maps = require('react-native-maps');
+    MapView = maps.default;
+    Marker = maps.Marker;
+    Polyline = maps.Polyline;
+  } catch (e) {
+    console.warn('react-native-maps not available in OrderTrackingScreen');
+  }
+}
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+interface Coordinate {
+  latitude: number;
+  longitude: number;
+}
+
+const toNumber = (value: any): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const extractCoordinate = (source: any): Coordinate | null => {
+  if (!source || typeof source !== 'object') return null;
+
+  const latKeys = ['latitude', 'lat', 'agent_latitude', 'agent_lat', 'rider_latitude', 'rider_lat'];
+  const lngKeys = ['longitude', 'lng', 'lon', 'agent_longitude', 'agent_lng', 'rider_longitude', 'rider_lng'];
+
+  let lat: number | null = null;
+  let lng: number | null = null;
+
+  for (const key of latKeys) {
+    lat = toNumber(source[key]);
+    if (lat !== null) break;
+  }
+  for (const key of lngKeys) {
+    lng = toNumber(source[key]);
+    if (lng !== null) break;
+  }
+
+  if (lat === null || lng === null) return null;
+  return { latitude: lat, longitude: lng };
+};
+
+const extractRestaurantCoordinate = (order: any): Coordinate | null => {
+  if (!order) return null;
+  return (
+    extractCoordinate(order.restaurant?.location) ||
+    extractCoordinate(order.restaurant?.locations?.[0]) ||
+    extractCoordinate(order.restaurant) ||
+    extractCoordinate(order)
+  );
+};
+
+const extractCustomerCoordinate = (order: any): Coordinate | null => {
+  if (!order) return null;
+  return extractCoordinate(order.delivery_address) || extractCoordinate(order.customer) || null;
+};
+
+const extractAgentCoordinate = (order: any): Coordinate | null => {
+  if (!order) return null;
+  const tracking = Array.isArray(order.tracking) ? [...order.tracking].reverse() : [];
+
+  for (const item of tracking) {
+    const coord = extractCoordinate(item);
+    if (coord) return coord;
+  }
+
+  return (
+    extractCoordinate(order.agent) ||
+    extractCoordinate(order.delivery_partner) ||
+    extractCoordinate(order.rider) ||
+    null
+  );
+};
 
 interface OrderTrackingScreenProps {
   onBack?: () => void;
@@ -139,12 +223,139 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
     return mapOrderStatusToUI(status);
   };
 
+  const restaurantCoordinate = extractRestaurantCoordinate(orderData);
+  const customerCoordinate = extractCustomerCoordinate(orderData);
+  const agentCoordinate = extractAgentCoordinate(orderData);
+
+  const assignedStatusSet = new Set([
+    'agent_assigned',
+    'agent-assigned',
+    'agent_arrived_restaurant',
+    'agent-arrived-restaurant',
+    'picked',
+    'out_for_delivery',
+    'out-for-delivery',
+    'on_the_way',
+    'on-the-way',
+    'delivered',
+  ]);
+
+  const readyStatusSet = new Set([
+    'packed',
+    'ready',
+    'order_ready',
+    'order-ready',
+  ]);
+
+  const currentStatusKey = (currentStatus || '').toString().toLowerCase();
+  const hasAgentAssignedSignal =
+    assignedStatusSet.has(currentStatusKey) ||
+    !!agentCoordinate ||
+    sortedTracking.some((item: any) => !!item?.agent_name || !!item?.agent_phone);
+
+  const showPreAssignmentRoute =
+    readyStatusSet.has(currentStatusKey) &&
+    !hasAgentAssignedSignal &&
+    !!restaurantCoordinate &&
+    !!customerCoordinate;
+
+  const showLiveTracking =
+    hasAgentAssignedSignal &&
+    !!customerCoordinate &&
+    !!agentCoordinate;
+
+  const mapCoordinatesForViewport: Coordinate[] = [
+    ...(restaurantCoordinate ? [restaurantCoordinate] : []),
+    ...(customerCoordinate ? [customerCoordinate] : []),
+    ...(showLiveTracking && agentCoordinate ? [agentCoordinate] : []),
+  ];
+
+  const mapRegion = (() => {
+    const fallback = { latitude: 9.9352, longitude: 78.1304 };
+    const center = customerCoordinate || restaurantCoordinate || agentCoordinate || fallback;
+    return {
+      latitude: center.latitude,
+      longitude: center.longitude,
+      latitudeDelta: 0.08,
+      longitudeDelta: 0.08,
+    };
+  })();
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#E9E9E9" />
 
-      {/* Background - Simple colored background instead of map */}
-      <View style={styles.background} />
+      {/* Map Area - Pre-assignment route preview and live tracking share this area */}
+      <View style={styles.mapArea}>
+        {MapView && mapCoordinatesForViewport.length >= 2 ? (
+          <MapView
+            style={styles.map}
+            initialRegion={mapRegion}
+          >
+            {/* Restaurant and customer are always shown when available */}
+            {restaurantCoordinate && (
+              <Marker
+                coordinate={restaurantCoordinate}
+                title="Restaurant"
+                pinColor="#00B14F"
+              />
+            )}
+            {customerCoordinate && (
+              <Marker
+                coordinate={customerCoordinate}
+                title="Delivery Location"
+                pinColor="#2563EB"
+              />
+            )}
+
+            {/* Pre-assignment route: restaurant to customer */}
+            {showPreAssignmentRoute && restaurantCoordinate && customerCoordinate && (
+              <Polyline
+                coordinates={[restaurantCoordinate, customerCoordinate]}
+                strokeColor="#00B14F"
+                strokeWidth={4}
+                lineDashPattern={[8, 8]}
+              />
+            )}
+
+            {/* Live mode route and rider marker */}
+            {showLiveTracking && agentCoordinate && customerCoordinate && (
+              <>
+                <Marker
+                  coordinate={agentCoordinate}
+                  title="Delivery Partner"
+                  pinColor="#F97316"
+                />
+                <Polyline
+                  coordinates={[agentCoordinate, customerCoordinate]}
+                  strokeColor="#F97316"
+                  strokeWidth={4}
+                />
+              </>
+            )}
+          </MapView>
+        ) : (
+          <View style={styles.mapFallback}>
+            <MaterialIcons name="map" size={44} color="#00B14F" />
+            <Text style={styles.mapFallbackTitle}>Tracking Map</Text>
+            <Text style={styles.mapFallbackText}>
+              {showLiveTracking
+                ? 'Live tracking will be shown here as rider location updates arrive.'
+                : 'Showing order progress. Route preview will appear once location data is available.'}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.mapStatusChip}>
+          <Text style={styles.mapStatusChipText}>
+            {showLiveTracking
+              ? 'Live delivery tracking'
+              : showPreAssignmentRoute
+                ? 'Order ready: route preview'
+                : 'Preparing tracking map'}
+          </Text>
+        </View>
+      </View>
 
       {/* Back Button */}
       <SafeAreaView style={styles.backButtonContainer} edges={['top']}>
@@ -276,9 +487,49 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#E9E9E9',
   },
-  background: {
+  mapArea: {
     flex: 1,
     backgroundColor: '#E9E9E9',
+  },
+  map: {
+    flex: 1,
+  },
+  mapFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 28,
+    backgroundColor: '#E8F8EE',
+  },
+  mapFallbackTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#001E1F',
+  },
+  mapFallbackText: {
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    lineHeight: 20,
+    color: 'rgba(0, 30, 31, 0.75)',
+    textAlign: 'center',
+  },
+  mapStatusChip: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: 92,
+    alignItems: 'center',
+  },
+  mapStatusChipText: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 100,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    color: '#001E1F',
+    overflow: 'hidden',
   },
   backButtonContainer: {
     position: 'absolute',
