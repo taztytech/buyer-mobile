@@ -64,6 +64,7 @@ class FCMNotificationService {
   private readonly MAX_RECENT_MESSAGES = 50;
   private navigationCallback: NotificationNavigationCallback | null = null;
   private ordersDispatch: OrdersDispatch | null = null;
+  private pendingNavigationOrderId: string | null = null;
 
   /**
    * Set navigation callback for handling notification taps
@@ -71,6 +72,15 @@ class FCMNotificationService {
    */
   setNavigationCallback(callback: NotificationNavigationCallback | null): void {
     this.navigationCallback = callback;
+    if (callback && this.pendingNavigationOrderId) {
+      const pendingOrderId = this.pendingNavigationOrderId;
+      this.pendingNavigationOrderId = null;
+      try {
+        callback(pendingOrderId);
+      } catch (error) {
+        console.warn('⚠️  FCM: Failed to process pending navigation callback:', error);
+      }
+    }
   }
 
   /**
@@ -524,10 +534,8 @@ class FCMNotificationService {
           });
         }
 
-        // Wait a bit for app to initialize, then handle navigation
-        setTimeout(() => {
-          this.onNotificationOpened(payload);
-        }, 1500);
+        // Handle navigation immediately; if callback isn't ready yet, it will be queued.
+        this.onNotificationOpened(payload);
         return;
       }
 
@@ -683,7 +691,9 @@ class FCMNotificationService {
       if (this.navigationCallback) {
         this.navigationCallback(orderId);
       } else {
-        console.warn('⚠️  FCM: Navigation callback not set. Cannot navigate to My Orders.');
+        // App may still be initializing; queue navigation and replay once callback is set.
+        this.pendingNavigationOrderId = orderId;
+        console.warn('⚠️  FCM: Navigation callback not set yet. Queued My Orders navigation.');
       }
     } else {
       console.log('ℹ️  FCM: No orderId or order_number found in notification data. Skipping navigation.');

@@ -52,7 +52,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // SplashScreen.preventAutoHideAsync();
 
 // Inner component with cart and confirmation context access
-function AppContent() {
+function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigateToOrders?: () => void }) {
   const {
     addToCart,
     setRestaurantInfo,
@@ -245,6 +245,7 @@ function AppContent() {
     // Navigate to My Orders screen and highlight the order
     fcmNotificationService.setNavigationCallback((orderId: string) => {
       console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
+      onNotificationNavigateToOrders?.();
 
       // Batch all screen position resets together to ensure Orders screen is visible
       // and not covered by other overlays (like restaurant or checkout)
@@ -255,6 +256,8 @@ function AppContent() {
       profileScreenSlide.setValue(SCREEN_WIDTH);
       searchScreenSlide.setValue(SCREEN_WIDTH);
 
+      // Keep existing back behavior: Orders -> Profile for notification entry.
+      setOrdersCameFrom('profile');
       setHighlightOrderId(orderId);
       setCurrentScreen('orders');
 
@@ -269,7 +272,7 @@ function AppContent() {
       fcmNotificationService.setNavigationCallback(null);
       fcmNotificationService.setOrdersDispatch(null);
     };
-  }, [ordersDispatch, getOrderByOrderNumber]);
+  }, [ordersDispatch, getOrderByOrderNumber, onNotificationNavigateToOrders]);
 
   // Handle app state changes to check for notifications when app becomes active
   React.useEffect(() => {
@@ -2579,7 +2582,11 @@ export default function App() {
             <SafeAreaProvider>
               <SnackbarProvider>
                 <OrdersProvider>
-                  <AppContent />
+                  <AppContent
+                    onNotificationNavigateToOrders={() => {
+                      setShowCustomSplash(false);
+                    }}
+                  />
                 </OrdersProvider>
               </SnackbarProvider>
             </SafeAreaProvider>
