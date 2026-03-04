@@ -1590,13 +1590,58 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           }
         >
           {/* Header Image with Overlay */}
-          {restaurantData?.logo_url ? (
-            <ImageBackground
-              source={{ uri: restaurantData.logo_url }}
-              style={styles.headerImage}
-              resizeMode="cover"
-            >
+          {isLoading ? (
+            <View style={styles.headerImage}>
+              {/* Shimmer for the banner image */}
+              <Shimmer
+                width={SCREEN_WIDTH}
+                height={252}
+                borderRadius={0}
+                backgroundColor="#E8E8E8"
+                style={{ position: 'absolute', top: 0, left: 0 }}
+              />
               <View style={[styles.headerOverlay, { paddingTop: insets.top + 10 }]}>
+                {/* Back Button */}
+                <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
+                  <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+                </TouchableOpacity>
+
+                {/* Restaurant Info Card with Shimmer */}
+                <View style={styles.restaurantCard}>
+                  <View style={styles.restaurantTopRow}>
+                    <View style={styles.restaurantNameRow}>
+                      <Shimmer width={180} height={20} borderRadius={4} backgroundColor="#E8E8E8" />
+                    </View>
+                    <View style={styles.ratingContainer}>
+                      <Shimmer width={80} height={16} borderRadius={4} backgroundColor="#E8E8E8" />
+                    </View>
+                  </View>
+
+                  {/* Dotted Divider */}
+                  <View style={styles.dividerContainer}>
+                    {Array.from({ length: 30 }).map((_, index) => (
+                      <View key={index} style={styles.dash} />
+                    ))}
+                  </View>
+
+                  <View style={styles.restaurantBottomRow}>
+                    <Shimmer width={120} height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+                    <Shimmer width={80} height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+                  </View>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.headerImage}>
+              {restaurantData?.logo_url && (
+                <ImageBackground
+                  source={{ uri: restaurantData.logo_url }}
+                  style={[StyleSheet.absoluteFill, styles.headerImage]}
+                  resizeMode="cover"
+                />
+              )}
+
+              <View style={[styles.headerOverlay, { paddingTop: insets.top + 10, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}>
                 {/* Back Button */}
                 <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
                   <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
@@ -1656,47 +1701,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                         'Location'}
                     </Text>
                     <Text style={styles.deliveryText}>{restaurantData?.delivery_time || '25-30 mins'}</Text>
-                  </View>
-                </View>
-              </View>
-            </ImageBackground>
-          ) : (
-            <View style={styles.headerImage}>
-              {/* Shimmer for the banner image */}
-              <Shimmer
-                width={SCREEN_WIDTH}
-                height={252}
-                borderRadius={0}
-                backgroundColor="#E8E8E8"
-                style={{ position: 'absolute', top: 0, left: 0 }}
-              />
-              <View style={[styles.headerOverlay, { paddingTop: insets.top + 10 }]}>
-                {/* Back Button */}
-                <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-                  <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
-                </TouchableOpacity>
-
-                {/* Restaurant Info Card with Shimmer */}
-                <View style={styles.restaurantCard}>
-                  <View style={styles.restaurantTopRow}>
-                    <View style={styles.restaurantNameRow}>
-                      <Shimmer width={180} height={20} borderRadius={4} backgroundColor="#E8E8E8" />
-                    </View>
-                    <View style={styles.ratingContainer}>
-                      <Shimmer width={80} height={16} borderRadius={4} backgroundColor="#E8E8E8" />
-                    </View>
-                  </View>
-
-                  {/* Dotted Divider */}
-                  <View style={styles.dividerContainer}>
-                    {Array.from({ length: 30 }).map((_, index) => (
-                      <View key={index} style={styles.dash} />
-                    ))}
-                  </View>
-
-                  <View style={styles.restaurantBottomRow}>
-                    <Shimmer width={120} height={14} borderRadius={4} backgroundColor="#E8E8E8" />
-                    <Shimmer width={80} height={14} borderRadius={4} backgroundColor="#E8E8E8" />
                   </View>
                 </View>
               </View>

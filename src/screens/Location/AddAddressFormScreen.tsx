@@ -7,7 +7,6 @@ import {
   StyleSheet,
   ScrollView,
   Platform,
-  Keyboard,
   Animated,
   ActivityIndicator,
   Modal,
@@ -18,6 +17,7 @@ import { addressService, AddAddressRequest } from '@/services/address.service';
 import * as Location from 'expo-location';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { Snackbar } from '@/components/Snackbar';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface AddAddressFormScreenProps {
   visible: boolean;
@@ -68,7 +68,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [alternateMobile, setAlternateMobile] = useState('');
   const [selectedTag, setSelectedTag] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [loading, setLoading] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [houseNoError, setHouseNoError] = useState('');
   const [buildingError, setBuildingError] = useState('');
   const [localityError, setLocalityError] = useState('');
@@ -78,6 +77,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [localToastMessage, setLocalToastMessage] = useState('');
   const slideAnim = useRef(new Animated.Value(1000)).current;
   const { showConfirmation } = useConfirmation();
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const hasInitializedRef = useRef(false);
   const previousVisibleRef = useRef(visible);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -278,29 +278,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     }
   }, [visible]);
 
-  // Listen to keyboard events
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const keyboardShowListener = Keyboard.addListener(
-      showEvent,
-      () => {
-        setKeyboardVisible(true);
-      }
-    );
-    const keyboardHideListener = Keyboard.addListener(
-      hideEvent,
-      () => {
-        setKeyboardVisible(false);
-      }
-    );
-
-    return () => {
-      keyboardShowListener.remove();
-      keyboardHideListener.remove();
-    };
-  }, []);
 
   const handleClose = () => {
     // Animate slide down before closing
@@ -509,12 +486,14 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           <TouchableOpacity
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
+            style={{ flex: 1 }}
           >
             <Animated.View
               style={[
                 styles.bottomSheet,
                 {
                   transform: [{ translateY: slideAnim }],
+                  flex: 1,
                 }
               ]}
             >
@@ -524,11 +503,8 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               >
                 <ScrollView
                   ref={scrollViewRef}
-                  style={styles.scrollView}
-                  contentContainerStyle={[
-                    styles.scrollContent,
-                    keyboardVisible && { paddingBottom: 60 }
-                  ]}
+                  style={{ flex: 1 }}
+                  contentContainerStyle={styles.scrollContent}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                 >
@@ -546,10 +522,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                       <Text style={styles.locationName}>{editMode ? 'Edit Address' : locationName}</Text>
                     </View>
                     {!editMode && <Text style={styles.locationAddress}>{locationAddress}</Text>}
-                    {/* Map pin/location button hidden as per requirement */}
-                    {/* <TouchableOpacity style={styles.relocateButton} onPress={onBack}>
-              <MaterialIcons name="my-location" size={20} color="#00B14F" />
-            </TouchableOpacity> */}
                   </View>
 
                   {/* Form Fields */}
@@ -640,7 +612,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                         value={landmark}
                         onChangeText={(text) => {
                           setLandmark(text);
-                          // No hard validation; this is optional helper text for delivery partner
                         }}
                         placeholder="Nearby landmark (Optional)"
                         placeholderTextColor="#999"
@@ -659,7 +630,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                         style={styles.input}
                         value={pincode}
                         onChangeText={(text) => {
-                          // Only allow numeric input
                           const numericText = text.replace(/[^0-9]/g, '');
                           setPincode(numericText);
                           if (pincodeError) {
@@ -685,7 +655,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                         style={styles.input}
                         value={alternateMobile}
                         onChangeText={(text) => {
-                          // Only allow numeric input
                           const numericText = text.replace(/[^0-9]/g, '');
                           setAlternateMobile(numericText);
                           if (alternateMobileError) {
@@ -708,96 +677,54 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                     {/* Address Tags */}
                     <View style={styles.tagsContainer}>
                       <TouchableOpacity
-                        style={[
-                          styles.tag,
-                          selectedTag === 'Home' && styles.tagSelected,
-                        ]}
+                        style={[styles.tag, selectedTag === 'Home' && styles.tagSelected]}
                         onPress={() => setSelectedTag('Home')}
                         activeOpacity={0.7}
                       >
-                        <MaterialIcons
-                          name="home"
-                          size={16}
-                          color={selectedTag === 'Home' ? '#FFFFFF' : '#001E1F'}
-                        />
-                        <Text
-                          style={[
-                            styles.tagText,
-                            selectedTag === 'Home' && styles.tagTextSelected,
-                          ]}
-                        >
-                          Home
-                        </Text>
+                        <MaterialIcons name="home" size={16} color={selectedTag === 'Home' ? '#FFFFFF' : '#001E1F'} />
+                        <Text style={[styles.tagText, selectedTag === 'Home' && styles.tagTextSelected]}>Home</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={[
-                          styles.tag,
-                          selectedTag === 'Work' && styles.tagSelected,
-                        ]}
+                        style={[styles.tag, selectedTag === 'Work' && styles.tagSelected]}
                         onPress={() => setSelectedTag('Work')}
                         activeOpacity={0.7}
                       >
-                        <MaterialIcons
-                          name="work"
-                          size={16}
-                          color={selectedTag === 'Work' ? '#FFFFFF' : '#001E1F'}
-                        />
-                        <Text
-                          style={[
-                            styles.tagText,
-                            selectedTag === 'Work' && styles.tagTextSelected,
-                          ]}
-                        >
-                          Work
-                        </Text>
+                        <MaterialIcons name="work" size={16} color={selectedTag === 'Work' ? '#FFFFFF' : '#001E1F'} />
+                        <Text style={[styles.tagText, selectedTag === 'Work' && styles.tagTextSelected]}>Work</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={[
-                          styles.tag,
-                          selectedTag === 'Other' && styles.tagSelected,
-                        ]}
+                        style={[styles.tag, selectedTag === 'Other' && styles.tagSelected]}
                         onPress={() => setSelectedTag('Other')}
                         activeOpacity={0.7}
                       >
-                        <MaterialIcons
-                          name="location-on"
-                          size={16}
-                          color={selectedTag === 'Other' ? '#FFFFFF' : '#001E1F'}
-                        />
-                        <Text
-                          style={[
-                            styles.tagText,
-                            selectedTag === 'Other' && styles.tagTextSelected,
-                          ]}
-                        >
-                          Other
-                        </Text>
+                        <MaterialIcons name="location-on" size={16} color={selectedTag === 'Other' ? '#FFFFFF' : '#001E1F'} />
+                        <Text style={[styles.tagText, selectedTag === 'Other' && styles.tagTextSelected]}>Other</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
                 </ScrollView>
-              </KeyboardAvoidingView>
 
-              {/* Continue Button */}
-              <View style={styles.footer}>
-                <TouchableOpacity
-                  style={[styles.continueButton, loading && styles.continueButtonDisabled]}
-                  onPress={handleContinue}
-                  activeOpacity={0.8}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Text style={styles.continueButtonText}>{editMode ? 'Update' : 'Continue'}</Text>
-                      <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
+                {/* Continue / Update Button */}
+                <SafeAreaView style={styles.footer} edges={["bottom"]}>
+                  <TouchableOpacity
+                    style={[styles.continueButton, loading && styles.continueButtonDisabled]}
+                    onPress={handleContinue}
+                    activeOpacity={0.8}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Text style={styles.continueButtonText}>{editMode ? 'Update' : 'Continue'}</Text>
+                        <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </SafeAreaView>
+              </KeyboardAvoidingView>
             </Animated.View>
           </TouchableOpacity>
         </View>
@@ -815,6 +742,7 @@ const styles = StyleSheet.create({
   bottomSheetWrapper: {
     width: '100%',
     maxHeight: '85%',
+    flex: 1,
   },
   bottomSheet: {
     backgroundColor: '#FFFFFF',
@@ -999,7 +927,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#00B14F',
     borderRadius: 10,
     gap: 10,
-    marginBottom: 30,
   },
   continueButtonDisabled: {
     backgroundColor: '#80D8A7',

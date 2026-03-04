@@ -1389,21 +1389,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       >
         <Animated.Image
           source={require('@/assets/home_app_bar.png')}
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              transform: [
-                {
-                  translateY: scrollYAnimated.interpolate({
-                    inputRange: [0, 500],
-                    outputRange: [0, -500],
-                    extrapolateLeft: 'clamp',
-                    extrapolateRight: 'clamp',
-                  }),
-                },
-              ],
-            },
-          ]}
+          style={[StyleSheet.absoluteFill]}
           resizeMode="cover"
         />
       </View>
@@ -1678,7 +1664,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   ) : showBannerShimmer ? (
                     <View style={styles.loadingContainer}>
 
-                      <Shimmer width="100%" height={149} borderRadius={20} backgroundColor="#00BEC8" />
+                      <Shimmer width="100%" height={149} borderRadius={20} />
                     </View>
                   ) : (
                     <>
@@ -2137,13 +2123,13 @@ const styles = StyleSheet.create({
   headerBackground: {
     width: '100%',
     paddingHorizontal: 20,
-    paddingBottom: 15,
+    paddingBottom: Dimensions.get('window').height * 0.06, // Responsive bottom padding based on screen height
     gap: 12,
-    minHeight: 180,
+    minHeight: Dimensions.get('window').height * 0.22, // Responsive minimum height
   },
   headerBackgroundImage: {
     width: '120%',
-    height: Dimensions.get('window').height * 0.28, // Adjust height based on screen height for better aspect ratio
+    height: Dimensions.get('window').height * 0.28, // Adjusted for 25% overlap with carousel
     resizeMode: 'cover',
     backgroundColor: '#00B14F',
     left: 0,
@@ -2341,7 +2327,7 @@ const styles = StyleSheet.create({
   },
   // Carousel Container
   carouselContainer: {
-    marginTop: -20,
+    marginTop: -28, 
     marginBottom: 16,
   },
   closedBannerContainer: {

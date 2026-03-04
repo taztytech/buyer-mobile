@@ -1346,7 +1346,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           styles.bottomSection,
           {
             bottom: bottomPosition,
-            paddingBottom: isKeyboardVisible ? 12 : 40,
+            paddingBottom: isKeyboardVisible ? 12 : 20,
           }
         ]}>
           {/* Location Info Card - Hidden when keyboard is visible */}

@@ -83,101 +83,106 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
-          bounces={false}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+      <View style={styles.whiteBackgroundWrapper}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
         >
-          <View style={styles.mainContainer}>
-            {/* Green Background Section */}
-            <View style={styles.greenSection}>
-              {/* Log In Title */}
-              <Text style={styles.title}>Log In</Text>
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1 }}
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.mainContainer}>
+              {/* Green Background Section */}
+              <View style={styles.greenSection}>
+                {/* Log In Title */}
+                <Text style={styles.title}>Log In</Text>
 
-              {/* Subtitle */}
-              <Text style={styles.subtitle}>Login with Your Mobile Number</Text>
+                {/* Subtitle */}
+                <Text style={styles.subtitle}>Login with Your Mobile Number</Text>
 
-              {/* Delivery Illustration */}
-              <Image
-                source={require('@/assets/login-illustration.png')}
-                style={styles.illustrationImage}
-                resizeMode="contain"
-              />
-            </View>
-
-            {/* White Bottom Sheet */}
-            <View style={styles.bottomSheet}>
-              <View style={styles.formContainer}>
-                {/* Mobile Number Label */}
-                <Text style={styles.inputLabel}>MOBILE NUMBER</Text>
-
-                {/* Phone Input Row */}
-                <View style={styles.phoneInputRow}>
-                  {/* Country Code Box */}
-                  <View style={styles.countryCodeBox}>
-                    <Text style={styles.flagEmoji}>🇮🇳</Text>
-                    <Text style={styles.countryCodeText}>+91</Text>
-                  </View>
-
-                  {/* Phone Number Input */}
-                  <TextInput autoCorrect={false}
-                    style={styles.phoneInput}
-                    placeholder="Mobile Number"
-                    placeholderTextColor="#999"
-                    keyboardType="phone-pad"
-                    maxLength={10}
-                    value={phoneNumber}
-                    onChangeText={handlePhoneChange}
-                  />
-                </View>
-
-                {/* Inline Error Message */}
-                {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-                {/* LOG IN Button */}
-                <TouchableOpacity
-                  style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-                  onPress={handleLogin}
-                  activeOpacity={0.8}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Text style={styles.loginButtonText}>LOG IN</Text>
-                      <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
-                    </>
-                  )}
-                </TouchableOpacity>
+                {/* Delivery Illustration */}
+                <Image
+                  source={require('@/assets/login-illustration.png')}
+                  style={styles.illustrationImage}
+                  resizeMode="contain"
+                />
               </View>
 
-              {/* Terms & Privacy */}
-              <Text style={styles.termsText}>
-                By Clicking, You agree our{' '}
-                <Text
-                  style={styles.termsLink}
-                  onPress={onOpenTerms}
-                >
-                  T&C
-                </Text>
-                {' and '}
-                <Text
-                  style={styles.termsLink}
-                  onPress={onOpenPrivacy}
-                >
-                  Privacy Policy
-                </Text>
-              </Text>
+              {/* White Bottom Sheet */}
+              <View style={styles.bottomSheet}>
+                <View style={styles.formContainer}>
+                  {/* Mobile Number Label */}
+                  <Text style={styles.inputLabel}>MOBILE NUMBER</Text>
+
+                  {/* Phone Input Row */}
+                  <View style={styles.phoneInputRow}>
+                    {/* Country Code Box */}
+                    <View style={styles.countryCodeBox}>
+                      <Text style={styles.flagEmoji}>🇮🇳</Text>
+                      <Text style={styles.countryCodeText}>+91</Text>
+                    </View>
+
+                    {/* Phone Number Input */}
+                    <TextInput
+                      autoCorrect={false}
+                      style={styles.phoneInput}
+                      placeholder="Mobile Number"
+                      placeholderTextColor="#999"
+                      keyboardType="phone-pad"
+                      maxLength={10}
+                      value={phoneNumber}
+                      onChangeText={handlePhoneChange}
+                    />
+                  </View>
+
+                  {/* Inline Error Message */}
+                  {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+                  {/* LOG IN Button */}
+                  <TouchableOpacity
+                    style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+                    onPress={handleLogin}
+                    activeOpacity={0.8}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Text style={styles.loginButtonText}>LOG IN</Text>
+                        <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+
+        {/* Terms & Privacy - Fixed to bottom */}
+        <View style={styles.bottomTermsContainer}>
+          <Text style={styles.termsText}>
+            By Clicking, You agree our{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={onOpenTerms}
+            >
+              T&C
+            </Text>
+            {' and '}
+            <Text
+              style={styles.termsLink}
+              onPress={onOpenPrivacy}
+            >
+              Privacy Policy
+            </Text>
+          </Text>
+        </View>
+      </View>
     </SafeAreaView>
   );
 };
@@ -187,8 +192,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#00B14F',
   },
+  whiteBackgroundWrapper: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   mainContainer: {
     flex: 1,
+  },
+  bottomTermsContainer: {
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
   },
   greenSection: {
     height: 258,
@@ -227,6 +241,7 @@ const styles = StyleSheet.create({
     height: 252,
   },
   bottomSheet: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
