@@ -94,7 +94,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
   const handleCall = async () => {
     // Check if phone number is available in restaurant data
     const phoneNumber = (restaurantData as any)?.phone_number || (restaurantData as any)?.contact_number;
-    
+
     if (!phoneNumber) {
       showConfirmation({
         title: 'Error',
@@ -102,7 +102,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -116,7 +116,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -132,7 +132,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -160,7 +160,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
           confirmText: 'OK',
           cancelText: '',
           confirmButtonColor: '#DC2626',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
       }
     } catch (error: any) {
@@ -170,7 +170,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#DC2626',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
     } finally {
       setIsInitiatingCall(false);
@@ -479,16 +479,12 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                     <Text style={styles.infoTitle}>Timings</Text>
                   </View>
                   <View style={styles.infoContent}>
-                    {restaurantData.is_open ? (
+                    {restaurantData.is_open && getCurrentDayTiming() ? (
                       <>
-                        {getCurrentDayTiming() && (
-                          <Text style={styles.openNow}>Open now</Text>
-                        )}
-                        {getCurrentDayTiming() && (
-                          <Text style={styles.infoText}>
-                            {' • '}Closes {formatTime(getCurrentDayTiming()!.close_time)}
-                          </Text>
-                        )}
+                        <Text style={styles.openNow}>Open now</Text>
+                        <Text style={styles.infoText}>
+                          {' • '}Closes {formatTime(getCurrentDayTiming()!.close_time)}
+                        </Text>
                       </>
                     ) : (
                       <Text style={styles.infoText}>Closed now</Text>
@@ -536,8 +532,8 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
             </View>
           )}
 
-          {/* Delivery Service */}
-          {/* {(restaurantData?.delivery_time || restaurantData?.delivery_fee || restaurantData?.min_order_value) && (
+            {/* Delivery Service */}
+            {/* {(restaurantData?.delivery_time || restaurantData?.delivery_fee || restaurantData?.min_order_value) && (
             <View style={styles.infoRow}>
               <MaterialIcons name="delivery-dining" size={24} color="#666666" />
               <View style={styles.infoContentColumn}>
@@ -562,69 +558,69 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
             </View>
           )} */}
 
-          {/* Photos */}
-          {getRestaurantPhotos().length > 0 && (
-            <View style={styles.photosSection}>
-              <View style={styles.photoHeader}>
-                <MaterialIcons name="photo" size={24} color="#666666" />
-                <Text style={styles.photoTitle}>Photos</Text>
+            {/* Photos */}
+            {getRestaurantPhotos().length > 0 && (
+              <View style={styles.photosSection}>
+                <View style={styles.photoHeader}>
+                  <MaterialIcons name="photo" size={24} color="#666666" />
+                  <Text style={styles.photoTitle}>Photos</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.photosScroll}
+                >
+                  {getRestaurantPhotos().map((photo, index) => (
+                    <Image
+                      key={index}
+                      source={{ uri: photo }}
+                      style={styles.photo}
+                      resizeMode="cover"
+                    />
+                  ))}
+                </ScrollView>
               </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.photosScroll}
-              >
-                {getRestaurantPhotos().map((photo, index) => (
-                  <Image
-                    key={index}
-                    source={{ uri: photo }}
-                    style={styles.photo}
-                    resizeMode="cover"
-                  />
-                ))}
-              </ScrollView>
-            </View>
-          )}
+            )}
 
-          {/* Stats Info */}
-          {restaurantData?.stats && (restaurantData.stats.total_items > 0 || restaurantData.stats.total_categories > 0) && (
-            <View style={styles.infoRow}>
-              <MaterialIcons name="restaurant-menu" size={24} color="#666666" />
-              <Text style={styles.infoTitle}>
-                {restaurantData.stats.total_items > 0 && `${restaurantData.stats.total_items} item${restaurantData.stats.total_items !== 1 ? 's' : ''}`}
-                {restaurantData.stats.total_items > 0 && restaurantData.stats.total_categories > 0 && ' across '}
-                {restaurantData.stats.total_categories > 0 && `${restaurantData.stats.total_categories} categor${restaurantData.stats.total_categories !== 1 ? 'ies' : 'y'}`}
-              </Text>
-            </View>
-          )}
+            {/* Stats Info */}
+            {restaurantData?.stats && (restaurantData.stats.total_items > 0 || restaurantData.stats.total_categories > 0) && (
+              <View style={styles.infoRow}>
+                <MaterialIcons name="restaurant-menu" size={24} color="#666666" />
+                <Text style={styles.infoTitle}>
+                  {restaurantData.stats.total_items > 0 && `${restaurantData.stats.total_items} item${restaurantData.stats.total_items !== 1 ? 's' : ''}`}
+                  {restaurantData.stats.total_items > 0 && restaurantData.stats.total_categories > 0 && ' across '}
+                  {restaurantData.stats.total_categories > 0 && `${restaurantData.stats.total_categories} categor${restaurantData.stats.total_categories !== 1 ? 'ies' : 'y'}`}
+                </Text>
+              </View>
+            )}
 
-          {/* Legal Information */}
-          <View style={styles.legalSection}>
-            {restaurantData?.name && (
-              <>
-                <Text style={styles.legalLabel}>Legal Name</Text>
-                <Text style={styles.legalValue}>{restaurantData.name}</Text>
-              </>
-            )}
-            {restaurantData?.gst_number && (
-              <>
-                <Text style={styles.legalLabel}>GST Number</Text>
-                <Text style={styles.legalValue}>{restaurantData.gst_number}</Text>
-              </>
-            )}
-            {restaurantData?.fssai_license && (
-              <>
-                <Text style={styles.legalLabel}>FSSAI Lic No</Text>
-                <Text style={styles.legalValue}>{restaurantData.fssai_license}</Text>
-              </>
-            )}
-            {/* <Text style={styles.termsText}>
+            {/* Legal Information */}
+            <View style={styles.legalSection}>
+              {restaurantData?.name && (
+                <>
+                  <Text style={styles.legalLabel}>Legal Name</Text>
+                  <Text style={styles.legalValue}>{restaurantData.name}</Text>
+                </>
+              )}
+              {restaurantData?.gst_number && (
+                <>
+                  <Text style={styles.legalLabel}>GST Number</Text>
+                  <Text style={styles.legalValue}>{restaurantData.gst_number}</Text>
+                </>
+              )}
+              {restaurantData?.fssai_license && (
+                <>
+                  <Text style={styles.legalLabel}>FSSAI Lic No</Text>
+                  <Text style={styles.legalValue}>{restaurantData.fssai_license}</Text>
+                </>
+              )}
+              {/* <Text style={styles.termsText}>
               Please review the terms of service for Tazty{' '}
               <Text style={styles.termsLink}>here</Text>
             </Text> */}
-          </View>
+            </View>
 
-        </ScrollView>
+          </ScrollView>
         )}
       </View>
     </View>

@@ -78,15 +78,15 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const [locationAddress, setLocationAddress] = useState(
     isEditing
       ? [
-          editingAddress?.address1,
-          editingAddress?.address2,
-          editingAddress?.address3,
-          editingAddress?.city,
-          editingAddress?.state,
-          editingAddress?.pincode,
-        ]
-          .filter(Boolean)
-          .join(', ')
+        editingAddress?.address1,
+        editingAddress?.address2,
+        editingAddress?.address3,
+        editingAddress?.city,
+        editingAddress?.state,
+        editingAddress?.pincode,
+      ]
+        .filter(Boolean)
+        .join(', ')
       : 'Move the pin or use "Use current location"'
   );
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
@@ -135,7 +135,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     setIsCurrentLocationSet(false);
     setIsGeocodingInProgress(false);
     setHasUserChangedLocation(false); // Reset location change flag
-    
+
     // Reset permission tracking and auto-location flag
     hasTriedAutoLocationOnResume.current = false;
     previousPermissionStatus.current = null;
@@ -262,7 +262,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       const requestLocationWithDelay = async () => {
         // Small delay to ensure loading state is visible
         await new Promise(resolve => setTimeout(resolve, 100));
-        
+
         // First, wait for all interactions to complete (ensures screen is fully rendered)
         await new Promise<void>((resolve) => {
           InteractionManager.runAfterInteractions(() => resolve());
@@ -308,7 +308,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         // Silently fail - permission tracking is optional
       }
     };
-    
+
     checkInitialPermission();
   }, []);
 
@@ -335,10 +335,10 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
         // Check current permission status
         const { status } = await Location.getForegroundPermissionsAsync();
-        
+
         // If permission was just granted (changed from denied to granted)
-        const wasPermissionJustGranted = 
-          previousPermissionStatus.current !== 'granted' && 
+        const wasPermissionJustGranted =
+          previousPermissionStatus.current !== 'granted' &&
           status === 'granted';
 
         // Update previous permission status
@@ -508,7 +508,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             Alert.alert(
               'Enable Location',
               'To use your current location, please enable location access for Tazty in your device settings.\n\n' +
-                getLocationSettingsGuide(),
+              getLocationSettingsGuide(),
               [
                 { text: 'Not now', style: 'cancel' },
                 {
@@ -528,7 +528,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             Alert.alert(
               'Turn on location access',
               'To fetch your current location, please turn on device location and allow Tazty to access your location (choose "While using this app" or "Allow all the time").\n\n' +
-                getLocationSettingsGuide()
+              getLocationSettingsGuide()
             );
           }
         }
@@ -575,8 +575,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           const addr = addresses[0];
           setLocationName(addr.name || addr.street || 'Current Location');
           setLocationAddress(
-            `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${
-              addr.country || ''
+            `${addr.street || ''}, ${addr.city || ''}, ${addr.region || ''}, ${addr.country || ''
             }`,
           );
           // Store geocoding data for pre-filling address form
@@ -605,7 +604,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         Alert.alert(
           'Turn on location access',
           'We could not fetch your current location. Please turn on device location and allow Tazty to access your location (choose "While using this app" or "Allow all the time"), then try again.\n\n' +
-            getLocationSettingsGuide()
+          getLocationSettingsGuide()
         );
       }
       success = false;
@@ -684,7 +683,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         // Mark geocoding as in progress
         isGeocodingRef.current = true;
         setIsGeocodingInProgress(true);
-        
+
         // User has stopped dragging and we have a pinned map position – treat this
         // as a confirmed location regardless of whether reverse geocoding succeeds.
         setHasSelectedLocation(true);
@@ -717,7 +716,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
               Alert.alert(
                 'Enable Location Access',
                 'To get address details for this location, please enable location access for Tazty in your device settings. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
-                  getLocationSettingsGuide(),
+                getLocationSettingsGuide(),
                 [
                   { text: 'Not now', style: 'cancel' },
                   {
@@ -737,7 +736,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
               Alert.alert(
                 'Location Permission Required',
                 'Please allow Tazty to access your location to get address details. Turn on device location and choose "While using this app" or "Allow all the time" when prompted. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
-                  getLocationSettingsGuide()
+                getLocationSettingsGuide()
               );
             }
           }
@@ -747,7 +746,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
         // Step 3: Permission is granted - check if location services are enabled
         const isLocationEnabled = await Location.hasServicesEnabledAsync();
-        
+
         if (!isLocationEnabled) {
           // Permission granted but location services are disabled - try to get location (triggers system prompt)
           try {
@@ -765,7 +764,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
               Alert.alert(
                 'Turn on Location',
                 'Location permission is granted, but location services are turned off. Please turn on location services in your device settings to get address details. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
-                  getLocationSettingsGuide(),
+                getLocationSettingsGuide(),
                 [
                   { text: 'OK', style: 'cancel' },
                   {
@@ -822,10 +821,10 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     // Validate that we have actual coordinates (not hardcoded or default values)
     const currentLat = currentMapRegion.current.latitude;
     const currentLng = currentMapRegion.current.longitude;
-    const hasValidCoordinates = 
-      currentLat !== 0 && 
-      currentLng !== 0 && 
-      !isNaN(currentLat) && 
+    const hasValidCoordinates =
+      currentLat !== 0 &&
+      currentLng !== 0 &&
+      !isNaN(currentLat) &&
       !isNaN(currentLng);
 
     // If editing an address, ensure we have a confirmed map location first
@@ -857,7 +856,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             Alert.alert(
               'Enable Location Access',
               'To update this address accurately, please enable location access for Tazty in your device settings.\n\n' +
-                getLocationSettingsGuide(),
+              getLocationSettingsGuide(),
               [
                 { text: 'Not now', style: 'cancel' },
                 {
@@ -876,7 +875,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             Alert.alert(
               'Location Permission Required',
               'Please allow Tazty to access your location to update this address accurately. Turn on device location and choose "While using this app" or "Allow all the time" when prompted.\n\n' +
-                getLocationSettingsGuide()
+              getLocationSettingsGuide()
             );
           }
           return;
@@ -889,7 +888,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           Alert.alert(
             'Turn on Location',
             'Location permission is granted, but location services are turned off. Please turn on location services in your device settings to update this address accurately.\n\n' +
-              getLocationSettingsGuide(),
+            getLocationSettingsGuide(),
             [
               { text: 'Cancel', style: 'cancel' },
               {
@@ -975,7 +974,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           Alert.alert(
             'Enable Location Access',
             'To use your current location, please enable location access for Tazty in your device settings. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
-              getLocationSettingsGuide(),
+            getLocationSettingsGuide(),
             [
               { text: 'Not now', style: 'cancel' },
               {
@@ -995,7 +994,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           Alert.alert(
             'Location Permission Required',
             'Please allow Tazty to access your location. Turn on device location and choose "While using this app" or "Allow all the time" when prompted. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
-              getLocationSettingsGuide()
+            getLocationSettingsGuide()
           );
         }
         return;
@@ -1003,7 +1002,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
       // Step 3: Permission is granted - check if location services are enabled
       const isLocationEnabled = await Location.hasServicesEnabledAsync();
-      
+
       if (!isLocationEnabled) {
         // Permission granted but location services are disabled - try to get location (triggers system prompt) or open settings
         try {
@@ -1019,7 +1018,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           Alert.alert(
             'Turn on Location',
             'Location permission is granted, but location services are turned off. Please turn on location services in your device settings. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
-              getLocationSettingsGuide(),
+            getLocationSettingsGuide(),
             [
               { text: 'Cancel', style: 'cancel' },
               {
@@ -1063,7 +1062,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       Alert.alert(
         'Location Error',
         'Unable to access location. Please ensure location services are enabled and try again. Alternatively, you can use the "Use Current Location" button if needed.\n\n' +
-          getLocationSettingsGuide()
+        getLocationSettingsGuide()
       );
     }
   };
@@ -1071,7 +1070,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const handleBackPress = () => {
     // Dismiss keyboard before navigating back
     Keyboard.dismiss();
-    
+
     // Clear any pending timeouts
     if (geocodingTimeout.current) {
       clearTimeout(geocodingTimeout.current);
@@ -1081,21 +1080,21 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       clearTimeout(dragTimeoutRef.current);
       dragTimeoutRef.current = null;
     }
-    
+
     // Reset flags
     isGeocodingRef.current = false;
     isDraggingRef.current = false;
     isUpdatingFromCode.current = false;
     isRequestingPermission.current = false;
     hasUserManuallyMovedPin.current = false;
-    
+
     // Clear cached data and search text
     setGeocodingData(null);
     setShowAddressForm(false);
     setSearchText('');
     setIsGeocodingInProgress(false);
     setHasUserChangedLocation(false);
-    
+
     if (onBack) {
       onBack();
     }
@@ -1131,7 +1130,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     // Final validation: Ensure coordinates are valid before sending to API
     const lat = currentMapRegion.current.latitude;
     const lng = currentMapRegion.current.longitude;
-    
+
     if (lat === 0 || lng === 0 || isNaN(lat) || isNaN(lng)) {
       Alert.alert(
         'Invalid location',
@@ -1140,14 +1139,14 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       setShowAddressForm(false);
       return;
     }
-    
+
     // Close the address form first
     setShowAddressForm(false);
-    
+
     // Clear cached data after saving
     setGeocodingData(null);
     setSearchText('');
-    
+
     // onLocationConfirm handles navigation back to the appropriate screen
     // Don't call onBack() here as it conflicts with the navigation animation
     if (onLocationConfirm) {
@@ -1175,7 +1174,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           Alert.alert(
             'Enable Location to Search',
             'To search for locations, please enable location access for Tazty.\n\n' +
-              getLocationSettingsGuide(),
+            getLocationSettingsGuide(),
             [
               { text: 'Not now', style: 'cancel' },
               {
@@ -1274,7 +1273,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
             <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
           </TouchableOpacity>
-          
+
           {/* Search Bar */}
           <View style={styles.searchContainer}>
             <MaterialIcons name="search" size={24} color="#001E1F" />
@@ -1336,8 +1335,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         {/* Tooltip */}
         <View style={styles.tooltip}>
           <Text style={styles.tooltipText}>
-            {isCurrentLocationSet 
-              ? 'Current location set. Move the pin to adjust' 
+            {isCurrentLocationSet
+              ? 'Current location set. Move the pin to adjust'
               : 'Move the pin to change location'}
           </Text>
         </View>
@@ -1354,11 +1353,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           {!isKeyboardVisible && (
             <>
               {/* Current Location Button */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.currentLocationButton,
                   isGettingLocation && styles.currentLocationButtonDisabled
-                ]} 
+                ]}
                 onPress={() => getCurrentLocation(true)}
                 disabled={isGettingLocation}
                 activeOpacity={0.7}
@@ -1393,11 +1392,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
               </View>
 
               {/* Confirm Button */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.confirmButton,
                   (isGeocodingInProgress || isGettingLocation) && styles.confirmButtonDisabled
-                ]} 
+                ]}
                 onPress={handleConfirm}
                 disabled={isGeocodingInProgress || isGettingLocation}
                 activeOpacity={0.7}

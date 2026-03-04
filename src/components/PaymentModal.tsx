@@ -134,7 +134,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     <Text style={styles.upiText}>Pay using UPI ID</Text>
                   </View>
                   <View style={styles.upiInputContainer}>
-                    <TextInput
+                    <TextInput autoCorrect={false}
                       style={styles.upiInput}
                       value={upiId}
                       onChangeText={setUpiId}

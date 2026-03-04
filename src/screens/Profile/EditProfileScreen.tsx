@@ -8,6 +8,8 @@ import {
   TextInput,
   ScrollView,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -129,7 +131,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
           message: 'Email already exist',
           confirmText: 'OK',
           cancelText: 'Close',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
       }
     } catch (error) {
@@ -138,7 +140,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
         message: 'Email already exist',
         confirmText: 'OK',
         cancelText: 'Close',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
     } finally {
       setIsSaving(false);
@@ -167,81 +169,88 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
           </View>
         ) : (
           <>
-            <ScrollView
-              style={styles.scrollView}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={{ flex: 1 }}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 76 : 0}
             >
-              {/* Mobile Number */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Mobile Number</Text>
-                <View style={styles.phoneRow}>
-                  <View style={styles.countryCodeBox}>
-                    <Text style={styles.flagEmoji}>🇮🇳</Text>
-                    <Text style={styles.countryCode}>+91</Text>
-                  </View>
-                  <View style={styles.phoneInputBox}>
-                    <TextInput
-                      style={styles.phoneInput}
-                      value={phone}
-                      placeholder="Enter mobile number"
-                      placeholderTextColor="rgba(0, 0, 0, 0.3)"
-                      keyboardType="phone-pad"
-                      editable={false}
-                    />
-                    <MaterialIcons name="check-circle" size={24} color="#00B14F" />
+              <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {/* Mobile Number */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Mobile Number</Text>
+                  <View style={styles.phoneRow}>
+                    <View style={styles.countryCodeBox}>
+                      <Text style={styles.flagEmoji}>🇮🇳</Text>
+                      <Text style={styles.countryCode}>+91</Text>
+                    </View>
+                    <View style={styles.phoneInputBox}>
+                      <TextInput autoCorrect={false}
+                        style={styles.phoneInput}
+                        value={phone}
+                        placeholder="Enter mobile number"
+                        placeholderTextColor="rgba(0, 0, 0, 0.3)"
+                        keyboardType="phone-pad"
+                        editable={false}
+                      />
+                      <MaterialIcons name="check-circle" size={24} color="#00B14F" />
+                    </View>
                   </View>
                 </View>
-              </View>
 
-              {/* Name */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Name</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={name}
-                  onChangeText={(text) => {
-                    setName(text);
-                    if (error) {
-                      setError('');
-                    }
-                    if (success) {
-                      setSuccess('');
-                    }
-                  }}
-                  placeholder="Enter your name"
-                  placeholderTextColor="rgba(0, 0, 0, 0.3)"
-                  maxLength={18}
-                />
-              </View>
+                {/* Name */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Name</Text>
+                  <TextInput autoCorrect={false}
+                    style={styles.textInput}
+                    value={name}
+                    onChangeText={(text) => {
+                      setName(text);
+                      if (error) {
+                        setError('');
+                      }
+                      if (success) {
+                        setSuccess('');
+                      }
+                    }}
+                    placeholder="Enter your name"
+                    placeholderTextColor="rgba(0, 0, 0, 0.3)"
+                    maxLength={18}
+                  />
+                </View>
 
-              {/* Email */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Email</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    if (error) {
-                      setError('');
-                    }
-                    if (success) {
-                      setSuccess('');
-                    }
-                  }}
-                  placeholder="Enter your email"
-                  placeholderTextColor="rgba(0, 0, 0, 0.3)"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  maxLength={30}
-                />
-              </View>
+                {/* Email */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Email</Text>
+                  <TextInput autoCorrect={false}
+                    style={styles.textInput}
+                    value={email}
+                    onChangeText={(text) => {
+                      setEmail(text);
+                      if (error) {
+                        setError('');
+                      }
+                      if (success) {
+                        setSuccess('');
+                      }
+                    }}
+                    placeholder="Enter your email"
+                    placeholderTextColor="rgba(0, 0, 0, 0.3)"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    maxLength={30}
+                  />
+                </View>
 
-              {/* Inline Error Message */}
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
-              {success ? <Text style={styles.successText}>{success}</Text> : null}
-            </ScrollView>
+                {/* Inline Error Message */}
+                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                {success ? <Text style={styles.successText}>{success}</Text> : null}
+              </ScrollView>
+            </KeyboardAvoidingView>
 
             {/* Update Button - Fixed at bottom */}
             <View style={styles.bottomButtonContainer}>

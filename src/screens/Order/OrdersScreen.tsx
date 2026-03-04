@@ -102,9 +102,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // Use Orders Context for global state
   const { dispatch, getOrdersList, state } = useOrders();
   const { showConfirmation } = useConfirmation();
+
   // Get orders from context (live updates from FCM)
   const contextOrders = getOrdersList();
-  
+
   // Local state for API pagination and loading
   // Initialize from persisted data if available, otherwise use defaults
   // Note: When reset is called, hasPersistedData is false, so state initializes empty
@@ -120,19 +121,19 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [totalOrders, setTotalOrders] = useState(() => hasPersistedData ? persistedTotalOrders : 0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
+
   // Refs to prevent API overload
   const isRequestInProgress = useRef(false);
   const lastRequestedPage = useRef(0);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const highlightedOrderRef = useRef<string | null>(null);
-  
+
   // Refs for initial mount tracking and scroll restoration
   // Reset isInitialMount when hasPersistedData is false (reset was called)
   const isInitialMount = useRef(!hasPersistedData);
   const hasRestoredScroll = useRef(false);
-  
+
   // Track previous visible state to detect when returning from another screen
   const prevVisibleRef = useRef(visible);
   const lastRefreshTimeRef = useRef<number>(0);
@@ -146,10 +147,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     if (contextOrders.length === 0 && localOrders.length > 0) {
       return localOrders;
     }
-    
+
     const contextOrderMap = new Map(contextOrders.map(o => [o.id.toString(), o]));
     const merged = [...localOrders];
-    
+
     // Update local orders with context updates (FCM updates)
     for (let i = 0; i < merged.length; i++) {
       const orderId = merged[i].id.toString();
@@ -178,14 +179,22 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         }
       }
     }
-    
-    // Add any new context orders that aren't in local orders
+
+    // Add any new context orders that aren't in local orders at the beginning (newest first)
+    const newContextOrders: OrderListItem[] = [];
     contextOrderMap.forEach((order) => {
-      merged.push(order);
+      newContextOrders.push(order);
     });
-    
-    return merged;
-  }, [contextOrders, localOrders, state.byId]);
+
+    // Sort new orders by id or created_at if possible to ensure newest is at top
+    newContextOrders.sort((a, b) => {
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    return [...newContextOrders, ...merged];
+  }, [localOrders, contextOrders, state.byId]);
 
   // Sync localOrders to context store after state updates
   useEffect(() => {
@@ -204,7 +213,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // This effect runs when visible changes or component mounts
   useEffect(() => {
     const wasVisible = prevVisibleRef.current;
-    
+
     if (!visible) {
       prevVisibleRef.current = visible;
       return;
@@ -213,7 +222,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     // Check if we're returning to this screen (was hidden, now visible)
     const isReturning = !wasVisible && visible;
     prevVisibleRef.current = visible;
-    
+
     console.log('👁️ OrdersScreen visibility changed:', { wasVisible, visible, isReturning });
 
     // Check if reset was called (hasPersistedData is false)
@@ -226,7 +235,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         setCurrentPage(1);
         setTotalOrders(0);
       }
-      
+
       // Always fetch fresh data when reset (hasPersistedData is false)
       // Check if we need to fetch (no data and no request in progress)
       if (localOrders.length === 0 && !isRequestInProgress.current) {
@@ -247,164 +256,29 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         type: 'BULK_SET_ORDERS',
         payload: persistedOrders,
       });
-      
+
       // Only update localOrders if it's empty or doesn't match persisted data
       if (localOrders.length === 0 || localOrders.length !== persistedOrders.length) {
         setLocalOrders(persistedOrders);
       }
       // Reset the restore flag when screen becomes visible with persisted data
       hasRestoredScroll.current = false;
-      
-      // Always try to refresh when screen becomes visible (if enough time has passed)
-      // This ensures we get the latest data even if isReturning detection fails
-      if (!isRequestInProgress.current) {
-        const now = Date.now();
-        const timeSinceLastRefresh = now - (lastRefreshTimeRef.current || 0);
-        const MIN_REFRESH_INTERVAL = 1000; // 1 second
-        
-        // Refresh if enough time has passed (regardless of isReturning)
-        if (timeSinceLastRefresh >= MIN_REFRESH_INTERVAL) {
-          const refreshOrders = async () => {
-            try {
-              console.log('🔄 OrdersScreen: Auto-refreshing on visibility...');
-              isRequestInProgress.current = true;
-              lastRequestedPage.current = 0;
-              
-              const response = await ordersService.getOrders(5, 1);
-              
-              if (response.success && response.data) {
-                const responseData = response.data as any;
-                
-                const ordersArray =
-                  responseData.data ||
-                  responseData.orders ||
-                  (Array.isArray(responseData) ? responseData : []);
 
-                const total =
-                  responseData.total ||
-                  responseData.meta?.total ||
-                  responseData.data?.total ||
-                  responseData.pagination?.total ||
-                  responseData.metadata?.total ||
-                  ordersArray.length;
-                
-                console.log('🔄 OrdersScreen: Auto-refresh successful, orders count:', ordersArray.length);
-                
-                // Update persisted data
-                persistedOrders = ordersArray;
-                persistedCurrentPage = 1;
-                persistedTotalOrders = total;
-                hasPersistedData = true;
-                
-                // Update local state with new array reference to trigger re-render
-                setLocalOrders([...ordersArray]);
-                setCurrentPage(1);
-                setTotalOrders(total);
-                
-                // Update context
-                dispatch({
-                  type: 'BULK_SET_ORDERS',
-                  payload: ordersArray,
-                });
-                
-                lastRefreshTimeRef.current = now;
-              }
-            } catch (error) {
-              console.warn('🔄 OrdersScreen: Auto-refresh failed:', error);
-            } finally {
-              isRequestInProgress.current = false;
-            }
-          };
-          
-          // Delay refresh slightly
-          const refreshTimer = setTimeout(() => {
-            refreshOrders();
-          }, 500);
-          
-          return () => clearTimeout(refreshTimer);
-        }
-      }
-      
-      // If returning from another screen (e.g., Order Details, Rate Order), refresh orders to get new ones
-      // Only refresh if it's been at least 1 second since last refresh to avoid excessive API calls
-      if (isReturning && !isRequestInProgress.current) {
-        const now = Date.now();
-        const timeSinceLastRefresh = now - (lastRefreshTimeRef.current || 0);
-        const MIN_REFRESH_INTERVAL = 1000; // 1 second (reduced for faster updates after rating)
-        
-        console.log('🔄 OrdersScreen: Returning detected, time since last refresh:', timeSinceLastRefresh);
-        
-        if (timeSinceLastRefresh >= MIN_REFRESH_INTERVAL) {
-          // Refresh first page in background to get any new orders
-          // Don't show loading state - just silently update
-          const refreshOrders = async () => {
-            try {
-              console.log('🔄 OrdersScreen: Starting refresh...');
-              isRequestInProgress.current = true;
-              lastRequestedPage.current = 0; // Reset to allow fetching page 1
-              
-              const response = await ordersService.getOrders(5, 1);
-              
-              if (response.success && response.data) {
-                // Handle different response structures (same as fetchOrders)
-                const responseData = response.data as any;
-                
-                const ordersArray =
-                  responseData.data ||
-                  responseData.orders ||
-                  (Array.isArray(responseData) ? responseData : []);
+      // If returning from another screen, just ensure the data is displayed
+      if (hasPersistedData && persistedOrders.length > 0) {
+        // Sync context from persisted orders
+        dispatch({
+          type: 'BULK_SET_ORDERS',
+          payload: persistedOrders,
+        });
 
-                const total =
-                  responseData.total ||
-                  responseData.meta?.total ||
-                  responseData.data?.total ||
-                  responseData.pagination?.total ||
-                  responseData.metadata?.total ||
-                  ordersArray.length;
-                
-                console.log('🔄 OrdersScreen: Refresh successful, orders count:', ordersArray.length);
-                
-                // Update persisted data
-                persistedOrders = ordersArray;
-                persistedCurrentPage = 1;
-                persistedTotalOrders = total;
-                hasPersistedData = true;
-                
-                // Update local state - this will trigger re-render
-                setLocalOrders([...ordersArray]); // Use spread to ensure new array reference
-                setCurrentPage(1);
-                setTotalOrders(total);
-                
-                // Update context with fresh orders
-                dispatch({
-                  type: 'BULK_SET_ORDERS',
-                  payload: ordersArray,
-                });
-                
-                lastRefreshTimeRef.current = now;
-              } else {
-                console.warn('🔄 OrdersScreen: Refresh failed:', response.error);
-              }
-            } catch (error) {
-              console.warn('🔄 OrdersScreen: Failed to refresh orders on return:', error);
-            } finally {
-              isRequestInProgress.current = false;
-            }
-          };
-          
-          // Delay refresh slightly to ensure smooth transition
-          const refreshTimer = setTimeout(() => {
-            refreshOrders();
-          }, 300);
-          
-          return () => clearTimeout(refreshTimer);
-        } else {
-          console.log('🔄 OrdersScreen: Refresh skipped, too soon since last refresh');
+        if (localOrders.length === 0 || localOrders.length !== persistedOrders.length) {
+          setLocalOrders(persistedOrders);
         }
       }
     }
     return undefined;
-  }, [visible, dispatch, localOrders.length, currentPage, totalOrders]);
+  }, [visible, dispatch, localOrders.length]);
 
   // Separate effect to restore scroll position after orders are rendered
   useEffect(() => {
@@ -419,7 +293,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           hasRestoredScroll.current = true; // Mark as restored
         }
       }, 200);
-      
+
       return () => clearTimeout(restoreTimer);
     }
     return undefined;
@@ -436,11 +310,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         highlightedOrderRef.current = highlightOrderId;
         // Scroll to order after a short delay to ensure layout is complete
         setTimeout(() => {
+          // Improve scroll calculation: if it's the first few items, scroll to top
+          // Otherwise use a slightly more generous offset
+          const scrollY = orderIndex === 0 ? 0 : Math.max(0, orderIndex * 240 - 50);
           scrollViewRef.current?.scrollTo({
-            y: orderIndex * 250, // Approximate height per card
+            y: scrollY,
             animated: true,
           });
-        }, 500);
+        }, 600);
       }
     }
   }, [highlightOrderId, orders]);
@@ -479,7 +356,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       if (response.success && response.data) {
         // Type assertion to handle different API response structures
         const responseData = response.data as any;
-        
+
         // Try different response structures the API might return
         const ordersArray =
           responseData.data || // Double-wrapped response
@@ -514,13 +391,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         setCurrentPage(page);
         persistedCurrentPage = page;
         hasPersistedData = true;
-        
+
         // Update context with fetched orders
         dispatch({
           type: 'BULK_SET_ORDERS',
           payload: reset ? ordersArray : [...localOrders, ...ordersArray],
         });
-        
+
         // Update last refresh time
         lastRefreshTimeRef.current = Date.now();
       } else {
@@ -712,7 +589,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [trackingOrderData, setTrackingOrderData] = useState<any>(null);
   const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
-  
+  const [isClosingTracking, setIsClosingTracking] = useState(false);
+
   const { canUsePip, isInPipMode: hookIsInPipMode, enterPip } = useAndroidPip();
   const webViewLoadedRef = useRef<boolean>(false);
   const webViewRef = useRef<any>(null);
@@ -880,6 +758,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const OPEN_HEIGHT = HALF_SCREEN;
   // Use height animation instead of translateY - CLOSED_HEIGHT = closed, OPEN_HEIGHT = open
   const bottomSheetHeight = useRef(new Animated.Value(OPEN_HEIGHT)).current; // Start open
+  const dragStartHeight = useRef(OPEN_HEIGHT);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(true); // Start open
 
   // Safely derive tracking URL from full order data (detail API response)
@@ -905,7 +784,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   const handleTrackOrder = (orderId: string) => {
     if (!orderId) return;
-
+    // Reset closing state immediately if we re-track before cleanup finished
+    setIsClosingTracking(false);
     setSelectedOrderIdForTracking(orderId);
 
     // Optimistically seed tracking data and URL from the existing orders list
@@ -938,7 +818,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       if (!silent) {
         setIsLoadingTrackingData(true);
       }
-      
+
       const response = await ordersService.getOrderById(Number(orderId));
 
       if (response.success && response.data) {
@@ -949,14 +829,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           hasFullData: true,
           silent,
         });
-        
+
         // Always update trackingOrderData when API response arrives
         // This ensures bottom sheet reloads with latest data
         setTrackingOrderData((prevData: any) => {
           // Check if API response has newer data than what we have
-          if (!prevData || 
-              response.data.updated_at !== prevData.updated_at ||
-              response.data.status !== prevData.status) {
+          if (!prevData ||
+            response.data.updated_at !== prevData.updated_at ||
+            response.data.status !== prevData.status) {
             console.log('✅ Tracking: API response has updated data - Reloading bottom sheet', {
               orderId,
               oldStatus: prevData?.status,
@@ -969,7 +849,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             // Return new data - this triggers bottom sheet reload
             return response.data;
           }
-          
+
           // Even if status hasn't changed, update with latest API data to ensure we have full data
           console.log('📦 Tracking: API response received - Updating with latest full data', {
             orderId,
@@ -998,29 +878,34 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         setIsLoadingTrackingData(false);
       }
     }
-  }, []);
+  }, [getTrackingUrlFromOrderData]);
 
   // Handle closing the tracking WebView modal and refresh orders
   const handleCloseTrackingWebView = useCallback(() => {
+    // 1. Guard against redundant calls
+    if (isClosingTracking) return;
+
+    // 2. Mark as closing - this immediately unmounts WebView from the tree
+    setIsClosingTracking(true);
     setShowTrackingWebView(false);
     setSelectedOrderIdForTracking(null);
     setTrackingOrderData(null);
     setSelectedTrackingUrl(null);
     webViewLoadedRef.current = false;
-    
+
     // Reset bottom sheet to open state when closing modal
     bottomSheetHeight.setValue(OPEN_HEIGHT);
     setIsBottomSheetOpen(true);
-    
+
     // Refresh orders when navigating back to My Orders page
     console.log('🔄 Tracking: Closing modal, refreshing orders...');
     fetchOrders(1, true).catch((err) => {
       console.error('Failed to refresh orders after closing tracking:', err);
     });
-  }, []);
+    setIsClosingTracking(false);
+  }, [isClosingTracking]);
 
   // Handle Android hardware back button while tracking overlay is open.
-  // Replaces the Modal's built-in onRequestClose since we now use a plain View.
   useEffect(() => {
     if (!showTrackingWebView) return;
 
@@ -1029,49 +914,53 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         handleCloseTrackingWebView();
         webViewLoadedRef.current = false;
       }
-      // Always intercept — in PiP mode, back should not close the overlay
       return true;
     };
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
   }, [showTrackingWebView, isInPipMode, handleCloseTrackingWebView]);
-  
+
   // PanResponder for bottom sheet drag - on drag handle and top section when closed
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => false, // Let children have a chance, but we'll take it if they don't
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only respond to vertical drags
+        // More sensitive threshold
+        return Math.abs(gestureState.dy) > 2;
+      },
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+        // Capture if it's a significant vertical move
         return Math.abs(gestureState.dy) > 5;
       },
       onPanResponderGrant: () => {
-        // Set offset to current value
-        bottomSheetHeight.setOffset((bottomSheetHeight as any)._value);
-        bottomSheetHeight.setValue(0);
+        // Stop any active animations to prevent fight between JS and Native
+        bottomSheetHeight.stopAnimation();
+
+        // Capture initial height and simplify state by flattening any existing offset
+        const currentHeight = (bottomSheetHeight as any)._value + ((bottomSheetHeight as any)._offset || 0);
+        dragStartHeight.current = currentHeight;
+        bottomSheetHeight.flattenOffset();
+        bottomSheetHeight.setValue(currentHeight);
       },
       onPanResponderMove: (_, gestureState) => {
-        const currentOffset = (bottomSheetHeight as any)._offset || 0;
-        // When dragging down (positive dy), reduce height (negative change)
-        // When dragging up (negative dy), increase height (positive change)
-        const heightChange = -gestureState.dy;
-        const newHeight = currentOffset + heightChange;
-        
-        // Restrict movement: can't go below CLOSED_HEIGHT or above OPEN_HEIGHT
-        const minHeight = CLOSED_HEIGHT;
-        const maxHeight = OPEN_HEIGHT;
-        const clampedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
-        bottomSheetHeight.setValue(clampedHeight - currentOffset);
+        // Calculate new height based on delta from start height
+        const nextHeight = dragStartHeight.current - gestureState.dy;
+
+        // Clamp height between CLOSED and OPEN thresholds
+        const clampedHeight = Math.max(CLOSED_HEIGHT, Math.min(OPEN_HEIGHT, nextHeight));
+        bottomSheetHeight.setValue(clampedHeight);
       },
       onPanResponderRelease: () => {
         bottomSheetHeight.flattenOffset();
         const currentValue = (bottomSheetHeight as any)._value;
         const currentOffset = (bottomSheetHeight as any)._offset || 0;
         const totalHeight = currentValue + currentOffset;
-        
+
         // Threshold: if height is more than halfway between closed and open, snap to open
         const threshold = (CLOSED_HEIGHT + OPEN_HEIGHT) / 2;
-        
+
         let targetHeight: number;
         if (totalHeight > threshold) {
           // Snap to open (OPEN_HEIGHT)
@@ -1082,7 +971,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           targetHeight = CLOSED_HEIGHT;
           setIsBottomSheetOpen(false);
         }
-        
+
         Animated.spring(bottomSheetHeight, {
           toValue: targetHeight,
           useNativeDriver: false, // Height animation doesn't support native driver
@@ -1090,13 +979,38 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           friction: 8, // Increased for smoother, less bouncy animation
         }).start();
       },
+      onPanResponderTerminate: (_: any, _gestureState: any) => {
+        // Handle termination (e.g., system dialog, modal swipe) by snapping back to valid state
+        const totalHeight = (bottomSheetHeight as any)._value;
+        const threshold = (CLOSED_HEIGHT + OPEN_HEIGHT) / 2;
+        const targetHeight = totalHeight > threshold ? OPEN_HEIGHT : CLOSED_HEIGHT;
+        setIsBottomSheetOpen(totalHeight > threshold);
+        Animated.spring(bottomSheetHeight, {
+          toValue: targetHeight,
+          useNativeDriver: false,
+        }).start();
+      },
+    })
+  ).current;
+
+  // Dedicated PanResponder for the notch itself - aggressive capture to stop iOS modal dismissal
+  const notchPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true, // Winner for the notch area
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 2,
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dy) > 5,
+      onPanResponderGrant: panResponder.panHandlers.onResponderGrant as any,
+      onPanResponderMove: panResponder.panHandlers.onResponderMove as any,
+      onPanResponderRelease: panResponder.panHandlers.onResponderRelease as any,
+      onPanResponderTerminate: panResponder.panHandlers.onResponderRelease as any,
     })
   ).current;
 
   // Subscribe to FCM updates for tracking order
   // Get the order directly from state.byId - this will update when FCM notifications arrive
   const trackingContextOrder = selectedOrderIdForTracking ? state.byId[selectedOrderIdForTracking] : undefined;
-  
+
   // Get status and updated_at as separate values for reliable change detection
   const contextStatus = trackingContextOrder?.status;
   const contextUpdatedAt = trackingContextOrder?.updated_at;
@@ -1104,7 +1018,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // LOG: Track order status watching - log current status values
   useEffect(() => {
     if (!selectedOrderIdForTracking) return;
-    
+
     console.log('📊 TRACK ORDER STATUS WATCH:', {
       orderId: selectedOrderIdForTracking,
       fcmStatus: contextStatus || 'N/A',
@@ -1116,12 +1030,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       hasAPIData: !!trackingOrderData,
     });
   }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, trackingOrderData?.status, trackingOrderData?.updated_at]);
-  
+
   // WATCH BOTH: FCM updates AND API response data for the bottom sheet
   // 1. FCM LISTENER: Watches context order (state.byId) for real-time FCM updates
   // 2. API RESPONSE WATCHER: The initial API response is stored in trackingOrderData
   // When either FCM or API data changes, the UI automatically updates
-  
+
   // FCM LISTENER + API WATCHER: Listen to FCM updates AND watch API response data
   // When FCM status update arrives:
   // 1. Immediately update UI with FCM status (fast, real-time) - triggers bottom sheet reload
@@ -1135,7 +1049,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
     // Get the latest order from state.byId (this updates when FCM arrives)
     const latestContextOrder = state.byId[selectedOrderIdForTracking];
-    
+
     // If context order exists (from FCM), sync it to local state AND fetch latest API data
     if (latestContextOrder) {
       setTrackingOrderData((prevData: any) => {
@@ -1153,7 +1067,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         // No status is restricted - any status update from FCM will automatically update the UI
         const statusChanged = prevData.status !== latestContextOrder.status;
         const updatedAtChanged = prevData.updated_at !== latestContextOrder.updated_at;
-        
+
         if (statusChanged || updatedAtChanged) {
           console.log('✅ Tracking: FCM update detected - Updating UI and fetching latest API data', {
             orderId: selectedOrderIdForTracking,
@@ -1164,7 +1078,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             source: 'FCM',
             note: 'This handles ANY status update automatically',
           });
-          
+
           // LOG: Status change detected - works for ALL status types
           console.log('📊 TRACK ORDER STATUS CHANGE:', {
             orderId: selectedOrderIdForTracking,
@@ -1175,7 +1089,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             statusType: 'ANY_STATUS_UPDATE', // Confirms we handle all status types
             timestamp: new Date().toISOString(),
           });
-          
+
           // Step 1: Immediately update UI with FCM data (fast, real-time)
           // This triggers bottom sheet reload with FCM status
           const updatedData = {
@@ -1186,13 +1100,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             // Preserve restaurant details if they exist in prevData but not in context
             restaurant: latestContextOrder.restaurant || prevData.restaurant,
           };
-          
+
           // Step 2: Fetch latest full order data from API (silent fetch - no loading indicator)
           // When API response arrives, it will update trackingOrderData which triggers bottom sheet reload
           fetchTrackingOrderData(selectedOrderIdForTracking, true).catch((err) => {
             console.error('Failed to fetch latest API data after FCM update:', err);
           });
-          
+
           return updatedData;
         }
 
@@ -1201,7 +1115,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       });
     }
   }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, state.byId, fetchTrackingOrderData]);
-  
+
   // API RESPONSE WATCHER: Watch for changes in API response data and reload bottom sheet
   // This ensures whenever the API response updates (status/timeline), the bottom sheet reflects changes
   useEffect(() => {
@@ -1217,7 +1131,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       updatedAt: apiUpdatedAt,
       source: 'API',
     });
-    
+
     // LOG: API status update
     console.log('📊 TRACK ORDER API STATUS UPDATE:', {
       orderId: selectedOrderIdForTracking,
@@ -1231,7 +1145,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     // This useEffect ensures we're watching the API response data
     // The UI uses displayOrder = trackingContextOrder || trackingOrderData
     // So when trackingOrderData updates, the bottom sheet reloads with new data
-  }, [selectedOrderIdForTracking, trackingOrderData?.status, trackingOrderData?.updated_at]);
+  }, [selectedOrderIdForTracking, trackingOrderData?.status, trackingOrderData?.updated_at  ]);
 
   // Auto-close tracking overlay in PiP mode when order reaches a terminal status
   useEffect(() => {
@@ -1269,7 +1183,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     trackingOrderData?.status,
     handleCloseTrackingWebView,
   ]);
-  
+
   // API RESPONSE WATCHER: Also watch the trackingOrderData itself for any changes
   // This ensures we catch updates from the initial API response or any subsequent API calls
   // The displayOrder will use the latest data from either FCM (trackingContextOrder) or API (trackingOrderData)
@@ -1279,10 +1193,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     // Get support number from cache first, only call API if not found
     const supportDetails = await authService.getSupportDetails(false);
     const numberToCall = supportDetails.support_number;
-    
+
     if (!numberToCall) return;
     const telUrl = `tel:${numberToCall.replace(/\s+/g, '')}`;
-    Linking.openURL(telUrl).catch(() => {});
+    Linking.openURL(telUrl).catch(() => { });
 
     // Navigate to Contact Us page instead of directly calling
     if (onContactUs) {
@@ -1300,7 +1214,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -1314,7 +1228,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -1330,7 +1244,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -1342,18 +1256,24 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       const response = await exotelService.initiateCall({
         order_id: orderNumber,
         from: userPhone,
-        to: agentPhoneClean,        
+        to: agentPhoneClean,
       });
 
       if (response.success) {
-        showConfirmation({
-          title: 'Call Initiated',
-          message: 'Your call to the delivery agent is being connected. Please wait for the call.',
-          confirmText: 'OK',
-          cancelText: '',
-          confirmButtonColor: '#00B14F',
-          onConfirm: () => {},
-        });
+        // CLOSE MODAL FIRST to avoid multiple modal contentions on iOS
+        handleCloseTrackingWebView();
+
+        // Show confirmation after modal is dismissed
+        setTimeout(() => {
+          showConfirmation({
+            title: 'Call Initiated',
+            message: 'Your call to the delivery agent is being connected. Please wait for the call.',
+            confirmText: 'OK',
+            cancelText: '',
+            confirmButtonColor: '#00B14F',
+            onConfirm: () => { },
+          });
+        }, 800);
       } else {
         showConfirmation({
           title: 'Call Failed',
@@ -1361,7 +1281,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           confirmText: 'OK',
           cancelText: '',
           confirmButtonColor: '#DC2626',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
       }
     } catch (error: any) {
@@ -1371,7 +1291,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#DC2626',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
     } finally {
       setIsInitiatingCall(false);
@@ -1404,15 +1324,19 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
     // Get status config from mapping utility
     const statusConfig = mapOrderStatusToUI(statusToMap);
-    
+
     // Check if this order should be highlighted
-    // Check if this order should be highlighted (by id or order_number)
-    const isHighlighted = highlightOrderId === order.id.toString() || highlightOrderId === order.order_number;
+    // Priority: If it matches by order_number, it's very likely the target from a notification
+    // If highlightOrderId matches an id but we also have an order_number match elsewhere, 
+    // we should be careful. But for UI state, we'll highlight any match.
+    const isHighlighted = highlightOrderId ? (
+      order.order_number === highlightOrderId || order.id.toString() === highlightOrderId
+    ) : false;
 
     // Show order number from API response (e.g., "ORD-20251208-084")
     // The API returns "order_number" field, so we use it directly
     const orderNumber = order.order_number || (order as any).orderNumber || `ORD-${order.id}`;
-    
+
     // Get total amount - check multiple possible locations in API response
     const totalAmount = order.summary?.total_amount || order.total_amount || (order as any).total || 0;
 
@@ -1503,7 +1427,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 // Disabled for: confirmed (order placed), billed (order accepted)
                 const rawStatus = (order.status || '').toString().toLowerCase();
                 const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
-                
+
                 // Explicitly disabled statuses - tracking is NOT allowed for these
                 const disabledStatuses = [
                   'confirmed',
@@ -1519,7 +1443,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   'pending_payment',
                   'preparing'
                 ];
-                
+
                 // Define enabled statuses - tracking works from "packed" / "agent-assigned" status onward
                 const enabledStatuses = [
                   'packed',
@@ -1535,14 +1459,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   'delivered',
                   'completed'
                 ];
-                
+
                 // Check if status is explicitly disabled first - force disable
                 const isExplicitlyDisabled = disabledStatuses.includes(normalizedStatus);
-                
+
                 // Enable tracking only if status is in enabled list AND not explicitly disabled
                 // Note: tracking_url override removed - status must be enabled
                 const isTrackingEnabled = !isExplicitlyDisabled && enabledStatuses.includes(normalizedStatus);
-                
+
                 return (
                   <TouchableOpacity
                     style={[
@@ -1553,10 +1477,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                     activeOpacity={!isTrackingEnabled ? 1 : 0.8}
                     disabled={!isTrackingEnabled}
                   >
-                    <MaterialIcons 
-                      name="location-on" 
-                      size={18} 
-                      color={!isTrackingEnabled ? "#CCCCCC" : "#FFFFFF"} 
+                    <MaterialIcons
+                      name="location-on"
+                      size={18}
+                      color={!isTrackingEnabled ? "#CCCCCC" : "#FFFFFF"}
                     />
                     <Text style={[
                       styles.reorderButtonText,
@@ -1567,14 +1491,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   </TouchableOpacity>
                 );
               })()}
-                <TouchableOpacity
-                  style={styles.reorderButton}
-                  onPress={() => handleOrderPress(order.id.toString())}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name="visibility" size={18} color="#FFFFFF" />
-                  <Text style={styles.reorderButtonText}>View Order</Text>
-                </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.reorderButton}
+                onPress={() => handleOrderPress(order.id.toString())}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="visibility" size={18} color="#FFFFFF" />
+                <Text style={styles.reorderButtonText}>View Order</Text>
+              </TouchableOpacity>
             </>
           ) : (
             <>
@@ -1619,7 +1543,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   <Text style={styles.reorderButtonText}>Reorder</Text>
                 </TouchableOpacity>
               )} */}
-               {!isPaymentFailed && (
+              {!isPaymentFailed && (
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={() => handleOrderPress(order.id.toString())}
@@ -1652,11 +1576,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
       <SafeAreaView style={styles.container} edges={['bottom']}>
 
-      {/* Search and Filter - Hidden */}
-      {/* <View style={styles.searchContainer}>
+        {/* Search and Filter - Hidden */}
+        {/* <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
           <MaterialIcons name="search" size={24} color="rgba(0, 30, 31, 0.5)" />
-          <TextInput
+          <TextInput autoCorrect={false}
             style={styles.searchInput}
             placeholder="Search"
             placeholderTextColor="rgba(0, 30, 31, 0.5)"
@@ -1673,79 +1597,79 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         </TouchableOpacity>
       </View> */}
 
-      {/* Orders List */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-        overScrollMode="never"
-        scrollEventThrottle={100}
-        onScroll={handleScroll}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            tintColor="#00B14F"
-            colors={['#00B14F']}
-          />
-        }
-      >
-        {isLoading ? (
-          // Loading shimmer
-          <>
-            {[1, 2, 3].map((i) => (
-              <View key={i} style={styles.orderCard}>
-                <Shimmer width="100%" height={200} borderRadius={20} />
-              </View>
-            ))}
-          </>
-        ) : error ? (
-          // Error state
-          <View style={styles.emptyState}>
-            <MaterialIcons name="error-outline" size={64} color="rgba(0, 0, 0, 0.2)" />
-            <Text style={styles.emptyTitle}>Failed to load orders</Text>
-            <Text style={styles.emptyText}>{error}</Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={() => fetchOrders(1, true)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : orders.length === 0 ? (
-          // Empty state
-          <View style={styles.emptyState}>
-            <MaterialIcons name="receipt-long" size={64} color="rgba(0, 0, 0, 0.2)" />
-            <Text style={styles.emptyTitle}>No Orders Yet</Text>
-            <Text style={styles.emptyText}>
-              Your order history will appear here once you place an order
-            </Text>
-          </View>
-        ) : (
-          <>
-            {orders.map((order, index) => (
-              <React.Fragment key={`order-${order.id}-${index}`}>
-                {renderOrderCard(order)}
-              </React.Fragment>
-            ))}
+        {/* Orders List */}
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          alwaysBounceVertical={true}
+          overScrollMode="never"
+          scrollEventThrottle={100}
+          onScroll={handleScroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor="#00B14F"
+              colors={['#00B14F']}
+            />
+          }
+        >
+          {isLoading ? (
+            // Loading shimmer
+            <>
+              {[1, 2, 3].map((i) => (
+                <View key={i} style={styles.orderCard}>
+                  <Shimmer width="100%" height={200} borderRadius={20} />
+                </View>
+              ))}
+            </>
+          ) : error ? (
+            // Error state
+            <View style={styles.emptyState}>
+              <MaterialIcons name="error-outline" size={64} color="rgba(0, 0, 0, 0.2)" />
+              <Text style={styles.emptyTitle}>Failed to load orders</Text>
+              <Text style={styles.emptyText}>{error}</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => fetchOrders(1, true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : orders.length === 0 ? (
+            // Empty state
+            <View style={styles.emptyState}>
+              <MaterialIcons name="receipt-long" size={64} color="rgba(0, 0, 0, 0.2)" />
+              <Text style={styles.emptyTitle}>No Orders Yet</Text>
+              <Text style={styles.emptyText}>
+                Your order history will appear here once you place an order
+              </Text>
+            </View>
+          ) : (
+            <>
+              {orders.map((order, index) => (
+                <React.Fragment key={`order-${order.id}-${index}`}>
+                  {renderOrderCard(order)}
+                </React.Fragment>
+              ))}
 
-            {/* Infinite scroll loading indicator */}
-            {isLoadingMore && (
-              <View style={styles.loadingMoreContainer}>
-                <ActivityIndicator size="small" color="#00B14F" />
-                <Text style={styles.loadingMoreText}>Loading more orders...</Text>
-              </View>
-            )}
+              {/* Infinite scroll loading indicator */}
+              {isLoadingMore && (
+                <View style={styles.loadingMoreContainer}>
+                  <ActivityIndicator size="small" color="#00B14F" />
+                  <Text style={styles.loadingMoreText}>Loading more orders...</Text>
+                </View>
+              )}
 
-            {/* Show message when all orders are loaded */}
-            {!isLoadingMore && orders.length >= totalOrders && orders.length > 0 && (
-              <View style={styles.endOfListContainer}>
-                <Text style={styles.endOfListText}>You've reached the end</Text>
-              </View>
-            )}
+              {/* Show message when all orders are loaded */}
+              {!isLoadingMore && orders.length >= totalOrders && orders.length > 0 && (
+                <View style={styles.endOfListContainer}>
+                  <Text style={styles.endOfListText}>You've reached the end</Text>
+                </View>
+              )}
 
             {/* App Version */}
             <Text style={styles.appVersion}>App version {APP_VERSION_NAME}_{APP_VERSION_CODE}</Text>
@@ -1755,14 +1679,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
       </SafeAreaView>
 
-      {/* Tracking WebView Overlay
-          Rendered as a plain absolute View inside the activity window — NOT as a
-          Modal / Dialog.  React Native Modals are separate Android Dialog windows
-          that do not correctly track the activity's PiP window boundary during
-          drag, which causes resize / layout glitches in PiP mode.
-          Using an absolute View means it lives in the same view hierarchy as the
-          activity and scales perfectly with the PiP window at all times.
-          Back-button handling is done via BackHandler (see useEffect above). */}
+      {/* Tracking WebView Overlay - plain View for PiP support (not Modal) */}
       {showTrackingWebView && (
         <View
           style={{
@@ -1777,9 +1694,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           }}
         >
 
-          {/* Header — visible in normal mode only.
-              Hiding it (not unmounting WebView) lets the WebView resize naturally
-              without triggering a reload when entering / exiting PiP. */}
           {!isInPipMode && (
             <SafeAreaView edges={['top']} style={{ backgroundColor: '#FFFFFF' }}>
               <View style={styles.webViewHeader}>
@@ -1808,13 +1722,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             </SafeAreaView>
           )}
 
-          {/* ── Single WebView (memoized) ─────────────────────────────────────────
-              TrackingWebView is wrapped in React.memo with stable prop references.
-              It will NOT re-render when isInPipMode, bottom-sheet, or any other
-              parent state changes — eliminating lag on PiP ↔ normal transitions.
-              stableTrackingUrl is a useMemo that only changes when the user opens
-              a different order's tracking session.
-          ──────────────────────────────────────────────────────────────────── */}
           <View style={{ flex: 1, backgroundColor: '#000000' }}>
             {stableTrackingUrl ? (
               <TrackingWebView
@@ -1832,7 +1739,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             )}
           </View>
 
-          {/* PiP navigation widget — absolute overlay, only shown in PiP mode */}
           {isInPipMode && trackingOrderData && (
             <View style={styles.navigationWidget} pointerEvents="box-none">
               <View style={styles.navigationInfoBar}>
@@ -1851,10 +1757,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
               </View>
             </View>
           )}
-          
-          {/* Bottom Sheet Overlay - hidden in PiP so only the map is visible */}
+
           {!isInPipMode && (
-          <Animated.View 
+          <Animated.View
             style={[
               styles.trackingBottomSheet,
               {
@@ -1863,24 +1768,24 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             ]}
           >
             {/* Drag handle at top - always visible, controls open/close */}
-            <View 
-              style={styles.trackingDragHandleContainer} 
-              {...(isBottomSheetOpen ? panResponder.panHandlers : {})}
+            <View
+              style={styles.trackingDragHandleContainer}
+              {...notchPanResponder.panHandlers}
             >
               <View style={styles.trackingDragHandleBar} />
             </View>
-            
+
             {/* Top Section: Always visible (restaurant info, status, address3) - draggable when closed */}
             {trackingOrderData && !isLoadingTrackingData && (() => {
               const orderForFullDetails = trackingOrderData || trackingContextOrder;
               const displayOrder = trackingContextOrder || trackingOrderData;
               const displayStatus = displayOrder?.status;
               const statusConfig = mapOrderStatusToUI(displayStatus);
-              
+
               return (
-                <View 
+                <View
                   style={styles.trackingTopSection}
-                  {...(!isBottomSheetOpen ? panResponder.panHandlers : {})}
+                  {...panResponder.panHandlers}
                 >
                   <View style={styles.trackingLeftContent}>
                     <View style={styles.trackingRestaurantRow}>
@@ -1909,10 +1814,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   </View>
                   <View style={styles.trackingRightContent}>
                     <View style={[styles.trackingStatusBadge, { backgroundColor: statusConfig.bgColor }]}>
-                      <MaterialIcons 
-                        name={statusConfig.iconName as any} 
-                        size={16} 
-                        color={statusConfig.color} 
+                      <MaterialIcons
+                        name={statusConfig.iconName as any}
+                        size={16}
+                        color={statusConfig.color}
                       />
                       <Text style={[styles.trackingStatusText, { color: statusConfig.color }]}>
                         {statusConfig.label}
@@ -1922,88 +1827,97 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 </View>
               );
             })()}
-            
+
             {/* Scrollable content - only shown when open */}
             {isBottomSheetOpen && (
               <>
-              {isLoadingTrackingData ? (
-              <View style={styles.trackingLoadingContainer}>
-                <ActivityIndicator size="large" color="#00B14F" />
-                <Text style={styles.trackingLoadingText}>Loading order status...</Text>
-              </View>
-            ) : trackingOrderData ? (
-              <ScrollView
-                style={styles.trackingBottomSheetContent}
-                contentContainerStyle={styles.trackingBottomSheetContentContainer}
-                showsVerticalScrollIndicator={true}
-                scrollEnabled={true}
-                nestedScrollEnabled={true}
-                bounces={false}
-              >
-                {(() => {
-                  // Use API order (trackingOrderData) for full details so we always show API tracking/delivery/restaurant.
-                  // Use displayOrder for status so FCM live status is reflected.
-                  const orderForFullDetails = trackingOrderData || trackingContextOrder;
-                  const displayOrder = trackingContextOrder || trackingOrderData;
-                  const displayStatus = displayOrder?.status;
-                  const trackingArray = orderForFullDetails?.tracking ?? [];
-                  let agentName: string | null = null;
-                  let agentPhone: string | null = null;
-                  for (let i = trackingArray.length - 1; i >= 0; i--) {
-                    const trackingEntry = trackingArray[i];
-                    if (trackingEntry) {
-                      if (trackingEntry.agent_name) {
-                        agentName = trackingEntry.agent_name;
-                        agentPhone = trackingEntry.agent_phone || null;
-                        break;
+                {isLoadingTrackingData ? (
+                  <View style={styles.trackingLoadingContainer}>
+                    <ActivityIndicator size="large" color="#00B14F" />
+                    <Text style={styles.trackingLoadingText}>Loading order status...</Text>
+                  </View>
+                ) : trackingOrderData ? (
+                  <ScrollView
+                    style={styles.trackingBottomSheetContent}
+                    contentContainerStyle={styles.trackingBottomSheetContentContainer}
+                    showsVerticalScrollIndicator={true}
+                    scrollEnabled={isBottomSheetOpen}
+                    nestedScrollEnabled={true}
+                    bounces={false}
+                  >
+                    {(() => {
+                      const orderForFullDetails = trackingOrderData || trackingContextOrder;
+                      const displayOrder = trackingContextOrder || trackingOrderData;
+                      const displayStatus = displayOrder?.status;
+                      const trackingArray = orderForFullDetails?.tracking ?? [];
+                      let agentName: string | null = null;
+                      let agentPhone: string | null = null;
+                      for (let i = trackingArray.length - 1; i >= 0; i--) {
+                        const trackingEntry = trackingArray[i];
+                        if (trackingEntry) {
+                          if (trackingEntry.agent_name) {
+                            agentName = trackingEntry.agent_name;
+                            agentPhone = trackingEntry.agent_phone || null;
+                            break;
+                          }
+                          if (trackingEntry.agent_phone && !agentName) {
+                            agentName = null;
+                            agentPhone = trackingEntry.agent_phone;
+                          }
+                        }
                       }
-                      if (trackingEntry.agent_phone && !agentName) {
-                        agentName = null;
-                        agentPhone = trackingEntry.agent_phone;
+                      const sortedApiTracking = [...trackingArray].sort((a: any, b: any) =>
+                        new Date(a.timestamp || a.created_at || 0).getTime() - new Date(b.timestamp || b.created_at || 0).getTime()
+                      );
+                      const timelineEntries = sortedApiTracking.length > 0 ? sortedApiTracking : getFallbackTimelineForStatus(displayStatus);
+
+                      const formatDeliveryTime = (dateString: string | null | undefined): string => {
+                        if (!dateString) return '';
+                        try {
+                          const date = new Date(dateString);
+                          if (isNaN(date.getTime())) return '';
+                          return date.toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          });
+                        } catch {
+                          return '';
+                        }
+                      };
+
+                      const deliveryTime = formatDeliveryTime(orderForFullDetails?.estimated_delivery_time);
+                      const statusConfig = mapOrderStatusToUI(displayStatus);
+                      const isDelivered = (displayStatus || '').toLowerCase().trim() === 'delivered' ||
+                                          (displayStatus || '').toLowerCase().trim() === 'completed';
+                      const normalizedStatus = (displayStatus || '').toLowerCase().replace(/[_\s]+/g, '-');
+                      const isAgentAssignedish =
+                        normalizedStatus === 'agent-assigned' ||
+                        normalizedStatus === 'agent-arrived-restaurant' ||
+                        normalizedStatus === 'picked' ||
+                        normalizedStatus === 'out-for-delivery' ||
+                        normalizedStatus === 'on-the-way';
+
+                      // Find the latest tracking entry with agent_name or agent_phone
+                      // Iterate from the end to get the most recent agent assignment
+                      for (let i = trackingArray.length - 1; i >= 0; i--) {
+                        const trackingEntry = trackingArray[i];
+                        if (trackingEntry) {
+                          // If we find an entry with agent_name, use it
+                          if (trackingEntry.agent_name) {
+                            agentName = trackingEntry.agent_name;
+                            agentPhone = trackingEntry.agent_phone || null;
+                            break;
+                          }
+                          // If we find an entry with agent_phone but no name, still use it
+                          if (trackingEntry.agent_phone && !agentName) {
+                            agentName = null;
+                            agentPhone = trackingEntry.agent_phone;
+                          }
+                        }
                       }
-                    }
-                  }
-                  // Use API tracking when available; otherwise fallback timeline (e.g. agent_assigned with no tracking array)
-                  const sortedApiTracking = [...trackingArray].sort((a: any, b: any) =>
-                    new Date(a.timestamp || a.created_at || 0).getTime() - new Date(b.timestamp || b.created_at || 0).getTime()
-                  );
-                  const timelineEntries = sortedApiTracking.length > 0 ? sortedApiTracking : getFallbackTimelineForStatus(displayStatus);
-                  
-                  // Format estimated delivery time - extract only time from ISO string
-                  const formatDeliveryTime = (dateString: string | null | undefined): string => {
-                    if (!dateString) return '';
-                    try {
-                      const date = new Date(dateString);
-                      if (isNaN(date.getTime())) return '';
-                      return date.toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true,
-                      });
-                    } catch {
-                      return '';
-                    }
-                  };
-                  
-                  const deliveryTime = formatDeliveryTime(orderForFullDetails?.estimated_delivery_time);
-                  
-                  // Get status config
-                  const statusConfig = mapOrderStatusToUI(displayStatus);
-                  
-                  // Check if order is delivered
-                  const isDelivered = (displayStatus || '').toLowerCase().trim() === 'delivered' || 
-                                      (displayStatus || '').toLowerCase().trim() === 'completed';
 
-                  // Normalize status for helper conditions
-                  const normalizedStatus = (displayStatus || '').toLowerCase().replace(/[_\s]+/g, '-');
-                  const isAgentAssignedish =
-                    normalizedStatus === 'agent-assigned' ||
-                    normalizedStatus === 'agent-arrived-restaurant' ||
-                    normalizedStatus === 'picked' ||
-                    normalizedStatus === 'out-for-delivery' ||
-                    normalizedStatus === 'on-the-way';
-
-                  // If status says agent is involved but we don't yet have name from API,
+                      // If status says agent is involved but we don't yet have name from API,
                   // show status-appropriate label (same as timeline) instead of generic "on the way"
                   let agentDisplayName = agentName;
                   if (!agentDisplayName && isAgentAssignedish) {
@@ -2141,7 +2055,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             ) : null}
               </>
             )}
-            
           </Animated.View>
           )}
         </View>
@@ -2513,6 +2426,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E4E4E4',
     backgroundColor: '#FFFFFF',
+    zIndex: 999,
+    elevation: 10,
   },
   webViewBackButton: {
     width: 40,
@@ -2639,15 +2554,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     overflow: 'hidden',
     // Enhanced shadow for better visibility
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
-    elevation: 15, // Android shadow
+    zIndex: 1000,
+    elevation: 20, // Android shadow and layering
   },
   trackingDragHandleContainer: {
     width: '100%',
@@ -2656,7 +2572,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 8,
     paddingBottom: 8,
-    zIndex: 10,
+    zIndex: 999,
+    elevation: 10,
   },
   trackingDragHandleBar: {
     width: 40,

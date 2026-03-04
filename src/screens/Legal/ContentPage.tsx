@@ -143,7 +143,8 @@ export const ContentPage: React.FC<ContentPageProps> = ({ title, url, onBack }) 
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{title}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
+        <View style={styles.headerPlaceholder} />
       </View>
 
       <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -280,12 +281,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
+    flex: 1,
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 18,
     lineHeight: 27,
     textAlign: 'center',
     color: '#FFFFFF',
     opacity: 0.85,
+  },
+  headerPlaceholder: {
+    width: 40,
   },
   scrollContent: {
     padding: 20,

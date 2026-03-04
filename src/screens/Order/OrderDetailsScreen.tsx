@@ -10,6 +10,8 @@ import {
   Animated,
   ActivityIndicator,
   Pressable,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -606,7 +608,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       try {
         console.log(`[OrderDetails] Reactivating cart (attempt ${attempt}/${maxRetries})...`);
         const response = await cartService.updateCart(cartId, { is_active: true });
-        
+
         if (response.success) {
           console.log('[OrderDetails] Cart reactivated successfully');
           return true;
@@ -625,7 +627,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         }
       }
     }
-    
+
     console.error('[OrderDetails] Failed to reactivate cart after all retries');
     return false;
   };
@@ -1554,611 +1556,619 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           </SafeAreaView>
         </View>
 
-        {/* Main Content */}
-        <ScrollView 
-          style={styles.scrollView} 
-          showsVerticalScrollIndicator={false}
-          onScrollBeginDrag={() => setShowTaxTooltip(false)}
+        {/* Main Content & Footer wrapped in KeyboardAvoidingView */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
-          <View style={styles.content}>
+          <ScrollView
+            style={styles.scrollView}
+            showsVerticalScrollIndicator={false}
+            onScrollBeginDrag={() => setShowTaxTooltip(false)}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.content}>
+              {/* ... existing content ... */}
 
-            {/* Your Order Section */}
-            <View style={styles.section}>
-              <TouchableOpacity
-                style={styles.sectionHeader}
-                onPress={() => setOrderExpanded(!orderExpanded)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.sectionTitle}>Your Order</Text>
-                <MaterialIcons
-                  name={orderExpanded ? 'expand-less' : 'expand-more'}
-                  size={24}
-                  color="#000000"
-                />
-              </TouchableOpacity>
-
-              {orderExpanded && (
-                <View style={styles.sectionContent}>
-                  {/* Order Items */}
-                  {localCartItems.map((item) => {
-                    const isAtQuantityLimit = getLocalItemTotalQuantity(item.id) >= MAX_ITEM_QUANTITY;
-                    const itemPrice = item.price * item.quantity;
-
-                    return (
-                      <View key={item.variantId || item.id} style={styles.orderItem}>
-                        <View style={styles.orderItemDetails}>
-                          <View style={styles.itemNameRow}>
-                            <View style={[
-                              styles.vegIconSmall,
-                              !item.isVeg && styles.nonVegIconSmall
-                            ]}>
-                              <View style={[
-                                styles.vegDotSmall,
-                                !item.isVeg && styles.nonVegDotSmall
-                              ]} />
-                            </View>
-                            <Text style={styles.orderItemName}>{item.name}</Text>
-                          </View>
-                          {/* Show customization row for all customizable items */}
-                          {item.variantId && (
-                            <TouchableOpacity
-                              style={styles.customizationsRow}
-                              onPress={() => {
-                                if (onEditCustomization && item.variantId) {
-                                  onEditCustomization(item.id, item.variantId, item.addOnIds || [], item.quantity);
-                                }
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              <Text style={styles.orderItemCustomizations} numberOfLines={1} ellipsizeMode="tail">
-                                {item.customizations && item.customizations.trim() !== ''
-                                  ? item.customizations
-                                  : 'No add-ons selected'}
-                              </Text>
-                              <MaterialIcons name="keyboard-arrow-down" size={16} color="rgba(0, 0, 0, 0.5)" />
-                            </TouchableOpacity>
-                          )}
-                          {/* Only show unit price for non-customizable items */}
-                          {!item.variantId && (
-                            <Text style={styles.orderItemPrice}>₹{item.price}</Text>
-                          )}
-                        </View>
-                        <View style={styles.quantityControl}>
-                          <TouchableOpacity
-                            onPress={() => handleDecrement(item.id, item.variantId)}
-                            activeOpacity={0.7}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          >
-                            <Text style={styles.quantityButton}>-</Text>
-                          </TouchableOpacity>
-                          <Text style={styles.quantityText}>{item.quantity}</Text>
-                          <TouchableOpacity
-                            onPress={() => handleIncrement(item.id, item.variantId)}
-                            activeOpacity={0.7}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                            disabled={isAtQuantityLimit}
-                          >
-                            <Text
-                              style={[
-                                styles.quantityButton,
-                                isAtQuantityLimit && styles.quantityButtonDisabled,
-                              ]}
-                            >
-                              +
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                        <View style={styles.priceContainer}>
-                          <Text style={styles.finalPrice}>₹{itemPrice}</Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-
-                  {/* Add More Items Button */}
-                  <TouchableOpacity
-                    style={styles.addMoreButton}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      if (onAddMoreItems) {
-                        onAddMoreItems();
-                      } else if (onBack) {
-                        onBack();
-                      }
-                    }}
-                  >
-                    <Text style={styles.addMoreButtonText}>+ Add More Items</Text>
-                  </TouchableOpacity>
-
-                  {/* Notes */}
-                  <View style={styles.notesContainer}>
-                    <Text style={styles.notesLabel}>Notes</Text>
-                    <TextInput
-                      style={styles.notesInput}
-                      placeholder="Add special instructions for your order"
-                      placeholderTextColor="rgba(0, 0, 0, 0.4)"
-                      value={notes}
-                      onChangeText={setNotes}
-                      multiline
-                    />
-                  </View>
-                </View>
-              )}
-            </View>
-
-            {/* Delivery Details Section */}
-            <View style={styles.section}>
-              {addresses.length === 0 ? (
-                // Show only Add Address button when no addresses exist
-                <View style={styles.sectionContent}>
-                  <TouchableOpacity
-                    style={styles.addAddressButton}
-                    activeOpacity={0.7}
-                    onPress={() => setShowLocationSelection(true)}
-                  >
-                    <MaterialIcons name="add-location" size={20} color="#00B14F" />
-                    <Text style={styles.addAddressButtonText}>Add Address</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                // Show full delivery details when addresses exist
-                <>
-                  <TouchableOpacity
-                    style={styles.sectionHeader}
-                    onPress={() => setDeliveryExpanded(!deliveryExpanded)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.sectionTitle}>Delivery Details</Text>
-                    <MaterialIcons
-                      name={deliveryExpanded ? 'expand-less' : 'expand-more'}
-                      size={24}
-                      color="#000000"
-                    />
-                  </TouchableOpacity>
-
-                  {deliveryExpanded && (
-                    <View style={styles.sectionContent}>
-                      {/* Delivery At */}
-                      <View style={styles.subsection}>
-                        <Text style={styles.subsectionTitle}>Delivery At</Text>
-                        <TouchableOpacity
-                          style={styles.deliveryAtBox}
-                          activeOpacity={0.7}
-                          onPress={() => setShowAddressModal(true)}
-                        >
-                          <View style={styles.deliveryAtContent}>
-                            <MaterialIcons name="location-on" size={20} color="#00B14F" />
-                            <Text
-                              style={[
-                                styles.deliveryAtText,
-                                !selectedAddress && styles.deliveryAtTextPlaceholder,
-                              ]}
-                              numberOfLines={5}
-                            >
-                              {selectedAddress
-                                ? formatAddress(selectedAddress)
-                                : 'Select a default address before placing order'}
-                            </Text>
-                          </View>
-                          <MaterialIcons name="expand-more" size={20} color="rgba(0, 0, 0, 0.5)" />
-                        </TouchableOpacity>
-                      </View>
-
-                      {/* Delivery Duration - show only when we have an estimated time from API */}
-                      {estimatedDeliveryTime ? (
-                        <View style={styles.subsection}>
-                          <Text style={styles.subsectionTitle}>Estimated Delivery Time</Text>
-                          <View style={styles.deliveryTimeBox}>
-                            <MaterialIcons name="access-time" size={20} color="#00B14F" />
-                            <Text style={styles.deliveryTimeText}>
-                              Delivery in{' '}
-                              <Text style={styles.deliveryTimeBold}>
-                                {estimatedDeliveryTime}
-                              </Text>
-                            </Text>
-                          </View>
-                        </View>
-                      ) : null}
-                    </View>
-                  )}
-                </>
-              )}
-            </View>
-
-            {/* Tip Section */}
-            <View style={styles.section}>
-              <TouchableOpacity
-                style={styles.sectionHeader}
-                onPress={() => setTipExpanded(!tipExpanded)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.sectionTitle}>Add a Tip</Text>
-                <MaterialIcons
-                  name={tipExpanded ? 'expand-less' : 'expand-more'}
-                  size={24}
-                  color="#000000"
-                />
-              </TouchableOpacity>
-
-              {tipExpanded && (
-                <View style={styles.sectionContent}>
-                  <View style={styles.tipButtons}>
-                    {[10, 20, 30].map((amount) => (
-                      <TouchableOpacity
-                        key={amount}
-                        style={[
-                          styles.tipButton,
-                          selectedTip === amount && styles.tipButtonSelected,
-                          isUpdatingTip && styles.tipButtonDisabled,
-                        ]}
-                        onPress={() => {
-                          if (isUpdatingTip) return;
-                          // Toggle: if already selected, deselect (send 0), otherwise select (send amount)
-                          const newTip = selectedTip === amount ? null : amount;
-                          handleTipSelection(newTip);
-                          setCustomTipAmount(''); // Clear custom amount when selecting preset
-                        }}
-                        activeOpacity={0.7}
-                        disabled={isUpdatingTip}
-                      >
-                        <Text
-                          style={[
-                            styles.tipButtonText,
-                            selectedTip === amount && styles.tipButtonTextSelected,
-                          ]}
-                        >
-                          ₹{amount}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                    {/* Show entered amount as button if user has typed something OR if a custom tip is selected, otherwise show "Other" */}
-                    {(customTipAmount && customTipAmount.trim() !== '') || (selectedTip !== null && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30 && selectedTip !== -1) ? (
-                      <TouchableOpacity
-                        style={[
-                          styles.tipButton,
-                          (selectedTip === -1 || (selectedTip !== null && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30)) && styles.tipButtonSelected,
-                          isUpdatingTip && styles.tipButtonDisabled,
-                        ]}
-                        onPress={() => {
-                          if (isUpdatingTip) return;
-                          // Clicking the entered amount button allows editing
-                          // If we have a selected custom tip amount, populate the input with it
-                          if (selectedTip !== null && selectedTip !== -1 && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30) {
-                            setCustomTipAmount(selectedTip.toString());
-                          }
-                          // Set selectedTip to -1 to show input field and focus it
-                          setSelectedTip(-1);
-                          // Focus the input field after a short delay to ensure it's rendered
-                          setTimeout(() => {
-                            customTipInputRef.current?.focus();
-                          }, 100);
-                        }}
-                        activeOpacity={0.7}
-                        disabled={isUpdatingTip}
-                      >
-                        <Text
-                          style={[
-                            styles.tipButtonText,
-                            (selectedTip === -1 || (selectedTip !== null && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30)) && styles.tipButtonTextSelected,
-                          ]}
-                        >
-                          ₹{(() => {
-                            // Show customTipAmount if available, otherwise show selectedTip if it's a custom amount
-                            if (customTipAmount && customTipAmount.trim() !== '') {
-                              return customTipAmount;
-                            }
-                            if (selectedTip !== null && selectedTip !== -1 && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30) {
-                              return selectedTip.toString();
-                            }
-                            return '0';
-                          })()}
-                        </Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity
-                        style={[
-                          styles.tipButton,
-                          selectedTip === -1 && styles.tipButtonSelected,
-                          isUpdatingTip && styles.tipButtonDisabled,
-                        ]}
-                        onPress={() => {
-                          if (isUpdatingTip) return;
-                          if (selectedTip === -1) {
-                            // If already selected, deselect it (send 0)
-                            handleTipSelection(null);
-                            setCustomTipAmount('');
-                          } else {
-                            // Just show input, don't call API yet
-                            // Update state immediately for instant UI feedback
-                            setSelectedTip(-1);
-                            setCustomTipAmount('');
-                          }
-                        }}
-                        activeOpacity={0.7}
-                        disabled={isUpdatingTip}
-                      >
-                        <Text
-                          style={[
-                            styles.tipButtonText,
-                            selectedTip === -1 && styles.tipButtonTextSelected,
-                          ]}
-                        >
-                          Other
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  {selectedTip === -1 && (
-                    <View style={styles.customTipContainer}>
-                      <Text style={styles.customTipLabel}>Enter custom tip amount</Text>
-                      <View style={styles.customTipInputRow}>
-                        <Animated.View
-                          style={[
-                            styles.customTipInputContainer,
-                            { transform: [{ translateX: tipShakeAnim }] },
-                          ]}
-                        >
-                          <Text style={styles.rupeeSymbol}>₹</Text>
-                          <TextInput
-                            ref={customTipInputRef}
-                            style={styles.customTipInput}
-                            placeholder="0"
-                            placeholderTextColor="rgba(0, 0, 0, 0.4)"
-                            value={customTipAmount}
-                            onChangeText={(text) => {
-                              // Allow only digits, no decimals, and limit to 3 digits (max 999)
-                              const numericValue = text.replace(/[^0-9]/g, '');
-                              const limitedValue = numericValue.slice(0, 3);
-                              setCustomTipAmount(limitedValue);
-                            }}
-                            keyboardType="number-pad"
-                          />
-                        </Animated.View>
-                        <TouchableOpacity
-                          style={[styles.addTipButton, isUpdatingTip && styles.addTipButtonDisabled]}
-                          onPress={handleAddCustomTip}
-                          activeOpacity={0.7}
-                          disabled={isUpdatingTip}
-                        >
-                          {isUpdatingTip ? (
-                            <ActivityIndicator size="small" color="#FFFFFF" />
-                          ) : (
-                            <Text style={styles.addTipButtonText}>Add</Text>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                      {tipError ? (
-                        <Text style={styles.tipErrorText}>{tipError}</Text>
-                      ) : null}
-                    </View>
-                  )}
-
-                  <Text style={styles.tipInfo}>
-                    100% of the tip will go to your delivery partner.
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Apply Promo Code Section - Hide if cart has preorder items */}
-            {!hasPreorderItems && (
+              {/* Your Order Section */}
               <View style={styles.section}>
                 <TouchableOpacity
                   style={styles.sectionHeader}
-                  onPress={() => setPromoExpanded(!promoExpanded)}
+                  onPress={() => setOrderExpanded(!orderExpanded)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.sectionTitle}>Promo Code</Text>
+                  <Text style={styles.sectionTitle}>Your Order</Text>
                   <MaterialIcons
-                    name={promoExpanded ? 'expand-less' : 'expand-more'}
+                    name={orderExpanded ? 'expand-less' : 'expand-more'}
                     size={24}
                     color="#000000"
                   />
                 </TouchableOpacity>
 
-                {promoExpanded && (
+                {orderExpanded && (
                   <View style={styles.sectionContent}>
-                    <View style={styles.promoCodeContainer}>
-                      <TextInput
-                        style={styles.promoCodeInput}
-                        placeholder="Enter promo code"
-                        placeholderTextColor="rgba(0, 0, 0, 0.4)"
-                        value={promoCode}
-                        onChangeText={(text) => {
-                          // Normalize to uppercase and hard-limit to 15 characters
-                          const uppercased = text.toUpperCase();
-                          const limited = uppercased.slice(0, 15);
+                    {/* Order Items */}
+                    {localCartItems.map((item) => {
+                      const isAtQuantityLimit = getLocalItemTotalQuantity(item.id) >= MAX_ITEM_QUANTITY;
+                      const itemPrice = item.price * item.quantity;
 
-                          setPromoCode(limited);
+                      return (
+                        <View key={item.variantId || item.id} style={styles.orderItem}>
+                          <View style={styles.orderItemDetails}>
+                            <View style={styles.itemNameRow}>
+                              <View style={[
+                                styles.vegIconSmall,
+                                !item.isVeg && styles.nonVegIconSmall
+                              ]}>
+                                <View style={[
+                                  styles.vegDotSmall,
+                                  !item.isVeg && styles.nonVegDotSmall
+                                ]} />
+                              </View>
+                              <Text style={styles.orderItemName}>{item.name}</Text>
+                            </View>
+                            {/* Show customization row for all customizable items */}
+                            {item.variantId && (
+                              <TouchableOpacity
+                                style={styles.customizationsRow}
+                                onPress={() => {
+                                  if (onEditCustomization && item.variantId) {
+                                    onEditCustomization(item.id, item.variantId, item.addOnIds || [], item.quantity);
+                                  }
+                                }}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.orderItemCustomizations} numberOfLines={1} ellipsizeMode="tail">
+                                  {item.customizations && item.customizations.trim() !== ''
+                                    ? item.customizations
+                                    : 'No add-ons selected'}
+                                </Text>
+                                <MaterialIcons name="keyboard-arrow-down" size={16} color="rgba(0, 0, 0, 0.5)" />
+                              </TouchableOpacity>
+                            )}
+                            {/* Only show unit price for non-customizable items */}
+                            {!item.variantId && (
+                              <Text style={styles.orderItemPrice}>₹{item.price}</Text>
+                            )}
+                          </View>
+                          <View style={styles.quantityControl}>
+                            <TouchableOpacity
+                              onPress={() => handleDecrement(item.id, item.variantId)}
+                              activeOpacity={0.7}
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                              <Text style={styles.quantityButton}>-</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.quantityText}>{item.quantity}</Text>
+                            <TouchableOpacity
+                              onPress={() => handleIncrement(item.id, item.variantId)}
+                              activeOpacity={0.7}
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              disabled={isAtQuantityLimit}
+                            >
+                              <Text
+                                style={[
+                                  styles.quantityButton,
+                                  isAtQuantityLimit && styles.quantityButtonDisabled,
+                                ]}
+                              >
+                                +
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                          <View style={styles.priceContainer}>
+                            <Text style={styles.finalPrice}>₹{itemPrice}</Text>
+                          </View>
+                        </View>
+                      );
+                    })}
 
-                          // Clear backend promo error when user edits the code
-                          if (promoError) {
-                            setPromoError('');
-                          }
-                        }}
-                        autoCapitalize="characters"
-                      />
-                      <TouchableOpacity
-                        style={[
-                          styles.applyButton,
-                          (isApplyingPromo ||
-                            (!isCouponApplied && !promoCode.trim())) && styles.applyButtonDisabled,
-                        ]}
-                        onPress={isCouponApplied ? handleRemovePromoCode : handleApplyPromoCode}
-                        activeOpacity={0.8}
-                        disabled={
-                          isApplyingPromo ||
-                          (!isCouponApplied && !promoCode.trim())
+                    {/* Add More Items Button */}
+                    <TouchableOpacity
+                      style={styles.addMoreButton}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        if (onAddMoreItems) {
+                          onAddMoreItems();
+                        } else if (onBack) {
+                          onBack();
                         }
-                      >
-                        {isApplyingPromo ? (
-                          <ActivityIndicator size="small" color="#FFFFFF" />
-                        ) : (
-                          <Text style={styles.applyButtonText}>
-                            {isCouponApplied ? 'Remove' : 'Apply'}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
+                      }}
+                    >
+                      <Text style={styles.addMoreButtonText}>+ Add More Items</Text>
+                    </TouchableOpacity>
+
+                    {/* Notes */}
+                    <View style={styles.notesContainer}>
+                      <Text style={styles.notesLabel}>Notes</Text>
+                      <TextInput autoCorrect={false}
+                        style={styles.notesInput}
+                        placeholder="Add special instructions for your order"
+                        placeholderTextColor="rgba(0, 0, 0, 0.4)"
+                        value={notes}
+                        onChangeText={setNotes}
+                        multiline
+                      />
                     </View>
                   </View>
                 )}
               </View>
-            )}
 
-            {/* Bill Details Section */}
-            <View style={styles.section}>
-              <TouchableOpacity
-                style={styles.sectionHeader}
-                onPress={() => setBillExpanded(!billExpanded)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.sectionTitle}>Bill Details</Text>
-                <MaterialIcons
-                  name={billExpanded ? 'expand-less' : 'expand-more'}
-                  size={24}
-                  color="#000000"
-                />
-              </TouchableOpacity>
+              {/* Delivery Details Section */}
+              <View style={styles.section}>
+                {addresses.length === 0 ? (
+                  // Show only Add Address button when no addresses exist
+                  <View style={styles.sectionContent}>
+                    <TouchableOpacity
+                      style={styles.addAddressButton}
+                      activeOpacity={0.7}
+                      onPress={() => setShowLocationSelection(true)}
+                    >
+                      <MaterialIcons name="add-location" size={20} color="#00B14F" />
+                      <Text style={styles.addAddressButtonText}>Add Address</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  // Show full delivery details when addresses exist
+                  <>
+                    <TouchableOpacity
+                      style={styles.sectionHeader}
+                      onPress={() => setDeliveryExpanded(!deliveryExpanded)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.sectionTitle}>Delivery Details</Text>
+                      <MaterialIcons
+                        name={deliveryExpanded ? 'expand-less' : 'expand-more'}
+                        size={24}
+                        color="#000000"
+                      />
+                    </TouchableOpacity>
 
-              {billExpanded && (
-                <View style={styles.sectionContent}>
-                  <View style={styles.billRow}>
-                    <Text style={styles.billLabel}>Item Total</Text>
-                    <Text style={styles.billValue}>₹{itemTotal.toFixed(2)}</Text>
-                  </View>
-                  <View style={styles.billRow}>
-                    <Text style={styles.billLabel}>Delivery Fee</Text>
-                    <Text style={styles.billValue}>₹{deliveryFee.toFixed(2)}</Text>
-                  </View>
-                  <View style={styles.billRow}>
-                    <Text style={styles.billLabel}>Platform Fee</Text>
-                    <View style={styles.platformFeeValueContainer}>
-                      <Text style={
-                        (includePlatformFee || platformFee === 0)
-                          ? styles.billValue
-                          : styles.billValueStrikethrough
-                      }>
-                        ₹{platformFee.toFixed(2)}
-                      </Text>
-                    </View>
-                  </View>
-                  {backendTipAmount > 0 && (
-                    <View style={styles.billRow}>
-                      <Text style={styles.billLabel}>Delivery Partner tip</Text>
-                      <Text style={styles.billValue}>₹{backendTipAmount.toFixed(2)}</Text>
-                    </View>
-                  )}
-                  <View style={styles.billRow}>
-                    <View style={styles.billLabelContainer}>
-                      <Text style={styles.billLabel}>Taxes and Charges</Text>
-                      <View style={styles.infoIconWrapper}>
-                        <TouchableOpacity
-                          onPress={() => setShowTaxTooltip(!showTaxTooltip)}
-                          activeOpacity={0.7}
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        >
-                          <MaterialIcons name="info" size={16} color="rgba(0, 0, 0, 0.6)" />
-                        </TouchableOpacity>
-                        {showTaxTooltip && (
-                          <View style={styles.taxTooltip}>
-                            <View style={styles.taxTooltipContent}>
-                              <View style={styles.taxTooltipRow}>
-                                <Text style={styles.taxTooltipLabel}>Delivery Fee Tax</Text>
-                                <Text style={styles.taxTooltipValue}>
-                                  ₹{deliveryFeeTax.toFixed(2)}
-                                </Text>
-                              </View>
-                              <View style={styles.taxTooltipRow}>
-                                <Text style={styles.taxTooltipLabel}>Platform Fee Tax</Text>
-                                <Text style={styles.taxTooltipValue}>
-                                  ₹{platformFeeTax.toFixed(2)}
-                                </Text>
-                              </View>
-                              <View style={styles.taxTooltipRow}>
-                                <Text style={styles.taxTooltipLabel}>Tax Amount</Text>
-                                <Text style={styles.taxTooltipValue}>
-                                  ₹{taxAmount.toFixed(2)}
-                                </Text>
-                              </View>
+                    {deliveryExpanded && (
+                      <View style={styles.sectionContent}>
+                        {/* Delivery At */}
+                        <View style={styles.subsection}>
+                          <Text style={styles.subsectionTitle}>Delivery At</Text>
+                          <TouchableOpacity
+                            style={styles.deliveryAtBox}
+                            activeOpacity={0.7}
+                            onPress={() => setShowAddressModal(true)}
+                          >
+                            <View style={styles.deliveryAtContent}>
+                              <MaterialIcons name="location-on" size={20} color="#00B14F" />
+                              <Text
+                                style={[
+                                  styles.deliveryAtText,
+                                  !selectedAddress && styles.deliveryAtTextPlaceholder,
+                                ]}
+                                numberOfLines={5}
+                              >
+                                {selectedAddress
+                                  ? formatAddress(selectedAddress)
+                                  : 'Select a default address before placing order'}
+                              </Text>
                             </View>
-                            <View style={styles.taxTooltipArrow} />
+                            <MaterialIcons name="expand-more" size={20} color="rgba(0, 0, 0, 0.5)" />
+                          </TouchableOpacity>
+                        </View>
+
+                        {/* Delivery Duration - show only when we have an estimated time from API */}
+                        {estimatedDeliveryTime ? (
+                          <View style={styles.subsection}>
+                            <Text style={styles.subsectionTitle}>Estimated Delivery Time</Text>
+                            <View style={styles.deliveryTimeBox}>
+                              <MaterialIcons name="access-time" size={20} color="#00B14F" />
+                              <Text style={styles.deliveryTimeText}>
+                                Delivery in{' '}
+                                <Text style={styles.deliveryTimeBold}>
+                                  {estimatedDeliveryTime}
+                                </Text>
+                              </Text>
+                            </View>
                           </View>
-                        )}
+                        ) : null}
+                      </View>
+                    )}
+                  </>
+                )}
+              </View>
+
+              {/* Tip Section */}
+              <View style={styles.section}>
+                <TouchableOpacity
+                  style={styles.sectionHeader}
+                  onPress={() => setTipExpanded(!tipExpanded)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.sectionTitle}>Add a Tip</Text>
+                  <MaterialIcons
+                    name={tipExpanded ? 'expand-less' : 'expand-more'}
+                    size={24}
+                    color="#000000"
+                  />
+                </TouchableOpacity>
+
+                {tipExpanded && (
+                  <View style={styles.sectionContent}>
+                    <View style={styles.tipButtons}>
+                      {[10, 20, 30].map((amount) => (
+                        <TouchableOpacity
+                          key={amount}
+                          style={[
+                            styles.tipButton,
+                            selectedTip === amount && styles.tipButtonSelected,
+                            isUpdatingTip && styles.tipButtonDisabled,
+                          ]}
+                          onPress={() => {
+                            if (isUpdatingTip) return;
+                            // Toggle: if already selected, deselect (send 0), otherwise select (send amount)
+                            const newTip = selectedTip === amount ? null : amount;
+                            handleTipSelection(newTip);
+                            setCustomTipAmount(''); // Clear custom amount when selecting preset
+                          }}
+                          activeOpacity={0.7}
+                          disabled={isUpdatingTip}
+                        >
+                          <Text
+                            style={[
+                              styles.tipButtonText,
+                              selectedTip === amount && styles.tipButtonTextSelected,
+                            ]}
+                          >
+                            ₹{amount}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                      {/* Show entered amount as button if user has typed something OR if a custom tip is selected, otherwise show "Other" */}
+                      {(customTipAmount && customTipAmount.trim() !== '') || (selectedTip !== null && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30 && selectedTip !== -1) ? (
+                        <TouchableOpacity
+                          style={[
+                            styles.tipButton,
+                            (selectedTip === -1 || (selectedTip !== null && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30)) && styles.tipButtonSelected,
+                            isUpdatingTip && styles.tipButtonDisabled,
+                          ]}
+                          onPress={() => {
+                            if (isUpdatingTip) return;
+                            // Clicking the entered amount button allows editing
+                            // If we have a selected custom tip amount, populate the input with it
+                            if (selectedTip !== null && selectedTip !== -1 && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30) {
+                              setCustomTipAmount(selectedTip.toString());
+                            }
+                            // Set selectedTip to -1 to show input field and focus it
+                            setSelectedTip(-1);
+                            // Focus the input field after a short delay to ensure it's rendered
+                            setTimeout(() => {
+                              customTipInputRef.current?.focus();
+                            }, 100);
+                          }}
+                          activeOpacity={0.7}
+                          disabled={isUpdatingTip}
+                        >
+                          <Text
+                            style={[
+                              styles.tipButtonText,
+                              (selectedTip === -1 || (selectedTip !== null && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30)) && styles.tipButtonTextSelected,
+                            ]}
+                          >
+                            ₹{(() => {
+                              // Show customTipAmount if available, otherwise show selectedTip if it's a custom amount
+                              if (customTipAmount && customTipAmount.trim() !== '') {
+                                return customTipAmount;
+                              }
+                              if (selectedTip !== null && selectedTip !== -1 && selectedTip !== 10 && selectedTip !== 20 && selectedTip !== 30) {
+                                return selectedTip.toString();
+                              }
+                              return '0';
+                            })()}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={[
+                            styles.tipButton,
+                            selectedTip === -1 && styles.tipButtonSelected,
+                            isUpdatingTip && styles.tipButtonDisabled,
+                          ]}
+                          onPress={() => {
+                            if (isUpdatingTip) return;
+                            if (selectedTip === -1) {
+                              // If already selected, deselect it (send 0)
+                              handleTipSelection(null);
+                              setCustomTipAmount('');
+                            } else {
+                              // Just show input, don't call API yet
+                              // Update state immediately for instant UI feedback
+                              setSelectedTip(-1);
+                              setCustomTipAmount('');
+                            }
+                          }}
+                          activeOpacity={0.7}
+                          disabled={isUpdatingTip}
+                        >
+                          <Text
+                            style={[
+                              styles.tipButtonText,
+                              selectedTip === -1 && styles.tipButtonTextSelected,
+                            ]}
+                          >
+                            Other
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    {selectedTip === -1 && (
+                      <View style={styles.customTipContainer}>
+                        <Text style={styles.customTipLabel}>Enter custom tip amount</Text>
+                        <View style={styles.customTipInputRow}>
+                          <Animated.View
+                            style={[
+                              styles.customTipInputContainer,
+                              { transform: [{ translateX: tipShakeAnim }] },
+                            ]}
+                          >
+                            <Text style={styles.rupeeSymbol}>₹</Text>
+                            <TextInput autoCorrect={false}
+                              ref={customTipInputRef}
+                              style={styles.customTipInput}
+                              placeholder="0"
+                              placeholderTextColor="rgba(0, 0, 0, 0.4)"
+                              value={customTipAmount}
+                              onChangeText={(text) => {
+                                // Allow only digits, no decimals, and limit to 3 digits (max 999)
+                                const numericValue = text.replace(/[^0-9]/g, '');
+                                const limitedValue = numericValue.slice(0, 3);
+                                setCustomTipAmount(limitedValue);
+                              }}
+                              keyboardType="number-pad"
+                            />
+                          </Animated.View>
+                          <TouchableOpacity
+                            style={[styles.addTipButton, isUpdatingTip && styles.addTipButtonDisabled]}
+                            onPress={handleAddCustomTip}
+                            activeOpacity={0.7}
+                            disabled={isUpdatingTip}
+                          >
+                            {isUpdatingTip ? (
+                              <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                              <Text style={styles.addTipButtonText}>Add</Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                        {tipError ? (
+                          <Text style={styles.tipErrorText}>{tipError}</Text>
+                        ) : null}
+                      </View>
+                    )}
+
+                    <Text style={styles.tipInfo}>
+                      100% of the tip will go to your delivery partner.
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Apply Promo Code Section - Hide if cart has preorder items */}
+              {!hasPreorderItems && (
+                <View style={styles.section}>
+                  <TouchableOpacity
+                    style={styles.sectionHeader}
+                    onPress={() => setPromoExpanded(!promoExpanded)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.sectionTitle}>Promo Code</Text>
+                    <MaterialIcons
+                      name={promoExpanded ? 'expand-less' : 'expand-more'}
+                      size={24}
+                      color="#000000"
+                    />
+                  </TouchableOpacity>
+
+                  {promoExpanded && (
+                    <View style={styles.sectionContent}>
+                      <View style={styles.promoCodeContainer}>
+                        <TextInput autoCorrect={false}
+                          style={styles.promoCodeInput}
+                          placeholder="Enter promo code"
+                          placeholderTextColor="rgba(0, 0, 0, 0.4)"
+                          value={promoCode}
+                          onChangeText={(text) => {
+                            // Normalize to uppercase and hard-limit to 15 characters
+                            const uppercased = text.toUpperCase();
+                            const limited = uppercased.slice(0, 15);
+
+                            setPromoCode(limited);
+
+                            // Clear backend promo error when user edits the code
+                            if (promoError) {
+                              setPromoError('');
+                            }
+                          }}
+                          autoCapitalize="characters"
+                        />
+                        <TouchableOpacity
+                          style={[
+                            styles.applyButton,
+                            (isApplyingPromo ||
+                              (!isCouponApplied && !promoCode.trim())) && styles.applyButtonDisabled,
+                          ]}
+                          onPress={isCouponApplied ? handleRemovePromoCode : handleApplyPromoCode}
+                          activeOpacity={0.8}
+                          disabled={
+                            isApplyingPromo ||
+                            (!isCouponApplied && !promoCode.trim())
+                          }
+                        >
+                          {isApplyingPromo ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          ) : (
+                            <Text style={styles.applyButtonText}>
+                              {isCouponApplied ? 'Remove' : 'Apply'}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
                       </View>
                     </View>
-                    <Text style={styles.billValue}>₹{gstAndCharges?.toFixed(2) ?? '0.00'}</Text>
-                  </View>
-                  {discountAmount > 0 && (
-                    <View style={styles.billRow}>
-                      <Text style={styles.billLabel}>Discount</Text>
-                      <Text style={[styles.billValue, { color: '#00B14F' }]}>
-                        -₹{discountAmount.toFixed(2)}
-                      </Text>
-                    </View>
                   )}
-                  <View style={styles.billDivider} />
-                  <View style={styles.billTotalRow}>
-                    <Text style={styles.billTotalLabel}>To Pay</Text>
-                    <Text style={styles.billTotalValue}>₹{totalAmount.toFixed(2)}</Text>
+                </View>
+              )}
+
+              {/* Bill Details Section */}
+              <View style={styles.section}>
+                <TouchableOpacity
+                  style={styles.sectionHeader}
+                  onPress={() => setBillExpanded(!billExpanded)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.sectionTitle}>Bill Details</Text>
+                  <MaterialIcons
+                    name={billExpanded ? 'expand-less' : 'expand-more'}
+                    size={24}
+                    color="#000000"
+                  />
+                </TouchableOpacity>
+
+                {billExpanded && (
+                  <View style={styles.sectionContent}>
+                    <View style={styles.billRow}>
+                      <Text style={styles.billLabel}>Item Total</Text>
+                      <Text style={styles.billValue}>₹{itemTotal.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.billRow}>
+                      <Text style={styles.billLabel}>Delivery Fee</Text>
+                      <Text style={styles.billValue}>₹{deliveryFee.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.billRow}>
+                      <Text style={styles.billLabel}>Platform Fee</Text>
+                      <View style={styles.platformFeeValueContainer}>
+                        <Text style={
+                          (includePlatformFee || platformFee === 0)
+                            ? styles.billValue
+                            : styles.billValueStrikethrough
+                        }>
+                          ₹{platformFee.toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
+                    {backendTipAmount > 0 && (
+                      <View style={styles.billRow}>
+                        <Text style={styles.billLabel}>Delivery Partner tip</Text>
+                        <Text style={styles.billValue}>₹{backendTipAmount.toFixed(2)}</Text>
+                      </View>
+                    )}
+                    <View style={styles.billRow}>
+                      <View style={styles.billLabelContainer}>
+                        <Text style={styles.billLabel}>Taxes and Charges</Text>
+                        <View style={styles.infoIconWrapper}>
+                          <TouchableOpacity
+                            onPress={() => setShowTaxTooltip(!showTaxTooltip)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          >
+                            <MaterialIcons name="info" size={16} color="rgba(0, 0, 0, 0.6)" />
+                          </TouchableOpacity>
+                          {showTaxTooltip && (
+                            <View style={styles.taxTooltip}>
+                              <View style={styles.taxTooltipContent}>
+                                <View style={styles.taxTooltipRow}>
+                                  <Text style={styles.taxTooltipLabel}>Delivery Fee Tax</Text>
+                                  <Text style={styles.taxTooltipValue}>
+                                    ₹{deliveryFeeTax.toFixed(2)}
+                                  </Text>
+                                </View>
+                                <View style={styles.taxTooltipRow}>
+                                  <Text style={styles.taxTooltipLabel}>Platform Fee Tax</Text>
+                                  <Text style={styles.taxTooltipValue}>
+                                    ₹{platformFeeTax.toFixed(2)}
+                                  </Text>
+                                </View>
+                                <View style={styles.taxTooltipRow}>
+                                  <Text style={styles.taxTooltipLabel}>Tax Amount</Text>
+                                  <Text style={styles.taxTooltipValue}>
+                                    ₹{taxAmount.toFixed(2)}
+                                  </Text>
+                                </View>
+                              </View>
+                              <View style={styles.taxTooltipArrow} />
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                      <Text style={styles.billValue}>₹{gstAndCharges?.toFixed(2) ?? '0.00'}</Text>
+                    </View>
+                    {discountAmount > 0 && (
+                      <View style={styles.billRow}>
+                        <Text style={styles.billLabel}>Discount</Text>
+                        <Text style={[styles.billValue, { color: '#00B14F' }]}>
+                          -₹{discountAmount.toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.billDivider} />
+                    <View style={styles.billTotalRow}>
+                      <Text style={styles.billTotalLabel}>To Pay</Text>
+                      <Text style={styles.billTotalValue}>₹{totalAmount.toFixed(2)}</Text>
+                    </View>
                   </View>
-                </View>
-              )}
+                )}
+              </View>
+
+              {/* Delivery Location Warning Section */}
+              <View style={styles.section}>
+                <TouchableOpacity
+                  style={styles.sectionHeader}
+                  onPress={() => setDeliveryLocationExpanded(!deliveryLocationExpanded)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.sectionTitle}>Delivery Policy</Text>
+                  <MaterialIcons
+                    name={deliveryLocationExpanded ? 'expand-less' : 'expand-more'}
+                    size={24}
+                    color="#000000"
+                  />
+                </TouchableOpacity>
+
+                {deliveryLocationExpanded && (
+                  <View style={styles.sectionContent}>
+                    <Text style={styles.cancellationText}>
+                      Please ensure the delivery location is pinned correctly on the map. If the address is far from the pinned location, additional delivery charges may apply. Order cancellations due to incorrect location are non-refundable.
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Cancellation Policy Section */}
+              <View style={styles.section}>
+                <TouchableOpacity
+                  style={styles.sectionHeader}
+                  onPress={() => setCancellationExpanded(!cancellationExpanded)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.sectionTitle}>Cancellation Policy</Text>
+                  <MaterialIcons
+                    name={cancellationExpanded ? 'expand-less' : 'expand-more'}
+                    size={24}
+                    color="#000000"
+                  />
+                </TouchableOpacity>
+
+                {cancellationExpanded && (
+                  <View style={styles.sectionContent}>
+                    <Text style={styles.cancellationText}>
+                      Help us reduce food waste by avoiding cancellation after placing your
+                      order. A 100% cancellation fee will be applied.
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Add bottom padding for footer */}
+              <View style={styles.bottomPadding} />
             </View>
-
-            {/* Delivery Location Warning Section */}
-            <View style={styles.section}>
-              <TouchableOpacity
-                style={styles.sectionHeader}
-                onPress={() => setDeliveryLocationExpanded(!deliveryLocationExpanded)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.sectionTitle}>Delivery Policy</Text>
-                <MaterialIcons
-                  name={deliveryLocationExpanded ? 'expand-less' : 'expand-more'}
-                  size={24}
-                  color="#000000"
-                />
-              </TouchableOpacity>
-
-              {deliveryLocationExpanded && (
-                <View style={styles.sectionContent}>
-                  <Text style={styles.cancellationText}>
-                    Please ensure the delivery location is pinned correctly on the map. If the address is far from the pinned location, additional delivery charges may apply. Order cancellations due to incorrect location are non-refundable.
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Cancellation Policy Section */}
-            <View style={styles.section}>
-              <TouchableOpacity
-                style={styles.sectionHeader}
-                onPress={() => setCancellationExpanded(!cancellationExpanded)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.sectionTitle}>Cancellation Policy</Text>
-                <MaterialIcons
-                  name={cancellationExpanded ? 'expand-less' : 'expand-more'}
-                  size={24}
-                  color="#000000"
-                />
-              </TouchableOpacity>
-
-              {cancellationExpanded && (
-                <View style={styles.sectionContent}>
-                  <Text style={styles.cancellationText}>
-                    Help us reduce food waste by avoiding cancellation after placing your
-                    order. A 100% cancellation fee will be applied.
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Add bottom padding for footer */}
-            <View style={styles.bottomPadding} />
-          </View>
-        </ScrollView>
+          </ScrollView>
+        </KeyboardAvoidingView>
 
         {/* Footer */}
         <View style={styles.footer}>

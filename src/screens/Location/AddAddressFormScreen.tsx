@@ -17,6 +17,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { addressService, AddAddressRequest } from '@/services/address.service';
 import * as Location from 'expo-location';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { Snackbar } from '@/components/Snackbar';
 
 interface AddAddressFormScreenProps {
   visible: boolean;
@@ -52,7 +53,6 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   latitude,
   longitude,
   geocodingData,
-  onBack,
   onSave,
   onClose,
   editMode = false,
@@ -64,20 +64,18 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   const [building, setBuilding] = useState('');
   const [locality, setLocality] = useState('');
   const [landmark, setLandmark] = useState('');
-  const [city, setCity] = useState('');
-  const [state, setState] = useState('');
   const [pincode, setPincode] = useState('');
   const [alternateMobile, setAlternateMobile] = useState('');
-  const [isDefault, setIsDefault] = useState(false);
   const [selectedTag, setSelectedTag] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [houseNoError, setHouseNoError] = useState('');
   const [buildingError, setBuildingError] = useState('');
   const [localityError, setLocalityError] = useState('');
   const [pincodeError, setPincodeError] = useState('');
   const [alternateMobileError, setAlternateMobileError] = useState('');
+  const [localToastVisible, setLocalToastVisible] = useState(false);
+  const [localToastMessage, setLocalToastMessage] = useState('');
   const slideAnim = useRef(new Animated.Value(1000)).current;
   const { showConfirmation } = useConfirmation();
   const hasInitializedRef = useRef(false);
@@ -112,11 +110,8 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         setBuilding(initialData.building || '');
         setLocality(initialData.locality || '');
         setLandmark('');
-        setCity(initialData.city || '');
-        setState(initialData.state || '');
         setPincode(initialData.pincode || '');
         setAlternateMobile(initialData.alternateMobile || '');
-        setIsDefault(initialData.isDefault || false);
         if (initialData.tag) {
           const tagCapitalized = initialData.tag.charAt(0).toUpperCase() + initialData.tag.slice(1) as 'Home' | 'Work' | 'Other';
           setSelectedTag(tagCapitalized);
@@ -128,13 +123,13 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           // Look for patterns like "123", "123A", "123-456", "Flat 123", etc.
           const nameOrStreet = (geocodingData.name || geocodingData.street || '').trim();
           let houseNoValue = '';
-          
+
           // Try to extract house number from the beginning of the string
           const houseNoPatterns = [
             /^(\d+[A-Za-z]*(?:\s*[-/]\s*\d+[A-Za-z]*)?)/,  // "123", "123A", "123-456"
             /^(?:Flat|Unit|Apt|Apartment|House|No\.?|#)\s*(\d+[A-Za-z]*(?:\s*[-/]\s*\d+[A-Za-z]*)?)/i,  // "Flat 123", "Unit 5A"
           ];
-          
+
           for (const pattern of houseNoPatterns) {
             const match = nameOrStreet.match(pattern);
             if (match) {
@@ -142,51 +137,42 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               break;
             }
           }
-          
+
           // Building/Street name - use street, or name without house number
           let buildingValue = geocodingData.street || '';
           if (!buildingValue && geocodingData.name) {
             // Remove house number from name if found
-            buildingValue = houseNoValue 
+            buildingValue = houseNoValue
               ? geocodingData.name.replace(new RegExp(`^${houseNoValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'), '').trim()
               : geocodingData.name;
           }
-          
-         
+
+
           let localityValue = '';
-          
+
           // Use district if available (most reliable for locality/area)
           if (geocodingData.district) {
             localityValue = geocodingData.district;
-          } 
+          }
           // Use subregion as fallback (also reliable for area information)
           else if (geocodingData.subregion) {
             localityValue = geocodingData.subregion;
           }
           // If neither is available, leave empty rather than guessing from unreliable fields
           // This ensures we only populate with accurate data
-          
-          // City - use city field
-          const cityValue = geocodingData.city || '';
-          
-          // State - use region field
-          const stateValue = geocodingData.region || '';
-          
+
           // Pincode - use postalCode field
           const pincodeValue = geocodingData.postalCode || '';
-          
+
           // Set geocoded address fields
           setHouseNo(houseNoValue);
           setBuilding(buildingValue);
           setLocality(localityValue);
           setLandmark('');
-          setCity(cityValue);
-          setState(stateValue);
           setPincode(pincodeValue);
-          
+
           // Keep existing user preferences from initialData when editing
           setAlternateMobile(initialData?.alternateMobile || '');
-          setIsDefault(initialData?.isDefault || false);
           if (initialData?.tag) {
             const tagCapitalized = initialData.tag.charAt(0).toUpperCase() + initialData.tag.slice(1) as 'Home' | 'Work' | 'Other';
             setSelectedTag(tagCapitalized);
@@ -199,13 +185,10 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           setBuilding('');
           setLocality('');
           setLandmark('');
-          setCity('');
-          setState('');
           setPincode('');
-          
+
           // Keep existing user preferences from initialData when editing
           setAlternateMobile(initialData?.alternateMobile || '');
-          setIsDefault(initialData?.isDefault || false);
           if (initialData?.tag) {
             const tagCapitalized = initialData.tag.charAt(0).toUpperCase() + initialData.tag.slice(1) as 'Home' | 'Work' | 'Other';
             setSelectedTag(tagCapitalized);
@@ -220,13 +203,13 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           // Look for patterns like "123", "123A", "123-456", "Flat 123", etc.
           const nameOrStreet = (geocodingData.name || geocodingData.street || '').trim();
           let houseNoValue = '';
-          
+
           // Try to extract house number from the beginning of the string
           const houseNoPatterns = [
             /^(\d+[A-Za-z]*(?:\s*[-/]\s*\d+[A-Za-z]*)?)/,  // "123", "123A", "123-456"
             /^(?:Flat|Unit|Apt|Apartment|House|No\.?|#)\s*(\d+[A-Za-z]*(?:\s*[-/]\s*\d+[A-Za-z]*)?)/i,  // "Flat 123", "Unit 5A"
           ];
-          
+
           for (const pattern of houseNoPatterns) {
             const match = nameOrStreet.match(pattern);
             if (match) {
@@ -234,49 +217,40 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
               break;
             }
           }
-          
+
           // Building/Street name - use street, or name without house number
           let buildingValue = geocodingData.street || '';
           if (!buildingValue && geocodingData.name) {
             // Remove house number from name if found
-            buildingValue = houseNoValue 
+            buildingValue = houseNoValue
               ? geocodingData.name.replace(new RegExp(`^${houseNoValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'), '').trim()
               : geocodingData.name;
           }
-          
-         
+
+
           let localityValue = '';
-          
+
           // Use district if available (most reliable for locality/area)
           if (geocodingData.district) {
             localityValue = geocodingData.district;
-          } 
+          }
           // Use subregion as fallback (also reliable for area information)
           else if (geocodingData.subregion) {
             localityValue = geocodingData.subregion;
           }
           // If neither is available, leave empty rather than guessing from unreliable fields
           // This ensures we only populate with accurate data
-          
-          // City - use city field
-          const cityValue = geocodingData.city || '';
-          
-          // State - use region field
-          const stateValue = geocodingData.region || '';
-          
+
           // Pincode - use postalCode field
           const pincodeValue = geocodingData.postalCode || '';
-          
+
           // Set form values
           setHouseNo(houseNoValue);
           setBuilding(buildingValue);
           setLocality(localityValue);
           setLandmark('');
-          setCity(cityValue);
-          setState(stateValue);
           setPincode(pincodeValue);
           setAlternateMobile('');
-          setIsDefault(false);
           setSelectedTag('Home');
         } else {
           // Reset form if no geocoding data
@@ -284,11 +258,8 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           setBuilding('');
           setLocality('');
           setLandmark('');
-          setCity('');
-          setState('');
           setPincode('');
           setAlternateMobile('');
-          setIsDefault(false);
           setSelectedTag('Home');
         }
       }
@@ -309,24 +280,25 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
 
   // Listen to keyboard events
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      (e) => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const keyboardShowListener = Keyboard.addListener(
+      showEvent,
+      () => {
         setKeyboardVisible(true);
-        setKeyboardHeight(e.endCoordinates.height);
       }
     );
-    const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
+    const keyboardHideListener = Keyboard.addListener(
+      hideEvent,
       () => {
         setKeyboardVisible(false);
-        setKeyboardHeight(0);
       }
     );
 
     return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
+      keyboardShowListener.remove();
+      keyboardHideListener.remove();
     };
   }, []);
 
@@ -348,21 +320,21 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   // These are hard for delivery partners to find, so we ask users to enter proper address
   const isValidAddress = (text: string): boolean => {
     if (!text || !text.trim()) return true; // Empty is valid (will be validated separately)
-    
+
     const trimmedText = text.trim();
-    
+
     // Pattern to detect plus codes/geocoding formats:
     // - Contains alphanumeric with "+" (e.g., "X44P+884")
     // - Short alphanumeric codes (3-10 chars) with special characters
     // - Patterns like "X44P+884", "ABC+123", etc.
     const plusCodePattern = /^[A-Z0-9]{2,6}\+[A-Z0-9]{2,6}$/i;
     const shortGeocodePattern = /^[A-Z0-9]{3,10}$/i; // Very short codes without context
-    
+
     // Check if it matches plus code pattern
     if (plusCodePattern.test(trimmedText)) {
       return false;
     }
-    
+
     // Check if it's a very short code without proper address context
     // Only flag if it's very short (3-6 chars) and looks like a code
     if (trimmedText.length <= 6 && shortGeocodePattern.test(trimmedText) && !/[a-z]{3,}/i.test(trimmedText)) {
@@ -371,7 +343,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         return false;
       }
     }
-    
+
     return true;
   };
 
@@ -410,7 +382,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
       setBuildingError(`Please enter your building and street name (not map codes like "${example}").`);
       hasFieldError = true;
     }
-    
+
     if (!locality.trim()) {
       setLocalityError('Please enter your area or locality.');
       hasFieldError = true;
@@ -476,7 +448,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         if (onClose) {
           onClose();
         }
-        
+
         // Small delay to ensure modal state updates before navigation
         setTimeout(() => {
           // Call onSave to handle navigation back to home
@@ -485,16 +457,18 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           }
         }, 50);
       } else {
-        // Show API error in popup
-        const errorMessage = response.error || response.message || (editMode ? 'Failed to update address' : 'Failed to add address');
-        showConfirmation({
-          title: '',
-          message: errorMessage,
-          confirmText: 'OK',
-          cancelText: '',
-          confirmButtonColor: '#00B14F',
-          onConfirm: () => {},
-        });
+        // Show API error in toast
+        let errorMessage = response.message || (editMode ? 'Failed to update address' : 'Failed to add address');
+        if (response.error && response.error !== '[undefined]') {
+          errorMessage = response.error;
+        } else if ((response as any).fullResponse?.message) {
+          errorMessage = (response as any).fullResponse.message;
+        } else if (response.message && response.message !== '[undefined]') {
+          errorMessage = response.message;
+        }
+
+        setLocalToastMessage(errorMessage);
+        setLocalToastVisible(true);
       }
     } catch (error) {
       // Show unexpected error in popup
@@ -504,7 +478,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         confirmText: 'OK',
         cancelText: '',
         confirmButtonColor: '#00B14F',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
     } finally {
       setLoading(false);
@@ -524,13 +498,14 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         activeOpacity={1}
         onPress={handleClose}
       >
+        <Snackbar
+          visible={localToastVisible}
+          message={localToastMessage}
+          type="error"
+          onDismiss={() => setLocalToastVisible(false)}
+        />
 
-        <Animated.View
-          style={[
-            styles.bottomSheetWrapper,
-            keyboardVisible && { bottom: Platform.OS === 'android' ? keyboardHeight : 0 },
-          ]}
-        >
+        <View style={styles.bottomSheetWrapper}>
           <TouchableOpacity
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
@@ -543,290 +518,289 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
                 }
               ]}
             >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.keyboardAvoidingView}
-            enabled
-          >
-          <ScrollView
-            ref={scrollViewRef}
-            style={styles.scrollView}
-            contentContainerStyle={[
-              styles.scrollContent,
-              keyboardVisible && styles.scrollContentWithKeyboard
-            ]}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-          {/* Header - Location Info */}
-          <View style={styles.header}>
-            <View style={styles.locationHeader}>
-              <TouchableOpacity 
-                style={styles.backButton} 
-                onPress={handleClose}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={{ flex: 1 }}
               >
-                <MaterialIcons name="arrow-back" size={24} color="#001E1F" />
-              </TouchableOpacity>
-              <MaterialIcons name="location-on" size={28} color="#00B14F" />
-              <Text style={styles.locationName}>{editMode ? 'Edit Address' : locationName}</Text>
-            </View>
-            {!editMode && <Text style={styles.locationAddress}>{locationAddress}</Text>}
-            {/* Map pin/location button hidden as per requirement */}
-            {/* <TouchableOpacity style={styles.relocateButton} onPress={onBack}>
+                <ScrollView
+                  ref={scrollViewRef}
+                  style={styles.scrollView}
+                  contentContainerStyle={[
+                    styles.scrollContent,
+                    keyboardVisible && { paddingBottom: 60 }
+                  ]}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {/* Header - Location Info */}
+                  <View style={styles.header}>
+                    <View style={styles.locationHeader}>
+                      <TouchableOpacity
+                        style={styles.backButton}
+                        onPress={handleClose}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <MaterialIcons name="arrow-back" size={24} color="#001E1F" />
+                      </TouchableOpacity>
+                      <MaterialIcons name="location-on" size={28} color="#00B14F" />
+                      <Text style={styles.locationName}>{editMode ? 'Edit Address' : locationName}</Text>
+                    </View>
+                    {!editMode && <Text style={styles.locationAddress}>{locationAddress}</Text>}
+                    {/* Map pin/location button hidden as per requirement */}
+                    {/* <TouchableOpacity style={styles.relocateButton} onPress={onBack}>
               <MaterialIcons name="my-location" size={20} color="#00B14F" />
             </TouchableOpacity> */}
-          </View>
+                  </View>
 
-          {/* Form Fields */}
-          <View style={styles.formSection}>
-            {/* House/Flat/Floor Number - Full width */}
-            <View style={styles.fieldGroup}>
-              <TextInput
-                style={styles.input}
-                value={houseNo}
-                onChangeText={(text) => {
-                  setHouseNo(text);
-                  if (houseNoError) {
-                    setHouseNoError('');
-                  }
-                }}
-                placeholder="Flat / Floor number"
-                placeholderTextColor="#999"
-                maxLength={50}
-                onFocus={() => {
-                  setTimeout(() => {
-                    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-                  }, 100);
-                }}
-              />
-              {houseNoError ? <Text style={styles.errorText}>{houseNoError}</Text> : null}
-            </View>
+                  {/* Form Fields */}
+                  <View style={styles.formSection}>
+                    {/* House/Flat/Floor Number - Full width */}
+                    <View style={styles.fieldGroup}>
+                      <TextInput autoCorrect={false}
+                        style={styles.input}
+                        value={houseNo}
+                        onChangeText={(text) => {
+                          setHouseNo(text);
+                          if (houseNoError) {
+                            setHouseNoError('');
+                          }
+                        }}
+                        placeholder="Flat / Floor number"
+                        placeholderTextColor="#999"
+                        maxLength={50}
+                        onFocus={() => {
+                          setTimeout(() => {
+                            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+                          }, 100);
+                        }}
+                      />
+                      {houseNoError ? <Text style={styles.errorText}>{houseNoError}</Text> : null}
+                    </View>
 
-            {/* House/Building/Street Name - Full width */}
-            <View style={styles.fieldGroup}>
-              <TextInput
-                style={styles.input}
-                value={building}
-                onChangeText={(text) => {
-                  setBuilding(text);
-                  if (buildingError) {
-                    setBuildingError('');
-                  }
-                  // Real-time validation for geocoding codes
-                  if (text.trim() && !isValidAddress(text)) {
-                    const example = getAddressCodeExample(text);
-                    setBuildingError(`Please enter your building and street name (not map codes like "${example}").`);
-                  }
-                }}
-                placeholder="House / Building / Street Name"
-                placeholderTextColor="#999"
-                maxLength={100}
-                onFocus={() => {
-                  setTimeout(() => {
-                    scrollViewRef.current?.scrollTo({ y: 50, animated: true });
-                  }, 100);
-                }}
-              />
-              {buildingError ? <Text style={styles.errorText}>{buildingError}</Text> : null}
-            </View>
+                    {/* House/Building/Street Name - Full width */}
+                    <View style={styles.fieldGroup}>
+                      <TextInput autoCorrect={false}
+                        style={styles.input}
+                        value={building}
+                        onChangeText={(text) => {
+                          setBuilding(text);
+                          if (buildingError) {
+                            setBuildingError('');
+                          }
+                          // Real-time validation for geocoding codes
+                          if (text.trim() && !isValidAddress(text)) {
+                            const example = getAddressCodeExample(text);
+                            setBuildingError(`Please enter your building and street name (not map codes like "${example}").`);
+                          }
+                        }}
+                        placeholder="House / Building / Street Name"
+                        placeholderTextColor="#999"
+                        maxLength={100}
+                        onFocus={() => {
+                          setTimeout(() => {
+                            scrollViewRef.current?.scrollTo({ y: 50, animated: true });
+                          }, 100);
+                        }}
+                      />
+                      {buildingError ? <Text style={styles.errorText}>{buildingError}</Text> : null}
+                    </View>
 
-            {/* Area / locality - Full width */}
-            <View style={styles.fieldGroup}>
-              <TextInput
-                style={styles.input}
-                value={locality}
-                onChangeText={(text) => {
-                  setLocality(text);
-                  if (localityError) {
-                    setLocalityError('');
-                  }
-                  // Real-time validation for geocoding codes
-                  if (text.trim() && !isValidAddress(text)) {
-                    const example = getAddressCodeExample(text);
-                    setLocalityError(`Please enter your area or locality (not map codes like "${example}").`);
-                  }
-                }}
-                placeholder="Area / locality"
-                placeholderTextColor="#999"
-                maxLength={100}
-                onFocus={() => {
-                  setTimeout(() => {
-                    scrollViewRef.current?.scrollTo({ y: 100, animated: true });
-                  }, 100);
-                }}
-              />
-              {localityError ? <Text style={styles.errorText}>{localityError}</Text> : null}
-            </View>
+                    {/* Area / locality - Full width */}
+                    <View style={styles.fieldGroup}>
+                      <TextInput autoCorrect={false}
+                        style={styles.input}
+                        value={locality}
+                        onChangeText={(text) => {
+                          setLocality(text);
+                          if (localityError) {
+                            setLocalityError('');
+                          }
+                          // Real-time validation for geocoding codes
+                          if (text.trim() && !isValidAddress(text)) {
+                            const example = getAddressCodeExample(text);
+                            setLocalityError(`Please enter your area or locality (not map codes like "${example}").`);
+                          }
+                        }}
+                        placeholder="Area / locality"
+                        placeholderTextColor="#999"
+                        maxLength={100}
+                        onFocus={() => {
+                          setTimeout(() => {
+                            scrollViewRef.current?.scrollTo({ y: 100, animated: true });
+                          }, 100);
+                        }}
+                      />
+                      {localityError ? <Text style={styles.errorText}>{localityError}</Text> : null}
+                    </View>
 
-            {/* Landmark - Optional */}
-            <View style={styles.fieldGroup}>
-              <TextInput
-                style={styles.input}
-                value={landmark}
-                onChangeText={(text) => {
-                  setLandmark(text);
-                  // No hard validation; this is optional helper text for delivery partner
-                }}
-                placeholder="Nearby landmark (Optional)"
-                placeholderTextColor="#999"
-                maxLength={100}
-                onFocus={() => {
-                  setTimeout(() => {
-                    scrollViewRef.current?.scrollTo({ y: 150, animated: true });
-                  }, 100);
-                }}
-              />
-            </View>
+                    {/* Landmark - Optional */}
+                    <View style={styles.fieldGroup}>
+                      <TextInput autoCorrect={false}
+                        style={styles.input}
+                        value={landmark}
+                        onChangeText={(text) => {
+                          setLandmark(text);
+                          // No hard validation; this is optional helper text for delivery partner
+                        }}
+                        placeholder="Nearby landmark (Optional)"
+                        placeholderTextColor="#999"
+                        maxLength={100}
+                        onFocus={() => {
+                          setTimeout(() => {
+                            scrollViewRef.current?.scrollTo({ y: 150, animated: true });
+                          }, 100);
+                        }}
+                      />
+                    </View>
 
-            {/* Pincode */}
-            <View style={styles.fieldGroup}>
-              <TextInput
-                style={styles.input}
-                value={pincode}
-                onChangeText={(text) => {
-                  // Only allow numeric input
-                  const numericText = text.replace(/[^0-9]/g, '');
-                  setPincode(numericText);
-                  if (pincodeError) {
-                    setPincodeError('');
-                  }
-                }}
-                placeholder="Pincode"
-                placeholderTextColor="#999"
-                keyboardType="number-pad"
-                maxLength={6}
-                onFocus={() => {
-                  setTimeout(() => {
-                    scrollViewRef.current?.scrollTo({ y: 200, animated: true });
-                  }, 100);
-                }}
-              />
-              {pincodeError ? <Text style={styles.errorText}>{pincodeError}</Text> : null}
-            </View>
+                    {/* Pincode */}
+                    <View style={styles.fieldGroup}>
+                      <TextInput autoCorrect={false}
+                        style={styles.input}
+                        value={pincode}
+                        onChangeText={(text) => {
+                          // Only allow numeric input
+                          const numericText = text.replace(/[^0-9]/g, '');
+                          setPincode(numericText);
+                          if (pincodeError) {
+                            setPincodeError('');
+                          }
+                        }}
+                        placeholder="Pincode"
+                        placeholderTextColor="#999"
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        onFocus={() => {
+                          setTimeout(() => {
+                            scrollViewRef.current?.scrollTo({ y: 200, animated: true });
+                          }, 100);
+                        }}
+                      />
+                      {pincodeError ? <Text style={styles.errorText}>{pincodeError}</Text> : null}
+                    </View>
 
-            {/* Alternate Mobile Number */}
-            <View style={styles.fieldGroup}>
-              <TextInput
-                style={styles.input}
-                value={alternateMobile}
-                onChangeText={(text) => {
-                  // Only allow numeric input
-                  const numericText = text.replace(/[^0-9]/g, '');
-                  setAlternateMobile(numericText);
-                  if (alternateMobileError) {
-                    setAlternateMobileError('');
-                  }
-                }}
-                placeholder="Alternate Mobile number (Optional)"
-                placeholderTextColor="#999"
-                keyboardType="phone-pad"
-                maxLength={10}
-                onFocus={() => {
-                  setTimeout(() => {
-                    scrollViewRef.current?.scrollToEnd({ animated: true });
-                  }, 100);
-                }}
-              />
-              {alternateMobileError ? <Text style={styles.errorText}>{alternateMobileError}</Text> : null}
-            </View>
+                    {/* Alternate Mobile Number */}
+                    <View style={styles.fieldGroup}>
+                      <TextInput autoCorrect={false}
+                        style={styles.input}
+                        value={alternateMobile}
+                        onChangeText={(text) => {
+                          // Only allow numeric input
+                          const numericText = text.replace(/[^0-9]/g, '');
+                          setAlternateMobile(numericText);
+                          if (alternateMobileError) {
+                            setAlternateMobileError('');
+                          }
+                        }}
+                        placeholder="Alternate Mobile number (Optional)"
+                        placeholderTextColor="#999"
+                        keyboardType="phone-pad"
+                        maxLength={10}
+                        onFocus={() => {
+                          setTimeout(() => {
+                            scrollViewRef.current?.scrollToEnd({ animated: true });
+                          }, 100);
+                        }}
+                      />
+                      {alternateMobileError ? <Text style={styles.errorText}>{alternateMobileError}</Text> : null}
+                    </View>
 
-            {/* Address Tags */}
-            <View style={styles.tagsContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.tag,
-                  selectedTag === 'Home' && styles.tagSelected,
-                ]}
-                onPress={() => setSelectedTag('Home')}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons
-                  name="home"
-                  size={16}
-                  color={selectedTag === 'Home' ? '#FFFFFF' : '#001E1F'}
-                />
-                <Text
-                  style={[
-                    styles.tagText,
-                    selectedTag === 'Home' && styles.tagTextSelected,
-                  ]}
+                    {/* Address Tags */}
+                    <View style={styles.tagsContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.tag,
+                          selectedTag === 'Home' && styles.tagSelected,
+                        ]}
+                        onPress={() => setSelectedTag('Home')}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialIcons
+                          name="home"
+                          size={16}
+                          color={selectedTag === 'Home' ? '#FFFFFF' : '#001E1F'}
+                        />
+                        <Text
+                          style={[
+                            styles.tagText,
+                            selectedTag === 'Home' && styles.tagTextSelected,
+                          ]}
+                        >
+                          Home
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.tag,
+                          selectedTag === 'Work' && styles.tagSelected,
+                        ]}
+                        onPress={() => setSelectedTag('Work')}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialIcons
+                          name="work"
+                          size={16}
+                          color={selectedTag === 'Work' ? '#FFFFFF' : '#001E1F'}
+                        />
+                        <Text
+                          style={[
+                            styles.tagText,
+                            selectedTag === 'Work' && styles.tagTextSelected,
+                          ]}
+                        >
+                          Work
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.tag,
+                          selectedTag === 'Other' && styles.tagSelected,
+                        ]}
+                        onPress={() => setSelectedTag('Other')}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialIcons
+                          name="location-on"
+                          size={16}
+                          color={selectedTag === 'Other' ? '#FFFFFF' : '#001E1F'}
+                        />
+                        <Text
+                          style={[
+                            styles.tagText,
+                            selectedTag === 'Other' && styles.tagTextSelected,
+                          ]}
+                        >
+                          Other
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </ScrollView>
+              </KeyboardAvoidingView>
+
+              {/* Continue Button */}
+              <View style={styles.footer}>
+                <TouchableOpacity
+                  style={[styles.continueButton, loading && styles.continueButtonDisabled]}
+                  onPress={handleContinue}
+                  activeOpacity={0.8}
+                  disabled={loading}
                 >
-                  Home
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.tag,
-                  selectedTag === 'Work' && styles.tagSelected,
-                ]}
-                onPress={() => setSelectedTag('Work')}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons
-                  name="work"
-                  size={16}
-                  color={selectedTag === 'Work' ? '#FFFFFF' : '#001E1F'}
-                />
-                <Text
-                  style={[
-                    styles.tagText,
-                    selectedTag === 'Work' && styles.tagTextSelected,
-                  ]}
-                >
-                  Work
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.tag,
-                  selectedTag === 'Other' && styles.tagSelected,
-                ]}
-                onPress={() => setSelectedTag('Other')}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons
-                  name="location-on"
-                  size={16}
-                  color={selectedTag === 'Other' ? '#FFFFFF' : '#001E1F'}
-                />
-                <Text
-                  style={[
-                    styles.tagText,
-                    selectedTag === 'Other' && styles.tagTextSelected,
-                  ]}
-                >
-                  Other
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
-
-        {/* Continue Button */}
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[styles.continueButton, loading && styles.continueButtonDisabled]}
-            onPress={handleContinue}
-            activeOpacity={0.8}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Text style={styles.continueButtonText}>{editMode ? 'Update' : 'Continue'}</Text>
-                <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
-              </>
-            )}
-          </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Text style={styles.continueButtonText}>{editMode ? 'Update' : 'Continue'}</Text>
+                      <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
             </Animated.View>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
       </TouchableOpacity>
     </Modal>
   );
@@ -839,14 +813,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   bottomSheetWrapper: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    maxHeight: '75%',
-  },
-  bottomSheetWrapperWithKeyboard: {
-    maxHeight: '90%',
+    width: '100%',
+    maxHeight: '85%',
   },
   bottomSheet: {
     backgroundColor: '#FFFFFF',
@@ -858,7 +826,6 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 10,
     paddingTop: 12,
-    flex: 1,
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -884,7 +851,7 @@ const styles = StyleSheet.create({
   locationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 6,
     height: 30,
   },
   backButton: {
@@ -892,7 +859,6 @@ const styles = StyleSheet.create({
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: -4,
   },
   locationInfo: {
     flex: 1,

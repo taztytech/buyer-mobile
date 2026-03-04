@@ -94,6 +94,7 @@ function AppContent() {
   const [locationSelectionCameFrom, setLocationSelectionCameFrom] = React.useState<'home' | 'addressSelection' | 'myAddresses'>('home');
   const [orderTrackingCameFrom, setOrderTrackingCameFrom] = React.useState<'orders' | 'checkout' | 'orderDetail'>('orders');
   const [ordersCameFrom, setOrdersCameFrom] = React.useState<'profile' | 'orderDetail'>('profile');
+  const [orderDetailCameFrom, setOrderDetailCameFrom] = React.useState<'orders' | 'checkout'>('orders');
   const [editingAddress, setEditingAddress] = React.useState<any>(null);
   const [helpOrderData, setHelpOrderData] = React.useState<OrderListItem | null>(null);
   const [_isRegistrationFlow, setIsRegistrationFlow] = React.useState(false);
@@ -133,13 +134,14 @@ function AppContent() {
   // Set Poppins as default font for all Text components
   React.useEffect(() => {
     if (fontsLoaded) {
-      // Set default font family for all Text components
-      // This applies Poppins as the default font across the entire app
-      // Note: defaultProps is deprecated but still works in React Native
       if (!(Text as any).defaultProps) {
         (Text as any).defaultProps = {};
       }
-      (Text as any).defaultProps.style = { fontFamily: 'Poppins' };
+      (Text as any).defaultProps.style = {
+        ...(Text as any).defaultProps.style,
+        fontFamily: 'Poppins',
+        paddingRight: 2, // Prevent horizontal clipping of custom fonts on iOS
+      };
     }
   }, [fontsLoaded]);
 
@@ -198,7 +200,7 @@ function AppContent() {
   // Track screen views
   React.useEffect(() => {
     if (isCheckingAuth) return;
-    
+
     const screenNameMap: Record<typeof currentScreen, string> = {
       login: AnalyticsScreens.LOGIN,
       otp: AnalyticsScreens.OTP_VERIFICATION,
@@ -227,7 +229,7 @@ function AppContent() {
       orderHelp: 'Order Help',
       chat: 'Chat',
     };
-    
+
     const screenName = screenNameMap[currentScreen];
     if (screenName) {
       analyticsService.logScreenView(screenName);
@@ -247,9 +249,19 @@ function AppContent() {
     // Navigate to My Orders screen and highlight the order
     fcmNotificationService.setNavigationCallback((orderId: string) => {
       console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
+
+      // Batch all screen position resets together to ensure Orders screen is visible
+      // and not covered by other overlays (like restaurant or checkout)
+      ordersScreenSlide.setValue(0);
+      orderDetailScreenSlide.setValue(SCREEN_WIDTH);
+      restaurantScreenSlide.setValue(SCREEN_WIDTH);
+      checkoutScreenSlide.setValue(SCREEN_WIDTH);
+      profileScreenSlide.setValue(SCREEN_WIDTH);
+      searchScreenSlide.setValue(SCREEN_WIDTH);
+
       setHighlightOrderId(orderId);
       setCurrentScreen('orders');
-      
+
       // Clear highlight after 3 seconds (enough time for scroll animation)
       setTimeout(() => {
         setHighlightOrderId(null);
@@ -271,14 +283,14 @@ function AppContent() {
         fcmNotificationService.checkInitialNotification().catch((error) => {
           console.warn('⚠️  Failed to check initial notification:', error);
         });
-        
+
         // Check for app updates when app becomes active (but not on checkout)
         if (currentScreen !== 'checkout') {
           inAppUpdateService.checkForUpdate({ currentScreen }).catch((error) => {
             console.error('In-app update check error:', error);
           });
         }
-        
+
         // Track app foreground
         analyticsService.logEvent(AnalyticsEvents.APP_FOREGROUND);
       } else if (nextAppState === 'background') {
@@ -311,16 +323,16 @@ function AppContent() {
           try {
             // Force logout without API call (user is already deleted)
             await authService.forceLogout();
-            
+
             // Reset analytics user data
             await analyticsService.resetAnalyticsData();
-            
+
             // Clear address cache
             addressService.clearCache();
-            
+
             // Clear cart
             clearCart();
-            
+
             // Reset all animated values
             homeScreenSlide.setValue(0);
             profileScreenSlide.setValue(SCREEN_WIDTH);
@@ -330,7 +342,7 @@ function AppContent() {
             addressScreenSlide.setValue(SCREEN_WIDTH);
             locationScreenSlide.setValue(SCREEN_WIDTH);
             helpScreenSlide.setValue(SCREEN_WIDTH);
-            
+
             // Navigate to login screen
             setCurrentScreen('login');
             setPhoneNumber('');
@@ -348,16 +360,16 @@ function AppContent() {
           try {
             // Force logout to clear all data
             await authService.forceLogout();
-            
+
             // Reset analytics user data
             await analyticsService.resetAnalyticsData();
-            
+
             // Clear address cache
             addressService.clearCache();
-            
+
             // Clear cart
             clearCart();
-            
+
             // Reset all animated values
             homeScreenSlide.setValue(0);
             profileScreenSlide.setValue(SCREEN_WIDTH);
@@ -367,7 +379,7 @@ function AppContent() {
             addressScreenSlide.setValue(SCREEN_WIDTH);
             locationScreenSlide.setValue(SCREEN_WIDTH);
             helpScreenSlide.setValue(SCREEN_WIDTH);
-            
+
             // Navigate to login screen
             setCurrentScreen('login');
             setPhoneNumber('');
@@ -446,11 +458,11 @@ function AppContent() {
       // Allow back button to work normally on login, welcome, and OTP screens
       const authScreens: Array<typeof currentScreen> = ['login', 'welcome', 'otp'];
       const isOnAuthScreen = authScreens.includes(currentScreen);
-      
+
       if (forcedUpdateRequired && !isOnAuthScreen) {
         return true; // Prevent back button from doing anything on non-auth screens
       }
-      
+
       // Handle back button based on current screen
       switch (currentScreen) {
         case 'home':
@@ -574,14 +586,14 @@ function AppContent() {
       if (currentUser?.id) {
         await analyticsService.setUserId(currentUser.id.toString());
       }
-      
+
       await analyticsService.logEvent(AnalyticsEvents.LOGIN_SUCCESS, {
         is_existing_user: true,
       });
-      
+
       setCurrentScreen('home');
       setIsRegistrationFlow(false);
-      reloadCart().catch(() => {});
+      reloadCart().catch(() => { });
       ensureNotificationPermission();
     } else {
       // New user - show welcome screen for profile completion
@@ -605,7 +617,7 @@ function AppContent() {
           email,
         };
         await storageService.saveUser(updatedUser);
-        
+
         // Set analytics user ID and properties
         await analyticsService.setUserId(currentUser.id.toString());
         await analyticsService.setUserProperties({
@@ -629,7 +641,7 @@ function AppContent() {
     setIsRegistrationFlow(false);
 
     // Ensure cart (if any) is synced for this user
-    reloadCart().catch(() => {});
+    reloadCart().catch(() => { });
   };
 
   const handleLogout = async () => {
@@ -638,7 +650,7 @@ function AppContent() {
 
     // Reset analytics user data
     await analyticsService.resetAnalyticsData();
-    
+
     // Clear authentication tokens and user data
     await authService.logout();
 
@@ -671,12 +683,12 @@ function AppContent() {
     // Reset persisted orders and scroll position when navigating to profile
     // This ensures a fresh state when user returns to orders screen
     resetOrdersPersistence();
-    
+
     // Clear orders context to ensure fresh data on next visit
     if (ordersDispatch) {
       ordersDispatch({ type: 'CLEAR_ORDERS' });
     }
-    
+
     setCurrentScreen('profile');
 
     // Slide both screens simultaneously
@@ -799,7 +811,7 @@ function AppContent() {
     setAddressSelectionCameFrom('home');
     setLocationSelectionCameFrom('home');
     setCurrentScreen('locationSelection');
-    
+
     Animated.timing(locationScreenSlide, {
       toValue: 0,
       duration: 200,
@@ -810,7 +822,7 @@ function AppContent() {
   const handleBackFromLocationSelection = () => {
     // Clear editing address when going back
     setEditingAddress(null);
-    
+
     if (locationSelectionCameFrom === 'myAddresses') {
       // Animate location screen out and navigate back to myAddresses
       Animated.timing(locationScreenSlide, {
@@ -890,7 +902,7 @@ function AppContent() {
 
     // Check if we're editing an address (from myAddresses) or check navigation source
     const isEditingFromMyAddresses = editingAddress && locationSelectionCameFrom === 'myAddresses';
-    
+
     if (isEditingFromMyAddresses || addressSelectionCameFrom === 'myAddresses') {
       // Navigate back to MyAddresses after saving
       // Clear editing address and reset navigation state
@@ -1129,6 +1141,7 @@ function AppContent() {
     orderDetailScreenSlide.setValue(0);
 
     // Close checkout screen with animation first, then navigate to order detail
+    setOrderDetailCameFrom('checkout');
     Animated.timing(checkoutScreenSlide, {
       toValue: SCREEN_WIDTH,
       duration: 200,
@@ -1238,7 +1251,7 @@ function AppContent() {
         restaurantScreenSlide.setValue(SCREEN_WIDTH);
         checkoutScreenSlide.setValue(SCREEN_WIDTH);
         homeScreenSlide.setValue(0);
-        
+
         // Update state after all positions are set
         setCurrentScreen('home');
         setOrdersCameFrom('profile'); // Reset for next time
@@ -1250,6 +1263,7 @@ function AppContent() {
 
   // Order Detail Navigation
   const handleNavigateToOrderDetail = (orderId: string) => {
+    setOrderDetailCameFrom('orders');
     setSelectedOrderId(orderId);
     setCurrentScreen('orderDetail');
     // Reset order detail screen position to show it
@@ -1260,8 +1274,12 @@ function AppContent() {
     // Track that we're going to orders from orderDetail
     // If we came from checkout (orderDetail was accessed via handleOrderSuccessFromCheckout),
     // we need to track this so orders can go back to home
-    setOrdersCameFrom('orderDetail');
-    
+    if (orderDetailCameFrom === 'checkout') {
+      setOrdersCameFrom('orderDetail');
+    } else {
+      setOrdersCameFrom('profile');
+    }
+
     // Animate order detail screen out
     Animated.timing(orderDetailScreenSlide, {
       toValue: SCREEN_WIDTH,
@@ -1530,7 +1548,7 @@ function AppContent() {
 
   // Contact Us Navigation
   const [contactUsCameFrom, setContactUsCameFrom] = React.useState<'profile' | 'orders' | 'orderDetail'>('profile');
-  
+
   const handleNavigateToContactUs = (from: 'profile' | 'orders' | 'orderDetail' = 'profile') => {
     setContactUsCameFrom(from);
     setCurrentScreen('contactUs');
@@ -1743,7 +1761,7 @@ function AppContent() {
   // Search Navigation
   const handleNavigateToSearch = () => {
     setCurrentScreen('search');
-    
+
     // Track search start
     analyticsService.logEvent(AnalyticsEvents.SEARCH_START);
 
@@ -1796,7 +1814,7 @@ function AppContent() {
           message: typeof orderResponse.error === 'string' ? orderResponse.error : 'Failed to fetch order details',
           confirmText: 'OK',
           cancelText: 'Close',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
         return;
       }
@@ -1816,8 +1834,8 @@ function AppContent() {
 
       const restaurantResponse = hasUserCoords
         ? await apiService.get(
-            `/api/buyer/restaurants/${restaurantId}?lat=${selectedLocation!.latitude}&lng=${selectedLocation!.longitude}`
-          )
+          `/api/buyer/restaurants/${restaurantId}?lat=${selectedLocation!.latitude}&lng=${selectedLocation!.longitude}`
+        )
         : await apiService.get(`/api/buyer/restaurants/${restaurantId}`);
 
       if (restaurantResponse.success && restaurantResponse.data) {
@@ -1872,7 +1890,7 @@ function AppContent() {
             confirmText: 'OK',
             cancelText: 'Close',
             confirmButtonColor: '#DC2626',
-            onConfirm: () => {},
+            onConfirm: () => { },
           });
           return;
         }
@@ -1892,7 +1910,7 @@ function AppContent() {
               confirmText: 'OK',
               cancelText: 'Close',
               confirmButtonColor: '#DC2626',
-              onConfirm: () => {},
+              onConfirm: () => { },
             });
             return;
           }
@@ -1926,7 +1944,7 @@ function AppContent() {
         message: typeof error?.message === 'string' ? error.message : 'Failed to reorder',
         confirmText: 'OK',
         cancelText: 'Close',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
     }
   };
@@ -1987,7 +2005,7 @@ function AppContent() {
         message: typeof error?.message === 'string' ? error.message : 'Failed to add items to cart',
         confirmText: 'OK',
         cancelText: 'Close',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
     }
   };
@@ -1995,7 +2013,7 @@ function AppContent() {
   // Hide native splash screen INSTANTLY
   React.useEffect(() => {
     // Hide immediately on mount
-    SplashScreen.hideAsync().catch(() => {});
+    SplashScreen.hideAsync().catch(() => { });
   }, []);
 
   // Handler for forced update from API
@@ -2008,57 +2026,57 @@ function AppContent() {
     if (!forcedUpdateRequired) {
       return false;
     }
-    
+
     // Don't show while checking auth
     if (isCheckingAuth) {
       return false;
     }
-    
+
     // Don't show on auth screens (login, welcome, OTP)
     const authScreens: Array<typeof currentScreen> = ['login', 'welcome', 'otp'];
     if (authScreens.includes(currentScreen)) {
       return false;
     }
-    
+
     // Show on all other screens
     return true;
   }, [forcedUpdateRequired, isCheckingAuth, currentScreen]);
 
   return (
     <>
-      <SafeAreaProvider>
+      <>
         {/* Show Network Status Screen when offline on any screen */}
         {!isCheckingAuth && !isNetworkOnline ? (
           <NetworkStatusScreen selectedLocation={selectedLocation} />
-        ) : !isCheckingAuth && currentScreen === 'login' ? (
-        <LoginScreen
-          initialPhoneNumber={phoneNumber}
-          onLoginSuccess={handleLoginSuccess}
-          onOpenTerms={() => handleNavigateToTermsConditions('login')}
-          onOpenPrivacy={() => handleNavigateToPrivacyPolicy('login')}
-        />
-      ) : !isCheckingAuth && currentScreen === 'otp' ? (
-        <OTPVerificationScreen
-          phoneNumber={phoneNumber}
-          onBack={handleBackToLogin}
-          onSuccess={handleOtpSuccess}
-          onOpenTerms={() => handleNavigateToTermsConditions('otp')}
-          onOpenPrivacy={() => handleNavigateToPrivacyPolicy('otp')}
-        />
-      ) : !isCheckingAuth && currentScreen === 'welcome' ? (
-        <WelcomeScreen onContinue={handleWelcomeComplete} />
-      ) : !isCheckingAuth ? (
-        <View style={styles.container}>
-          {/* Keep HomeScreen mounted to preserve state */}
-          <Animated.View
-            style={[
-              styles.homeScreenContainer,
-              {
-                transform: [{ translateX: homeScreenSlide }],
-              },
-            ]}
-          >
-            <HomeScreen
+        ) : !isCheckingAuth && (currentScreen === 'login' || (['termsConditions', 'privacyPolicy'].includes(currentScreen) && legalCameFrom === 'login')) ? (
+          <LoginScreen
+            initialPhoneNumber={phoneNumber}
+            onLoginSuccess={handleLoginSuccess}
+            onOpenTerms={() => handleNavigateToTermsConditions('login')}
+            onOpenPrivacy={() => handleNavigateToPrivacyPolicy('login')}
+          />
+        ) : !isCheckingAuth && (currentScreen === 'otp' || (['termsConditions', 'privacyPolicy'].includes(currentScreen) && legalCameFrom === 'otp')) ? (
+          <OTPVerificationScreen
+            phoneNumber={phoneNumber}
+            onBack={handleBackToLogin}
+            onSuccess={handleOtpSuccess}
+            onOpenTerms={() => handleNavigateToTermsConditions('otp')}
+            onOpenPrivacy={() => handleNavigateToPrivacyPolicy('otp')}
+          />
+        ) : !isCheckingAuth && currentScreen === 'welcome' ? (
+          <WelcomeScreen onContinue={handleWelcomeComplete} />
+        ) : !isCheckingAuth ? (
+          <View style={styles.container}>
+            {/* Keep HomeScreen mounted to preserve state */}
+            <Animated.View
+              style={[
+                styles.homeScreenContainer,
+                {
+                  transform: [{ translateX: homeScreenSlide }],
+                },
+              ]}
+            >
+              <HomeScreen
               onLogout={handleLogout}
               onNavigateToProfile={handleNavigateToProfile}
               onNavigateToAddressSelection={handleNavigateToAddressSelection}
@@ -2072,10 +2090,10 @@ function AppContent() {
               isFocused={currentScreen === 'home'}
               addressRefreshTrigger={addressRefreshTrigger}
               onForcedUpdateRequired={handleForcedUpdateRequired}
-            />
-          </Animated.View>
+              />
+            </Animated.View>
 
-          {/* Always render ProfileScreen, positioned off-screen initially */}
+            {/* Always render ProfileScreen, positioned off-screen initially */}
           <Animated.View
             style={[
               styles.profileOverlay,
@@ -2240,329 +2258,334 @@ function AppContent() {
             </View>
           )}
 
-          {/* Conditionally render SearchScreen only when needed */}
-          {currentScreen === 'search' && (
+            {/* Conditionally render SearchScreen only when needed */}
+            {currentScreen === 'search' && (
+              <Animated.View
+                style={[
+                  styles.searchOverlay,
+                  {
+                    transform: [{ translateX: searchScreenSlide }],
+                  },
+                ]}
+                pointerEvents="auto"
+              >
+                <SearchScreen
+                  onBack={handleBackFromSearch}
+                  selectedLocation={selectedLocation}
+                  searchQuery={searchQuery}
+                  searchResults={searchResults}
+                  onSearchQueryChange={setSearchQuery}
+                  onSearchResultsChange={setSearchResults}
+                  onClearSearch={handleClearSearch}
+                  onSelectResult={(_result) => {
+                    handleBackFromSearch();
+                  }}
+                  onSelectItem={(_itemId, itemName) => {
+                    // Navigate to category results screen to show restaurants with this dish
+                    setSelectedCategory(itemName);
+                    setCategoryCameFrom('search');
+                    setCurrentScreen('categoryResults');
+
+                    // Close search screen with animation
+                    Animated.timing(searchScreenSlide, {
+                      toValue: SCREEN_WIDTH,
+                      duration: 200,
+                      useNativeDriver: true,
+                    }).start();
+                  }}
+                  onSelectRestaurant={(restaurantId, restaurantName) => {
+                    setSelectedRestaurantId(restaurantId);
+                    setSelectedRestaurantName(restaurantName);
+                    setRestaurantCameFrom('search');
+
+                    // Ensure restaurant screen starts off-screen before animating
+                    restaurantScreenSlide.setValue(SCREEN_WIDTH);
+
+                    // Set screen to restaurant
+                    setCurrentScreen('restaurant');
+
+                    // Small delay to ensure screen is mounted before animation
+                    requestAnimationFrame(() => {
+                      // Close search screen and open restaurant screen with animation
+                      Animated.parallel([
+                        Animated.timing(searchScreenSlide, {
+                          toValue: SCREEN_WIDTH,
+                          duration: 200,
+                          easing: Easing.out(Easing.ease),
+                          useNativeDriver: true,
+                        }),
+                        Animated.timing(restaurantScreenSlide, {
+                          toValue: 0,
+                          duration: 300,
+                          easing: Easing.out(Easing.ease),
+                          useNativeDriver: true,
+                        }),
+                      ]).start();
+                    });
+                  }}
+                />
+              </Animated.View>
+            )}
+
+            {/* Conditionally render MyAddressesScreen only when needed */}
+            {currentScreen === 'myAddresses' && (
+              <View style={styles.myAddressesOverlay}>
+                <MyAddressesScreen
+                  visible={true}
+                  onBack={handleBackFromMyAddresses}
+                  onAddNew={handleNavigateToAddressSelectionFromMyAddresses}
+                  onEditAddress={handleEditAddressFromMyAddresses}
+                  onAddressChange={handleAddressChange}
+                />
+              </View>
+            )}
+
+            {/* Conditionally render ExploreDishesScreen only when needed */}
+            {currentScreen === 'exploreDishes' && (
+              <View style={styles.exploreDishesOverlay} pointerEvents="auto">
+                <ExploreDishesScreen
+                  visible={true}
+                  onBack={handleBackFromExploreDishes}
+                  onSelectItem={(item) => {
+                    // Navigate to category results screen to show restaurants with this dish
+                    setSelectedCategory(item.name);
+                    setCategoryCameFrom('favorites');
+                    setCurrentScreen('categoryResults');
+                  }}
+                  onSelectRestaurant={(restaurantId, restaurantName) => {
+                    setSelectedRestaurantId(Number(restaurantId));
+                    setSelectedRestaurantName(restaurantName);
+                    setRestaurantCameFrom('favorites');
+                    setCurrentScreen('restaurant');
+
+                    // Animate restaurant screen sliding in from right
+                    Animated.timing(restaurantScreenSlide, {
+                      toValue: 0,
+                      duration: 250,
+                      easing: Easing.out(Easing.cubic),
+                      useNativeDriver: true,
+                    }).start();
+                  }}
+                />
+              </View>
+            )}
+
+
+
+            {/* FAQ Screen, positioned off-screen initially */}
             <Animated.View
               style={[
-                styles.searchOverlay,
+                styles.faqOverlay,
                 {
-                  transform: [{ translateX: searchScreenSlide }],
+                  transform: [{ translateX: faqScreenSlide }],
                 },
               ]}
-              pointerEvents="auto"
+              pointerEvents={currentScreen === 'faq' ? 'auto' : 'none'}
             >
-              <SearchScreen
-                onBack={handleBackFromSearch}
-                selectedLocation={selectedLocation}
-                searchQuery={searchQuery}
-                searchResults={searchResults}
-                onSearchQueryChange={setSearchQuery}
-                onSearchResultsChange={setSearchResults}
-                onClearSearch={handleClearSearch}
-                onSelectResult={(_result) => {
-                  handleBackFromSearch();
-                }}
-                onSelectItem={(_itemId, itemName) => {
-                  // Navigate to category results screen to show restaurants with this dish
-                  setSelectedCategory(itemName);
-                  setCategoryCameFrom('search');
-                  setCurrentScreen('categoryResults');
-
-                  // Close search screen with animation
-                  Animated.timing(searchScreenSlide, {
-                    toValue: SCREEN_WIDTH,
-                    duration: 200,
-                    useNativeDriver: true,
-                  }).start();
-                }}
-                onSelectRestaurant={(restaurantId, restaurantName) => {
-                  setSelectedRestaurantId(restaurantId);
-                  setSelectedRestaurantName(restaurantName);
-                  setRestaurantCameFrom('search');
-
-                  // Ensure restaurant screen starts off-screen before animating
-                  restaurantScreenSlide.setValue(SCREEN_WIDTH);
-
-                  // Set screen to restaurant
-                  setCurrentScreen('restaurant');
-
-                  // Small delay to ensure screen is mounted before animation
-                  requestAnimationFrame(() => {
-                    // Close search screen and open restaurant screen with animation
-                    Animated.parallel([
-                      Animated.timing(searchScreenSlide, {
-                        toValue: SCREEN_WIDTH,
-                        duration: 200,
-                        easing: Easing.out(Easing.ease),
-                        useNativeDriver: true,
-                      }),
-                      Animated.timing(restaurantScreenSlide, {
-                        toValue: 0,
-                        duration: 300,
-                        easing: Easing.out(Easing.ease),
-                        useNativeDriver: true,
-                      }),
-                    ]).start();
-                  });
-                }}
+              <ContentPage
+                title="FAQ"
+                url="https://tazty.in/faqs"
+                onBack={handleBackFromFaq}
               />
             </Animated.View>
-          )}
 
-          {/* Conditionally render MyAddressesScreen only when needed */}
-          {currentScreen === 'myAddresses' && (
-            <View style={styles.myAddressesOverlay}>
-              <MyAddressesScreen
-                visible={true}
-                onBack={handleBackFromMyAddresses}
-                onAddNew={handleNavigateToAddressSelectionFromMyAddresses}
-                onEditAddress={handleEditAddressFromMyAddresses}
-                onAddressChange={handleAddressChange}
-              />
-            </View>
-          )}
-
-          {/* Conditionally render ExploreDishesScreen only when needed */}
-          {currentScreen === 'exploreDishes' && (
-            <View style={styles.exploreDishesOverlay} pointerEvents="auto">
-              <ExploreDishesScreen
-                visible={true}
-                onBack={handleBackFromExploreDishes}
-                onSelectItem={(item) => {
-                  // Navigate to category results screen to show restaurants with this dish
-                  setSelectedCategory(item.name);
-                  setCategoryCameFrom('favorites');
-                  setCurrentScreen('categoryResults');
-                }}
-                onSelectRestaurant={(restaurantId, restaurantName) => {
-                  setSelectedRestaurantId(Number(restaurantId));
-                  setSelectedRestaurantName(restaurantName);
-                  setRestaurantCameFrom('favorites');
-                  setCurrentScreen('restaurant');
-
-                  // Animate restaurant screen sliding in from right
-                  Animated.timing(restaurantScreenSlide, {
-                    toValue: 0,
-                    duration: 250,
-                    easing: Easing.out(Easing.cubic),
-                    useNativeDriver: true,
-                  }).start();
-                }}
-              />
-            </View>
-          )}
-
-          {/* Always render Privacy Policy Screen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.privacyPolicyOverlay,
-              {
-                transform: [{ translateX: privacyPolicyScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'privacyPolicy' ? 'auto' : 'none'}
-          >
-            <ContentPage
-              title="Privacy Policy"
-              url="https://tazty.in/privacy"
-              onBack={handleBackFromPrivacyPolicy}
-            />
-          </Animated.View>
-
-          {/* Always render Terms & Conditions Screen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.termsConditionsOverlay,
-              {
-                transform: [{ translateX: termsConditionsScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'termsConditions' ? 'auto' : 'none'}
-          >
-            <ContentPage
-              title="Terms & Conditions"
-              url="https://tazty.in/terms"
-              onBack={handleBackFromTermsConditions}
-            />
-          </Animated.View>
-
-          {/* FAQ Screen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.faqOverlay,
-              {
-                transform: [{ translateX: faqScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'faq' ? 'auto' : 'none'}
-          >
-            <ContentPage
-              title="FAQ"
-              url="https://tazty.in/faqs"
-              onBack={handleBackFromFaq}
-            />
-          </Animated.View>
-
-          {/* Always render Help Screen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.helpOverlay,
-              {
-                transform: [{ translateX: helpScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'help' && !isHelpClosing ? 'auto' : 'none'}
-          >
-            <HelpScreen
-              visible={currentScreen === 'help'}
-              onBack={handleBackFromHelp}
-              onViewOrder={handleHelpViewOrder}
-              initialOrder={helpOrderData || undefined}
-            />
-          </Animated.View>
-
-          {/* Contact Us Screen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.contactUsOverlay,
-              {
-                transform: [{ translateX: contactUsScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'contactUs' ? 'auto' : 'none'}
-          >
-            <ContactUsScreen
-              visible={currentScreen === 'contactUs'}
-              onBack={handleBackFromContactUs}
-            />
-          </Animated.View>
-
-          {/* Conditionally render EditProfileScreen only when needed */}
-          {currentScreen === 'editProfile' && (
-            <View style={styles.editProfileOverlay}>
-              <EditProfileScreen
-                onBack={handleBackFromEditProfile}
-                onSave={(_data) => {
-                  handleBackFromEditProfile();
-                }}
-              />
-            </View>
-          )}
-
-          {/* Conditionally render CategoryResultsScreen only when needed */}
-          {currentScreen === 'categoryResults' && (
-            <View style={styles.categoryOverlay}>
-              <CategoryResultsScreen
-                categoryName={selectedCategory}
-                categories={categoryData}
-                onBack={handleBackFromCategoryResults}
-                onNavigateToRestaurant={handleNavigateToRestaurantFromCategory}
-                selectedLocation={selectedLocation}
-              />
-            </View>
-          )}
-
-          {/* Always render RestaurantScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.restaurantOverlay,
-              {
-                transform: [{ translateX: restaurantScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'restaurant' ? 'auto' : 'none'}
-          >
-            <RestaurantScreen
-              visible={currentScreen === 'restaurant'}
-              restaurantId={selectedRestaurantId}
-              restaurantName={selectedRestaurantName}
-              onBack={handleBackFromRestaurant}
-              onNavigateToCheckout={handleNavigateToCheckout}
-              onNavigateToDetails={handleNavigateToRestaurantDetails}
-              onNavigateToOrders={(orderId) => {
-                // Close restaurant screen and navigate to orders
-                Animated.timing(restaurantScreenSlide, {
-                  toValue: SCREEN_WIDTH,
-                  duration: 200,
-                  easing: Easing.out(Easing.ease),
-                  useNativeDriver: true,
-                }).start(() => {
-                  if (orderId) {
-                    setSelectedOrderId(orderId.toString());
-                  }
-                  setCurrentScreen('orders');
-                });
-              }}
-              onNavigateToHome={() => {
-                // Close restaurant screen and go back to appropriate screen
-                if (restaurantCameFrom === 'orders') {
-                  // If came from orders (reorder flow), go back to orders screen
-                  setCurrentScreen('orders');
-                } else if (restaurantCameFrom === 'home') {
-                  setCurrentScreen('home');
-                } else if (restaurantCameFrom === 'category') {
-                  setCurrentScreen('home');
-                } else if (restaurantCameFrom === 'search') {
-                  setCurrentScreen('home');
-                } else if (restaurantCameFrom === 'favorites') {
-                  setCurrentScreen('home');
-                } else {
-                  setCurrentScreen('home');
-                }
-
-                // Animate restaurant screen sliding out to the right
-                Animated.timing(restaurantScreenSlide, {
-                  toValue: SCREEN_WIDTH,
-                  duration: 200,
-                  easing: Easing.out(Easing.ease),
-                  useNativeDriver: true,
-                }).start();
-              }}
-            />
-          </Animated.View>
-
-          {/* Checkout Screen */}
-          {currentScreen === 'checkout' && (
+            {/* Always render Help Screen, positioned off-screen initially */}
             <Animated.View
               style={[
-                styles.checkoutOverlay,
+                styles.helpOverlay,
                 {
-                  transform: [{ translateX: checkoutScreenSlide }],
+                  transform: [{ translateX: helpScreenSlide }],
                 },
               ]}
-              pointerEvents="auto"
+              pointerEvents={currentScreen === 'help' && !isHelpClosing ? 'auto' : 'none'}
             >
-              <OrderDetailsScreen
-                restaurantId={cartRestaurantId || selectedRestaurantId}
-                restaurantName={cartRestaurantName || selectedRestaurantName}
-                restaurantAddress={selectedRestaurantAddress}
-                selectedLocation={selectedLocation}
-                visible={currentScreen === 'checkout'}
-                onBack={handleBackFromCheckout}
-                onAddMoreItems={handleAddMoreItemsFromCheckout}
-                onPlaceOrder={handlePlaceOrderFromCheckout}
-                onOrderSuccess={handleOrderSuccessFromCheckout}
-                onOrderCancel={handleOrderCancelFromCheckout}
-                onAddressChange={handleAddressChange}
+              <HelpScreen
+                visible={currentScreen === 'help'}
+                onBack={handleBackFromHelp}
+                onViewOrder={handleHelpViewOrder}
+                initialOrder={helpOrderData || undefined}
               />
             </Animated.View>
-          )}
 
-          {/* Restaurant Details Screen */}
-          {currentScreen === 'restaurantDetails' && (
-            <View style={styles.restaurantDetailsOverlay}>
-              <RestaurantDetailsScreen
+            {/* Contact Us Screen, positioned off-screen initially */}
+            <Animated.View
+              style={[
+                styles.contactUsOverlay,
+                {
+                  transform: [{ translateX: contactUsScreenSlide }],
+                },
+              ]}
+              pointerEvents={currentScreen === 'contactUs' ? 'auto' : 'none'}
+            >
+              <ContactUsScreen
+                visible={currentScreen === 'contactUs'}
+                onBack={handleBackFromContactUs}
+              />
+            </Animated.View>
+
+            {/* Conditionally render EditProfileScreen only when needed */}
+            {currentScreen === 'editProfile' && (
+              <View style={styles.editProfileOverlay}>
+                <EditProfileScreen
+                  onBack={handleBackFromEditProfile}
+                  onSave={(_data) => {
+                    handleBackFromEditProfile();
+                  }}
+                />
+              </View>
+            )}
+
+            {/* Conditionally render CategoryResultsScreen only when needed */}
+            {currentScreen === 'categoryResults' && (
+              <View style={styles.categoryOverlay}>
+                <CategoryResultsScreen
+                  categoryName={selectedCategory}
+                  categories={categoryData}
+                  onBack={handleBackFromCategoryResults}
+                  onNavigateToRestaurant={handleNavigateToRestaurantFromCategory}
+                  selectedLocation={selectedLocation}
+                />
+              </View>
+            )}
+
+            {/* Always render RestaurantScreen, positioned off-screen initially */}
+            <Animated.View
+              style={[
+                styles.restaurantOverlay,
+                {
+                  transform: [{ translateX: restaurantScreenSlide }],
+                },
+              ]}
+              pointerEvents={currentScreen === 'restaurant' ? 'auto' : 'none'}
+            >
+              <RestaurantScreen
+                visible={currentScreen === 'restaurant'}
                 restaurantId={selectedRestaurantId}
                 restaurantName={selectedRestaurantName}
-                latitude={selectedLocation?.latitude || 9.9252}
-                longitude={selectedLocation?.longitude || 78.1198}
-                onBack={handleBackFromRestaurantDetails}
+                onBack={handleBackFromRestaurant}
+                onNavigateToCheckout={handleNavigateToCheckout}
+                onNavigateToDetails={handleNavigateToRestaurantDetails}
+                onNavigateToOrders={(orderId) => {
+                  // Close restaurant screen and navigate to orders
+                  Animated.timing(restaurantScreenSlide, {
+                    toValue: SCREEN_WIDTH,
+                    duration: 200,
+                    easing: Easing.out(Easing.ease),
+                    useNativeDriver: true,
+                  }).start(() => {
+                    if (orderId) {
+                      setSelectedOrderId(orderId.toString());
+                    }
+                    setCurrentScreen('orders');
+                  });
+                }}
+                onNavigateToHome={() => {
+                  // Close restaurant screen and go back to appropriate screen
+                  if (restaurantCameFrom === 'orders') {
+                    // If came from orders (reorder flow), go back to orders screen
+                    setCurrentScreen('orders');
+                  } else if (restaurantCameFrom === 'home') {
+                    setCurrentScreen('home');
+                  } else if (restaurantCameFrom === 'category') {
+                    setCurrentScreen('home');
+                  } else if (restaurantCameFrom === 'search') {
+                    setCurrentScreen('home');
+                  } else if (restaurantCameFrom === 'favorites') {
+                    setCurrentScreen('home');
+                  } else {
+                    setCurrentScreen('home');
+                  }
+
+                  // Animate restaurant screen sliding out to the right
+                  Animated.timing(restaurantScreenSlide, {
+                    toValue: SCREEN_WIDTH,
+                    duration: 200,
+                    easing: Easing.out(Easing.ease),
+                    useNativeDriver: true,
+                  }).start();
+                }}
               />
-            </View>
-          )}
-        </View>
-      ) : null}
-        
+            </Animated.View>
+
+            {/* Checkout Screen */}
+            {currentScreen === 'checkout' && (
+              <Animated.View
+                style={[
+                  styles.checkoutOverlay,
+                  {
+                    transform: [{ translateX: checkoutScreenSlide }],
+                  },
+                ]}
+                pointerEvents="auto"
+              >
+                <OrderDetailsScreen
+                  restaurantId={cartRestaurantId || selectedRestaurantId}
+                  restaurantName={cartRestaurantName || selectedRestaurantName}
+                  restaurantAddress={selectedRestaurantAddress}
+                  selectedLocation={selectedLocation}
+                  visible={currentScreen === 'checkout'}
+                  onBack={handleBackFromCheckout}
+                  onAddMoreItems={handleAddMoreItemsFromCheckout}
+                  onPlaceOrder={handlePlaceOrderFromCheckout}
+                  onOrderSuccess={handleOrderSuccessFromCheckout}
+                  onOrderCancel={handleOrderCancelFromCheckout}
+                  onAddressChange={handleAddressChange}
+                />
+              </Animated.View>
+            )}
+
+            {/* Restaurant Details Screen */}
+            {currentScreen === 'restaurantDetails' && (
+              <View style={styles.restaurantDetailsOverlay}>
+                <RestaurantDetailsScreen
+                  restaurantId={selectedRestaurantId}
+                  restaurantName={selectedRestaurantName}
+                  latitude={selectedLocation?.latitude || 9.9252}
+                  longitude={selectedLocation?.longitude || 78.1198}
+                  onBack={handleBackFromRestaurantDetails}
+                />
+              </View>
+            )}
+          </View>
+        ) : null}
+
+        {/* Render Legal Overlays outside so they can float over Login/OTP/Welcome/App */}
+        {!isCheckingAuth && (
+          <>
+            <Animated.View
+              style={[
+                styles.privacyPolicyOverlay,
+                {
+                  transform: [{ translateX: privacyPolicyScreenSlide }],
+                },
+              ]}
+              pointerEvents={currentScreen === 'privacyPolicy' ? 'auto' : 'none'}
+            >
+              <ContentPage
+                title="Privacy Policy"
+                url="https://tazty.in/privacy"
+                onBack={handleBackFromPrivacyPolicy}
+              />
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                styles.termsConditionsOverlay,
+                {
+                  transform: [{ translateX: termsConditionsScreenSlide }],
+                },
+              ]}
+              pointerEvents={currentScreen === 'termsConditions' ? 'auto' : 'none'}
+            >
+              <ContentPage
+                title="Terms & Conditions"
+                url="https://tazty.in/terms"
+                onBack={handleBackFromTermsConditions}
+              />
+            </Animated.View>
+          </>
+        )}
+
         {/* Forced Update Modal - Blocks all app usage when flag is true */}
         {/* Show on all screens except login, welcome, and OTP verification */}
         {/* Works when app is opened from notification or any other scenario */}
@@ -2572,7 +2595,7 @@ function AppContent() {
           message={forcedUpdateMessage || "A new version of the app is available. Please update to continue using the app."}
           updateButtonText="Update Now"
         />
-      </SafeAreaProvider>
+      </>
     </>
   );
 }
@@ -2593,11 +2616,13 @@ export default function App() {
       <VegModeProvider>
         <CartProvider>
           <ConfirmationProvider>
-            <SnackbarProvider>
-              <OrdersProvider>
-                <AppContent />
-              </OrdersProvider>
-            </SnackbarProvider>
+            <SafeAreaProvider>
+              <SnackbarProvider>
+                <OrdersProvider>
+                  <AppContent />
+                </OrdersProvider>
+              </SnackbarProvider>
+            </SafeAreaProvider>
           </ConfirmationProvider>
         </CartProvider>
       </VegModeProvider>

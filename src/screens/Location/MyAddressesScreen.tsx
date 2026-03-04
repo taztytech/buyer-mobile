@@ -58,7 +58,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         message: 'We couldn’t load your saved addresses. Please check your internet connection and try again.',
         confirmText: 'OK',
         cancelText: 'Close',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
     } finally {
       setIsLoading(false);
@@ -77,7 +77,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         if (isDeletingDefault) {
           // Reload addresses first to get the updated list
           await loadAddresses();
-          
+
           // Find the next available address (first one in the list after deletion)
           const updatedResponse = await addressService.getAddresses();
           if (updatedResponse.success && updatedResponse.data && updatedResponse.data.length > 0) {
@@ -112,7 +112,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
           message: 'Address deleted successfully',
           confirmText: 'OK',
           cancelText: '',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
       } else {
         showConfirmation({
@@ -120,7 +120,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
           message: response.error || 'We couldn’t delete this address right now. Please try again in a moment.',
           confirmText: 'OK',
           cancelText: 'Close',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
       }
     } catch (error) {
@@ -129,7 +129,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         message: 'Something went wrong while deleting this address. Please check your connection and try again.',
         confirmText: 'OK',
         cancelText: 'Close',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
     }
   };
@@ -164,7 +164,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         message: `You can save up to ${MAX_ADDRESSES} delivery addresses. Please delete one before adding a new address.`,
         confirmText: 'OK',
         cancelText: '',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -208,7 +208,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
           >
             <View style={styles.addressList}>
               {addresses.map((address, index) => (
-                <View key={address.id}>
+                <View key={`${address.id}-${index}`}>
                   <View style={styles.addressCard}>
                     <View style={styles.addressContent}>
                       <View style={styles.iconContainer}>
@@ -265,7 +265,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.addButton}
-          onPress={handleAddNewPress}
+            onPress={handleAddNewPress}
           >
             <Text style={styles.addButtonText}>Add Address</Text>
             <MaterialIcons name="add" size={24} color="#FFFFFF" />

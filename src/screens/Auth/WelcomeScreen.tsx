@@ -32,7 +32,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const nameInputRef = useRef<TextInput>(null);
   const emailInputRef = useRef<TextInput>(null);
-  
+
   // Animated values for smooth, elegant transitions
   const greenSectionOpacity = useRef(new Animated.Value(1)).current;
   const greenSectionTranslateY = useRef(new Animated.Value(0)).current;
@@ -68,10 +68,10 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
       (event) => {
         setKeyboardHeight(0);
         setIsFormMoved(false);
-        const animationDuration = Platform.OS === 'ios' 
-          ? event.duration || 300 
+        const animationDuration = Platform.OS === 'ios'
+          ? event.duration || 300
           : 300;
-        
+
         // Restore green section and form position when keyboard hides
         Animated.parallel([
           Animated.timing(greenSectionOpacity, {
@@ -105,7 +105,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
   // Input focus animations
   const handleInputFocus = (inputType: 'name' | 'email') => {
     setFocusedField(inputType);
-    
+
     // Animate focused input with subtle scale and border
     if (inputType === 'name') {
       // Hide green section and move form up when name is focused
@@ -141,7 +141,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
           useNativeDriver: true,
         }),
       ]).start();
-      
+
       // Reset email input
       Animated.parallel([
         Animated.spring(emailInputScale, {
@@ -190,7 +190,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
           useNativeDriver: true,
         }),
       ]).start();
-      
+
       // Reset name input
       Animated.parallel([
         Animated.spring(nameInputScale, {
@@ -247,7 +247,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
         }),
       ]).start();
     }
-    
+
     setFocusedField(null);
   };
 
@@ -328,7 +328,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
           message: 'Phone number not found. Please login again.',
           confirmText: 'OK',
           cancelText: 'Close',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
         setIsLoading(false);
         return;
@@ -354,7 +354,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
           message: 'Email already exist',
           confirmText: 'OK',
           cancelText: 'Close',
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
       }
     } catch (error: any) {
@@ -363,7 +363,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
         message: 'Email already exist',
         confirmText: 'OK',
         cancelText: 'Close',
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
     } finally {
       setIsLoading(false);
@@ -387,7 +387,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
       <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <ScrollView
@@ -460,7 +460,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
                       transform: [{ scale: nameInputScale }],
                     }}
                   >
-                    <TextInput
+                    <TextInput autoCorrect={false}
                       ref={nameInputRef}
                       style={styles.input}
                       placeholder="Enter your full name"
@@ -501,7 +501,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
                       transform: [{ scale: emailInputScale }],
                     }}
                   >
-                    <TextInput
+                    <TextInput autoCorrect={false}
                       ref={emailInputRef}
                       style={styles.input}
                       placeholder="Enter your email"

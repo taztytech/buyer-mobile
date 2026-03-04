@@ -28,7 +28,7 @@ const formatTimeDifference = (minutes: number): string => {
   } else if (minutes < 1440) {
     const hours = Math.floor(minutes / 60);
     const remainingMinutes = minutes % 60;
-    
+
     if (remainingMinutes === 0) {
       return `in ${hours} ${hours === 1 ? 'hr' : 'hrs'}`;
     } else {
@@ -38,7 +38,7 @@ const formatTimeDifference = (minutes: number): string => {
     const days = Math.floor(minutes / 1440);
     const remainingHours = Math.floor((minutes % 1440) / 60);
     const remainingMinutes = minutes % 60;
-    
+
     if (remainingHours === 0 && remainingMinutes === 0) {
       return `in ${days} ${days === 1 ? 'day' : 'days'}`;
     } else if (remainingMinutes === 0) {
@@ -101,7 +101,7 @@ const getNextAvailableTime = (timings?: ItemTiming[]): { timeDifference?: string
       // Normal range (e.g., Mon-Fri)
       for (let day = timing.day_from; day <= timing.day_to; day++) {
         const isToday = day === currentApiDay;
-        
+
         if (isToday && timeFrom > currentTime) {
           // Today, but time hasn't started yet
           todaySlots.push({ day, timeFrom, timeTo, originalTiming: timing });
@@ -111,14 +111,14 @@ const getNextAvailableTime = (timings?: ItemTiming[]): { timeDifference?: string
       // Wraps around week (e.g., Sat-Sun)
       for (let day = timing.day_from; day <= 7; day++) {
         const isToday = day === currentApiDay;
-        
+
         if (isToday && timeFrom > currentTime) {
           todaySlots.push({ day, timeFrom, timeTo, originalTiming: timing });
         }
       }
       for (let day = 1; day <= timing.day_to; day++) {
         const isToday = day === currentApiDay;
-        
+
         if (isToday && timeFrom > currentTime) {
           todaySlots.push({ day, timeFrom, timeTo, originalTiming: timing });
         }
@@ -128,10 +128,10 @@ const getNextAvailableTime = (timings?: ItemTiming[]): { timeDifference?: string
 
   // Sort today's slots by time
   todaySlots.sort((a, b) => a.timeFrom - b.timeFrom);
-  
+
   // If there's a next slot today, return it with time difference
   const nextSlot = todaySlots.length > 0 ? todaySlots[0] : null;
-  
+
   if (nextSlot) {
     // Calculate time difference in minutes (only for today)
     const hours = Math.floor(nextSlot.timeFrom / 100);
@@ -322,7 +322,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         >
           {searchQuery.trim() !== '' && searchResults.length > 0 && (
             <View style={styles.menuContent}>
-              {searchResults.map((item) => {
+              {searchResults.map((item, index) => {
                 const currentQuantity = getItemQuantity(item.id);
                 const isAtQuantityLimit = currentQuantity >= MAX_ITEM_QUANTITY;
                 const isPreorderAtLimit = item.isPreorderAvailable && currentQuantity >= 1;
@@ -337,189 +337,189 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                 const nextAvailableTime = getNextAvailableTime(item.timings);
 
                 return (
-                <View key={item.id} style={styles.menuItem}>
-                  <View style={styles.itemLeft}>
-                    {/* Veg/Non-Veg Icon and Spicy Badge */}
-                    <View style={styles.itemBadges}>
-                      <View style={[
-                        styles.vegIconLarge,
-                        !item.isVeg && styles.nonVegIconLarge
-                      ]}>
+                  <View key={`${item.id}-${index}`} style={styles.menuItem}>
+                    <View style={styles.itemLeft}>
+                      {/* Veg/Non-Veg Icon and Spicy Badge */}
+                      <View style={styles.itemBadges}>
                         <View style={[
-                          styles.vegDotLarge,
-                          !item.isVeg && styles.nonVegDotLarge
-                        ]} />
+                          styles.vegIconLarge,
+                          !item.isVeg && styles.nonVegIconLarge
+                        ]}>
+                          <View style={[
+                            styles.vegDotLarge,
+                            !item.isVeg && styles.nonVegDotLarge
+                          ]} />
+                        </View>
+                        {item.isSpicy && (
+                          <View style={styles.spicyBadge}>
+                            <MaterialIcons name="local-fire-department" size={9} color="#FF0000" />
+                            <Text style={styles.spicyText}>Spicy</Text>
+                          </View>
+                        )}
                       </View>
-                      {item.isSpicy && (
-                        <View style={styles.spicyBadge}>
-                          <MaterialIcons name="local-fire-department" size={9} color="#FF0000" />
-                          <Text style={styles.spicyText}>Spicy</Text>
+
+                      {/* Item Name */}
+                      <Text style={styles.itemName}>{item.name}</Text>
+
+                      {/* Best Seller Badge */}
+                      {item.isBestSeller && (
+                        <View style={styles.bestSellerBadge}>
+                          <MaterialIcons name="star" size={8} color="#FFC529" />
+                          <Text style={styles.bestSellerText}>Best Seller</Text>
                         </View>
                       )}
-                    </View>
 
-                    {/* Item Name */}
-                    <Text style={styles.itemName}>{item.name}</Text>
+                      {/* Price */}
+                      {item.isPreorderAvailable && item.preorderCampaign && parseFloat(item.preorderCampaign.discount_amount || '0') > 0 ? (
+                        <View style={styles.priceContainer}>
+                          <Text style={[styles.itemPrice, styles.strikethroughPrice]}>₹ {item.price.toFixed(2)}</Text>
+                          <Text style={[styles.itemPrice, styles.discountedPrice]}>
+                            ₹ {(item.price - parseFloat(item.preorderCampaign.discount_amount || '0')).toFixed(2)}
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.itemPrice}>₹ {item.price.toFixed(2)}</Text>
+                      )}
 
-                    {/* Best Seller Badge */}
-                    {item.isBestSeller && (
-                      <View style={styles.bestSellerBadge}>
-                        <MaterialIcons name="star" size={8} color="#FFC529" />
-                        <Text style={styles.bestSellerText}>Best Seller</Text>
-                      </View>
-                    )}
-
-                    {/* Price */}
-                    {item.isPreorderAvailable && item.preorderCampaign && parseFloat(item.preorderCampaign.discount_amount || '0') > 0 ? (
-                      <View style={styles.priceContainer}>
-                        <Text style={[styles.itemPrice, styles.strikethroughPrice]}>₹ {item.price.toFixed(2)}</Text>
-                        <Text style={[styles.itemPrice, styles.discountedPrice]}>
-                          ₹ {(item.price - parseFloat(item.preorderCampaign.discount_amount || '0')).toFixed(2)}
+                      {/* Description */}
+                      <View style={styles.descriptionContainer}>
+                        <Text style={styles.itemDescription} numberOfLines={2}>
+                          {item.description}
                         </Text>
                       </View>
-                    ) : (
-                      <Text style={styles.itemPrice}>₹ {item.price.toFixed(2)}</Text>
-                    )}
 
-                    {/* Description */}
-                    <View style={styles.descriptionContainer}>
-                      <Text style={styles.itemDescription} numberOfLines={2}>
-                        {item.description}
-                      </Text>
+                      {/* Extra spacing removed now that action icons are hidden */}
                     </View>
 
-                    {/* Extra spacing removed now that action icons are hidden */}
-                  </View>
-
-                  <View style={styles.itemRight}>
-                    {/* Item Image with Shimmer */}
-                    <TouchableOpacity
-                      style={styles.itemImageContainer}
-                      onPress={() => {
-                        if (itemAvailable && onImageClick) {
-                          onImageClick(item);
-                        }
-                      }}
-                      disabled={!itemAvailable}
-                      activeOpacity={itemAvailable ? 0.9 : 1}
-                    >
-                      <OptimizedImage
-                        source={item.image}
-                        style={styles.itemImage}
-                        contentFit="cover"
-                        onLoad={() => onImageLoad && onImageLoad(item.id)}
-                        onError={() => {
-                          // Mark image as loaded even on error so add to cart button can appear
-                          if (onImageLoad) {
-                            onImageLoad(item.id);
+                    <View style={styles.itemRight}>
+                      {/* Item Image with Shimmer */}
+                      <TouchableOpacity
+                        style={styles.itemImageContainer}
+                        onPress={() => {
+                          if (itemAvailable && onImageClick) {
+                            onImageClick(item);
                           }
                         }}
-                        shimmerWidth={166}
-                        shimmerHeight={137}
-                        shimmerBorderRadius={16}
-                        transition={200}
-                        priority="normal"
-                        cachePolicy="memory-disk"
-                      />
-                      
-                      {/* Gray Overlay for Unavailable Items - Only on image */}
-                      {!itemAvailable && (
-                        <View style={styles.unavailableOverlay} />
-                      )}
+                        disabled={!itemAvailable}
+                        activeOpacity={itemAvailable ? 0.9 : 1}
+                      >
+                        <OptimizedImage
+                          source={item.image}
+                          style={styles.itemImage}
+                          contentFit="cover"
+                          onLoad={() => onImageLoad && onImageLoad(item.id)}
+                          onError={() => {
+                            // Mark image as loaded even on error so add to cart button can appear
+                            if (onImageLoad) {
+                              onImageLoad(item.id);
+                            }
+                          }}
+                          shimmerWidth={166}
+                          shimmerHeight={137}
+                          shimmerBorderRadius={16}
+                          transition={200}
+                          priority="normal"
+                          cachePolicy="memory-disk"
+                        />
 
-                      {/* Preorder Badge Overlay on Image - Top Left */}
-                      {item.isPreorderAvailable && (
-                        <View style={styles.preorderImageBadge}>
-                          <LinearGradient
-                            colors={['#00B14F', '#00A048']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.preorderImageBadgeGradient}
-                          >
-                            <MaterialIcons name="schedule" size={12} color="#FFFFFF" />
-                            <Text style={styles.preorderImageBadgeText}>Preorder</Text>
-                          </LinearGradient>
-                        </View>
-                      )}
-
-                      {/* Availability Badge - Bottom Left (like RestaurantScreen design) */}
-                      {!itemAvailable && (
-                        <View style={styles.availabilityBadge}>
-                          {nextAvailableTime?.availableTime ? (
-                            // Item will be available today - show timing with AM/PM and "today" on same line
-                            <Text style={styles.availabilityTimeTextMain}>
-                              Available at {nextAvailableTime.availableTime}
-                              <Text style={styles.availabilityTimeTextSub}> today</Text>
-                            </Text>
-                          ) : (
-                            // Not available today - show simple message
-                            <Text style={styles.availabilityTimeTextMain}>
-                              Not available
-                            </Text>
-                          )}
-                        </View>
-                      )}
-                    </TouchableOpacity>
-
-                    {/* Add Button or Increment/Decrement Controls */}
-                    {/* Only show when item is available and image is loaded (or no image) */}
-                    {itemAvailable && (loadedImages.has(item.id) || !item.image) && (
-                      <>
-                        {cart[item.id] ? (
-                          // Show increment/decrement controls if item is in cart
-                          <View style={styles.quantityControl}>
-                            <TouchableOpacity
-                              style={styles.quantityButton}
-                              onPress={() => onDecrementItem && onDecrementItem(item.id)}
-                              activeOpacity={0.7}
-                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                            >
-                              <Text style={styles.quantityButtonText}>-</Text>
-                            </TouchableOpacity>
-                            <Text style={styles.quantityText}>{currentQuantity}</Text>
-                            <TouchableOpacity
-                              style={[
-                                styles.quantityButton,
-                                (isAtQuantityLimit || isPreorderAtLimit) && styles.quantityButtonDisabled,
-                              ]}
-                              onPress={() => onIncrementItem && onIncrementItem(item.id)}
-                              activeOpacity={0.7}
-                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                              disabled={isAtQuantityLimit || isPreorderAtLimit}
-                            >
-                              <Text style={[
-                                styles.quantityButtonText,
-                                (isAtQuantityLimit || isPreorderAtLimit) && styles.quantityButtonTextDisabled
-                              ]}>+</Text>
-                            </TouchableOpacity>
-                          </View>
-                        ) : (
-                          // Show Add button
-                          <TouchableOpacity
-                            style={styles.addButton}
-                            onPress={() => {
-                              if (item.isCustomizable && onCustomizableItemClick) {
-                                onCustomizableItemClick(item);
-                              } else if (onAddToCart) {
-                                onAddToCart(item);
-                              }
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.addButtonPlus}>+</Text>
-                            <Text style={styles.addButtonText}>Add</Text>
-                          </TouchableOpacity>
+                        {/* Gray Overlay for Unavailable Items - Only on image */}
+                        {!itemAvailable && (
+                          <View style={styles.unavailableOverlay} />
                         )}
-                      </>
-                    )}
 
-                    {/* Customizable Text */}
-                    {loadedImages.has(item.id) && item.isCustomizable && (
-                      <Text style={styles.customizableText}>Customisable</Text>
-                    )}
+                        {/* Preorder Badge Overlay on Image - Top Left */}
+                        {item.isPreorderAvailable && (
+                          <View style={styles.preorderImageBadge}>
+                            <LinearGradient
+                              colors={['#00B14F', '#00A048']}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={styles.preorderImageBadgeGradient}
+                            >
+                              <MaterialIcons name="schedule" size={12} color="#FFFFFF" />
+                              <Text style={styles.preorderImageBadgeText}>Preorder</Text>
+                            </LinearGradient>
+                          </View>
+                        )}
+
+                        {/* Availability Badge - Bottom Left (like RestaurantScreen design) */}
+                        {!itemAvailable && (
+                          <View style={styles.availabilityBadge}>
+                            {nextAvailableTime?.availableTime ? (
+                              // Item will be available today - show timing with AM/PM and "today" on same line
+                              <Text style={styles.availabilityTimeTextMain}>
+                                Available at {nextAvailableTime.availableTime}
+                                <Text style={styles.availabilityTimeTextSub}> today</Text>
+                              </Text>
+                            ) : (
+                              // Not available today - show simple message
+                              <Text style={styles.availabilityTimeTextMain}>
+                                Not available
+                              </Text>
+                            )}
+                          </View>
+                        )}
+                      </TouchableOpacity>
+
+                      {/* Add Button or Increment/Decrement Controls */}
+                      {/* Only show when item is available and image is loaded (or no image) */}
+                      {itemAvailable && (loadedImages.has(item.id) || !item.image) && (
+                        <>
+                          {cart[item.id] ? (
+                            // Show increment/decrement controls if item is in cart
+                            <View style={styles.quantityControl}>
+                              <TouchableOpacity
+                                style={styles.quantityButton}
+                                onPress={() => onDecrementItem && onDecrementItem(item.id)}
+                                activeOpacity={0.7}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              >
+                                <Text style={styles.quantityButtonText}>-</Text>
+                              </TouchableOpacity>
+                              <Text style={styles.quantityText}>{currentQuantity}</Text>
+                              <TouchableOpacity
+                                style={[
+                                  styles.quantityButton,
+                                  (isAtQuantityLimit || isPreorderAtLimit) && styles.quantityButtonDisabled,
+                                ]}
+                                onPress={() => onIncrementItem && onIncrementItem(item.id)}
+                                activeOpacity={0.7}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                disabled={isAtQuantityLimit || isPreorderAtLimit}
+                              >
+                                <Text style={[
+                                  styles.quantityButtonText,
+                                  (isAtQuantityLimit || isPreorderAtLimit) && styles.quantityButtonTextDisabled
+                                ]}>+</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            // Show Add button
+                            <TouchableOpacity
+                              style={styles.addButton}
+                              onPress={() => {
+                                if (item.isCustomizable && onCustomizableItemClick) {
+                                  onCustomizableItemClick(item);
+                                } else if (onAddToCart) {
+                                  onAddToCart(item);
+                                }
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.addButtonPlus}>+</Text>
+                              <Text style={styles.addButtonText}>Add</Text>
+                            </TouchableOpacity>
+                          )}
+                        </>
+                      )}
+
+                      {/* Customizable Text */}
+                      {loadedImages.has(item.id) && item.isCustomizable && (
+                        <Text style={styles.customizableText}>Customisable</Text>
+                      )}
+                    </View>
                   </View>
-                </View>
-              );
+                );
               })}
             </View>
           )}

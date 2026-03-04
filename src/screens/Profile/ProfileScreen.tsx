@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { APP_VERSION_NAME, APP_VERSION_CODE } from '@/config/appVersion.generated';
+import * as Constants from 'expo-constants';
 import { storageService } from '@/services/storage.service';
 import { authService } from '@/services/auth.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
@@ -45,6 +45,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [userName, setUserName] = useState('User');
   const [userPhone, setUserPhone] = useState('');
 
+  // Get app version dynamically from Expo Constants
+  const appVersion =
+    Constants.expoConfig?.version ||
+    Constants.manifest?.version ||
+    Constants.manifest2?.extra?.expoClient?.version ||
+    '';
   // Fetch user data from API whenever screen becomes visible
   useEffect(() => {
     if (visible) {
@@ -52,7 +58,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         try {
           // First try to get data from API
           const response = await authService.getProfile();
-          
+
           if (response.success && response.data?.user) {
             const user = response.data.user;
             setUserName(user.name || 'User');
@@ -102,7 +108,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             message: 'Failed to logout. Please try again.',
             confirmText: 'OK',
             cancelText: 'Close',
-            onConfirm: () => {},
+            onConfirm: () => { },
           });
         }
       },
@@ -163,57 +169,58 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
           </TouchableOpacity>
         )}
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>Profile</Text>
+        {onBack && <View style={styles.headerPlaceholder} />}
       </View>
 
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         <View style={styles.container}>
-        <ScrollView
-          style={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContentContainer}
-        >
-          {/* Profile Header */}
-          <View style={styles.profileHeader}>
-            {/* Left side - Avatar and Info */}
-            <View style={styles.profileLeft}>
-              {/* Avatar with First Letter */}
-              <View style={styles.avatarContainer}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {userName && userName.length > 0 ? userName.charAt(0).toUpperCase() : 'U'}
-                  </Text>
+          <ScrollView
+            style={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContentContainer}
+          >
+            {/* Profile Header */}
+            <View style={styles.profileHeader}>
+              {/* Left side - Avatar and Info */}
+              <View style={styles.profileLeft}>
+                {/* Avatar with First Letter */}
+                <View style={styles.avatarContainer}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>
+                      {userName && userName.length > 0 ? userName.charAt(0).toUpperCase() : 'U'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Name and Phone */}
+                <View style={styles.profileInfo}>
+                  <Text style={styles.profileName}>{userName.toUpperCase()}</Text>
+                  <Text style={styles.profilePhone}>{userPhone ? `+91 ${userPhone}` : ''}</Text>
                 </View>
               </View>
 
-              {/* Name and Phone */}
-              <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>{userName.toUpperCase()}</Text>
-                <Text style={styles.profilePhone}>{userPhone ? `+91 ${userPhone}` : ''}</Text>
-              </View>
+              {/* Right side - Edit Profile Button */}
+              <TouchableOpacity
+                style={styles.editProfileButton}
+                onPress={onEditProfile}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.editProfileText}>Edit Profile</Text>
+                <MaterialIcons name="chevron-right" size={9} color="#000000" />
+              </TouchableOpacity>
             </View>
 
-            {/* Right side - Edit Profile Button */}
-            <TouchableOpacity
-              style={styles.editProfileButton}
-              onPress={onEditProfile}
-              activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={styles.editProfileText}>Edit Profile</Text>
-              <MaterialIcons name="chevron-right" size={9} color="#000000" />
-            </TouchableOpacity>
-          </View>
+            {/* Menu Container */}
+            <View style={styles.menuContainer}>
+              <MenuItem label="My Orders" icon="receipt-long" onPress={onMyOrders} />
+              <MenuItem label="My Addresses" icon="location-on" onPress={onMyAddresses} />
+              <MenuItem label="Favorites" icon="favorite" onPress={onFavorites} />
+              <MenuItem label="Contact Us" icon="chat" onPress={onContactUs} />
 
-          {/* Menu Container */}
-          <View style={styles.menuContainer}>
-            <MenuItem label="My Orders" icon="receipt-long" onPress={onMyOrders} />
-            <MenuItem label="My Addresses" icon="location-on" onPress={onMyAddresses} />
-            <MenuItem label="Favorites" icon="favorite" onPress={onFavorites} />
-            <MenuItem label="Contact Us" icon="chat" onPress={onContactUs} />
-
-            {/* Notification Toggle */}
-            {/* <View style={styles.menuItem}>
+              {/* Notification Toggle */}
+              {/* <View style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <MaterialIcons name="notifications" size={20} color="#00B14F" />
                 <Text style={styles.menuItemText}>Notification</Text>
@@ -230,42 +237,40 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </View>
             <View style={styles.divider} /> */}
 
-            <MenuItem 
-              label="Privacy Policy" 
-              icon="shield" 
-              onPress={onPrivacyPolicy} 
-            />
-            <MenuItem 
-              label="FAQ" 
-              icon="help-outline" 
-              onPress={onFaq} 
-            />
-            <MenuItem
-              label="Terms & Conditions"
-              icon="description"
-              onPress={onTermsConditions}
-              showDivider={false}
-            />
+              <MenuItem
+                label="Privacy Policy"
+                icon="shield"
+                onPress={onPrivacyPolicy}
+              />
+              <MenuItem
+                label="FAQ"
+                icon="help-outline"
+                onPress={onFaq}
+              />
+              <MenuItem
+                label="Terms & Conditions"
+                icon="description"
+                onPress={onTermsConditions}
+                showDivider={false}
+              />
+            </View>
+          </ScrollView>
+
+          {/* Bottom Section - App Version & Logout Button */}
+          <View style={styles.bottomSection}>
+            {/* App Version */}
+            <Text style={styles.appVersion}>App Version {appVersion}</Text>
+
+            {/* Logout Button */}
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.logoutText}>LOGOUT</Text>
+              <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
-        </ScrollView>
-
-        {/* Bottom Section - App Version & Logout Button */}
-        <View style={styles.bottomSection}>
-          {/* App Version */}
-          <Text style={styles.appVersion}>
-            App version {APP_VERSION_NAME}_{APP_VERSION_CODE}
-          </Text>
-
-          {/* Logout Button */}
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={handleLogout}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.logoutText}>LOGOUT</Text>
-            <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
         </View>
       </SafeAreaView>
     </View>
@@ -319,10 +324,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
+    flex: 1,
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 18,
     color: '#FFFFFF',
     lineHeight: 27,
+    textAlign: 'center',
+  },
+  headerPlaceholder: {
+    width: 40,
   },
   // Profile Header
   profileHeader: {
