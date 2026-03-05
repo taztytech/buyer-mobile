@@ -24,6 +24,8 @@ export const ContactUsScreen: React.FC<ContactUsScreenProps> = ({
   const [supportEmail, setSupportEmail] = useState<string>('');
   const [supportNumbers, setSupportNumbers] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const normalizedSupportEmail = supportEmail.trim();
+  const isValidSupportEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedSupportEmail);
 
   useEffect(() => {
     if (!visible) {
@@ -59,10 +61,18 @@ export const ContactUsScreen: React.FC<ContactUsScreenProps> = ({
     Linking.openURL(telUrl).catch(() => {});
   };
 
-  const handleEmail = () => {
-    if (!supportEmail) return;
-    const mailUrl = `mailto:${supportEmail}`;
-    Linking.openURL(mailUrl).catch(() => {});
+  const handleEmail = async () => {
+    if (!isValidSupportEmail) return;
+    const mailUrl = `mailto:${encodeURIComponent(normalizedSupportEmail)}`;
+    try {
+      const canOpen = await Linking.canOpenURL(mailUrl);
+      if (!canOpen) {
+        return;
+      }
+      await Linking.openURL(mailUrl);
+    } catch {
+      // Silent fail - keep UX non-blocking.
+    }
   };
 
   return (
@@ -140,9 +150,17 @@ export const ContactUsScreen: React.FC<ContactUsScreenProps> = ({
                   <TouchableOpacity
                     onPress={handleEmail}
                     activeOpacity={0.7}
+                    disabled={!isValidSupportEmail}
                     style={styles.valueContainer}
                   >
-                    <Text style={styles.valueText}>{supportEmail || '-'}</Text>
+                    <Text
+                      style={[
+                        styles.valueText,
+                        !isValidSupportEmail && styles.valueTextDisabled,
+                      ]}
+                    >
+                      {normalizedSupportEmail || '-'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -291,6 +309,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#00B14F',
     textAlign: 'right',
+  },
+  valueTextDisabled: {
+    color: '#9CA3AF',
   },
   divider: {
     height: 1,
