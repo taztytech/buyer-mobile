@@ -248,9 +248,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setOrderLookupFunction(getOrderByOrderNumber);
 
     // Set navigation callback to handle notification taps
-    // Navigate to My Orders screen and highlight the order
-    fcmNotificationService.setNavigationCallback((orderId: string) => {
-      console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
+    // Packed/out_for_delivery -> Track Order, others -> My Orders.
+    fcmNotificationService.setNavigationCallback(({ orderId, target }) => {
+      console.log(`📱 FCM: Notification tapped, navigating to ${target === 'track' ? 'Track Order' : 'My Orders'}:`, orderId);
       onNotificationNavigateToOrders?.();
 
       // Batch all screen position resets together to ensure Orders screen is visible
@@ -261,6 +261,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       checkoutScreenSlide.setValue(SCREEN_WIDTH);
       profileScreenSlide.setValue(SCREEN_WIDTH);
       searchScreenSlide.setValue(SCREEN_WIDTH);
+
+      if (target === 'track') {
+        setHighlightOrderId(null);
+        setSelectedOrderId(orderId);
+        setOrderTrackingCameFrom('orders');
+        setCurrentScreen('orderTracking');
+        return;
+      }
 
       // Keep existing back behavior: Orders -> Profile for notification entry.
       setOrdersCameFrom('profile');

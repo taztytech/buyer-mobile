@@ -50,7 +50,12 @@ export interface NotificationPayload {
 type BackgroundMessageHandler = (remoteMessage: any) => Promise<void>;
 
 // Navigation callback type for handling notification taps
-export type NotificationNavigationCallback = (orderId: string) => void;
+export interface NotificationNavigationTarget {
+  orderId: string;
+  target: 'orders' | 'track';
+}
+
+export type NotificationNavigationCallback = (payload: NotificationNavigationTarget) => void;
 
 class FCMNotificationService {
   private fcmToken: string | null = null;
@@ -64,7 +69,7 @@ class FCMNotificationService {
   private readonly MAX_RECENT_MESSAGES = 50;
   private navigationCallback: NotificationNavigationCallback | null = null;
   private ordersDispatch: OrdersDispatch | null = null;
-  private pendingNavigationOrderId: string | null = null;
+  private pendingNavigationPayload: NotificationNavigationTarget | null = null;
 
   /**
    * Set navigation callback for handling notification taps
@@ -72,11 +77,11 @@ class FCMNotificationService {
    */
   setNavigationCallback(callback: NotificationNavigationCallback | null): void {
     this.navigationCallback = callback;
-    if (callback && this.pendingNavigationOrderId) {
-      const pendingOrderId = this.pendingNavigationOrderId;
-      this.pendingNavigationOrderId = null;
+    if (callback && this.pendingNavigationPayload) {
+      const pendingPayload = this.pendingNavigationPayload;
+      this.pendingNavigationPayload = null;
       try {
-        callback(pendingOrderId);
+        callback(pendingPayload);
       } catch (error) {
         console.warn('⚠️  FCM: Failed to process pending navigation callback:', error);
       }
@@ -663,7 +668,7 @@ class FCMNotificationService {
 
   /**
    * Handle navigation based on notification data
-   * Centralized navigation - all notifications redirect to My Orders if orderId/orderNumber is present
+   * Route packed/out_for_delivery taps to Track Order, others to My Orders.
    */
   private handleNotificationNavigation(data: NotificationData): void {
     // Extract orderId from notification data
@@ -685,15 +690,29 @@ class FCMNotificationService {
     }
 
     if (orderId) {
-      console.log('🧭 FCM: Navigating to My Orders for order:', orderId);
+      const rawStatus =
+        data.status ||
+        data.new_status ||
+        data.order_status ||
+        data.current_status ||
+        '';
+      const normalizedStatus = rawStatus.toString().trim().toLowerCase();
+      const isTrackOrderStatus =
+        normalizedStatus === 'packed' ||
+        normalizedStatus === 'out_for_delivery' ||
+        normalizedStatus === 'out-for-delivery';
+      const target: NotificationNavigationTarget['target'] = isTrackOrderStatus ? 'track' : 'orders';
+      const navigationPayload: NotificationNavigationTarget = { orderId, target };
+
+      console.log(`🧭 FCM: Navigating to ${target === 'track' ? 'Track Order' : 'My Orders'} for order:`, orderId);
 
       // Call navigation callback if set
       if (this.navigationCallback) {
-        this.navigationCallback(orderId);
+        this.navigationCallback(navigationPayload);
       } else {
         // App may still be initializing; queue navigation and replay once callback is set.
-        this.pendingNavigationOrderId = orderId;
-        console.warn('⚠️  FCM: Navigation callback not set yet. Queued My Orders navigation.');
+        this.pendingNavigationPayload = navigationPayload;
+        console.warn(`⚠️  FCM: Navigation callback not set yet. Queued ${target} navigation.`);
       }
     } else {
       console.log('ℹ️  FCM: No orderId or order_number found in notification data. Skipping navigation.');
