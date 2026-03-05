@@ -163,6 +163,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const updateSequenceRef = useRef<number>(0);
   const pendingUpdateRef = useRef<{ itemId: string; quantity: number; sequence: number } | null>(null);
 
+  const isCartItemNotFoundError = (error: any): boolean => {
+    const message = (error?.message || '').toString().toLowerCase();
+    return message.includes('cart item not found');
+  };
+
   // Convenience accessors for backend-calculated amounts (no client-side recomputation)
   const itemTotal = cartSummary?.subtotal ?? 0;
   const deliveryFee = cartSummary?.delivery_fee ?? 0;
@@ -560,6 +565,13 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(cart), cartItems?.length]);
+
+  const visibleOrderItems = localCartItems.filter((item) => {
+    const hasName = typeof item?.name === 'string' && item.name.trim().length > 0;
+    const hasValidPrice = Number.isFinite(Number(item?.price));
+    const hasValidQuantity = Number.isFinite(Number(item?.quantity)) && Number(item.quantity) > 0;
+    return hasName && hasValidPrice && hasValidQuantity;
+  });
 
   // Animate background when modals open/close
   useEffect(() => {
@@ -1065,6 +1077,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         fetchCartSummary();
       }
     }).catch((error: any) => {
+      if (isCartItemNotFoundError(error)) {
+        // Fast taps can race with backend removal; keep UI consistent and resync silently.
+        setLocalCartItems(prev =>
+          prev.filter(item => (variantId ? item.variantId !== variantId : item.id !== itemId))
+        );
+        fetchCartSummary();
+        pendingUpdateRef.current = null;
+        return;
+      }
+
       // On error, check if it's a cart update error and show message
       // Always show error if it has a message (cart update errors will have isCartUpdateError flag)
       if (error?.isCartUpdateError || error?.message) {
@@ -1170,7 +1192,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           // Fallback: fetch cart summary if removeFromCart didn't return it
           fetchCartSummary();
         }
-      }).catch(() => {
+      }).catch((error: any) => {
+        if (isCartItemNotFoundError(error)) {
+          setLocalCartItems(prev =>
+            prev.filter(item => (variantId ? item.variantId !== variantId : item.id !== itemId))
+          );
+        }
         // On error, still try to fetch cart summary if this was the latest update
         if (pendingUpdateRef.current?.sequence === currentSequence) {
           fetchCartSummary();
@@ -1246,6 +1273,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           fetchCartSummary();
         }
       }).catch((error: any) => {
+        if (isCartItemNotFoundError(error)) {
+          // Item already removed on backend due rapid taps; remove stale row silently.
+          setLocalCartItems(prev =>
+            prev.filter(item => (variantId ? item.variantId !== variantId : item.id !== itemId))
+          );
+          fetchCartSummary();
+          pendingUpdateRef.current = null;
+          return;
+        }
+
         // On error, check if it's a cart update error and show message
         // Always show error if it has a message (cart update errors will have isCartUpdateError flag)
         if (error?.isCartUpdateError || error?.message) {
@@ -1589,12 +1626,13 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 {orderExpanded && (
                   <View style={styles.sectionContent}>
                     {/* Order Items */}
-                    {localCartItems.map((item) => {
+                    {visibleOrderItems.length === 0 ? null : visibleOrderItems.map((item, index) => {
                       const isAtQuantityLimit = getLocalItemTotalQuantity(item.id) >= MAX_ITEM_QUANTITY;
-                      const itemPrice = item.price * item.quantity;
+                      const itemPrice = (Number(item.price) || 0) * (Number(item.quantity) || 0);
+                      const lineKey = `${item.id}-${item.variantId || 'base'}-${item.addOnIds?.join('_') || 'no-addon'}-${index}`;
 
                       return (
-                        <View key={item.variantId || item.id} style={styles.orderItem}>
+                        <View key={lineKey} style={styles.orderItem}>
                           <View style={styles.orderItemDetails}>
                             <View style={styles.itemNameRow}>
                               <View style={[

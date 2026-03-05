@@ -739,15 +739,17 @@ class ApiService {
           errorMessage.includes('session expired');
         
         const isProfileEndpoint = endpoint.includes('/user/profile');
+        const isProfileEndpoint400 = isProfileEndpoint && statusCode === 400;
         
-        // CRITICAL: Treat as user deleted ONLY when:
-        // 1. `/user/profile` returns a terminal error (400/401/403/404/410), OR
-        // 2. Any endpoint responds with an explicit user-deletion style message.
-        //
-        // Do NOT rely on generic status codes (like 404) from other endpoints such as cart APIs,
-        // as they are also used for business errors (e.g. "Item not found in the specified restaurant").
+        // CRITICAL: Treat as user deleted / invalid session if:
+        // 1. ANY authenticated endpoint returns 401/403/404/410 (these indicate auth/session issues)
+        // 2. OR /user/profile returns 400 (specific case for profile endpoint)
+        // 3. OR error message explicitly indicates deleted / invalid user (on any endpoint)
+        // 
+        // This ensures user deletion is detected on ALL API calls, not just profile-related ones
         const isUserDeleted = 
-          (isProfileEndpoint && (statusCode === 400 || statusCode === 401 || statusCode === 403 || statusCode === 404 || statusCode === 410)) ||
+          (isAuthenticatedEndpoint && (statusCode === 401 || statusCode === 403 || statusCode === 404 || statusCode === 410)) ||
+          isProfileEndpoint400 ||
           hasExplicitUserDeletionMessage;
 
         // If user deletion is detected, clear tokens and notify callback

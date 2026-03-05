@@ -53,7 +53,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // SplashScreen.preventAutoHideAsync();
 
 // Inner component with cart and confirmation context access
-function AppContent() {
+function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigateToOrders?: () => void }) {
   const {
     addToCart,
     setRestaurantInfo,
@@ -84,8 +84,10 @@ function AppContent() {
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
   const [selectedRestaurantAddress, setSelectedRestaurantAddress] = React.useState<string>('');
-  const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites' | 'orders'>('home');
+  const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites' | 'orders' | 'checkout'>('home');
   const [checkoutCameFrom, setCheckoutCameFrom] = React.useState<'restaurant' | 'home' | 'orders'>('restaurant');
+  const [hasCheckoutMounted, setHasCheckoutMounted] = React.useState(false);
+  const [hasSearchMounted, setHasSearchMounted] = React.useState(false);
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
   const [selectedOrderData, setSelectedOrderData] = React.useState<any>(null);
@@ -249,6 +251,7 @@ function AppContent() {
     // Navigate to My Orders screen and highlight the order
     fcmNotificationService.setNavigationCallback((orderId: string) => {
       console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
+      onNotificationNavigateToOrders?.();
 
       // Batch all screen position resets together to ensure Orders screen is visible
       // and not covered by other overlays (like restaurant or checkout)
@@ -259,6 +262,8 @@ function AppContent() {
       profileScreenSlide.setValue(SCREEN_WIDTH);
       searchScreenSlide.setValue(SCREEN_WIDTH);
 
+      // Keep existing back behavior: Orders -> Profile for notification entry.
+      setOrdersCameFrom('profile');
       setHighlightOrderId(orderId);
       setCurrentScreen('orders');
 
@@ -273,7 +278,7 @@ function AppContent() {
       fcmNotificationService.setNavigationCallback(null);
       fcmNotificationService.setOrdersDispatch(null);
     };
-  }, [ordersDispatch, getOrderByOrderNumber]);
+  }, [ordersDispatch, getOrderByOrderNumber, onNotificationNavigateToOrders]);
 
   // Handle app state changes to check for notifications when app becomes active
   React.useEffect(() => {
@@ -1034,6 +1039,7 @@ function AppContent() {
     setSelectedRestaurantName(restaurantName);
     setSelectedRestaurantAddress(restaurantAddress || '');
     setCheckoutCameFrom(from);
+    setHasCheckoutMounted(true);
 
     // Reset animation to off-screen position first
     checkoutScreenSlide.setValue(SCREEN_WIDTH);
@@ -1063,14 +1069,20 @@ function AppContent() {
     }).start(() => {
       // Navigate based on where we came from
       if (checkoutCameFrom === 'home') {
+        homeScreenSlide.setValue(0);
         setCurrentScreen('home');
-      } else {
+      } else if (checkoutCameFrom === 'restaurant') {
+        // Ensure restaurant layer is visible before switching to it
+        restaurantScreenSlide.setValue(0);
         setCurrentScreen('restaurant');
+      } else {
+        ordersScreenSlide.setValue(0);
+        setCurrentScreen('orders');
       }
     });
-  }, [checkoutScreenSlide, checkoutCameFrom]);
+  }, [checkoutScreenSlide, checkoutCameFrom, homeScreenSlide, restaurantScreenSlide, ordersScreenSlide]);
 
-  // Handle Add More Items from Checkout - Navigate to restaurant menu, back goes to home
+  // Handle Add More Items from Checkout - navigate to restaurant menu and preserve checkout back path
   const handleAddMoreItemsFromCheckout = useCallback(() => {
     const targetRestaurantId = cartRestaurantId || selectedRestaurantId;
     const targetRestaurantName = cartRestaurantName || selectedRestaurantName;
@@ -1084,11 +1096,18 @@ function AppContent() {
     // Set restaurant info
     setSelectedRestaurantId(targetRestaurantId);
     setSelectedRestaurantName(targetRestaurantName);
-    // Set restaurantCameFrom to 'home' so back button goes to home, not checkout
-    setRestaurantCameFrom('home');
+    // Preserve checkout as the return destination for back navigation
+    setRestaurantCameFrom('checkout');
+
+    // Stop any in-flight animations before starting a new transition.
+    checkoutScreenSlide.stopAnimation();
+    restaurantScreenSlide.stopAnimation();
 
     // Reset restaurant screen to off-screen position first
     restaurantScreenSlide.setValue(SCREEN_WIDTH);
+    // Set target screen before animation to avoid callback race conditions
+    // when users quickly tap back after "Add More Items".
+    setCurrentScreen('restaurant');
 
     // Slide out checkout screen and navigate to restaurant
     Animated.parallel([
@@ -1104,9 +1123,7 @@ function AppContent() {
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setCurrentScreen('restaurant');
-    });
+    ]).start();
   }, [checkoutScreenSlide, restaurantScreenSlide, cartRestaurantId, cartRestaurantName, selectedRestaurantId, selectedRestaurantName, handleBackFromCheckout]);
 
   // Handle place order from checkout
@@ -1181,6 +1198,19 @@ function AppContent() {
 
   // Back from Restaurant (dynamic based on where we came from)
   const handleBackFromRestaurant = () => {
+    // For checkout return flow, switch instantly to avoid showing intermediate screens.
+    if (restaurantCameFrom === 'checkout') {
+      // Prevent in-flight animations from overriding values after back is pressed.
+      restaurantScreenSlide.stopAnimation();
+      checkoutScreenSlide.stopAnimation();
+      restaurantScreenSlide.setValue(SCREEN_WIDTH);
+      checkoutScreenSlide.setValue(0);
+      // After returning from "Add More Items", next back from checkout should go home.
+      setCheckoutCameFrom('home');
+      setCurrentScreen('checkout');
+      return;
+    }
+
     // Animate restaurant screen sliding out to the right
     Animated.timing(restaurantScreenSlide, {
       toValue: SCREEN_WIDTH,
@@ -1760,38 +1790,30 @@ function AppContent() {
 
   // Search Navigation
   const handleNavigateToSearch = () => {
+    setHasSearchMounted(true);
+    searchScreenSlide.stopAnimation();
+    searchScreenSlide.setValue(SCREEN_WIDTH);
     setCurrentScreen('search');
 
     // Track search start
     analyticsService.logEvent(AnalyticsEvents.SEARCH_START);
 
-    Animated.parallel([
-      Animated.timing(homeScreenSlide, {
-        toValue: -SCREEN_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(searchScreenSlide, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    // Keep home fixed and slide search over it to avoid exposing base white layer.
+    Animated.timing(searchScreenSlide, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
   };
 
   const handleBackFromSearch = () => {
-    Animated.parallel([
-      Animated.timing(homeScreenSlide, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(searchScreenSlide, {
-        toValue: SCREEN_WIDTH,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
+    searchScreenSlide.stopAnimation();
+    Animated.timing(searchScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => {
+      homeScreenSlide.setValue(0);
       setCurrentScreen('home');
     });
   };
@@ -2258,8 +2280,8 @@ function AppContent() {
             </View>
           )}
 
-            {/* Conditionally render SearchScreen only when needed */}
-            {currentScreen === 'search' && (
+            {/* Keep SearchScreen mounted after first open to prevent mount-time flicker */}
+            {hasSearchMounted && (
               <Animated.View
                 style={[
                   styles.searchOverlay,
@@ -2267,7 +2289,7 @@ function AppContent() {
                     transform: [{ translateX: searchScreenSlide }],
                   },
                 ]}
-                pointerEvents="auto"
+                pointerEvents={currentScreen === 'search' ? 'auto' : 'none'}
               >
                 <SearchScreen
                   onBack={handleBackFromSearch}
@@ -2507,8 +2529,8 @@ function AppContent() {
               />
             </Animated.View>
 
-            {/* Checkout Screen */}
-            {currentScreen === 'checkout' && (
+            {/* Checkout Screen (kept mounted after first open to avoid white flash on return) */}
+            {hasCheckoutMounted && (
               <Animated.View
                 style={[
                   styles.checkoutOverlay,
@@ -2516,7 +2538,7 @@ function AppContent() {
                     transform: [{ translateX: checkoutScreenSlide }],
                   },
                 ]}
-                pointerEvents="auto"
+                pointerEvents={currentScreen === 'checkout' ? 'auto' : 'none'}
               >
                 <OrderDetailsScreen
                   restaurantId={cartRestaurantId || selectedRestaurantId}
@@ -2619,7 +2641,11 @@ export default function App() {
             <SafeAreaProvider>
               <SnackbarProvider>
                 <OrdersProvider>
-                  <AppContent />
+                  <AppContent
+                    onNotificationNavigateToOrders={() => {
+                      setShowCustomSplash(false);
+                    }}
+                  />
                 </OrdersProvider>
               </SnackbarProvider>
             </SafeAreaProvider>
