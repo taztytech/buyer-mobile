@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,10 @@ import { ordersService } from '@/services/orders.service';
 import { useOrders } from '@/context/OrdersContext';
 import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
 import { isExpoGo } from '@/utils/platform.util';
+import { config } from '@/constants/config';
+import { restaurantService } from '@/services/restaurant.service';
+import { addressService } from '@/services/address.service';
+import { WebView } from 'react-native-webview';
 
 // Conditionally import maps for standalone/dev-client builds only.
 let MapView: any;
@@ -50,8 +54,41 @@ const toNumber = (value: any): number | null => {
 const extractCoordinate = (source: any): Coordinate | null => {
   if (!source || typeof source !== 'object') return null;
 
-  const latKeys = ['latitude', 'lat', 'agent_latitude', 'agent_lat', 'rider_latitude', 'rider_lat'];
-  const lngKeys = ['longitude', 'lng', 'lon', 'agent_longitude', 'agent_lng', 'rider_longitude', 'rider_lng'];
+  const latKeys = [
+    'latitude',
+    'lat',
+    'agent_latitude',
+    'agent_lat',
+    'rider_latitude',
+    'rider_lat',
+    'restaurant_latitude',
+    'restaurant_lat',
+    'delivery_latitude',
+    'delivery_lat',
+    'customer_latitude',
+    'customer_lat',
+    'location_latitude',
+    'pickup_latitude',
+    'drop_latitude',
+  ];
+  const lngKeys = [
+    'longitude',
+    'lng',
+    'lon',
+    'agent_longitude',
+    'agent_lng',
+    'rider_longitude',
+    'rider_lng',
+    'restaurant_longitude',
+    'restaurant_lng',
+    'delivery_longitude',
+    'delivery_lng',
+    'customer_longitude',
+    'customer_lng',
+    'location_longitude',
+    'pickup_longitude',
+    'drop_longitude',
+  ];
 
   let lat: number | null = null;
   let lng: number | null = null;
@@ -65,6 +102,16 @@ const extractCoordinate = (source: any): Coordinate | null => {
     if (lng !== null) break;
   }
 
+  // Support GeoJSON-like format: { coordinates: [lng, lat] }
+  if ((lat === null || lng === null) && Array.isArray(source.coordinates) && source.coordinates.length >= 2) {
+    const coordLng = toNumber(source.coordinates[0]);
+    const coordLat = toNumber(source.coordinates[1]);
+    if (coordLat !== null && coordLng !== null) {
+      lat = coordLat;
+      lng = coordLng;
+    }
+  }
+
   if (lat === null || lng === null) return null;
   return { latitude: lat, longitude: lng };
 };
@@ -74,6 +121,7 @@ const extractRestaurantCoordinate = (order: any): Coordinate | null => {
   return (
     extractCoordinate(order.restaurant?.location) ||
     extractCoordinate(order.restaurant?.locations?.[0]) ||
+    extractCoordinate(order.restaurant?.address) ||
     extractCoordinate(order.restaurant) ||
     extractCoordinate(order)
   );
@@ -81,7 +129,13 @@ const extractRestaurantCoordinate = (order: any): Coordinate | null => {
 
 const extractCustomerCoordinate = (order: any): Coordinate | null => {
   if (!order) return null;
-  return extractCoordinate(order.delivery_address) || extractCoordinate(order.customer) || null;
+  return (
+    extractCoordinate(order.delivery_address?.location) ||
+    extractCoordinate(order.delivery_address) ||
+    extractCoordinate(order.customer?.location) ||
+    extractCoordinate(order.customer) ||
+    extractCoordinate(order)
+  );
 };
 
 const extractAgentCoordinate = (order: any): Coordinate | null => {
@@ -94,11 +148,54 @@ const extractAgentCoordinate = (order: any): Coordinate | null => {
   }
 
   return (
+    extractCoordinate(order.agent?.location) ||
     extractCoordinate(order.agent) ||
+    extractCoordinate(order.delivery_partner?.location) ||
     extractCoordinate(order.delivery_partner) ||
+    extractCoordinate(order.rider?.location) ||
     extractCoordinate(order.rider) ||
     null
   );
+};
+
+const decodePolyline = (encoded: string): Coordinate[] => {
+  const points: Coordinate[] = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    let b: number;
+    let shift = 0;
+    let result = 0;
+
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+
+    const dlat = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+
+    const dlng = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+    lng += dlng;
+
+    points.push({
+      latitude: lat / 1e5,
+      longitude: lng / 1e5,
+    });
+  }
+
+  return points;
 };
 
 interface OrderTrackingScreenProps {
@@ -112,10 +209,14 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
   orderId,
 }) => {
   const { state } = useOrders();
+  const mapRef = useRef<any>(null);
   const [orderData, setOrderData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const lastStatusRef = React.useRef<string | null>(null);
+  const [preAssignmentRouteCoordinates, setPreAssignmentRouteCoordinates] = useState<Coordinate[]>([]);
+  const [fallbackRestaurantCoordinate, setFallbackRestaurantCoordinate] = useState<Coordinate | null>(null);
+  const [fallbackCustomerCoordinate, setFallbackCustomerCoordinate] = useState<Coordinate | null>(null);
 
   // Fetch order details from API
   const fetchOrderDetails = useCallback(async () => {
@@ -223,8 +324,10 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
     return mapOrderStatusToUI(status);
   };
 
-  const restaurantCoordinate = extractRestaurantCoordinate(orderData);
-  const customerCoordinate = extractCustomerCoordinate(orderData);
+  const extractedRestaurantCoordinate = extractRestaurantCoordinate(orderData);
+  const extractedCustomerCoordinate = extractCustomerCoordinate(orderData);
+  const restaurantCoordinate = extractedRestaurantCoordinate || fallbackRestaurantCoordinate;
+  const customerCoordinate = extractedCustomerCoordinate || fallbackCustomerCoordinate;
   const agentCoordinate = extractAgentCoordinate(orderData);
 
   const assignedStatusSet = new Set([
@@ -264,11 +367,250 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
     !!customerCoordinate &&
     !!agentCoordinate;
 
-  const mapCoordinatesForViewport: Coordinate[] = [
-    ...(restaurantCoordinate ? [restaurantCoordinate] : []),
-    ...(customerCoordinate ? [customerCoordinate] : []),
-    ...(showLiveTracking && agentCoordinate ? [agentCoordinate] : []),
-  ];
+  const mapCoordinatesForViewport: Coordinate[] = useMemo(
+    () => [
+      ...(restaurantCoordinate ? [restaurantCoordinate] : []),
+      ...(customerCoordinate ? [customerCoordinate] : []),
+      ...(showLiveTracking && agentCoordinate ? [agentCoordinate] : []),
+    ],
+    [
+      restaurantCoordinate?.latitude,
+      restaurantCoordinate?.longitude,
+      customerCoordinate?.latitude,
+      customerCoordinate?.longitude,
+      showLiveTracking,
+      agentCoordinate?.latitude,
+      agentCoordinate?.longitude,
+    ],
+  );
+
+  const webFallbackHtml = useMemo(() => {
+    if (mapCoordinatesForViewport.length < 2) return null;
+
+    const routeCoordinates =
+      showPreAssignmentRoute && preAssignmentRouteCoordinates.length > 1
+        ? preAssignmentRouteCoordinates
+        : showLiveTracking && agentCoordinate && customerCoordinate
+          ? [agentCoordinate, customerCoordinate]
+          : restaurantCoordinate && customerCoordinate
+            ? [restaurantCoordinate, customerCoordinate]
+            : mapCoordinatesForViewport;
+
+    const routeColor = showLiveTracking ? '#F97316' : '#00B14F';
+    const routePath = routeCoordinates.map((coord) => `[${coord.latitude}, ${coord.longitude}]`).join(',');
+    const restaurantPoint = restaurantCoordinate
+      ? `[${restaurantCoordinate.latitude}, ${restaurantCoordinate.longitude}]`
+      : null;
+    const customerPoint = customerCoordinate
+      ? `[${customerCoordinate.latitude}, ${customerCoordinate.longitude}]`
+      : null;
+    const agentPoint = showLiveTracking && agentCoordinate
+      ? `[${agentCoordinate.latitude}, ${agentCoordinate.longitude}]`
+      : null;
+    const boundsPoints = mapCoordinatesForViewport
+      .map((coord) => `[${coord.latitude}, ${coord.longitude}]`)
+      .join(',');
+
+    return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+      html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; background: #e9e9e9; }
+      .leaflet-control-container { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      const map = L.map('map', { zoomControl: false, attributionControl: false, dragging: true, scrollWheelZoom: false, doubleClickZoom: false });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+      const makeIcon = (symbol, bgColor) => L.divIcon({
+        className: 'custom-map-icon',
+        html: '<div style="width:30px;height:30px;border-radius:15px;background:' + bgColor + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;box-shadow:0 2px 6px rgba(0,0,0,0.25);">' + symbol + '</div>',
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+      });
+
+      ${restaurantPoint ? `L.marker(${restaurantPoint}, { icon: makeIcon('&#127869;', '#DC2626') }).addTo(map);` : ''}
+      ${customerPoint ? `L.marker(${customerPoint}, { icon: makeIcon('&#128100;', '#FFFFFF') }).addTo(map);` : ''}
+      ${agentPoint ? `L.marker(${agentPoint}, { icon: makeIcon('&#128757;', '#F97316') }).addTo(map);` : ''}
+
+      const routeLine = L.polyline([${routePath}], { color: '${routeColor}', weight: 4, opacity: 0.9 }).addTo(map);
+      const bounds = L.latLngBounds([${boundsPoints}]);
+      if (bounds.isValid()) {
+        map.fitBounds(bounds.pad(0.25), { animate: false });
+      } else {
+        map.setView(routeLine.getBounds().getCenter(), 13);
+      }
+    </script>
+  </body>
+</html>`;
+  }, [
+    mapCoordinatesForViewport,
+    showPreAssignmentRoute,
+    preAssignmentRouteCoordinates,
+    showLiveTracking,
+    agentCoordinate,
+    customerCoordinate,
+    restaurantCoordinate,
+  ]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadFallbackCoordinates = async () => {
+      if (!orderData) {
+        setFallbackRestaurantCoordinate(null);
+        setFallbackCustomerCoordinate(null);
+        return;
+      }
+
+      // Customer fallback from saved addresses if order payload has no lat/lng.
+      if (!extractedCustomerCoordinate) {
+        try {
+          const addressesResponse = await addressService.getAddresses();
+          if (!isCancelled && addressesResponse.success && Array.isArray(addressesResponse.data) && addressesResponse.data.length > 0) {
+            const deliveryAddressId = Number(orderData?.delivery_address?.id || orderData?.delivery_address_id);
+            const matchedAddress = Number.isFinite(deliveryAddressId) && deliveryAddressId > 0
+              ? addressesResponse.data.find((addr) => addr.id === deliveryAddressId)
+              : addressesResponse.data.find((addr) => addr.is_default) || addressesResponse.data[0];
+
+            if (matchedAddress?.latitude && matchedAddress?.longitude) {
+              setFallbackCustomerCoordinate({
+                latitude: Number(matchedAddress.latitude),
+                longitude: Number(matchedAddress.longitude),
+              });
+            }
+          }
+        } catch {
+          // Keep fallback null if address lookup fails.
+        }
+      } else {
+        setFallbackCustomerCoordinate(null);
+      }
+
+      // Restaurant fallback from restaurant details if payload has no lat/lng.
+      if (!extractedRestaurantCoordinate) {
+        const restaurantId = Number(orderData?.restaurant?.id || orderData?.restaurant_id);
+        if (Number.isFinite(restaurantId) && restaurantId > 0) {
+          try {
+            const anchor = extractedCustomerCoordinate || fallbackCustomerCoordinate || { latitude: 9.9352, longitude: 78.1304 };
+            const restaurantResponse = await restaurantService.getRestaurantDetails(restaurantId, {
+              lat: anchor.latitude,
+              lng: anchor.longitude,
+              include_items: false,
+            });
+            if (!isCancelled && restaurantResponse.success && restaurantResponse.data?.locations?.length) {
+              const firstLocation = restaurantResponse.data.locations[0];
+              if (firstLocation?.lat && firstLocation?.lng) {
+                setFallbackRestaurantCoordinate({
+                  latitude: Number(firstLocation.lat),
+                  longitude: Number(firstLocation.lng),
+                });
+              }
+            }
+          } catch {
+            // Keep fallback null if restaurant lookup fails.
+          }
+        }
+      } else {
+        setFallbackRestaurantCoordinate(null);
+      }
+    };
+
+    loadFallbackCoordinates();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [orderData, extractedRestaurantCoordinate?.latitude, extractedRestaurantCoordinate?.longitude, extractedCustomerCoordinate?.latitude, extractedCustomerCoordinate?.longitude]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadRoadRouteForReadyState = async () => {
+      if (!showPreAssignmentRoute || !restaurantCoordinate || !customerCoordinate) {
+        setPreAssignmentRouteCoordinates([]);
+        return;
+      }
+
+      // Show immediate fallback route to avoid empty state while route API resolves.
+      setPreAssignmentRouteCoordinates([restaurantCoordinate, customerCoordinate]);
+
+      const mapsApiKey =
+        (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || config.apiKey || '').trim();
+      if (!mapsApiKey) {
+        return;
+      }
+
+      try {
+        const origin = `${restaurantCoordinate.latitude},${restaurantCoordinate.longitude}`;
+        const destination = `${customerCoordinate.latitude},${customerCoordinate.longitude}`;
+        const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=driving&key=${encodeURIComponent(mapsApiKey)}`;
+        const response = await fetch(url);
+        const payload = await response.json();
+
+        const polyline = payload?.routes?.[0]?.overview_polyline?.points;
+        if (!isCancelled && typeof polyline === 'string' && polyline.length > 0) {
+          const decoded = decodePolyline(polyline);
+          if (decoded.length > 1) {
+            setPreAssignmentRouteCoordinates(decoded);
+          }
+        }
+      } catch {
+        // Keep fallback straight line route if directions fetch fails.
+      }
+    };
+
+    loadRoadRouteForReadyState();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [showPreAssignmentRoute, restaurantCoordinate?.latitude, restaurantCoordinate?.longitude, customerCoordinate?.latitude, customerCoordinate?.longitude]);
+
+  useEffect(() => {
+    if (!mapRef.current || mapCoordinatesForViewport.length < 2) return;
+
+    const targetCoordinates =
+      showLiveTracking && agentCoordinate && customerCoordinate
+        ? [
+            ...(restaurantCoordinate ? [restaurantCoordinate] : []),
+            agentCoordinate,
+            customerCoordinate,
+          ]
+        : restaurantCoordinate && customerCoordinate
+          ? [restaurantCoordinate, customerCoordinate]
+          : mapCoordinatesForViewport;
+
+    const timer = setTimeout(() => {
+      mapRef.current?.fitToCoordinates(targetCoordinates, {
+        edgePadding: {
+          top: 120,
+          right: 60,
+          bottom: Math.round(SCREEN_HEIGHT * 0.55),
+          left: 60,
+        },
+        animated: true,
+      });
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [
+    showLiveTracking,
+    mapCoordinatesForViewport,
+    restaurantCoordinate?.latitude,
+    restaurantCoordinate?.longitude,
+    customerCoordinate?.latitude,
+    customerCoordinate?.longitude,
+    agentCoordinate?.latitude,
+    agentCoordinate?.longitude,
+  ]);
 
   const mapRegion = (() => {
     const fallback = { latitude: 9.9352, longitude: 78.1304 };
@@ -289,6 +631,7 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
       <View style={styles.mapArea}>
         {MapView && mapCoordinatesForViewport.length >= 2 ? (
           <MapView
+            ref={mapRef}
             style={styles.map}
             initialRegion={mapRegion}
           >
@@ -297,24 +640,34 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
               <Marker
                 coordinate={restaurantCoordinate}
                 title="Restaurant"
-                pinColor="#00B14F"
-              />
+              >
+                <View style={styles.storeMarker}>
+                  <MaterialIcons name="restaurant" size={16} color="#FFFFFF" />
+                </View>
+              </Marker>
             )}
             {customerCoordinate && (
               <Marker
                 coordinate={customerCoordinate}
                 title="Delivery Location"
-                pinColor="#2563EB"
-              />
+              >
+                <View style={styles.customerMarker}>
+                  <MaterialIcons name="person" size={16} color="#FFFFFF" />
+                </View>
+              </Marker>
             )}
 
             {/* Pre-assignment route: restaurant to customer */}
             {showPreAssignmentRoute && restaurantCoordinate && customerCoordinate && (
               <Polyline
-                coordinates={[restaurantCoordinate, customerCoordinate]}
+                coordinates={
+                  preAssignmentRouteCoordinates.length > 1
+                    ? preAssignmentRouteCoordinates
+                    : [restaurantCoordinate, customerCoordinate]
+                }
                 strokeColor="#00B14F"
                 strokeWidth={4}
-                lineDashPattern={[8, 8]}
+                lineDashPattern={preAssignmentRouteCoordinates.length > 2 ? undefined : [8, 8]}
               />
             )}
 
@@ -324,8 +677,11 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
                 <Marker
                   coordinate={agentCoordinate}
                   title="Delivery Partner"
-                  pinColor="#F97316"
-                />
+                >
+                  <View style={styles.agentMarker}>
+                    <MaterialIcons name="two-wheeler" size={16} color="#FFFFFF" />
+                  </View>
+                </Marker>
                 <Polyline
                   coordinates={[agentCoordinate, customerCoordinate]}
                   strokeColor="#F97316"
@@ -334,6 +690,16 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
               </>
             )}
           </MapView>
+        ) : webFallbackHtml ? (
+          <WebView
+            originWhitelist={['*']}
+            source={{ html: webFallbackHtml }}
+            style={styles.map}
+            startInLoadingState={true}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            mixedContentMode="always"
+          />
         ) : (
           <View style={styles.mapFallback}>
             <MaterialIcons name="map" size={44} color="#00B14F" />
@@ -346,22 +712,17 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
           </View>
         )}
 
-        <View style={styles.mapStatusChip}>
-          <Text style={styles.mapStatusChipText}>
-            {showLiveTracking
-              ? 'Live delivery tracking'
-              : showPreAssignmentRoute
-                ? 'Order ready: route preview'
-                : 'Preparing tracking map'}
-          </Text>
-        </View>
       </View>
 
-      {/* Back Button */}
-      <SafeAreaView style={styles.backButtonContainer} edges={['top']}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <MaterialIcons name="chevron-left" size={24} color="#000000" />
-        </TouchableOpacity>
+      {/* Header */}
+      <SafeAreaView style={styles.headerContainer} edges={['top']}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <MaterialIcons name="chevron-left" size={24} color="#000000" />
+          </TouchableOpacity>
+          <View style={styles.headerTitlePlaceholder} />
+          <View style={styles.headerSpacer} />
+        </View>
       </SafeAreaView>
 
       {/* Bottom Sheet - Covers half the screen */}
@@ -494,6 +855,47 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
+  storeMarker: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  customerMarker: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  agentMarker: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#F97316',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
+  },
   mapFallback: {
     flex: 1,
     alignItems: 'center',
@@ -514,28 +916,31 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 30, 31, 0.75)',
     textAlign: 'center',
   },
-  mapStatusChip: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    top: 92,
-    alignItems: 'center',
-  },
-  mapStatusChipText: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 100,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 12,
-    color: '#001E1F',
-    overflow: 'hidden',
-  },
-  backButtonContainer: {
+  headerContainer: {
     position: 'absolute',
     top: 0,
-    left: 20,
+    left: 0,
+    right: 0,
     zIndex: 10,
+  },
+  headerContent: {
+    height: 56,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: '#001E1F',
+  },
+  headerTitlePlaceholder: {
+    flex: 1,
+  },
+  headerSpacer: {
+    width: 40,
+    height: 40,
   },
   backButton: {
     width: 40,
