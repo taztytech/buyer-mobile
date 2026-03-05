@@ -289,11 +289,17 @@ class StorageService {
   /**
    * Clear all stored data (logout)
    * This clears all user-specific data including authentication tokens,
-   * user data, cart data, FCM tokens, device ID, and background notifications.
+   * user data, cart data, FCM tokens, device ID, background notifications, and chat history.
    * Note: VEG_MODE preference is preserved as it's a device-level preference.
    */
   async clearAll(): Promise<void> {
     try {
+      // Import chat history service dynamically to avoid circular dependencies
+      const { chatHistoryService } = await import('./chatHistory.service');
+      
+      // Clear chat history first
+      await chatHistoryService.clearAllChatHistory();
+      
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.ACCESS_TOKEN,
         STORAGE_KEYS.REFRESH_TOKEN,

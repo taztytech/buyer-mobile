@@ -3,6 +3,9 @@ import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
 import android.os.Bundle
+import android.app.PictureInPictureParams
+import android.content.res.Configuration
+import android.util.Rational
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -42,6 +45,46 @@ class MainActivity : ReactActivity() {
               mainComponentName,
               fabricEnabled
           ){})
+  }
+
+  /**
+    * Only auto-enter PiP when JS has explicitly enabled it via PipModule.setAutoPipEnabled(true)
+    * This lets us restrict PiP to the Track Order page only.
+    */
+  override fun onUserLeaveHint() {
+    super.onUserLeaveHint()
+
+    if (!PipModule.autoPipEnabled) {
+      // Auto-PiP not enabled from JS, do nothing special
+      return
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      try {
+        val params = PictureInPictureParams.Builder()
+          .setAspectRatio(Rational(9, 16))  // 9:16 portrait ratio for vertical layout
+          .build()
+        enterPictureInPictureMode(params)
+      } catch (_: Exception) {
+        // Ignore PiP failures; app will just go to background normally
+      }
+    }
+  }
+
+  /**
+    * Handle Picture-in-Picture mode changes.
+    * We notify the JS layer via PipModule so React can toggle PiP layout
+    * reliably — useWindowDimensions heuristics alone are not sufficient because
+    * Android only invokes configChanges for window-size changes when
+    * smallestScreenSize is listed, and even then the timing is imprecise.
+    */
+  override fun onPictureInPictureModeChanged(
+    isInPictureInPictureMode: Boolean,
+    newConfig: Configuration
+  ) {
+    super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+    // Emit the definitive PiP state to the JS side
+    PipModule.notifyPipModeChanged(isInPictureInPictureMode)
   }
 
   /**

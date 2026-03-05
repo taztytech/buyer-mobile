@@ -307,8 +307,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         return true;
       }
 
-      const timings = response.data.timings;
-      const isOpen = timings ? homeService.isRestaurantOpen(timings) : true;
+      // Use top-level is_open only for store open/close.
+      // Do not derive open state from timings.
+      const isOpen =
+        typeof response.data.is_open === 'boolean' ? response.data.is_open : true;
 
       if (!isOpen) {
         showConfirmation({
@@ -927,13 +929,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 reason: errorMessage,
               });
             } catch (failureError) {
-              // If payment failure endpoint fails, try cancel order as fallback
-              try {
-                await ordersService.cancelOrder(orderId, `Payment failed: ${errorMessage}`);
-              } catch (cancelError) {
-                // If both fail, log but don't block user flow
-                console.error('Failed to mark order as payment failed:', failureError, cancelError);
-              }
+              // If payment failure endpoint fails, just log the error
+              // Don't try to cancel order as fallback - let the order remain in its current state
+              console.error('Failed to mark order as payment failed:', failureError);
             }
           }
 

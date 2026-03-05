@@ -61,18 +61,16 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
     setIsFavorite(restaurant.isFavorite || false);
   }, [restaurant.isFavorite]);
 
-  // Calculate isOpen dynamically from API timings if not provided
+  // Store open/close:
+  // Use ONLY the derived isOpen flag from top-level API is_open.
+  // Do NOT derive open state from timings.
   const isRestaurantOpen = React.useMemo(() => {
     if (restaurant.isOpen !== undefined) {
       return restaurant.isOpen;
     }
-    // If isOpen is not provided, calculate from timings
-    if (restaurant.timings && restaurant.timings.length > 0) {
-      return homeService.isRestaurantOpen(restaurant.timings);
-    }
-    // Default to true if no timing info available
+    // Default to true if not provided
     return true;
-  }, [restaurant.isOpen, restaurant.timings]);
+  }, [restaurant.isOpen]);
 
   // Handle location - convert object to string if needed
   const locationText = typeof restaurant.location === 'string'

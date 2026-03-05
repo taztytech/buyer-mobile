@@ -216,11 +216,13 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
       if (response && (response as any).data?.success && (response as any).data?.data?.restaurants) {
         // Transform API data to match RestaurantCard interface
         const restaurantsData = ((response as any).data.data.restaurants as any[]).map((restaurant: any) => {
-          // Calculate real-time open status using timings if available
+          // Determine open status:
+          // 1. Prefer backend-provided is_open flag (authoritative, includes holidays / overrides)
+          // 2. Fallback to timing-based calculation only when is_open is not sent
           const timings = restaurant.timings || [];
-          const isOpen = timings.length > 0
-            ? homeService.isRestaurantOpen(timings)
-            : (restaurant.is_open !== undefined ? restaurant.is_open : true);
+          // For store open/close, use ONLY backend top-level is_open flag.
+          const isOpen: boolean =
+            typeof restaurant.is_open === 'boolean' ? restaurant.is_open : true;
 
           // Format cuisine_tags: if array, join with " • ", otherwise use as string
           let cuisineText = 'Restaurant';
@@ -296,11 +298,13 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
       if (response && (response as any).data?.success && (response as any).data?.data?.restaurants) {
         // Transform API data to match RestaurantCard interface
         const restaurantsData = ((response as any).data.data.restaurants as any[]).map((restaurant: any) => {
-          // Calculate real-time open status using timings if available
+          // Determine open status:
+          // 1. Prefer backend-provided is_open flag (authoritative, includes holidays / overrides)
+          // 2. Fallback to timing-based calculation only when is_open is not sent
           const timings = restaurant.timings || [];
-          const isOpen = timings.length > 0
-            ? homeService.isRestaurantOpen(timings)
-            : (restaurant.is_open !== undefined ? restaurant.is_open : true);
+          // For store open/close, use ONLY backend top-level is_open flag.
+          const isOpen: boolean =
+            typeof restaurant.is_open === 'boolean' ? restaurant.is_open : true;
 
           // Format cuisine_tags: if array, join with " • ", otherwise use as string
           let cuisineText = 'Restaurant';

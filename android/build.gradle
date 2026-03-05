@@ -24,5 +24,23 @@ allprojects {
   }
 }
 
+// Ensure all Android modules (including older third-party libraries) compile
+// against a modern SDK / Build Tools that are compatible with AGP 8.x
+subprojects { subproject ->
+  afterEvaluate { proj ->
+    if (proj.hasProperty('android')) {
+      proj.android {
+        // For older plugins this is still the correct property name.
+        // Newer modules will simply ignore the duplicate and use their own `compileSdk`.
+        compileSdkVersion 35
+
+        // Avoid old hard-coded Build Tools like 29.0.2 on libraries;
+        // AGP 8.11 requires at least 35.0.0.
+        buildToolsVersion "35.0.0"
+      }
+    }
+  }
+}
+
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
