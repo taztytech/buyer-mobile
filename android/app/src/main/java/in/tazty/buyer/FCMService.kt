@@ -3,6 +3,8 @@ package `in`.tazty.buyer
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
@@ -16,6 +18,8 @@ import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import java.net.HttpURLConnection
+import java.net.URL
 
 class FCMService : FirebaseMessagingService() {
     
@@ -36,7 +40,8 @@ class FCMService : FirebaseMessagingService() {
         // Check if message contains a notification payload
         remoteMessage.notification?.let {
             Log.d(TAG, "Message Notification Body: ${it.body}")
-            showNotification(it.title ?: "New Notification", it.body ?: "", remoteMessage.data)
+            val imageUrl = it.imageUrl?.toString() ?: remoteMessage.data["image"] ?: remoteMessage.data["imageUrl"]
+            showNotification(it.title ?: "New Notification", it.body ?: "", remoteMessage.data, imageUrl)
         }
         
         // Send message to React Native
@@ -84,7 +89,41 @@ class FCMService : FirebaseMessagingService() {
         }
     }
     
-    private fun showNotification(title: String, body: String, data: Map<String, String>) {
+    private fun getAppLogoBitmap(): Bitmap? {
+        return try {
+            BitmapFactory.decodeResource(resources, applicationInfo.icon)
+        } catch (error: Exception) {
+            Log.w(TAG, "Failed to decode app logo bitmap", error)
+            null
+        }
+    }
+
+    private fun downloadBitmapFromUrl(urlString: String): Bitmap? {
+        var connection: HttpURLConnection? = null
+        return try {
+            val url = URL(urlString)
+            connection = url.openConnection() as HttpURLConnection
+            connection.doInput = true
+            connection.connectTimeout = 5000
+            connection.readTimeout = 5000
+            connection.connect()
+            connection.inputStream.use { input ->
+                BitmapFactory.decodeStream(input)
+            }
+        } catch (error: Exception) {
+            Log.w(TAG, "Failed to download notification image", error)
+            null
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    private fun showNotification(
+        title: String,
+        body: String,
+        data: Map<String, String>,
+        imageUrl: String? = null
+    ) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         
         // Create notification channel for Android O and above
@@ -126,14 +165,33 @@ class FCMService : FirebaseMessagingService() {
         )
         
         val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val appLogoBitmap = getAppLogoBitmap()
         val notificationBuilder = NotificationCompat.Builder(this, "default")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(applicationInfo.icon)
             .setContentTitle(title)
             .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setAutoCancel(true)
             .setSound(defaultSoundUri)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+
+        appLogoBitmap?.let {
+            notificationBuilder.setLargeIcon(it)
+        }
+
+        if (!imageUrl.isNullOrBlank()) {
+            val bigPictureBitmap = downloadBitmapFromUrl(imageUrl)
+            if (bigPictureBitmap != null) {
+                val bigPictureStyle = NotificationCompat.BigPictureStyle()
+                    .bigPicture(bigPictureBitmap)
+                    .setSummaryText(body)
+                appLogoBitmap?.let { logo ->
+                    bigPictureStyle.bigLargeIcon(logo)
+                }
+                notificationBuilder.setStyle(bigPictureStyle)
+            }
+        }
         
         notificationManager.notify(System.currentTimeMillis().toInt(), notificationBuilder.build())
     }
