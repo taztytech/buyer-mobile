@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import * as Constants from 'expo-constants';
+import { APP_VERSION_NAME, APP_VERSION_CODE } from '@/config/appVersion.generated';
 import { storageService } from '@/services/storage.service';
 import { authService } from '@/services/auth.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
@@ -44,13 +44,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const { showConfirmation } = useConfirmation();
   const [userName, setUserName] = useState('User');
   const [userPhone, setUserPhone] = useState('');
-
-  // Get app version dynamically from Expo Constants
-  const appVersion =
-    Constants.expoConfig?.version ||
-    Constants.manifest?.version ||
-    Constants.manifest2?.extra?.expoClient?.version ||
-    '';
   // Fetch user data from API whenever screen becomes visible
   useEffect(() => {
     if (visible) {
@@ -259,7 +252,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           {/* Bottom Section - App Version & Logout Button */}
           <View style={styles.bottomSection}>
             {/* App Version */}
-            <Text style={styles.appVersion}>App Version {appVersion}</Text>
+            <Text style={styles.appVersion}>
+              App version {APP_VERSION_NAME}_{APP_VERSION_CODE}
+            </Text>
 
             {/* Logout Button */}
             <TouchableOpacity
