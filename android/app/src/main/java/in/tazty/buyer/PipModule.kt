@@ -27,14 +27,19 @@ class PipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
          * This is the ONLY reliable source of truth for PiP mode detection —
          * useWindowDimensions heuristics are unreliable because the system may
          * not invoke configChanges for window-only resizes without smallestScreenSize.
+         * Emit is run on the JS queue thread so the event is delivered reliably
+         * (required on some devices and in Release builds).
          */
         fun notifyPipModeChanged(isInPip: Boolean) {
-            try {
-                appReactContext
-                    ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                    ?.emit("onPictureInPictureModeChanged", isInPip)
-            } catch (_: Exception) {
-                // Ignore — JS bridge may not be ready yet
+            val ctx = appReactContext ?: return
+            if (!ctx.hasActiveReactInstance()) return
+            ctx.runOnJSQueueThread {
+                try {
+                    ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                        ?.emit("onPictureInPictureModeChanged", isInPip)
+                } catch (_: Exception) {
+                    // Ignore — JS bridge may not be ready yet
+                }
             }
         }
     }
