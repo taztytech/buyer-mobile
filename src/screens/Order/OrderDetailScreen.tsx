@@ -39,6 +39,7 @@ interface OrderDetailScreenProps {
   onRateOrder?: (orderId: string, orderData?: any) => void;
   onReorder?: () => void;
   onDownloadInvoice?: () => void;
+  onTrackOrder?: () => void;
 }
 
 export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
@@ -49,6 +50,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   onRateOrder: _onRateOrder,
   onReorder: _onReorder,
   onDownloadInvoice: _onDownloadInvoice,
+  onTrackOrder,
 }) => {
   const { getOrderById, state } = useOrders();
   const { showConfirmation } = useConfirmation();
@@ -1362,6 +1364,22 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                     // Enable tracking only if status is in enabled list AND not explicitly disabled
                     const isTrackingEnabled = !isExplicitlyDisabled && enabledStatuses.includes(normalizedStatus);
 
+                    // For "order ready" style statuses where we want to show the
+                    // pre-assignment route (restaurant → customer) even before a
+                    // tracking_url exists, delegate to the parent navigation handler
+                    // so the full-screen OrderTrackingScreen can render the map.
+                    const readyStatusesForMap = new Set([
+                      'packed',
+                      'ready',
+                      'order-ready',
+                      'order_ready',
+                    ]);
+
+                    const hasTrackingUrl =
+                      !!orderData?.tracking_url ||
+                      (Array.isArray(orderData?.tracking) &&
+                        orderData.tracking.some((entry: any) => !!entry?.tracking_url));
+
                     return (
                       <>
                         <TouchableOpacity
@@ -1372,6 +1390,13 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                           onPress={() => {
                             if (!isTrackingEnabled || showTrackingWebView || isClosingTracking) return;
                             if (!orderId) return;
+
+                            const isReadyForPreAssignmentMap = readyStatusesForMap.has(normalizedStatus) && !hasTrackingUrl;
+
+                            if (isReadyForPreAssignmentMap && onTrackOrder) {
+                              onTrackOrder();
+                              return;
+                            }
 
                             setSelectedOrderIdForTracking(orderId);
                             setTrackingOrderData((prev: any) => prev ?? orderData);

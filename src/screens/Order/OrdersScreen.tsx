@@ -816,6 +816,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   const handleTrackOrder = (orderId: string) => {
     if (!orderId) return;
+
     // Reset closing state immediately if we re-track before cleanup finished
     setIsClosingTracking(false);
     setSelectedOrderIdForTracking(orderId);
@@ -824,9 +825,29 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     // so the tracking overlay and map can appear immediately, without waiting
     // for the full detail API response.
     const shallowOrder = orders.find(o => o.id?.toString() === orderId.toString());
+
     if (shallowOrder) {
-      setTrackingOrderData((prev: any) => prev ?? shallowOrder);
+      // For "order ready" style statuses where a pre-assignment map should be shown
+      // but no tracking_url is yet available, delegate to the parent navigation
+      // handler so the full-screen OrderTrackingScreen (Leaflet / native map)
+      // can render the restaurant → customer route.
+      const rawStatus = (shallowOrder.status || '').toString().toLowerCase();
+      const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
+      const readyStatusesForMap = new Set([
+        'packed',
+        'ready',
+        'order-ready',
+        'order_ready',
+      ]);
+
       const initialUrl = getTrackingUrlFromOrderData(shallowOrder);
+
+      if (readyStatusesForMap.has(normalizedStatus) && !initialUrl && _onTrackOrder) {
+        _onTrackOrder(orderId);
+        return;
+      }
+
+      setTrackingOrderData((prev: any) => prev ?? shallowOrder);
       if (initialUrl) {
         setSelectedTrackingUrl(initialUrl);
       }
