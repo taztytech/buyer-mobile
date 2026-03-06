@@ -1,5 +1,5 @@
-import { useCallback, useState, useEffect } from 'react';
-import { Platform, NativeModules, DeviceEventEmitter } from 'react-native';
+import { useCallback, useState, useEffect, useRef } from 'react';
+import { Platform, NativeModules, DeviceEventEmitter, NativeEventEmitter } from 'react-native';
 
 // Our custom native PiP module (always preferred — correct 9:16 aspect ratio)
 const { PipModule } = NativeModules;
@@ -8,6 +8,16 @@ const { PipModule } = NativeModules;
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const PipAndroidModule = Platform.OS === 'android' ? require('react-native-pip-android') : null;
 const PipAndroid = PipAndroidModule?.default ?? PipAndroidModule;
+
+/** Normalize native payload to boolean (bridge may send boolean, number 0/1, or object). */
+function normalizePipPayload(payload: unknown): boolean {
+  if (typeof payload === 'boolean') return payload;
+  if (typeof payload === 'number') return payload !== 0;
+  if (payload != null && typeof payload === 'object' && 'isInPip' in payload) {
+    return Boolean((payload as { isInPip?: unknown }).isInPip);
+  }
+  return Boolean(payload);
+}
 
 /**
  * useAndroidPip
@@ -32,21 +42,36 @@ export function useAndroidPip() {
 
   // Authoritative PiP state — set by the native event, cleared on exit
   const [isInPipMode, setIsInPipMode] = useState(false);
+  const lastPipValueRef = useRef(false);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
-    // MainActivity.kt calls PipModule.notifyPipModeChanged(boolean) inside
-    // onPictureInPictureModeChanged(), which emits this DeviceEventEmitter event.
-    const subscription = DeviceEventEmitter.addListener(
-      'onPictureInPictureModeChanged',
-      (isInPip: boolean) => {
-        setIsInPipMode(isInPip);
-      },
-    );
+    const handler = (payload: unknown) => {
+      const isInPip = normalizePipPayload(payload);
+      // Only update state when value actually changes to avoid re-render loops
+      // (setState inside event listener can cause "Maximum update depth" in some RN builds)
+      if (lastPipValueRef.current === isInPip) return;
+      lastPipValueRef.current = isInPip;
+      setIsInPipMode(isInPip);
+    };
 
-    // Clean up listener on unmount
-    return () => subscription.remove();
+    // Native PipModule emits via RCTDeviceEventEmitter (same as DeviceEventEmitter).
+    // Also subscribe via NativeEventEmitter(PipModule) for builds where global emitter
+    // is not delivered (e.g. some Release/ProGuard cases); then we only use one path.
+    const sub1 = DeviceEventEmitter.addListener('onPictureInPictureModeChanged', handler);
+    const pipEmitter =
+      PipModule && typeof NativeEventEmitter === 'function'
+        ? new NativeEventEmitter(PipModule)
+        : null;
+    const sub2 = pipEmitter
+      ? pipEmitter.addListener('onPictureInPictureModeChanged', handler)
+      : null;
+
+    return () => {
+      sub1.remove();
+      sub2?.remove();
+    };
   }, []);
 
   const enterPip = useCallback(async () => {

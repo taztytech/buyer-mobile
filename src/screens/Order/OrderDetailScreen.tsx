@@ -8,9 +8,7 @@ import {
   Image,
   StatusBar,
   ActivityIndicator,
-  Linking,
   BackHandler,
-  Modal,
   RefreshControl,
   Dimensions,
   Animated,
@@ -22,7 +20,7 @@ import {
 } from 'react-native';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import TrackingWebView from '@/components/TrackingWebView';
 import { ordersService } from '@/services/orders.service';
@@ -40,10 +38,8 @@ interface OrderDetailScreenProps {
   onThankDriver?: () => void;
   onRateOrder?: (orderId: string, orderData?: any) => void;
   onReorder?: () => void;
-  onTrackOrder?: () => void;
   onDownloadInvoice?: () => void;
-  onContactUs?: () => void;
-  onHelp?: () => void;
+  onTrackOrder?: () => void;
 }
 
 export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
@@ -53,20 +49,16 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   onThankDriver,
   onRateOrder: _onRateOrder,
   onReorder: _onReorder,
-  onTrackOrder,
   onDownloadInvoice: _onDownloadInvoice,
-  onContactUs,
-  onHelp,
+  onTrackOrder,
 }) => {
   const { getOrderById, state } = useOrders();
-  const insets = useSafeAreaInsets();
   const { showConfirmation } = useConfirmation();
   const [contextOrder, setContextOrder] = useState<any>(null);
   const [orderData, setOrderData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState<string>('');
-  const [_supportNumber, setSupportNumber] = useState<string>('');
   const [showTrackingWebView, setShowTrackingWebView] = useState(false);
   const [selectedOrderIdForTracking, setSelectedOrderIdForTracking] = useState<string | null>(null);
   const [trackingOrderData, setTrackingOrderData] = useState<any>(null);
@@ -77,6 +69,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [isClosingTracking, setIsClosingTracking] = useState(false);
   const webViewLoadedRef = useRef<boolean>(false);
   const webViewRef = useRef<any>(null);
+  const appStateRef = useRef(AppState.currentState);
 
   const effectiveTrackingUrl = useMemo(
     () => {
@@ -143,6 +136,29 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     prevIsInPipModeRef.current = isInPipMode;
   }, [isInPipMode, showTrackingWebView, forceTrackingWebViewResize]);
 
+  // When returning from background after PiP close or app resume, force the
+  // tracking page to recalculate its layout so the map fills the full overlay
+  // instead of keeping a stale PiP-sized snapshot over the header.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const wasBackground =
+        appStateRef.current === 'background' || appStateRef.current === 'inactive';
+      const isActive = nextState === 'active';
+
+      appStateRef.current = nextState;
+
+      if (wasBackground && isActive && showTrackingWebView) {
+        forceTrackingWebViewResize();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [showTrackingWebView, forceTrackingWebViewResize]);
+
   useEffect(() => {
     const pipModule = NativeModules.PipModule;
     if (Platform.OS !== 'android' || !pipModule || typeof pipModule.setAutoPipEnabled !== 'function') {
@@ -162,8 +178,17 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     };
   }, [showTrackingWebView]);
 
+  // Trigger native PiP from the header button.
+  // Guard: only allow PiP once the tracking WebView has fully loaded so
+  // Android snapshots a rendered map instead of a blank white surface.
   const handleEnterPip = useCallback(() => {
     if (!showTrackingWebView) return;
+
+    if (!webViewLoadedRef.current) {
+      console.log('[OrderDetailScreen] Ignoring PiP tap until tracking WebView has loaded');
+      return;
+    }
+
     setIsEnteringPip(true);
     enterPip().catch(() => {
       setIsEnteringPip(false);
@@ -185,27 +210,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     return () => backHandler.remove();
   }, [showTrackingWebView, isInPipMode]);
 
-  // Safely derive tracking URL from order data.
-  // Backend may populate either a top-level tracking_url OR one inside the tracking history.
-  const getTrackingUrlFromOrderData = useCallback((data: any): string | null => {
-    if (!data) return null;
-
-    // 1) Prefer top-level tracking_url when present
-    if (data.tracking_url && data.tracking_url !== null) {
-      return String(data.tracking_url);
-    }
-
-    // 2) Fallback: look into tracking history for the latest entry with tracking_url
-    const history = data.tracking;
-    if (Array.isArray(history) && history.length > 0) {
-      const lastWithUrl = [...history].reverse().find((entry: any) => entry?.tracking_url);
-      if (lastWithUrl?.tracking_url) {
-        return String(lastWithUrl.tracking_url);
-      }
-    }
-
-    return null;
-  }, []);
+  // (Tracking URL derivation is handled by effectiveTrackingUrl above.)
   // Bottom sheet drag state
   const HALF_SCREEN = SCREEN_HEIGHT * 0.5;
   const DRAG_HANDLE_HEIGHT = 40; // Height of drag handle
@@ -692,27 +697,6 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
     fetchUserPhone();
   }, []);
-
-  // Fetch support number from cache first, only call API if not cached
-  useEffect(() => {
-    if (!visible) {
-      return;
-    }
-
-    const fetchSupportDetails = async () => {
-      const supportDetails = await authService.getSupportDetails(false);
-      setSupportNumber(supportDetails.support_number);
-    };
-
-    fetchSupportDetails();
-  }, [visible]);
-
-  const _handleCallSupport = () => {
-    // Navigate to Contact Us page instead of directly calling
-    if (onContactUs) {
-      onContactUs();
-    }
-  };
 
   // Handle Exotel call to delivery agent
   const handleCallDeliveryAgent = async (orderNumber: string, agentPhone: string) => {
@@ -1380,6 +1364,22 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                     // Enable tracking only if status is in enabled list AND not explicitly disabled
                     const isTrackingEnabled = !isExplicitlyDisabled && enabledStatuses.includes(normalizedStatus);
 
+                    // For "order ready" style statuses where we want to show the
+                    // pre-assignment route (restaurant → customer) even before a
+                    // tracking_url exists, delegate to the parent navigation handler
+                    // so the full-screen OrderTrackingScreen can render the map.
+                    const readyStatusesForMap = new Set([
+                      'packed',
+                      'ready',
+                      'order-ready',
+                      'order_ready',
+                    ]);
+
+                    const hasTrackingUrl =
+                      !!orderData?.tracking_url ||
+                      (Array.isArray(orderData?.tracking) &&
+                        orderData.tracking.some((entry: any) => !!entry?.tracking_url));
+
                     return (
                       <>
                         <TouchableOpacity
@@ -1389,9 +1389,17 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                           ]}
                           onPress={() => {
                             if (!isTrackingEnabled || showTrackingWebView || isClosingTracking) return;
+                            if (!orderId) return;
+
+                            const isReadyForPreAssignmentMap = readyStatusesForMap.has(normalizedStatus) && !hasTrackingUrl;
+
+                            if (isReadyForPreAssignmentMap && onTrackOrder) {
+                              onTrackOrder();
+                              return;
+                            }
 
                             setSelectedOrderIdForTracking(orderId);
-                            setTrackingOrderData(prev => prev ?? orderData);
+                            setTrackingOrderData((prev: any) => prev ?? orderData);
                             setShowTrackingWebView(true);
                             fetchTrackingOrderData(orderId, true);
                           }}
@@ -1428,7 +1436,6 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               <Text style={styles.sectionTitle}>Item Details</Text>
               <View style={styles.itemDetailsContainer}>
                 {orderData.items.map((item: any, index: number) => {
-                  const _isVeg = item.is_veg !== false; // Default to veg if not specified
                   const imageUrl = item.image_url || item.image || null;
 
                   return (
@@ -1809,23 +1816,27 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               const orderForFullDetails = trackingOrderData || trackingContextOrder;
               const displayOrder = trackingContextOrder || trackingOrderData;
               const displayStatus = displayOrder?.status;
-              const statusConfig = mapOrderStatusToUI(displayStatus);
+              const statusConfigRaw = mapOrderStatusToUI(displayStatus);
+              const statusConfig =
+                statusConfigRaw ?? {
+                  label: '',
+                  color: '#666666',
+                  bgColor: '#EEEEEE',
+                  iconName: 'fiber-manual-record',
+                };
               const trackingArray = orderForFullDetails?.tracking ?? [];
               let agentName: string | null = null;
-              let agentPhone: string | null = null;
               for (let i = trackingArray.length - 1; i >= 0; i--) {
                 const trackingEntry = trackingArray[i];
-                if (trackingEntry) {
-                  if (trackingEntry.agent_name) {
-                    agentName = trackingEntry.agent_name;
-                    agentPhone = trackingEntry.agent_phone || null;
-                    break;
+                  if (trackingEntry) {
+                    if (trackingEntry.agent_name) {
+                      agentName = trackingEntry.agent_name;
+                      break;
+                    }
+                    if (trackingEntry.agent_phone && !agentName) {
+                      agentName = null;
+                    }
                   }
-                  if (trackingEntry.agent_phone && !agentName) {
-                    agentName = null;
-                    agentPhone = trackingEntry.agent_phone;
-                  }
-                }
               }
               return (
                 <View
@@ -1901,12 +1912,10 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                     if (trackingEntry) {
                       if (trackingEntry.agent_name) {
                         agentName = trackingEntry.agent_name;
-                        agentPhone = trackingEntry.agent_phone || null;
                         break;
                       }
                       if (trackingEntry.agent_phone && !agentName) {
                         agentName = null;
-                        agentPhone = trackingEntry.agent_phone;
                       }
                     }
                   }
