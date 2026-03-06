@@ -648,9 +648,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       has_email: !!email,
     });
 
-    // For new users, go directly to home
-    // HomeScreen will check for addresses and redirect if needed
-    setCurrentScreen('home');
+    // For brand-new users, go directly to location selection to avoid
+    // rendering Home briefly (which can cause a visible green flash).
+    setAddressSelectionCameFrom('home');
+    setLocationSelectionCameFrom('home');
+    setSearchQuery('');
+    setInitialLocationCoords(null);
+    setCurrentScreen('locationSelection');
+    locationScreenSlide.setValue(0);
     setIsRegistrationFlow(false);
 
     // Ensure cart (if any) is synced for this user
@@ -1437,7 +1442,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('login');
-        setLegalCameFrom('profile');
       });
     } else if (legalCameFrom === 'otp') {
       Animated.timing(privacyPolicyScreenSlide, {
@@ -1446,7 +1450,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('otp');
-        setLegalCameFrom('profile');
       });
     } else {
       Animated.parallel([
@@ -1503,7 +1506,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('login');
-        setLegalCameFrom('profile');
       });
     } else if (legalCameFrom === 'otp') {
       Animated.timing(termsConditionsScreenSlide, {
@@ -1512,7 +1514,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('otp');
-        setLegalCameFrom('profile');
       });
     } else {
       Animated.parallel([

@@ -289,6 +289,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
   };
 
   const handleContinue = async () => {
+    Keyboard.dismiss();
+
     // Hide error if exists
     if (error) {
       hideError();
