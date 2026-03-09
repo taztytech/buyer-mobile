@@ -25,6 +25,8 @@ class MainActivity : ReactActivity() {
     SplashScreenManager.registerOnActivity(this)
     // @generated end expo-splashscreen
     super.onCreate(null)
+    // Handle cold-start notification intents.
+    FCMEventEmitterModule.handleNotificationIntent(intent)
   }
 
   /**
@@ -53,6 +55,8 @@ class MainActivity : ReactActivity() {
     // Keep the latest notification intent on the activity so JS-side
     // notification handlers can read the newest extras consistently.
     setIntent(intent)
+    // Handle notification taps while app is already running/backgrounded.
+    FCMEventEmitterModule.handleNotificationIntent(intent)
   }
 
   /**

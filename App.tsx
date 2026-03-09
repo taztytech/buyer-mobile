@@ -249,32 +249,33 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setOrderLookupFunction(getOrderByOrderNumber);
 
     // Set navigation callback to handle notification taps
-    // Packed/out_for_delivery -> Track Order, others -> My Orders.
-    fcmNotificationService.setNavigationCallback(({ orderId, target }) => {
+    // Route all notification taps to My Orders.
+    fcmNotificationService.setNavigationCallback(({ orderId }) => {
       startupNotificationNavigationRef.current = true;
-      console.log(`📱 FCM: Notification tapped, navigating to ${target === 'track' ? 'Track Order' : 'My Orders'}:`, orderId);
+      console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
       onNotificationNavigateToOrders?.();
 
-      // Batch all screen position resets together to ensure Orders screen is visible
-      // and not covered by other overlays (like restaurant or checkout)
+      // Force-close all overlays so notification navigation wins from any screen.
+      homeScreenSlide.setValue(0);
       ordersScreenSlide.setValue(0);
-      orderDetailScreenSlide.setValue(SCREEN_WIDTH);
-      restaurantScreenSlide.setValue(SCREEN_WIDTH);
-      checkoutScreenSlide.setValue(SCREEN_WIDTH);
       profileScreenSlide.setValue(SCREEN_WIDTH);
       searchScreenSlide.setValue(SCREEN_WIDTH);
-
-      if (target === 'track') {
-        setHighlightOrderId(null);
-        setSelectedOrderId(orderId);
-        setOrderTrackingCameFrom('orders');
-        setCurrentScreen('orderTracking');
-        return;
-      }
+      privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
+      termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
+      addressScreenSlide.setValue(SCREEN_WIDTH);
+      locationScreenSlide.setValue(SCREEN_WIDTH);
+      orderDetailScreenSlide.setValue(SCREEN_WIDTH);
+      helpScreenSlide.setValue(SCREEN_WIDTH);
+      contactUsScreenSlide.setValue(SCREEN_WIDTH);
+      faqScreenSlide.setValue(SCREEN_WIDTH);
+      restaurantScreenSlide.setValue(SCREEN_WIDTH);
+      checkoutScreenSlide.setValue(SCREEN_WIDTH);
+      setEditingAddress(null);
+      setSelectedOrderData(null);
 
       // Keep existing back behavior: Orders -> Profile for notification entry.
       setOrdersCameFrom('profile');
-      setHighlightOrderId(orderId);
+      setHighlightOrderId(orderId || null);
       setCurrentScreen('orders');
 
       // Clear highlight after 3 seconds (enough time for scroll animation)

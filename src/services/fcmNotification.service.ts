@@ -65,6 +65,7 @@ class FCMNotificationService {
   private notificationOpenedListener: (() => void) | null = null;
   private lastProcessedMessageId: string | null = null;
   private lastProcessedTime: number = 0;
+  private processedNotificationIds = new Set<string>();
   private recentMessages: NotificationPayload[] = [];
   private readonly MAX_RECENT_MESSAGES = 50;
   private navigationCallback: NotificationNavigationCallback | null = null;
@@ -503,6 +504,11 @@ class FCMNotificationService {
           AsyncStorage.setItem(PUSH_TOKEN_KEY, data.token);
           this.sendTokenToBackend(data.token);
         });
+
+        eventEmitter.addListener('FCMNotificationOpened', (data: { [key: string]: string }) => {
+          console.log('👆 FCM: Notification opened from native intent bridge');
+          this.handleNotificationFromIntent(data);
+        });
       }
     }
   }
@@ -514,12 +520,11 @@ class FCMNotificationService {
    */
   async checkInitialNotification(): Promise<void> {
     try {
-      if (!messaging) {
-        return;
+      let remoteMessage: any = null;
+      if (messaging) {
+        // Check FCM initial notification (works for both iOS and Android)
+        remoteMessage = await messaging().getInitialNotification();
       }
-
-      // Check FCM initial notification (works for both iOS and Android)
-      const remoteMessage = await messaging().getInitialNotification();
 
       if (remoteMessage) {
         console.log('🚀 FCM: App opened from notification:', remoteMessage.messageId);
@@ -544,9 +549,16 @@ class FCMNotificationService {
         return;
       }
 
-      // For Android: Also check if app was opened from notification via intent
-      // This is handled by the native layer and will be caught by onNotificationOpened
-      // when the app becomes active
+      // For Android: fallback to native intent bridge data.
+      if (Platform.OS === 'android') {
+        const { FCMEventEmitter } = NativeModules;
+        if (FCMEventEmitter?.getInitialNotificationData) {
+          const intentData = await FCMEventEmitter.getInitialNotificationData();
+          if (intentData && typeof intentData === 'object') {
+            this.handleNotificationFromIntent(intentData as { [key: string]: string });
+          }
+        }
+      }
     } catch (error) {
       console.error('❌ FCM: Error checking initial notification:', error);
     }
@@ -563,15 +575,19 @@ class FCMNotificationService {
 
     // Extract orderId from various possible field names
     const orderId = data.orderId || data.order_id || data.orderID || data['order-id'];
+    const orderNumber = data.order_number || data.orderNumber || data['order-number'];
 
-    if (orderId) {
-      console.log('📱 FCM: App opened from notification (intent), orderId:', orderId);
+    if (orderId || orderNumber) {
+      console.log('📱 FCM: App opened from notification (intent), orderId/orderNumber:', orderId || orderNumber);
 
       const payload: NotificationPayload = {
         title: data.title,
         body: data.body,
         data: data as NotificationData,
-        notificationId: data.messageId || Date.now().toString(),
+        notificationId:
+          data.messageId ||
+          data.notification_id ||
+          `${orderId || orderNumber}:${data.status || data.new_status || data.order_status || data.current_status || 'unknown'}`,
       };
 
       // Handle navigation
@@ -643,6 +659,11 @@ class FCMNotificationService {
    * Override this or listen to events
    */
   private onNotificationOpened(payload: NotificationPayload): void {
+    if (payload.notificationId && this.processedNotificationIds.has(payload.notificationId)) {
+      console.log('ℹ️  FCM: Notification already consumed, skipping:', payload.notificationId);
+      return;
+    }
+
     // Prevent duplicate processing of the same notification within a short window (2 seconds)
     // iOS sometimes triggers both getInitialNotification and onNotificationOpenedApp
     const now = Date.now();
@@ -657,6 +678,14 @@ class FCMNotificationService {
 
     this.lastProcessedMessageId = payload.notificationId || null;
     this.lastProcessedTime = now;
+    if (payload.notificationId) {
+      this.processedNotificationIds.add(payload.notificationId);
+      // Keep this bounded to avoid unbounded growth in long sessions.
+      if (this.processedNotificationIds.size > 200) {
+        const ids = Array.from(this.processedNotificationIds);
+        this.processedNotificationIds = new Set(ids.slice(ids.length - 200));
+      }
+    }
 
     console.log('👆 FCM: Notification opened:', payload);
 
@@ -668,9 +697,18 @@ class FCMNotificationService {
 
   /**
    * Handle navigation based on notification data
-   * Route packed/out_for_delivery taps to Track Order, others to My Orders.
+   * Route ALL order notification taps to My Orders.
    */
   private handleNotificationNavigation(data: NotificationData): void {
+    const isOrderNotification =
+      (data.type || '').toString().trim().toLowerCase() === 'order' ||
+      !!(data.orderId || data.order_id || data.orderID || data['order-id'] || data.order_number || data.orderNumber || data['order-number']);
+
+    if (!isOrderNotification) {
+      console.log('ℹ️  FCM: Not an order notification tap. Skipping navigation.');
+      return;
+    }
+
     // Extract orderId from notification data
     // Support multiple possible field names: orderId, order_id, orderID, etc.
     let orderId = data.orderId || data.order_id || data.orderID || data['order-id'];
@@ -689,34 +727,26 @@ class FCMNotificationService {
       }
     }
 
-    if (orderId) {
-      const rawStatus =
-        data.status ||
-        data.new_status ||
-        data.order_status ||
-        data.current_status ||
-        '';
-      const normalizedStatus = rawStatus.toString().trim().toLowerCase();
-      const isTrackOrderStatus =
-        normalizedStatus === 'packed' ||
-        normalizedStatus === 'out-for-delivery' ||
-        normalizedStatus === 'out_for_delivery' ||
-        normalizedStatus === 'out for delivery';
-      const target: NotificationNavigationTarget['target'] = isTrackOrderStatus ? 'track' : 'orders';
-      const navigationPayload: NotificationNavigationTarget = { orderId, target };
+    const rawStatus =
+      data.status ||
+      data.new_status ||
+      data.order_status ||
+      data.current_status ||
+      '';
+    const normalizedStatus = rawStatus.toString().trim().toLowerCase();
+    const target: NotificationNavigationTarget['target'] = 'orders';
+    const normalizedOrderId = orderId || '';
+    const navigationPayload: NotificationNavigationTarget = { orderId: normalizedOrderId, target };
 
-      console.log(`🧭 FCM: Navigating to ${target === 'track' ? 'Track Order' : 'My Orders'} for order:`, orderId);
+    console.log(`🧭 FCM: Navigating to My Orders for order: ${normalizedOrderId || 'N/A'}, status: ${normalizedStatus || 'unknown'}`);
 
-      // Call navigation callback if set
-      if (this.navigationCallback) {
-        this.navigationCallback(navigationPayload);
-      } else {
-        // App may still be initializing; queue navigation and replay once callback is set.
-        this.pendingNavigationPayload = navigationPayload;
-        console.warn(`⚠️  FCM: Navigation callback not set yet. Queued ${target} navigation.`);
-      }
+    // Call navigation callback if set
+    if (this.navigationCallback) {
+      this.navigationCallback(navigationPayload);
     } else {
-      console.log('ℹ️  FCM: No orderId or order_number found in notification data. Skipping navigation.');
+      // App may still be initializing; queue navigation and replay once callback is set.
+      this.pendingNavigationPayload = navigationPayload;
+      console.warn(`⚠️  FCM: Navigation callback not set yet. Queued ${target} navigation.`);
     }
   }
 
@@ -816,6 +846,7 @@ class FCMNotificationService {
 
     this.notificationListeners.forEach((unsubscribe) => unsubscribe());
     this.notificationListeners = [];
+    this.processedNotificationIds.clear();
 
     console.log('🧹 FCM: Listeners cleaned up');
   }
