@@ -65,7 +65,7 @@ class ApiService {
   private refreshToken: string | null = null;
   private tokenExpiry: number | null = null; // Timestamp when access token expires
   private isRefreshing: boolean = false;
-  private refreshPromise: Promise<boolean> | null = null;
+  private refreshPromise: Promise<'success' | 'hard_fail' | 'soft_fail'> | null = null;
   private isInitialized: boolean = false;
   private onUserDeletedCallback: (() => void) | null = null;
   private onSessionExpiredCallback: (() => void) | null = null;
@@ -303,10 +303,13 @@ class ApiService {
   }
 
   /**
-   * Refresh access token using refresh token
+   * Refresh access token using refresh token.
+   * Returns: 'success' | 'hard_fail' | 'soft_fail'
+   *  - success    : new tokens saved, caller should retry the original request
+   *  - hard_fail  : token is definitively invalid, caller should log the user out
+   *  - soft_fail  : temporary error (network/server), caller should NOT log out
    */
-  private async refreshAccessToken(): Promise<boolean> {
-    // Prevent multiple simultaneous refresh attempts
+  private async refreshAccessToken(): Promise<'success' | 'hard_fail' | 'soft_fail'> {
     if (this.isRefreshing && this.refreshPromise) {
       return this.refreshPromise;
     }
@@ -324,31 +327,19 @@ class ApiService {
   }
 
   /**
-   * Perform the actual token refresh
+   * Perform the actual token refresh.
+   * Returns 'success', 'hard_fail', or 'soft_fail'.
    */
-  private async _performRefresh(): Promise<boolean> {
+  private async _performRefresh(): Promise<'success' | 'hard_fail' | 'soft_fail'> {
     try {
-      // Ensure tokens are loaded from storage
       await this.ensureTokensLoaded();
 
-      // Get refresh token from memory or storage
       const refreshToken = this.refreshToken || await storageService.getRefreshToken();
 
-      // Validate refresh token exists and is not empty
       if (!refreshToken || refreshToken.trim() === '') {
         console.warn('[apiService] No refresh token available for refresh');
         await this.clearTokens();
-        
-        // Notify callback that session expired
-        if (this.onSessionExpiredCallback) {
-          try {
-            this.onSessionExpiredCallback();
-          } catch (callbackError) {
-            console.error('[apiService] Error in session expired callback:', callbackError);
-          }
-        }
-        
-        return false;
+        return 'hard_fail';
       }
 
       const url = buildApiUrl('/authentication/refresh-token');
@@ -416,7 +407,7 @@ class ApiService {
         if (!newAccessToken || newAccessToken.trim() === '') {
           console.warn('[apiService] Refresh token response missing access token');
           // Keep existing tokens - don't clear them (might be temporary backend issue)
-          return false;
+          return 'soft_fail';
         }
 
         // Save new tokens
@@ -438,47 +429,42 @@ class ApiService {
         });
 
         console.log('[apiService] Token refresh successful');
-        return true;
+        return 'success';
       } else {
-        // Check if this is a definitive "invalid token" error
+        // Check if this is a definitive "invalid / expired token" error.
+        // Use token-specific phrases only — bare words like "invalid" or "expired" are
+        // far too broad and can match non-auth business errors (e.g. "Invalid address",
+        // "Expired promotion"), which would incorrectly clear a valid session.
         const errorMessage = (data.message || data.error || '').toLowerCase();
-        const isInvalidToken = response.status === 401 ||
-                              response.status === 403 ||
-                              errorMessage.includes('invalid') ||
-                              errorMessage.includes('expired') ||
-                              errorMessage.includes('unauthorized') ||
-                              errorMessage.includes('token not found');
+        const isInvalidToken =
+          response.status === 401 ||
+          response.status === 403 ||
+          errorMessage.includes('invalid token') ||
+          errorMessage.includes('token invalid') ||
+          errorMessage.includes('token expired') ||
+          errorMessage.includes('refresh token expired') ||
+          errorMessage.includes('token not found') ||
+          errorMessage.includes('unauthorized');
 
         if (isInvalidToken) {
           console.warn('[apiService] Refresh token is invalid/expired, clearing session');
           await this.clearTokens();
-          
-          // Notify callback that session expired
-          if (this.onSessionExpiredCallback) {
-            try {
-              this.onSessionExpiredCallback();
-            } catch (callbackError) {
-              console.error('[apiService] Error in session expired callback:', callbackError);
-            }
-          }
-        } else {
-          // Network/server error - keep tokens and try again later
-          console.warn('[apiService] Refresh token failed (non-auth error), keeping tokens');
+          return 'hard_fail';
         }
 
-        return false;
+        // Server returned a non-auth error (e.g. 500, 502) — keep tokens, try again later
+        console.warn('[apiService] Refresh token failed (non-auth error), keeping tokens');
+        return 'soft_fail';
       }
     } catch (error: any) {
-      // Handle abort (timeout) separately
       if (error.name === 'AbortError') {
         console.warn('[apiService] Refresh token request timed out');
-        return false;
+        return 'soft_fail';
       }
 
-      // Network error or other exception - DON'T clear tokens
-      // The user might just have temporary connectivity issues
+      // Network error — keep tokens, user might just have temporary connectivity issues
       console.error('[apiService] Refresh token error:', error);
-      return false;
+      return 'soft_fail';
     }
   }
 
@@ -634,53 +620,44 @@ class ApiService {
       // Handle 401 Unauthorized - attempt token refresh (REACTIVE REFRESH)
       // Only refresh when API fails with 401, not proactively
       if (response.status === 401) {
-        // Only attempt refresh once per request to avoid infinite loops
         if (retryCount < 1) {
           console.log('[apiService] 🔄 REACTIVE REFRESH: API returned 401, attempting token refresh...');
-          const refreshed = await this.refreshAccessToken();
+          const refreshResult = await this.refreshAccessToken();
 
-          if (refreshed) {
-            // Retry the original request with new token
+          if (refreshResult === 'success') {
             console.log('[apiService] ✅ Token refresh successful, retrying original request...');
             return this.request<T>(method, endpoint, data, customHeaders, retryCount + 1);
-          } else {
-            // Refresh failed - session expired, logout user
-            console.warn('[apiService] ⚠️ Token refresh failed, logging out user...');
-            
-            // Clear tokens if not already cleared
-            await this.clearTokens();
-            
-            // Trigger session expired callback to logout and navigate to login
-            if (this.onSessionExpiredCallback) {
-              try {
-                this.onSessionExpiredCallback();
-              } catch (callbackError) {
-                console.error('[apiService] Error in session expired callback:', callbackError);
-              }
-            }
-            
+          }
+
+          if (refreshResult === 'soft_fail') {
+            // Temporary error (network/server) — do NOT logout.
+            // Return a generic error so the feature layer can retry or show an error.
+            console.warn('[apiService] ⚠️ Token refresh soft-failed (temporary error), NOT logging out');
             return {
               success: false,
-              error: 'Session expired. Please login again.',
-              message: 'Session expired. Please login again.',
+              error: 'Temporary error. Please try again.',
+              message: 'Temporary error. Please try again.',
             };
           }
-        } else {
-          // Already retried, refresh must have failed
-          console.warn('[apiService] ⚠️ Already retried after 401, refresh failed - logging out...');
-          
-          // Clear tokens
+
+          // hard_fail — token is definitively invalid, force logout
+          console.warn('[apiService] ⚠️ Token refresh hard-failed, logging out user...');
           await this.clearTokens();
-          
-          // Trigger session expired callback
           if (this.onSessionExpiredCallback) {
-            try {
-              this.onSessionExpiredCallback();
-            } catch (callbackError) {
-              console.error('[apiService] Error in session expired callback:', callbackError);
-            }
+            try { this.onSessionExpiredCallback(); } catch { /* ignore */ }
           }
-          
+          return {
+            success: false,
+            error: 'Session expired. Please login again.',
+            message: 'Session expired. Please login again.',
+          };
+        } else {
+          // Already retried with a fresh token and still got 401 — session is dead
+          console.warn('[apiService] ⚠️ Already retried after 401, still failing - logging out...');
+          await this.clearTokens();
+          if (this.onSessionExpiredCallback) {
+            try { this.onSessionExpiredCallback(); } catch { /* ignore */ }
+          }
           return {
             success: false,
             error: 'Session expired. Please login again.',
@@ -706,51 +683,26 @@ class ApiService {
       }));
 
       // Check for user deletion indicators
-      // IMPORTANT: Only trust the dedicated `/user/profile` endpoint OR explicit user-deletion messages.
-      // Other APIs (like cart/add, orders, etc.) may return 4xx for many business reasons (e.g. OOS item)
-      // and must NOT trigger a forced logout.
+      // IMPORTANT: Only trust:
+      // - The dedicated `/user/profile` endpoint with specific status codes, OR
+      // - Explicit user/account/session error messages from the backend.
+      //
+      // Other APIs (like cart/add, cart/update, orders, etc.) can legitimately return 4xx
+      // (for example, "Cart item not found" when user updates quantity quickly) and MUST NOT
+      // be treated as user deletion or forced logout.
       if (!response.ok) {
         const statusCode = response.status;
-        const errorMessage = (responseData.message || responseData.error || '').toLowerCase();
-        
-        // Check if this is an authenticated endpoint (requires auth token)
-        // Exclude unauthenticated endpoints like login, OTP, etc.
-        // Only check if we have a token (meaning user was logged in)
-        const isAuthenticatedEndpoint = 
-          this.accessToken !== null &&
-          !endpoint.includes('/authentication/generate-otp') &&
-          !endpoint.includes('/authentication/login') &&
-          !endpoint.includes('/authentication/refresh-token');
-        
-        // Check for user deletion / invalid account indicators in error messages.
-        // This is useful when backend returns generic 4xx/5xx but with specific text.
-        const hasExplicitUserDeletionMessage = 
-          errorMessage.includes('user not found') ||
-          errorMessage.includes('user deleted') ||
-          errorMessage.includes('account deleted') ||
-          errorMessage.includes('user does not exist') ||
-          errorMessage.includes('invalid user') ||
-          errorMessage.includes('account suspended') ||
-          errorMessage.includes('account deactivated') ||
-          errorMessage.includes('failed to retrieve user profile') ||
-          errorMessage.includes('failed to retrieve user') ||
-          errorMessage.includes('user account') ||
-          errorMessage.includes('invalid session') ||
-          errorMessage.includes('session expired');
-        
+
         const isProfileEndpoint = endpoint.includes('/user/profile');
-        const isProfileEndpoint400 = isProfileEndpoint && statusCode === 400;
-        
-        // CRITICAL: Treat as user deleted / invalid session if:
-        // 1. ANY authenticated endpoint returns 401/403/404/410 (these indicate auth/session issues)
-        // 2. OR /user/profile returns 400 (specific case for profile endpoint)
-        // 3. OR error message explicitly indicates deleted / invalid user (on any endpoint)
-        // 
-        // This ensures user deletion is detected on ALL API calls, not just profile-related ones
-        const isUserDeleted = 
-          (isAuthenticatedEndpoint && (statusCode === 401 || statusCode === 403 || statusCode === 404 || statusCode === 410)) ||
-          isProfileEndpoint400 ||
-          hasExplicitUserDeletionMessage;
+        // Only treat `/user/profile` returning status 400 with the exact deletion
+        // message as a hard deletion signal. Both conditions must match — status 400
+        // alone is not enough (could be a malformed request), and the message alone
+        // is not checked on other endpoints to avoid false logouts.
+        const profileErrorMessage = (responseData.message || responseData.error || '').toLowerCase();
+        const isUserDeleted =
+          isProfileEndpoint &&
+          statusCode === 400 &&
+          profileErrorMessage.includes('failed to retrieve user profile');
 
         // If user deletion is detected, clear tokens and notify callback
         if (isUserDeleted) {

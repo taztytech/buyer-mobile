@@ -119,6 +119,7 @@ const extractCoordinate = (source: any): Coordinate | null => {
 const extractRestaurantCoordinate = (order: any): Coordinate | null => {
   if (!order) return null;
   return (
+    extractCoordinate(order.pickup_address) ||
     extractCoordinate(order.restaurant?.location) ||
     extractCoordinate(order.restaurant?.locations?.[0]) ||
     extractCoordinate(order.restaurant?.address) ||

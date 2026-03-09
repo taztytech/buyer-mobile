@@ -290,7 +290,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   onNavigateToCheckout,
   selectedLocation,
 }) => {
-  const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, reloadCart, checkRestaurantConflict, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName, restaurantLogo: cartRestaurantLogo } = useCart();
+  const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, reloadCart, flushPendingQuantityUpdate, checkRestaurantConflict, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName, restaurantLogo: cartRestaurantLogo } = useCart();
   const { vegMode, setVegMode } = useVegMode();
   const { showConfirmation } = useConfirmation();
 
@@ -659,6 +659,16 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
     // Update ref immediately for next click
     itemQuantityRefs.current[itemId] = newQuantity;
+
+    // If item was removed (e.g. decremented to 0), re-add via addToCart so API and UI stay in sync.
+    // updateQuantity(id, 1) no-ops when the item is not in cart, which caused "0 → 1" not updating.
+    if (!cartItem) {
+      const menuItem = menuSections.flatMap((s) => s.items).find((i) => i.id === itemId);
+      if (menuItem) {
+        addToCart(menuItem);
+      }
+      return;
+    }
 
     // Update quantity (will sync with backend)
     updateQuantity(itemId, newQuantity);
@@ -2175,17 +2185,13 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           <View style={[styles.cartBar, { bottom: 0, paddingBottom: insets.bottom + 10 }]}>
             <TouchableOpacity
               style={styles.cartButton}
-              onPress={() => {
-                // Navigate to checkout page only if restaurant is open
-                if (!onNavigateToCheckout) {
-                  return;
-                }
+              onPress={async () => {
+                if (!onNavigateToCheckout) return;
+                if (!ensureRestaurantOpen()) return;
 
-                if (!ensureRestaurantOpen()) {
-                  return;
-                }
+                // Flush any pending debounced quantity update so checkout sees the latest cart in the API
+                await flushPendingQuantityUpdate();
 
-                // Build restaurant address from current restaurant data
                 const restaurantAddress =
                   restaurantData?.locations?.[0]?.address ||
                   restaurantData?.location?.address ||
@@ -2197,9 +2203,6 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     .join(', ') ||
                   'Restaurant Address';
 
-                // Use the current restaurant screen context so that back navigation
-                // from checkout returns to this restaurant, even if the cart belongs
-                // to a different restaurant.
                 onNavigateToCheckout(restaurantId, restaurantName || '', restaurantAddress, 'restaurant');
               }}
               activeOpacity={0.8}
