@@ -97,7 +97,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   isFocused = true,
   onForcedUpdateRequired,
 }) => {
-  const { restaurantId, restaurantName, restaurantLogo, getTotalItems } = useCart();
+  const { restaurantId, restaurantName, restaurantLogo, getTotalItems, flushPendingQuantityUpdate } = useCart();
   const { vegMode, setVegMode, isVegModeEnabled } = useVegMode();
   const { showConfirmation } = useConfirmation();
   const insets = useSafeAreaInsets();
@@ -1362,8 +1362,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       return;
     }
 
+    await flushPendingQuantityUpdate();
     onNavigateToCheckout(restaurantId, restaurantName, 'home');
-  }, [restaurantId, restaurantName, hasCartItems, onNavigateToCheckout, ensureCartRestaurantOpen]);
+  }, [restaurantId, restaurantName, hasCartItems, onNavigateToCheckout, ensureCartRestaurantOpen, flushPendingQuantityUpdate]);
 
   return (
     <View style={[styles.outerContainer, { backgroundColor: colors.background }]}>
