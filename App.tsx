@@ -106,6 +106,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const [pendingHomeRefresh, setPendingHomeRefresh] = React.useState(false);
   const [isNetworkOnline, setIsNetworkOnline] = React.useState(true);
   const lastConnectionStatusRef = React.useRef<boolean | null>(null);
+  const startupNotificationNavigationRef = React.useRef(false);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -250,6 +251,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     // Set navigation callback to handle notification taps
     // Packed/out_for_delivery -> Track Order, others -> My Orders.
     fcmNotificationService.setNavigationCallback(({ orderId, target }) => {
+      startupNotificationNavigationRef.current = true;
       console.log(`📱 FCM: Notification tapped, navigating to ${target === 'track' ? 'Track Order' : 'My Orders'}:`, orderId);
       onNotificationNavigateToOrders?.();
 
@@ -438,8 +440,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             await crashlyticsService.setUserId(idString);
           }
 
-          // User has valid session, navigate to home
-          setCurrentScreen('home');
+          // If app was opened by tapping an FCM notification, keep the
+          // notification target screen (orders/track) and avoid overriding it.
+          if (!startupNotificationNavigationRef.current) {
+            setCurrentScreen('home');
+          }
         } else {
           // No valid session, go to login
           setCurrentScreen('login');

@@ -4,6 +4,7 @@ import expo.modules.splashscreen.SplashScreenManager
 import android.os.Build
 import android.os.Bundle
 import android.app.PictureInPictureParams
+import android.content.Intent
 import android.content.res.Configuration
 import android.util.Rational
 
@@ -45,6 +46,13 @@ class MainActivity : ReactActivity() {
               mainComponentName,
               fabricEnabled
           ){})
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    // Keep the latest notification intent on the activity so JS-side
+    // notification handlers can read the newest extras consistently.
+    setIntent(intent)
   }
 
   /**

@@ -699,8 +699,9 @@ class FCMNotificationService {
       const normalizedStatus = rawStatus.toString().trim().toLowerCase();
       const isTrackOrderStatus =
         normalizedStatus === 'packed' ||
+        normalizedStatus === 'out-for-delivery' ||
         normalizedStatus === 'out_for_delivery' ||
-        normalizedStatus === 'out-for-delivery';
+        normalizedStatus === 'out for delivery';
       const target: NotificationNavigationTarget['target'] = isTrackOrderStatus ? 'track' : 'orders';
       const navigationPayload: NotificationNavigationTarget = { orderId, target };
 

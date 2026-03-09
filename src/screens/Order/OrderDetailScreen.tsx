@@ -40,6 +40,8 @@ interface OrderDetailScreenProps {
   onReorder?: () => void;
   onDownloadInvoice?: () => void;
   onTrackOrder?: () => void;
+  onContactUs?: () => void;
+  onHelp?: () => void;
 }
 
 export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
@@ -51,6 +53,8 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   onReorder: _onReorder,
   onDownloadInvoice: _onDownloadInvoice,
   onTrackOrder,
+  onContactUs: _onContactUs,
+  onHelp: _onHelp,
 }) => {
   const { getOrderById, state } = useOrders();
   const { showConfirmation } = useConfirmation();
