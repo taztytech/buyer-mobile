@@ -1154,10 +1154,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           const updatedData = {
             ...prevData,
             ...latestContextOrder,
-            // Preserve order_number if it exists in prevData but not in context
             order_number: latestContextOrder.order_number || prevData.order_number,
-            // Preserve restaurant details if they exist in prevData but not in context
             restaurant: latestContextOrder.restaurant || prevData.restaurant,
+            // FCM payloads are minimal — preserve rich fields from the previous API response
+            // so agent details, delivery address, and ETA aren't wiped out on status updates.
+            tracking: (latestContextOrder as any).tracking?.length ? (latestContextOrder as any).tracking : prevData.tracking,
+            delivery_address: (latestContextOrder as any).delivery_address || prevData.delivery_address,
+            estimated_delivery_time: (latestContextOrder as any).estimated_delivery_time || prevData.estimated_delivery_time,
           };
 
           // Step 2: Fetch latest full order data from API (silent fetch - no loading indicator)
@@ -1351,20 +1354,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       });
 
       if (response.success) {
-        // CLOSE MODAL FIRST to avoid multiple modal contentions on iOS
-        handleCloseTrackingWebView();
-
-        // Show confirmation after modal is dismissed
-        setTimeout(() => {
-          showConfirmation({
-            title: 'Call Initiated',
-            message: 'Your call to the delivery agent is being connected. Please wait for the call.',
-            confirmText: 'OK',
-            cancelText: '',
-            confirmButtonColor: '#00B14F',
-            onConfirm: () => { },
-          });
-        }, 800);
+        showConfirmation({
+          title: 'Call Initiated',
+          message: 'Your call to the delivery agent is being connected. Please wait for the call.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => { },
+        });
       } else {
         showConfirmation({
           title: 'Call Failed',
