@@ -91,7 +91,8 @@ class FCMService : FirebaseMessagingService() {
     
     private fun getAppLogoBitmap(): Bitmap? {
         return try {
-            BitmapFactory.decodeResource(resources, applicationInfo.icon)
+            // Use explicit round launcher icon for consistent branding in notifications
+            BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher_round)
         } catch (error: Exception) {
             Log.w(TAG, "Failed to decode app logo bitmap", error)
             null
@@ -169,7 +170,8 @@ class FCMService : FirebaseMessagingService() {
         val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         val appLogoBitmap = getAppLogoBitmap()
         val notificationBuilder = NotificationCompat.Builder(this, "default")
-            .setSmallIcon(applicationInfo.icon)
+            // Use explicit launcher icon so the same logo appears in collapsed and expanded views
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))

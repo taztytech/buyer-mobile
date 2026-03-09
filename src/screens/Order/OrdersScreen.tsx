@@ -23,6 +23,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import TrackingWebView from '@/components/TrackingWebView';
+import { OrderRouteMapView } from '@/components/OrderRouteMapView';
+import OrderDeliveredOverlay from '@/components/OrderDeliveredOverlay';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import { Shimmer } from '@/components/Shimmer';
 import { useOrders } from '@/context/OrdersContext';
@@ -32,6 +34,7 @@ import { exotelService } from '@/services/exotel.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { useAndroidPip } from '@/hooks/useAndroidPip';
 import { APP_VERSION_NAME, APP_VERSION_CODE } from '@/config/appVersion.generated';
+import { extractRestaurantCoordinate, extractCustomerCoordinate } from './orderTrackingLocationUtils';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -129,6 +132,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const highlightedOrderRef = useRef<string | null>(null);
+  // Only sync localOrders to context when data came from API fetch, not from persistence.
+  // This prevents overwriting FCM updates when restoring from persisted data or on visibility.
+  const ordersFromApiRef = useRef(false);
 
   // Refs for initial mount tracking and scroll restoration
   // Reset isInitialMount when hasPersistedData is false (reset was called)
@@ -197,16 +203,18 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     return [...newContextOrders, ...merged];
   }, [localOrders, contextOrders, state.byId]);
 
-  // Sync localOrders to context store after state updates
+  // Sync localOrders to context only when they came from an API fetch.
+  // Avoids overwriting context (and losing FCM updates) when localOrders is from persistence or initial state.
   useEffect(() => {
-    if (localOrders.length > 0) {
-      // Save to persisted storage
+    if (localOrders.length > 0 && ordersFromApiRef.current) {
+      ordersFromApiRef.current = false;
       persistedOrders = localOrders;
-      // Update context
       dispatch({
         type: 'BULK_SET_ORDERS',
         payload: localOrders,
       });
+    } else if (localOrders.length > 0) {
+      persistedOrders = localOrders;
     }
   }, [localOrders, dispatch]);
 
@@ -251,32 +259,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       }
       return undefined;
     } else if (hasPersistedData && persistedOrders.length > 0) {
-      // Has persisted data - restore it
-      // Always restore context from persisted orders when screen becomes visible
-      dispatch({
-        type: 'BULK_SET_ORDERS',
-        payload: persistedOrders,
-      });
-
-      // Only update localOrders if it's empty or doesn't match persisted data
+      // Has persisted data - do NOT overwrite context here so FCM updates are preserved.
+      // Only ensure localOrders is set for display; merge useMemo will combine context (FCM) + local.
       if (localOrders.length === 0 || localOrders.length !== persistedOrders.length) {
         setLocalOrders(persistedOrders);
       }
-      // Reset the restore flag when screen becomes visible with persisted data
       hasRestoredScroll.current = false;
-
-      // If returning from another screen, just ensure the data is displayed
-      if (hasPersistedData && persistedOrders.length > 0) {
-        // Sync context from persisted orders
-        dispatch({
-          type: 'BULK_SET_ORDERS',
-          payload: persistedOrders,
-        });
-
-        if (localOrders.length === 0 || localOrders.length !== persistedOrders.length) {
-          setLocalOrders(persistedOrders);
-        }
-      }
     }
     return undefined;
   }, [visible, dispatch, localOrders.length]);
@@ -374,9 +362,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           ordersArray.length; // Fallback to array length
 
         if (reset) {
+          ordersFromApiRef.current = true;
           setLocalOrders(ordersArray);
           persistedOrders = ordersArray;
         } else {
+          ordersFromApiRef.current = true;
           // Append new orders to existing ones, filtering out duplicates
           setLocalOrders(prev => {
             const existingIds = new Set(prev.map((o: OrderListItem) => o.id));
@@ -591,6 +581,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
   const [isClosingTracking, setIsClosingTracking] = useState(false);
+  const [showDeliveredOverlay, setShowDeliveredOverlay] = useState(false);
 
   const { canUsePip, isInPipMode: hookIsInPipMode, enterPip } = useAndroidPip();
   const webViewLoadedRef = useRef<boolean>(false);
@@ -610,9 +601,16 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [isEnteringPip, setIsEnteringPip] = useState(false);
   const pipNativeConfirmedRef = useRef(false); // true after native PiP is active
   const prevIsInPipModeRef = useRef(false);
+  const isInPipModeRef = useRef(false);
+  const lastPipSyncRef = useRef<{ status?: string; updated_at?: string }>({});
+  const [pipSyncKey, setPipSyncKey] = useState(0);
 
   // isInPipMode: true as soon as user presses button (isEnteringPip) OR native confirms
   const isInPipMode = showTrackingWebView && (hookIsInPipMode || isEnteringPip);
+
+  useEffect(() => {
+    isInPipModeRef.current = isInPipMode;
+  }, [isInPipMode]);
 
   const forceTrackingWebViewResize = useCallback(() => {
     if (!webViewRef.current || typeof webViewRef.current.injectJavaScript !== 'function') {
@@ -655,13 +653,23 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   // When entering or exiting PiP, force the underlying tracking page to recalculate its layout
   // so the map uses the full available height for both the compact PiP window and normal screen.
+  // When expanding from PiP, if order is delivered show the delivered overlay (status may have updated while in PiP).
   useEffect(() => {
     const wasInPip = prevIsInPipModeRef.current;
     if (wasInPip !== isInPipMode && showTrackingWebView) {
       forceTrackingWebViewResize();
+      if (wasInPip && !isInPipMode) {
+        const ctxOrder = selectedOrderIdForTracking ? state.byId[selectedOrderIdForTracking] : undefined;
+        const displayOrder = ctxOrder || trackingOrderData;
+        const rawStatus = (displayOrder?.status || '').toString().toLowerCase().trim();
+        const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
+        if (normalizedStatus === 'delivered' || normalizedStatus === 'completed') {
+          setShowDeliveredOverlay(true);
+        }
+      }
     }
     prevIsInPipModeRef.current = isInPipMode;
-  }, [isInPipMode, showTrackingWebView, forceTrackingWebViewResize]);
+  }, [isInPipMode, showTrackingWebView, forceTrackingWebViewResize, selectedOrderIdForTracking, state.byId, trackingOrderData?.status]);
 
   // When returning from background after PiP close or app resume, force the
   // tracking page to recalculate its layout so the map fills the full overlay
@@ -696,43 +704,30 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     [selectedTrackingUrl],
   );
 
-  const getPipEtaLabelForTracking = (order: any): string => {
-    if (!order) return 'Tracking';
+  const fallbackMapCoords = useMemo(() => {
+    if (!trackingOrderData) return null;
 
-    const rawStatus = (order.status || '').toString().toLowerCase().trim();
-    const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
+    const hasTrackingUrl =
+      !!trackingOrderData.tracking_url ||
+      (Array.isArray(trackingOrderData.tracking) &&
+        trackingOrderData.tracking.some((entry: any) => !!entry?.tracking_url));
+    if (hasTrackingUrl) return null;
 
-    if (normalizedStatus === 'delivered' || normalizedStatus === 'completed') {
-      return 'Delivered';
-    }
+    const restaurantCoordinate = extractRestaurantCoordinate(trackingOrderData);
+    const customerCoordinate = extractCustomerCoordinate(trackingOrderData);
 
-    if (normalizedStatus === 'cancelled' || normalizedStatus === 'canceled') {
-      return 'Cancelled';
-    }
+    if (!restaurantCoordinate || !customerCoordinate) return null;
 
-    const etaSource =
-      order.estimated_delivery_time ||
-      order.preorder_delivery_date ||
-      null;
+    const restaurantName =
+      trackingOrderData.restaurant?.name?.trim() || 'Restaurant';
+    const addr = trackingOrderData.delivery_address;
+    const customerAddress = [addr?.address1, addr?.address2, addr?.address3, addr?.city]
+      .filter(Boolean)
+      .map((s: any) => String(s).trim())
+      .join(', ') || 'Delivery location';
 
-    if (etaSource) {
-      try {
-        const etaDate = new Date(etaSource);
-        if (!Number.isNaN(etaDate.getTime())) {
-          const diffMs = etaDate.getTime() - Date.now();
-          const diffMins = Math.max(0, Math.round(diffMs / 60000));
-
-          if (diffMins > 0) {
-            return `${diffMins} min${diffMins === 1 ? '' : 's'}`;
-          }
-        }
-      } catch {
-        // ignore parse errors and fall back
-      }
-    }
-
-    return 'On the way';
-  };
+    return { restaurantCoordinate, customerCoordinate, restaurantName, customerAddress };
+  }, [trackingOrderData]);
 
   // Inform native layer when auto-PiP via home button is allowed.
   // This keeps the lifecycle fully on the Android side and avoids React-side crashes.
@@ -756,6 +751,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       }
     };
   }, [showTrackingWebView]);
+
+  // When showing the native route map (no tracking URL), allow PiP immediately.
+  useEffect(() => {
+    if (showTrackingWebView && fallbackMapCoords) {
+      webViewLoadedRef.current = true;
+    }
+  }, [showTrackingWebView, fallbackMapCoords]);
 
   // Trigger native PiP from the button in the header.
   // Sets isEnteringPip immediately so the header hides before the Android
@@ -816,7 +818,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   const handleTrackOrder = (orderId: string) => {
     if (!orderId) return;
-
     // Reset closing state immediately if we re-track before cleanup finished
     setIsClosingTracking(false);
     setSelectedOrderIdForTracking(orderId);
@@ -825,29 +826,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     // so the tracking overlay and map can appear immediately, without waiting
     // for the full detail API response.
     const shallowOrder = orders.find(o => o.id?.toString() === orderId.toString());
-
     if (shallowOrder) {
-      // For "order ready" style statuses where a pre-assignment map should be shown
-      // but no tracking_url is yet available, delegate to the parent navigation
-      // handler so the full-screen OrderTrackingScreen (Leaflet / native map)
-      // can render the restaurant → customer route.
-      const rawStatus = (shallowOrder.status || '').toString().toLowerCase();
-      const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
-      const readyStatusesForMap = new Set([
-        'packed',
-        'ready',
-        'order-ready',
-        'order_ready',
-      ]);
-
-      const initialUrl = getTrackingUrlFromOrderData(shallowOrder);
-
-      if (readyStatusesForMap.has(normalizedStatus) && !initialUrl && _onTrackOrder) {
-        _onTrackOrder(orderId);
-        return;
-      }
-
       setTrackingOrderData((prev: any) => prev ?? shallowOrder);
+      const initialUrl = getTrackingUrlFromOrderData(shallowOrder);
       if (initialUrl) {
         setSelectedTrackingUrl(initialUrl);
       }
@@ -1103,6 +1084,31 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     // Get the latest order from state.byId (this updates when FCM arrives)
     const latestContextOrder = state.byId[selectedOrderIdForTracking];
 
+    // When in PiP, force Android to redraw the surface so the new status is visible immediately.
+    // Android PiP does not automatically repaint React Native's surface on state changes —
+    // it only redraws on touch/interaction. We call PipModule.invalidateView() repeatedly
+    // for ~500 ms after the change to ensure the updated UI is painted.
+    if (latestContextOrder && isInPipModeRef.current) {
+      const last = lastPipSyncRef.current;
+      if (last.status !== latestContextOrder.status || last.updated_at !== latestContextOrder.updated_at) {
+        lastPipSyncRef.current = { status: latestContextOrder.status, updated_at: latestContextOrder.updated_at };
+        setPipSyncKey((k) => k + 1);
+        forceTrackingWebViewResize();
+
+        // Nudge the surface sooner than the next 100 ms native loop tick.
+        // Start at 100 ms so React has committed its changes to the native
+        // view hierarchy before we request a redraw.
+        const pipModule = NativeModules.PipModule;
+        if (pipModule && typeof pipModule.invalidateView === 'function') {
+          for (let i = 2; i <= 8; i++) {
+            setTimeout(() => {
+              try { pipModule.invalidateView(); } catch { /* ignore */ }
+            }, i * 50);
+          }
+        }
+      }
+    }
+
     // If context order exists (from FCM), sync it to local state AND fetch latest API data
     if (latestContextOrder) {
       setTrackingOrderData((prevData: any) => {
@@ -1148,10 +1154,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           const updatedData = {
             ...prevData,
             ...latestContextOrder,
-            // Preserve order_number if it exists in prevData but not in context
             order_number: latestContextOrder.order_number || prevData.order_number,
-            // Preserve restaurant details if they exist in prevData but not in context
             restaurant: latestContextOrder.restaurant || prevData.restaurant,
+            // FCM payloads are minimal — preserve rich fields from the previous API response
+            // so agent details, delivery address, and ETA aren't wiped out on status updates.
+            tracking: (latestContextOrder as any).tracking?.length ? (latestContextOrder as any).tracking : prevData.tracking,
+            delivery_address: (latestContextOrder as any).delivery_address || prevData.delivery_address,
+            estimated_delivery_time: (latestContextOrder as any).estimated_delivery_time || prevData.estimated_delivery_time,
           };
 
           // Step 2: Fetch latest full order data from API (silent fetch - no loading indicator)
@@ -1167,7 +1176,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         return prevData;
       });
     }
-  }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, state.byId, fetchTrackingOrderData]);
+  }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, state.byId, fetchTrackingOrderData, forceTrackingWebViewResize]);
 
   // API RESPONSE WATCHER: Watch for changes in API response data and reload bottom sheet
   // This ensures whenever the API response updates (status/timeline), the bottom sheet reflects changes
@@ -1200,7 +1209,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     // So when trackingOrderData updates, the bottom sheet reloads with new data
   }, [selectedOrderIdForTracking, trackingOrderData?.status, trackingOrderData?.updated_at  ]);
 
-  // Auto-close tracking overlay in PiP mode when order reaches a terminal status
+  // When order reaches terminal status in PiP: show "Delivered" overlay for delivered/completed, or close for cancelled
   useEffect(() => {
     if (!showTrackingWebView || !isInPipMode) return;
 
@@ -1208,27 +1217,45 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     const rawStatus = (displayOrder?.status || '').toString().toLowerCase().trim();
     const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
 
-    const isTerminalStatus =
-      normalizedStatus === 'delivered' ||
-      normalizedStatus === 'completed' ||
-      normalizedStatus === 'cancelled' ||
-      normalizedStatus === 'canceled';
+    const isDelivered =
+      normalizedStatus === 'delivered' || normalizedStatus === 'completed';
+    const isCancelled =
+      normalizedStatus === 'cancelled' || normalizedStatus === 'canceled';
 
-    if (!isTerminalStatus) {
-      return;
-    }
+    let cleanup: (() => void) | undefined;
 
-    handleCloseTrackingWebView();
-    webViewLoadedRef.current = false;
+    if (isDelivered) {
+      setShowDeliveredOverlay(true);
 
-    const pipModule = NativeModules.PipModule;
-    if (Platform.OS === 'android' && pipModule && typeof pipModule.setAutoPipEnabled === 'function') {
-      try {
-        pipModule.setAutoPipEnabled(false);
-      } catch {
-        // ignore native errors
+      // Show "Delivered" in the PiP status bar for 3 s, then terminate the PiP window.
+      // If the user expands PiP back to full screen before the timer fires,
+      // the OrderDeliveredOverlay mounts and plays its entrance animation.
+      const autoCloseTimer = setTimeout(() => {
+        const pipModule = NativeModules.PipModule;
+        if (Platform.OS === 'android' && pipModule) {
+          try { pipModule.setAutoPipEnabled(false); } catch { /* ignore */ }
+          if (typeof pipModule.closePip === 'function') {
+            try { pipModule.closePip(); } catch { /* ignore */ }
+          }
+        }
+        handleCloseTrackingWebView();
+      }, 3000);
+
+      cleanup = () => clearTimeout(autoCloseTimer);
+    } else if (isCancelled) {
+      handleCloseTrackingWebView();
+      webViewLoadedRef.current = false;
+      const pipModule = NativeModules.PipModule;
+      if (Platform.OS === 'android' && pipModule && typeof pipModule.setAutoPipEnabled === 'function') {
+        try {
+          pipModule.setAutoPipEnabled(false);
+        } catch {
+          // ignore
+        }
       }
     }
+
+    return cleanup;
   }, [
     showTrackingWebView,
     isInPipMode,
@@ -1236,6 +1263,20 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     trackingOrderData?.status,
     handleCloseTrackingWebView,
   ]);
+
+  const handleDeliveredOverlayDone = useCallback(() => {
+    setShowDeliveredOverlay(false);
+    handleCloseTrackingWebView();
+    webViewLoadedRef.current = false;
+    const pipModule = NativeModules.PipModule;
+    if (Platform.OS === 'android' && pipModule && typeof pipModule.setAutoPipEnabled === 'function') {
+      try {
+        pipModule.setAutoPipEnabled(false);
+      } catch {
+        // ignore
+      }
+    }
+  }, [handleCloseTrackingWebView]);
 
   // API RESPONSE WATCHER: Also watch the trackingOrderData itself for any changes
   // This ensures we catch updates from the initial API response or any subsequent API calls
@@ -1313,20 +1354,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       });
 
       if (response.success) {
-        // CLOSE MODAL FIRST to avoid multiple modal contentions on iOS
-        handleCloseTrackingWebView();
-
-        // Show confirmation after modal is dismissed
-        setTimeout(() => {
-          showConfirmation({
-            title: 'Call Initiated',
-            message: 'Your call to the delivery agent is being connected. Please wait for the call.',
-            confirmText: 'OK',
-            cancelText: '',
-            confirmButtonColor: '#00B14F',
-            onConfirm: () => { },
-          });
-        }, 800);
+        showConfirmation({
+          title: 'Call Initiated',
+          message: 'Your call to the delivery agent is being connected. Please wait for the call.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => { },
+        });
       } else {
         showConfirmation({
           title: 'Call Failed',
@@ -1746,8 +1781,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             elevation: 10,
           }}
         >
-
-          {!isInPipMode && (
+          {!isInPipMode && !showDeliveredOverlay && (
             <SafeAreaView edges={['top']} style={{ backgroundColor: '#FFFFFF' }}>
               <View style={styles.webViewHeader}>
                 <TouchableOpacity
@@ -1782,6 +1816,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 webViewRef={webViewRef}
                 webViewLoadedRef={webViewLoadedRef}
               />
+            ) : fallbackMapCoords ? (
+              <OrderRouteMapView
+                restaurantCoordinate={fallbackMapCoords.restaurantCoordinate}
+                customerCoordinate={fallbackMapCoords.customerCoordinate}
+                restaurantName={fallbackMapCoords.restaurantName}
+                customerAddress={fallbackMapCoords.customerAddress}
+                resizeTrigger={isInPipMode}
+                style={styles.webView}
+              />
             ) : (
               <View style={isInPipMode ? styles.webViewLoadingContainerPip : styles.webViewLoadingContainer}>
                 <ActivityIndicator size="large" color="#00B14F" />
@@ -1792,23 +1835,37 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             )}
           </View>
 
-          {isInPipMode && trackingOrderData && (
-            <View style={styles.navigationWidget} pointerEvents="box-none">
-              <View style={styles.navigationInfoBar}>
-                <View style={styles.navigationDirection}>
-                  <MaterialIcons name="arrow-upward" size={14} color="#FFFFFF" />
-                  <Text style={styles.navigationDirectionText} numberOfLines={1} ellipsizeMode="tail">
-                    {trackingOrderData?.restaurant?.name || 'Restaurant'}
-                  </Text>
-                </View>
-                <View style={styles.navigationETA}>
-                  <MaterialIcons name="access-time" size={11} color="#FFFFFF" />
-                  <Text style={styles.navigationETAText}>
-                    {getPipEtaLabelForTracking(trackingContextOrder || trackingOrderData)}
-                  </Text>
+          {isInPipMode && trackingOrderData && (() => {
+            const pipDisplayOrder = trackingContextOrder || trackingOrderData;
+            const pipStatusConfig = mapOrderStatusToUI(pipDisplayOrder?.status);
+            return (
+              <View key={`pip-status-${pipSyncKey}`} style={styles.navigationWidget} pointerEvents="box-none">
+                <View style={[styles.navigationInfoBar, { backgroundColor: pipStatusConfig.color }]}>
+                  <View style={styles.navigationStatus}>
+                    <Text
+                      style={styles.navigationStatusText}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {pipStatusConfig.label}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            </View>
+            );
+          })()}
+
+          {/* Delivered overlay — only rendered in normal mode so animations play correctly.
+              In PiP the green status bar already shows "Delivered".
+              When the user returns from PiP with showDeliveredOverlay=true the overlay
+              mounts fresh and the entrance animation plays from the start. */}
+          {showDeliveredOverlay && !isInPipMode && (
+            <OrderDeliveredOverlay
+              onDone={handleDeliveredOverlayDone}
+              restaurantName={trackingOrderData?.restaurant?.name || trackingContextOrder?.restaurant?.name}
+              orderNumber={trackingOrderData?.order_number || trackingContextOrder?.order_number}
+              autoCloseMs={4500}
+            />
           )}
 
           {!isInPipMode && (
@@ -2538,13 +2595,12 @@ const styles = StyleSheet.create({
     pointerEvents: 'box-none',
   },
   navigationInfoBar: {
-    backgroundColor: '#00B14F',
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -2552,34 +2608,20 @@ const styles = StyleSheet.create({
     elevation: 4,
     minHeight: 32,
   },
-  navigationDirection: {
+  navigationStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-    marginRight: 6,
-  },
-  navigationDirectionText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontFamily: 'Poppins_600SemiBold',
-    marginLeft: 6,
-    flex: 1,
-    lineHeight: 12,
-  },
-  navigationETA: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 6,
-    minWidth: 60,
+    alignSelf: 'center',
+    maxWidth: '100%',
   },
-  navigationETAText: {
-    color: '#FFFFFF',
-    fontSize: 9,
+  navigationStatusText: {
+    fontSize: 10,
     fontFamily: 'Poppins_600SemiBold',
-    marginLeft: 3,
+    color: '#FFFFFF',
+    flexShrink: 1,
   },
   webViewLoadingContainer: {
     position: 'absolute',

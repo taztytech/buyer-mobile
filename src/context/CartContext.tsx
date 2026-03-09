@@ -36,6 +36,8 @@ interface CartContextType {
   updateQuantity: (itemId: string, quantity: number) => Promise<CartSummary | null>;
   clearCart: (syncWithBackend?: boolean) => Promise<void>;
   reloadCart: () => Promise<void>; // Reload cart from backend
+  /** Run any pending debounced quantity update immediately (e.g. before navigating to checkout). */
+  flushPendingQuantityUpdate: () => Promise<void>;
   getTotalItems: () => number;
   getTotalPrice: () => number;
   restaurantId: number | null;
@@ -108,7 +110,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   // Refs for debouncing and canceling pending requests
   const updateQuantityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const pendingUpdateRef = useRef<{ itemId: string; quantity: number } | null>(null);
+  const pendingUpdateRef = useRef<{ itemId: string; quantity: number; previousQuantity: number } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   /**
@@ -608,156 +610,194 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       abortControllerRef.current.abort();
     }
 
-    // Store pending update
-    pendingUpdateRef.current = { itemId, quantity: finalQuantity };
+    // Store pending update (previousQuantity used for revert on API failure)
+    const previousQuantity = item.quantity || 0;
+    pendingUpdateRef.current = { itemId, quantity: finalQuantity, previousQuantity };
 
-    return new Promise<CartSummary | null>((resolve, reject) => {
-      updateQuantityTimeoutRef.current = setTimeout(async () => {
-        const pendingUpdate = pendingUpdateRef.current;
-        if (!pendingUpdate || pendingUpdate.itemId !== itemId) {
-          resolve(null);
-          return;
+    const runPendingUpdate = async (): Promise<CartSummary | null> => {
+      const pendingUpdate = pendingUpdateRef.current;
+      if (!pendingUpdate || pendingUpdate.itemId !== itemId) {
+        return null;
+      }
+      const currentItem = cart[pendingUpdate.itemId];
+      if (!currentItem) {
+        pendingUpdateRef.current = null;
+        return null;
+      }
+      const pendingItemId = pendingUpdate.itemId;
+      const pendingQuantity = pendingUpdate.quantity;
+      const revertQuantity = pendingUpdate.previousQuantity;
+
+      abortControllerRef.current = new AbortController();
+
+      try {
+        const token = await storageService.getAccessToken();
+        if (!token || !restaurantId) {
+          return null;
         }
 
-        // Create new abort controller for this request
-        abortControllerRef.current = new AbortController();
-
-        try {
-          const token = await storageService.getAccessToken();
-
-          if (!token || !restaurantId) {
-            resolve(null);
-            return;
-          }
-
-          // If item doesn't have cartItemId, add it to backend first
-          if (!item?.cartItemId) {
-            // Prepare backend request
-            const backendRequest: AddToCartRequest = {
-              restaurant_id: restaurantId,
-              item_id: item.itemId || parseInt(item.id, 10),
-              quantity: finalQuantity,
-              special_instructions: item.specialInstructions,
-            };
-
-            // Check if cart contains only preorder items (excluding current item being updated)
-            const cartWithoutCurrentItem = { ...cart };
-            delete cartWithoutCurrentItem[itemId];
-            const cartHasOnlyPreorder = isCartOnlyPreorder(cartWithoutCurrentItem);
-
-            // Only include preorder fields if:
-            // 1. Item is actually a preorder item
-            // 2. Cart contains ONLY preorder items (no normal items mixed in)
-            if (item.isPreorder === true && cartHasOnlyPreorder) {
-              backendRequest.is_preorder = true;
-              if (item.campaignId) {
-                backendRequest.campaign_id = item.campaignId;
-              }
-            }
-
-            // Add customizations if item has variants
-            if (item.isCustomizable && item.variants && item.variants.length > 0) {
-              backendRequest.customizations = item.variants.map((variant) => ({
-                customization_group_id: parseInt(variant.variantId || '0', 10),
-                selected_options: (variant.addOns || []).map(addOnId => ({
-                  id: parseInt(addOnId, 10),
-                })),
-              })).filter(c => c.customization_group_id > 0);
-            }
-
-            const addResponse = await cartService.addToCart(backendRequest);
-
-            if (addResponse.success && addResponse.cart_item_id) {
-              // Update local cart with backend cart_item_id
-              setCart(prev => {
-                const updatedCart = {
-                  ...prev,
-                  [item.id]: {
-                    ...prev[item.id],
-                    cartItemId: addResponse.cart_item_id,
-                  },
-                };
-                // Save to storage after backend sync
-                saveCartToStorage(updatedCart, restaurantId, restaurantName, restaurantLogo);
-                return updatedCart;
-              });
-              // Return cart_summary from add response
-              resolve(addResponse.cart_summary || null);
-              return;
-            } else {
-              // Revert local cart change on failure
-              setCart(prev => ({
-                ...prev,
-                [itemId]: {
-                  ...prev[itemId],
-                  quantity: item.quantity || 0,
-                },
-              }));
-              resolve(null);
-              return;
-            }
-          }
-
-          setSyncWithBackend(true);
-
-          // Update existing cart item - do NOT pass is_preorder or campaign_id
-          // These fields are only sent when adding new items via addToCart API
-          const updateResponse = await cartService.updateCartItem(item.cartItemId, {
+        if (!currentItem.cartItemId) {
+          const backendRequest: AddToCartRequest = {
             restaurant_id: restaurantId,
-            quantity: finalQuantity,
-          });
-
-          // If update failed, reject promise with error message so it can be displayed
-          if (!updateResponse.success) {
-            // Revert local cart change on failure
-            setCart(prev => ({
-              ...prev,
-              [itemId]: {
-                ...prev[itemId],
-                quantity: item.quantity || 0,
-              },
-            }));
-            
-            const errorMessage = updateResponse.error || 'Failed to update cart item';
-            const error: any = new Error(errorMessage);
-            error.isCartUpdateError = true;
-            reject(error);
-            return;
+            item_id: currentItem.itemId || parseInt(currentItem.id, 10),
+            quantity: pendingQuantity,
+            special_instructions: currentItem.specialInstructions,
+          };
+          const cartWithoutCurrent = { ...cart };
+          delete cartWithoutCurrent[pendingItemId];
+          if (currentItem.isPreorder === true && isCartOnlyPreorder(cartWithoutCurrent)) {
+            backendRequest.is_preorder = true;
+            if (currentItem.campaignId) {
+              backendRequest.campaign_id = currentItem.campaignId;
+            }
+          }
+          if (currentItem.isCustomizable && currentItem.variants && currentItem.variants.length > 0) {
+            backendRequest.customizations = currentItem.variants.map((variant) => ({
+              customization_group_id: parseInt(variant.variantId || '0', 10),
+              selected_options: (variant.addOns || []).map(addOnId => ({ id: parseInt(addOnId, 10) })),
+            })).filter(c => c.customization_group_id > 0);
           }
 
-          // Return cart_summary from update response
-          resolve(updateResponse.cart_summary || null);
-        } catch (error: any) {
-          // Revert local cart change on error
+          const addResponse = await cartService.addToCart(backendRequest);
+          if (addResponse.success && addResponse.cart_item_id) {
+            setCart(prev => {
+              const updated = {
+                ...prev,
+                [currentItem.id]: { ...prev[currentItem.id], cartItemId: addResponse.cart_item_id },
+              };
+              saveCartToStorage(updated, restaurantId, restaurantName, restaurantLogo);
+              return updated;
+            });
+            return addResponse.cart_summary || null;
+          }
           setCart(prev => ({
             ...prev,
-            [itemId]: {
-              ...prev[itemId],
-              quantity: item.quantity || 0,
-            },
+            [pendingItemId]: { ...prev[pendingItemId], quantity: revertQuantity },
           }));
-          
-          // If request was aborted, don't treat as error
-          if (error?.name === 'AbortError') {
-            resolve(null);
-            return;
-          }
-          
-          // Reject with cart update errors so they can be caught and displayed in the UI
-          if (error?.isCartUpdateError) {
-            reject(error);
-            return;
-          }
-          
-          // For other errors, just resolve with null (local cart already reverted)
-          resolve(null);
-        } finally {
-          setSyncWithBackend(false);
-          pendingUpdateRef.current = null;
-          abortControllerRef.current = null;
+          return null;
         }
-      }, 300); // 300ms debounce delay
+
+        setSyncWithBackend(true);
+        const updateResponse = await cartService.updateCartItem(currentItem.cartItemId, {
+          restaurant_id: restaurantId,
+          quantity: pendingQuantity,
+        });
+
+        if (!updateResponse.success) {
+          setCart(prev => ({
+            ...prev,
+            [pendingItemId]: { ...prev[pendingItemId], quantity: revertQuantity },
+          }));
+          const err: any = new Error(updateResponse.error || 'Failed to update cart item');
+          err.isCartUpdateError = true;
+          throw err;
+        }
+        return updateResponse.cart_summary || null;
+      } catch (error: any) {
+        setCart(prev => ({
+          ...prev,
+          [pendingItemId]: { ...prev[pendingItemId], quantity: revertQuantity },
+        }));
+        if (error?.name === 'AbortError') return null;
+        if (error?.isCartUpdateError) throw error;
+        return null;
+      } finally {
+        setSyncWithBackend(false);
+        pendingUpdateRef.current = null;
+        abortControllerRef.current = null;
+      }
+    };
+
+    return new Promise<CartSummary | null>((resolve, reject) => {
+      updateQuantityTimeoutRef.current = setTimeout(() => {
+        runPendingUpdate().then(resolve).catch(reject);
+      }, 300);
     });
+  };
+
+  /**
+   * Run any pending debounced quantity update immediately.
+   * Call before navigating to checkout so the backend cart is in sync.
+   */
+  const flushPendingQuantityUpdate = async (): Promise<void> => {
+    if (updateQuantityTimeoutRef.current) {
+      clearTimeout(updateQuantityTimeoutRef.current);
+      updateQuantityTimeoutRef.current = null;
+    }
+    const pending = pendingUpdateRef.current;
+    if (!pending) return;
+    const currentItem = cart[pending.itemId];
+    if (!currentItem) {
+      pendingUpdateRef.current = null;
+      return;
+    }
+    abortControllerRef.current = new AbortController();
+    try {
+      const token = await storageService.getAccessToken();
+      if (!token || !restaurantId) {
+        pendingUpdateRef.current = null;
+        return;
+      }
+      if (!currentItem.cartItemId) {
+        const backendRequest: AddToCartRequest = {
+          restaurant_id: restaurantId,
+          item_id: currentItem.itemId || parseInt(currentItem.id, 10),
+          quantity: pending.quantity,
+          special_instructions: currentItem.specialInstructions,
+        };
+        const cartWithoutCurrent = { ...cart };
+        delete cartWithoutCurrent[pending.itemId];
+        if (currentItem.isPreorder === true && isCartOnlyPreorder(cartWithoutCurrent)) {
+          backendRequest.is_preorder = true;
+          if (currentItem.campaignId) backendRequest.campaign_id = currentItem.campaignId;
+        }
+        if (currentItem.isCustomizable && currentItem.variants?.length) {
+          backendRequest.customizations = currentItem.variants.map((v) => ({
+            customization_group_id: parseInt(v.variantId || '0', 10),
+            selected_options: (v.addOns || []).map((id) => ({ id: parseInt(id, 10) })),
+          })).filter(c => c.customization_group_id > 0);
+        }
+        const addResponse = await cartService.addToCart(backendRequest);
+        if (addResponse.success && addResponse.cart_item_id) {
+          setCart(prev => {
+            const updated = {
+              ...prev,
+              [currentItem.id]: { ...prev[currentItem.id], cartItemId: addResponse.cart_item_id },
+            };
+            saveCartToStorage(updated, restaurantId, restaurantName, restaurantLogo);
+            return updated;
+          });
+        } else {
+          setCart(prev => ({
+            ...prev,
+            [pending.itemId]: { ...prev[pending.itemId], quantity: pending.previousQuantity },
+          }));
+        }
+        pendingUpdateRef.current = null;
+        abortControllerRef.current = null;
+        return;
+      }
+      setSyncWithBackend(true);
+      const updateResponse = await cartService.updateCartItem(currentItem.cartItemId, {
+        restaurant_id: restaurantId,
+        quantity: pending.quantity,
+      });
+      if (!updateResponse.success) {
+        setCart(prev => ({
+          ...prev,
+          [pending.itemId]: { ...prev[pending.itemId], quantity: pending.previousQuantity },
+        }));
+      }
+    } catch {
+      setCart(prev => ({
+        ...prev,
+        [pending.itemId]: { ...prev[pending.itemId], quantity: pending.previousQuantity },
+      }));
+    } finally {
+      setSyncWithBackend(false);
+      pendingUpdateRef.current = null;
+      abortControllerRef.current = null;
+    }
   };
 
   /**
@@ -841,6 +881,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         updateQuantity,
         clearCart,
         reloadCart,
+        flushPendingQuantityUpdate,
         getTotalItems,
         getTotalPrice,
         restaurantId,
