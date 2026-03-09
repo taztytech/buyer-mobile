@@ -18,6 +18,7 @@ import {
   PanResponder,
   NativeModules,
   Platform,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -594,6 +595,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const { canUsePip, isInPipMode: hookIsInPipMode, enterPip } = useAndroidPip();
   const webViewLoadedRef = useRef<boolean>(false);
   const webViewRef = useRef<any>(null);
+  const appStateRef = useRef(AppState.currentState);
 
   // isEnteringPip: set to true the instant the user presses the PiP button so
   // the header disappears BEFORE the Android animation starts.  This eliminates
@@ -660,6 +662,29 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }
     prevIsInPipModeRef.current = isInPipMode;
   }, [isInPipMode, showTrackingWebView, forceTrackingWebViewResize]);
+
+  // When returning from background after PiP close or app resume, force the
+  // tracking page to recalculate its layout so the map fills the full overlay
+  // instead of keeping a stale PiP-sized snapshot over the header.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const wasBackground =
+        appStateRef.current === 'background' || appStateRef.current === 'inactive';
+      const isActive = nextState === 'active';
+
+      appStateRef.current = nextState;
+
+      if (wasBackground && isActive && showTrackingWebView) {
+        forceTrackingWebViewResize();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [showTrackingWebView, forceTrackingWebViewResize]);
 
   // Stable tracking URL memo — the TrackingWebView source prop must NOT change
   // during PiP ↔ normal transitions, bottom-sheet drags, or any other parent
@@ -735,8 +760,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // Trigger native PiP from the button in the header.
   // Sets isEnteringPip immediately so the header hides before the Android
   // shrink animation starts, preventing the white-screen flash.
+  // Guard: only allow PiP once the tracking WebView has fully loaded so
+  // Android snapshots a rendered map instead of a blank white surface.
   const handleEnterPip = useCallback(() => {
     if (!showTrackingWebView) return;
+
+    if (!webViewLoadedRef.current) {
+      console.log('[OrdersScreen] Ignoring PiP tap until tracking WebView has loaded');
+      return;
+    }
 
     // Optimistically hide header — native event will confirm & clear this flag
     setIsEnteringPip(true);
@@ -784,6 +816,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
   const handleTrackOrder = (orderId: string) => {
     if (!orderId) return;
+
     // Reset closing state immediately if we re-track before cleanup finished
     setIsClosingTracking(false);
     setSelectedOrderIdForTracking(orderId);
@@ -792,9 +825,29 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     // so the tracking overlay and map can appear immediately, without waiting
     // for the full detail API response.
     const shallowOrder = orders.find(o => o.id?.toString() === orderId.toString());
+
     if (shallowOrder) {
-      setTrackingOrderData((prev: any) => prev ?? shallowOrder);
+      // For "order ready" style statuses where a pre-assignment map should be shown
+      // but no tracking_url is yet available, delegate to the parent navigation
+      // handler so the full-screen OrderTrackingScreen (Leaflet / native map)
+      // can render the restaurant → customer route.
+      const rawStatus = (shallowOrder.status || '').toString().toLowerCase();
+      const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
+      const readyStatusesForMap = new Set([
+        'packed',
+        'ready',
+        'order-ready',
+        'order_ready',
+      ]);
+
       const initialUrl = getTrackingUrlFromOrderData(shallowOrder);
+
+      if (readyStatusesForMap.has(normalizedStatus) && !initialUrl && _onTrackOrder) {
+        _onTrackOrder(orderId);
+        return;
+      }
+
+      setTrackingOrderData((prev: any) => prev ?? shallowOrder);
       if (initialUrl) {
         setSelectedTrackingUrl(initialUrl);
       }
