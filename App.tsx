@@ -46,6 +46,8 @@ import { analyticsService, AnalyticsEvents, AnalyticsScreens } from '@/services/
 import { inAppUpdateService } from '@/services/inAppUpdate.service';
 import { crashlyticsService } from '@/services/crashlytics.service';
 import { ForcedUpdateModal } from '@/components/ForcedUpdateModal';
+import { initMeta } from '@/analytics/metaInit';
+import { trackCheckout, trackRegistration, trackViewRestaurant } from '@/analytics/metaEvents';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -60,6 +62,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     checkRestaurantConflict,
     clearCart,
     reloadCart,
+    getTotalPrice,
     restaurantId: cartRestaurantId,
     restaurantName: cartRestaurantName,
   } = useCart();
@@ -397,6 +400,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
         // Initialize Crashlytics
         await crashlyticsService.initialize();
+        await initMeta();
 
         // Initialize Analytics
         await analyticsService.initialize();
@@ -639,6 +643,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       has_name: !!name,
       has_email: !!email,
     });
+    trackRegistration('phone_otp');
 
     // For new users, go directly to home
     // HomeScreen will check for addresses and redirect if needed
@@ -1000,6 +1005,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setSelectedRestaurantName(restaurantName);
     setRestaurantCameFrom('category');
     setCurrentScreen('restaurant');
+    trackViewRestaurant(String(restaurantId));
 
     // Animate restaurant screen sliding in from right
     Animated.timing(restaurantScreenSlide, {
@@ -1023,6 +1029,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       restaurant_name: restaurantName,
       source: 'home',
     });
+    trackViewRestaurant(String(restaurantId));
 
     // Animate restaurant screen sliding in from right
     Animated.timing(restaurantScreenSlide, {
@@ -1046,6 +1053,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
     // Set screen to checkout
     setCurrentScreen('checkout');
+    trackCheckout(getTotalPrice());
 
     // Animate checkout screen sliding in from right (next frame)
     requestAnimationFrame(() => {
@@ -1056,7 +1064,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start();
     });
-  }, [checkoutScreenSlide]);
+  }, [checkoutScreenSlide, getTotalPrice]);
 
   // Back from Checkout
   const handleBackFromCheckout = useCallback(() => {

@@ -178,6 +178,19 @@ module.exports = {
           "Tazty needs your location to show nearby restaurants and deliver food to your address.",
         NSLocationAlwaysAndWhenInUseUsageDescription:
           "Tazty needs your location to show nearby restaurants and deliver food to your address.",
+        NSUserTrackingUsageDescription:
+          "We use your data to provide personalized offers and improve ad attribution.",
+        FacebookAppID: process.env.EXPO_PUBLIC_META_APP_ID,
+        FacebookClientToken: process.env.EXPO_PUBLIC_META_CLIENT_TOKEN,
+        FacebookDisplayName: process.env.EXPO_PUBLIC_META_DISPLAY_NAME || "Tazty",
+        LSApplicationQueriesSchemes: ["fbapi", "fb-messenger-share-api", "fbauth2", "fbshareextension"],
+        CFBundleURLTypes: [
+          {
+            CFBundleURLSchemes: [
+              process.env.EXPO_PUBLIC_META_APP_ID ? `fb${process.env.EXPO_PUBLIC_META_APP_ID.replace(/^fb/, '')}` : "fb000000000000000"
+            ]
+          }
+        ],
         // For notifications
         FirebaseAppDelegateForwarderEnabled: true
       },
@@ -218,6 +231,9 @@ module.exports = {
       EXPO_PUBLIC_API_BASE_URL: apiConfig.apiBaseUrl,
       EXPO_PUBLIC_GOOGLE_MAPS_API_KEY:
         process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+      EXPO_PUBLIC_META_APP_ID: process.env.EXPO_PUBLIC_META_APP_ID,
+      EXPO_PUBLIC_META_CLIENT_TOKEN: process.env.EXPO_PUBLIC_META_CLIENT_TOKEN,
+      EXPO_PUBLIC_META_DISPLAY_NAME: process.env.EXPO_PUBLIC_META_DISPLAY_NAME,
       TAZTY_SELLER_BASEURL: process.env.TAZTY_SELLER_BASEURL || process.env.EXPO_PUBLIC_TAZTY_SELLER_BASEURL,
       eas: {
         projectId: "7d65a380-eee0-49b0-9f39-a5cd6eaede5a"

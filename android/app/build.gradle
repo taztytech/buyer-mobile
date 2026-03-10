@@ -127,7 +127,13 @@ android {
         // Google Maps API Key from environment variable or gradle.properties
         // Priority: gradle.properties > EXPO_PUBLIC_GOOGLE_MAPS_API_KEY env var
         def googleMapsApiKey = findProperty('GOOGLE_MAPS_API_KEY') ?: System.getenv('EXPO_PUBLIC_GOOGLE_MAPS_API_KEY') ?: ""
-        manifestPlaceholders = [GOOGLE_MAPS_API_KEY: googleMapsApiKey]
+        def facebookAppId = findProperty('META_APP_ID') ?: System.getenv('EXPO_PUBLIC_META_APP_ID') ?: ""
+        def facebookClientToken = findProperty('META_CLIENT_TOKEN') ?: System.getenv('EXPO_PUBLIC_META_CLIENT_TOKEN') ?: ""
+        manifestPlaceholders = [
+            GOOGLE_MAPS_API_KEY: googleMapsApiKey,
+            FACEBOOK_APP_ID: facebookAppId,
+            FACEBOOK_CLIENT_TOKEN: facebookClientToken
+        ]
     }
     
     // Load keystore properties from local.properties (primary source)

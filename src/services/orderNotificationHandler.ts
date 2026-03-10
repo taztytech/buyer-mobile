@@ -6,6 +6,7 @@
 import { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
 import { ordersService } from './orders.service';
 import { OrderListItem } from './orders.service';
+import { trackPurchase } from '@/analytics/metaEvents';
 
 // Action type for dispatching to orders store
 export type OrdersDispatch = (action: {
@@ -15,6 +16,12 @@ export type OrdersDispatch = (action: {
 
 // Store reference to get order by order_number (set by handler)
 let getOrderByOrderNumberFn: ((orderNumber: string) => OrderListItem | undefined) | null = null;
+
+function isPaymentConfirmed(paymentStatus: string | null | undefined): boolean {
+  if (!paymentStatus) return false;
+  const normalized = paymentStatus.toLowerCase();
+  return ['paid', 'captured', 'success', 'completed', 'successful'].includes(normalized);
+}
 
 /**
  * Set the function to lookup orders by order_number
@@ -218,6 +225,36 @@ export async function handleOrderNotification(
         updated_at: new Date().toISOString(),
       },
     });
+    const normalizedStatus = status.toLowerCase();
+    const paymentStatusRaw =
+      typeof data.payment_status === 'string'
+        ? data.payment_status
+        : typeof data.paymentStatus === 'string'
+          ? data.paymentStatus
+          : null;
+    const amountFromPayload =
+      typeof data.total_amount === 'string'
+        ? Number(data.total_amount)
+        : typeof data.final_amount === 'string'
+          ? Number(data.final_amount)
+          : null;
+    const numItemsFromPayload =
+      typeof data.num_items === 'string'
+        ? Number(data.num_items)
+        : null;
+    if (
+      normalizedStatus === 'delivered' &&
+      isPaymentConfirmed(paymentStatusRaw) &&
+      amountFromPayload !== null &&
+      Number.isFinite(amountFromPayload)
+    ) {
+      trackPurchase({
+        orderId: String(orderIdNum),
+        amount: amountFromPayload,
+        numItems: numItemsFromPayload !== null && Number.isFinite(numItemsFromPayload) ? numItemsFromPayload : undefined,
+        eventId: `${orderIdNum}_${Date.now()}`,
+      });
+    }
     console.log('✅ Order Handler: Status update dispatched to OrdersContext - Will update ALL screens automatically', {
       status,
       willUpdate: ['My Orders Screen', 'Order Details Screen', 'Track Order Bottom Sheet'],
@@ -231,6 +268,25 @@ export async function handleOrderNotification(
 
         if (response.success && response.data) {
           const fullOrder = response.data as any;
+          const fullStatus = String(fullOrder?.status || status).toLowerCase();
+          const fullPaymentStatus = String(fullOrder?.payment_status || '').toLowerCase();
+          const fullAmount = Number(
+            fullOrder?.summary?.total_amount ??
+            fullOrder?.total_amount ??
+            fullOrder?.final_amount ??
+            NaN
+          );
+          const fullNumItems = Array.isArray(fullOrder?.items)
+            ? fullOrder.items.reduce((sum: number, item: any) => sum + Number(item?.quantity || 0), 0)
+            : undefined;
+          if (fullStatus === 'delivered' && isPaymentConfirmed(fullPaymentStatus) && Number.isFinite(fullAmount)) {
+            trackPurchase({
+              orderId: String(orderIdNum),
+              amount: fullAmount,
+              numItems: fullNumItems,
+              eventId: `${orderIdNum}_${Date.now()}`,
+            });
+          }
           // Update with full order data
           dispatch({
             type: 'UPSERT_ORDER_FROM_FCM',

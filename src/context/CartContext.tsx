@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useRe
 import { cartService, AddToCartRequest, CartSummary } from '@/services/cart.service';
 import { storageService } from '@/services/storage.service';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
+import { trackAddToCart } from '@/analytics/metaEvents';
 
 export interface CartVariant {
   id: string;
@@ -378,6 +379,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const addToCart = async (item: CartItem, overrideRestaurantId?: number) => {
     const normalizedItem = normalizeCartItemQuantities(item);
+    const itemIdForEvent = normalizedItem.itemId || parseInt(normalizedItem.id, 10);
+    const itemPriceForEvent = normalizedItem.price;
+    if (Number.isFinite(itemIdForEvent) && Number.isFinite(itemPriceForEvent)) {
+      trackAddToCart(String(itemIdForEvent), Number(itemPriceForEvent));
+    }
 
       // Update local cart immediately for responsive UI
     setCart(prev => ({
