@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { APP_VERSION_CODE, APP_VERSION_NAME } from '@/config/appVersion.generated';
 import { API_CONFIG, buildApiUrl } from '@/config/api.config';
 import { storageService } from './storage.service';
+import { analyticsService, AnalyticsEvents } from './analytics.service';
 
 // Types
 export interface ApiResponse<T = any> {
@@ -692,6 +693,10 @@ class ApiService {
       // be treated as user deletion or forced logout.
       if (!response.ok) {
         const statusCode = response.status;
+        analyticsService.logEvent(AnalyticsEvents.API_ERROR, {
+          endpoint,
+          http_code: statusCode,
+        });
 
         const isProfileEndpoint = endpoint.includes('/user/profile');
         // Only treat `/user/profile` returning status 400 with the exact deletion
@@ -777,6 +782,10 @@ class ApiService {
         timestamp: new Date().toISOString(),
       }));
       const apiError = this.handleError(error);
+      analyticsService.logEvent(AnalyticsEvents.API_ERROR, {
+        endpoint,
+        http_code: apiError.status || 0,
+      });
       return {
         success: false,
         error: apiError.message,

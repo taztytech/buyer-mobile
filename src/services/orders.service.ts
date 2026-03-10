@@ -4,6 +4,7 @@
  */
 
 import { apiService, ApiResponse } from './api.service';
+import { analyticsService, AnalyticsEvents } from './analytics.service';
 
 // Cart Item Interfaces
 export interface CartCustomization {
@@ -211,6 +212,13 @@ class OrdersService {
   async createOrder(request: CreateOrderRequest): Promise<ApiResponse<Order>> {
     try {
       const response = await apiService.post<any>('/api/buyer/orders', request);
+      if (response.success) {
+        const orderData = (response.data as any)?.order || response.data;
+        const orderId = (orderData as any)?.id || (orderData as any)?.order_id;
+        analyticsService.logEvent(AnalyticsEvents.ORDER_PLACED, {
+          order_id: orderId || undefined,
+        });
+      }
       return response;
     } catch (error: any) {
       return {
@@ -290,6 +298,11 @@ class OrdersService {
         reason,
         cancelled_by: cancelledBy,
       });
+      if (response.success) {
+        analyticsService.logEvent(AnalyticsEvents.ORDER_CANCELLED, {
+          order_id: orderNumber,
+        });
+      }
       return response;
     } catch (error: any) {
       return {

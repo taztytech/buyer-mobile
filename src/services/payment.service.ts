@@ -5,6 +5,7 @@
 
 import RazorpayCheckout from 'react-native-razorpay';
 import { apiService, ApiResponse } from './api.service';
+import { analyticsService, AnalyticsEvents } from './analytics.service';
 
 // Payment Interfaces
 export interface InitiatePaymentRequest {
@@ -287,6 +288,9 @@ class PaymentService {
     paymentDetails: PaymentDetails
   ): Promise<PaymentResult> {
     try {
+      await analyticsService.logEvent(AnalyticsEvents.PAYMENT_METHOD_SELECTED, {
+        method: 'online',
+      });
       // Step 1: Open Razorpay checkout using payment_details from order response
       const checkoutOptions: RazorpayOptions = {
         description: paymentDetails.description,
@@ -308,6 +312,10 @@ class PaymentService {
       const paymentResult = await this.openCheckout(checkoutOptions);
 
       if (!paymentResult.success) {
+        await analyticsService.logEvent(AnalyticsEvents.PAYMENT_FAILED, {
+          reason: paymentResult.error || 'payment_cancelled_or_failed',
+          gateway: 'razorpay',
+        });
         // Only mark as payment failure if it's not a user cancellation or network error
         // User cancellations and network errors don't need to be marked as failures
         if (
@@ -332,6 +340,10 @@ class PaymentService {
       });
 
       if (!verifyResponse.success) {
+        await analyticsService.logEvent(AnalyticsEvents.PAYMENT_FAILED, {
+          reason: verifyResponse.error || 'verification_failed',
+          gateway: 'razorpay',
+        });
         // Verification failed - treat as payment failed
         const failureResponse = await this.handlePaymentFailure(orderId, {
           reason: 'Payment could not be confirmed',
@@ -349,6 +361,11 @@ class PaymentService {
         };
       }
 
+      await analyticsService.logEvent(AnalyticsEvents.PAYMENT_SUCCESS, {
+        order_id: orderId,
+        final_amount: paymentDetails.amount,
+      });
+
       return {
         success: true,
         razorpay_payment_id: paymentResult.razorpay_payment_id,
@@ -358,6 +375,10 @@ class PaymentService {
     } catch (error: any) {
       // Parse any unexpected errors
       const parsedError = this.parseRazorpayError(error);
+      await analyticsService.logEvent(AnalyticsEvents.PAYMENT_FAILED, {
+        reason: parsedError.errorMessage,
+        gateway: 'razorpay',
+      });
       return {
         success: false,
         error: parsedError.errorMessage,
