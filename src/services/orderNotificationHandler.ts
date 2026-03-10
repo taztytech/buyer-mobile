@@ -7,6 +7,7 @@ import { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
 import { ordersService } from './orders.service';
 import { OrderListItem } from './orders.service';
 import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from './analytics.service';
+import { crashlyticsService } from './crashlytics.service';
 
 // Action type for dispatching to orders store
 export type OrdersDispatch = (action: {
@@ -229,6 +230,9 @@ export async function handleOrderNotification(
       analyticsService.setUserProperties({
         [AnalyticsUserProperties.USER_TYPE]: 'returning',
       });
+      crashlyticsService.setGlobalContext({
+        user_type: 'returning',
+      });
     } else if (normalizedStatus === 'cancelled' || normalizedStatus === 'canceled') {
       analyticsService.logEvent(AnalyticsEvents.ORDER_CANCELLED, { order_id: orderIdNum });
     }
@@ -261,6 +265,9 @@ export async function handleOrderNotification(
       }
     }
   } catch (error) {
+    crashlyticsService.recordError(error, {
+      source: 'fcm_order_notification_handler',
+    });
     console.error('❌ Order Handler: Error processing order notification', error);
     // Don't throw - allow app to continue
   }

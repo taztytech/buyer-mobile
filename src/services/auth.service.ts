@@ -8,6 +8,7 @@ import { API_CONFIG } from '@/config/api.config';
 import { storageService, UserData } from './storage.service';
 import { fcmNotificationService } from './fcmNotification.service';
 import { analyticsService, AnalyticsEvents } from './analytics.service';
+import { crashlyticsService } from './crashlytics.service';
 
 // Types
 export interface SendOtpRequest {
@@ -196,6 +197,7 @@ class AuthService {
       // Clear all tokens and user data regardless of API response
       // This ensures complete cleanup even if API call fails
       await apiService.clearTokens();
+      await crashlyticsService.setUserId(null);
 
       return response;
     } catch (error: any) {
@@ -203,6 +205,7 @@ class AuthService {
       await apiService.clearTokens().catch((clearError) => {
         console.error('⚠️  Failed to clear tokens on logout:', clearError);
       });
+      await crashlyticsService.setUserId(null);
 
       return {
         success: false,
@@ -225,6 +228,7 @@ class AuthService {
 
       // Clear all tokens and user data immediately
       await apiService.clearTokens();
+      await crashlyticsService.setUserId(null);
     } catch (error: any) {
       console.error('⚠️  Error during force logout:', error);
       // Still try to clear tokens even if FCM unregister fails

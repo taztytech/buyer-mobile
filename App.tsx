@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState, InteractionManager } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState, InteractionManager, Platform } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
@@ -46,6 +46,7 @@ import { analyticsService, AnalyticsEvents, AnalyticsScreens, AnalyticsUserPrope
 import { inAppUpdateService } from '@/services/inAppUpdate.service';
 import { crashlyticsService } from '@/services/crashlytics.service';
 import { ForcedUpdateModal } from '@/components/ForcedUpdateModal';
+import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -241,6 +242,19 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     }
   }, [currentScreen, isCheckingAuth]);
 
+  React.useEffect(() => {
+    const criticalScreenAttributeMap: Partial<Record<typeof currentScreen, string>> = {
+      checkout: 'checkout',
+      orderTracking: 'order_status',
+      orderDetail: 'order_status',
+      orders: 'order_status',
+    };
+    const crashScreen = criticalScreenAttributeMap[currentScreen];
+    if (crashScreen) {
+      crashlyticsService.setAttribute('current_screen', crashScreen);
+    }
+  }, [currentScreen]);
+
   // Set up FCM handlers for order notifications
   React.useEffect(() => {
     // Set orders dispatch in FCM service
@@ -352,6 +366,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
             // Reset analytics user data
             await analyticsService.resetAnalyticsData();
+            await crashlyticsService.setUserId(null);
 
             // Clear address cache
             addressService.clearCache();
@@ -389,6 +404,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
             // Reset analytics user data
             await analyticsService.resetAnalyticsData();
+            await crashlyticsService.setUserId(null);
 
             // Clear address cache
             addressService.clearCache();
@@ -418,6 +434,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
         // Initialize Crashlytics
         await crashlyticsService.initialize();
+        await crashlyticsService.setGlobalContext({
+          app_version: APP_VERSION_NAME,
+          platform: Platform.OS,
+        });
 
         // Initialize Analytics
         await analyticsService.initialize();
@@ -450,6 +470,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             await analyticsService.setUserId(idString);
             await crashlyticsService.setUserId(idString);
           }
+          await crashlyticsService.setGlobalContext({
+            app_version: APP_VERSION_NAME,
+            login_state: 'logged_in',
+          });
           await analyticsService.setUserProperties({
             [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
           });
@@ -458,6 +482,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           setCurrentScreen('home');
         } else {
           // No valid session, go to login
+          await crashlyticsService.setUserId(null);
+          await crashlyticsService.setGlobalContext({
+            app_version: APP_VERSION_NAME,
+            login_state: 'guest',
+          });
           await analyticsService.setUserProperties({
             [AnalyticsUserProperties.LOGIN_STATE]: 'guest',
           });
@@ -618,12 +647,18 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       const currentUser = await authService.getCurrentUser();
       if (currentUser?.id) {
         await analyticsService.setUserId(currentUser.id.toString());
+        await crashlyticsService.setUserId(currentUser.id.toString());
       }
 
       await analyticsService.logEvent(AnalyticsEvents.OTP_VERIFIED, { method: 'sms' });
       await analyticsService.logEvent(AnalyticsEvents.LOGIN_SUCCESS, { method: 'otp' });
       await analyticsService.setUserProperties({
         [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
+      });
+      await crashlyticsService.setGlobalContext({
+        app_version: APP_VERSION_NAME,
+        login_state: 'logged_in',
+        user_type: 'returning',
       });
 
       setCurrentScreen('home');
@@ -655,9 +690,15 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
         // Set analytics user ID and properties
         await analyticsService.setUserId(currentUser.id.toString());
+        await crashlyticsService.setUserId(currentUser.id.toString());
         await analyticsService.setUserProperties({
           [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
           [AnalyticsUserProperties.USER_TYPE]: 'new',
+        });
+        await crashlyticsService.setGlobalContext({
+          app_version: APP_VERSION_NAME,
+          login_state: 'logged_in',
+          user_type: 'new',
         });
       }
     } catch (error) {
@@ -682,6 +723,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
     // Reset analytics user data
     await analyticsService.reset();
+    await crashlyticsService.setUserId(null);
+    await crashlyticsService.setGlobalContext({
+      login_state: 'guest',
+    });
 
     // Clear authentication tokens and user data
     await authService.logout();
@@ -935,6 +980,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       [AnalyticsUserProperties.CITY]: resolvedCity || null,
       [AnalyticsUserProperties.PINCODE]: resolvedPincode || null,
       [AnalyticsUserProperties.AREA_NAME]: resolvedAreaName || null,
+    });
+    crashlyticsService.setGlobalContext({
+      city: resolvedCity || undefined,
+      pincode: resolvedPincode || undefined,
     });
     analyticsService.logEvent(AnalyticsEvents.LOCATION_SELECTED_MANUAL, {
       city: resolvedCity || undefined,

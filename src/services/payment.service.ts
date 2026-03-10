@@ -6,6 +6,7 @@
 import RazorpayCheckout from 'react-native-razorpay';
 import { apiService, ApiResponse } from './api.service';
 import { analyticsService, AnalyticsEvents } from './analytics.service';
+import { crashlyticsService } from './crashlytics.service';
 
 // Payment Interfaces
 export interface InitiatePaymentRequest {
@@ -288,6 +289,9 @@ class PaymentService {
     paymentDetails: PaymentDetails
   ): Promise<PaymentResult> {
     try {
+      await crashlyticsService.setAttribute('current_screen', 'payment');
+      await crashlyticsService.setAttribute('payment_method', 'online');
+      await crashlyticsService.log('User initiated online payment');
       await analyticsService.logEvent(AnalyticsEvents.PAYMENT_METHOD_SELECTED, {
         method: 'online',
       });
@@ -312,6 +316,16 @@ class PaymentService {
       const paymentResult = await this.openCheckout(checkoutOptions);
 
       if (!paymentResult.success) {
+        await crashlyticsService.recordError(
+          new Error(paymentResult.error || 'payment_cancelled_or_failed'),
+          {
+            source: 'payment_process_checkout',
+            order_id: orderId,
+            gateway: 'razorpay',
+            payment_method: 'online',
+            error_type: paymentResult.errorType || 'unknown',
+          }
+        );
         await analyticsService.logEvent(AnalyticsEvents.PAYMENT_FAILED, {
           reason: paymentResult.error || 'payment_cancelled_or_failed',
           gateway: 'razorpay',
@@ -340,6 +354,15 @@ class PaymentService {
       });
 
       if (!verifyResponse.success) {
+        await crashlyticsService.recordError(
+          new Error(verifyResponse.error || 'verification_failed'),
+          {
+            source: 'payment_verify',
+            order_id: orderId,
+            gateway: 'razorpay',
+            payment_method: 'online',
+          }
+        );
         await analyticsService.logEvent(AnalyticsEvents.PAYMENT_FAILED, {
           reason: verifyResponse.error || 'verification_failed',
           gateway: 'razorpay',
@@ -375,6 +398,13 @@ class PaymentService {
     } catch (error: any) {
       // Parse any unexpected errors
       const parsedError = this.parseRazorpayError(error);
+      await crashlyticsService.recordError(error, {
+        source: 'payment_process_exception',
+        order_id: orderId,
+        gateway: 'razorpay',
+        payment_method: 'online',
+        error_code: parsedError.errorCode || 'unknown',
+      });
       await analyticsService.logEvent(AnalyticsEvents.PAYMENT_FAILED, {
         reason: parsedError.errorMessage,
         gateway: 'razorpay',
