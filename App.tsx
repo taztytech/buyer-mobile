@@ -98,7 +98,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const [addressSelectionCameFrom, setAddressSelectionCameFrom] = React.useState<'home' | 'myAddresses' | 'registration'>('home');
   const [locationSelectionCameFrom, setLocationSelectionCameFrom] = React.useState<'home' | 'addressSelection' | 'myAddresses'>('home');
   const [orderTrackingCameFrom, setOrderTrackingCameFrom] = React.useState<'orders' | 'checkout' | 'orderDetail'>('orders');
-  const [ordersCameFrom, setOrdersCameFrom] = React.useState<'profile' | 'orderDetail'>('profile');
+  const [ordersCameFrom, setOrdersCameFrom] = React.useState<'profile' | 'orderDetail' | 'notification'>('profile');
   const [orderDetailCameFrom, setOrderDetailCameFrom] = React.useState<'orders' | 'checkout'>('orders');
   const [editingAddress, setEditingAddress] = React.useState<any>(null);
   const [helpOrderData, setHelpOrderData] = React.useState<OrderListItem | null>(null);
@@ -271,6 +271,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       startupNotificationNavigationRef.current = true;
       console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
       onNotificationNavigateToOrders?.();
+      // Force fresh fetch when arriving from notification tap.
+      resetOrdersPersistence();
 
       // Force-close all overlays so notification navigation wins from any screen.
       homeScreenSlide.setValue(0);
@@ -291,7 +293,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       setSelectedOrderData(null);
 
       // Keep existing back behavior: Orders -> Profile for notification entry.
-      setOrdersCameFrom('profile');
+      setOrdersCameFrom('notification');
       setHighlightOrderId(orderId || null);
       setCurrentScreen('orders');
 
@@ -489,8 +491,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
           });
 
-          // User has valid session, navigate to home
-          setCurrentScreen('home');
+          // If app opened from an FCM tap during cold start, preserve orders navigation.
+          if (!startupNotificationNavigationRef.current) {
+            setCurrentScreen('home');
+          }
         } else {
           // No valid session, go to login
           await crashlyticsService.setUserId(null);
@@ -1388,8 +1392,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       duration: 200,  // Small duration for smooth transition
       useNativeDriver: true,
     }).start(() => {
-      // If we came from orderDetail (which came from checkout), go to home
-      // Otherwise, go to profile (normal flow from profile screen)
+      // If we came from orderDetail (which came from checkout), go to home.
+      // If we came from notification tap, go to home (continue app usage).
+      // Otherwise, go to profile (normal flow from profile screen).
       if (ordersCameFrom === 'orderDetail') {
         // Batch all screen position resets together before state update
         orderDetailScreenSlide.setValue(SCREEN_WIDTH);
@@ -1400,6 +1405,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         homeScreenSlide.setValue(0);
 
         // Update state after all positions are set
+        setCurrentScreen('home');
+        setOrdersCameFrom('profile'); // Reset for next time
+      } else if (ordersCameFrom === 'notification') {
         setCurrentScreen('home');
         setOrdersCameFrom('profile'); // Reset for next time
       } else {
