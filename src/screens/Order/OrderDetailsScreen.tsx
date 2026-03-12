@@ -139,6 +139,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
   const [selectedTip, setSelectedTip] = useState<number | null>(null);
   const [customTipAmount, setCustomTipAmount] = useState('');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'online' | 'cod'>('online');
   const [selfPickup, setSelfPickup] = useState(false);
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
@@ -750,10 +751,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       // Cart is already synced with backend via CartContext
       // So we can directly create order from the backend cart
 
-      // Create order with online payment
+      // Create order with selected payment method
       const createOrderRequest = {
         delivery_address_id: parseInt(selectedAddressId),
-        payment_method: 'online' as const,
+        payment_method: selectedPaymentMethod as 'online' | 'cod',
         notes: notes || undefined,
       };
 
@@ -2153,6 +2154,53 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 )}
               </View>
 
+              {/* Payment Method Section */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Payment Method</Text>
+                </View>
+
+                <View style={styles.sectionContent}>
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentOption,
+                      selectedPaymentMethod === 'online' && styles.paymentOptionSelected,
+                    ]}
+                    onPress={() => setSelectedPaymentMethod('online')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.paymentOptionLeft}>
+                      <MaterialIcons name="credit-card" size={24} color="#00B14F" />
+                      <Text style={styles.paymentOptionText}>Online Payment</Text>
+                    </View>
+                    <MaterialIcons
+                      name={selectedPaymentMethod === 'online' ? 'radio-button-checked' : 'radio-button-unchecked'}
+                      size={24}
+                      color={selectedPaymentMethod === 'online' ? '#00B14F' : 'rgba(0, 0, 0, 0.25)'}
+                    />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentOption,
+                      selectedPaymentMethod === 'cod' && styles.paymentOptionSelected,
+                    ]}
+                    onPress={() => setSelectedPaymentMethod('cod')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.paymentOptionLeft}>
+                      <MaterialIcons name="account-balance-wallet" size={24} color="#00B14F" />
+                      <Text style={styles.paymentOptionText}>Cash on Delivery (COD)</Text>
+                    </View>
+                    <MaterialIcons
+                      name={selectedPaymentMethod === 'cod' ? 'radio-button-checked' : 'radio-button-unchecked'}
+                      size={24}
+                      color={selectedPaymentMethod === 'cod' ? '#00B14F' : 'rgba(0, 0, 0, 0.25)'}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               {/* Delivery Location Warning Section */}
               <View style={styles.section}>
                 <TouchableOpacity
@@ -2214,13 +2262,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             <View style={styles.footerContent}>
               <View style={styles.paymentInfo}>
                 <MaterialIcons
-                  name="credit-card"
+                  name={selectedPaymentMethod === 'online' ? 'credit-card' : 'account-balance-wallet'}
                   size={20}
                   color="#00B14F"
                 />
                 <View style={styles.paymentInfoTextContainer}>
-                  <Text style={styles.paymentInfoTitle}>Online Payment</Text>
-                  <Text style={styles.paymentInfoSubtitle}>UPI, Cards & More</Text>
+                  <Text style={styles.paymentInfoTitle}>
+                    {selectedPaymentMethod === 'online' ? 'Online Payment' : 'Cash on Delivery'}
+                  </Text>
+                  <Text style={styles.paymentInfoSubtitle}>
+                    {selectedPaymentMethod === 'online' ? 'UPI, Cards & More' : 'Pay at your doorstep'}
+                  </Text>
                 </View>
               </View>
 
@@ -2777,6 +2829,38 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.5)',
     textAlign: 'center',
   },
+  paymentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.10)',
+    backgroundColor: '#FFFFFF',
+    marginBottom: 14,
+  },
+  paymentOptionSelected: {
+    borderColor: 'rgba(0, 177, 79, 0.45)',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  paymentOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  paymentOptionText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#000000',
+    marginLeft: 12,
+  },
   customTipContainer: {
     marginTop: 16,
     marginBottom: 12,
@@ -2967,9 +3051,11 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.10)',
+    borderRadius: 12,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     marginRight: 12,
   },
@@ -2992,7 +3078,7 @@ const styles = StyleSheet.create({
   placeOrderButton: {
     flexDirection: 'row',
     backgroundColor: '#00B14F',
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 20,
     paddingVertical: 14,
     alignItems: 'center',
