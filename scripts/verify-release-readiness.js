@@ -357,6 +357,60 @@ function checkSigningConfig(filePath) {
   }
 }
 
+function checkCrashlyticsInstrumentation() {
+  const checks = [];
+  const appTsxPath = path.join(__dirname, '..', 'App.tsx');
+  const crashServicePath = path.join(__dirname, '..', 'src', 'services', 'crashlytics.service.ts');
+  const paymentServicePath = path.join(__dirname, '..', 'src', 'services', 'payment.service.ts');
+  const apiServicePath = path.join(__dirname, '..', 'src', 'services', 'api.service.ts');
+  const ordersServicePath = path.join(__dirname, '..', 'src', 'services', 'orders.service.ts');
+  const authServicePath = path.join(__dirname, '..', 'src', 'services', 'auth.service.ts');
+  const orderNotificationHandlerPath = path.join(__dirname, '..', 'src', 'services', 'orderNotificationHandler.ts');
+  const checklistPath = path.join(__dirname, '..', 'CRASHLYTICS_RELEASE_CHECKLIST.md');
+
+  checks.push(
+    checkFileExists(crashServicePath, 'Crashlytics service exists (central wrapper)')
+  );
+  checks.push(
+    checkFileContains(appTsxPath, 'crashlyticsService.initialize()', 'Crashlytics initialized at app bootstrap')
+  );
+  checks.push(
+    checkFileContains(appTsxPath, "crashlyticsService.setAttribute('current_screen'", 'Revenue-critical screen context is tracked')
+  );
+  checks.push(
+    checkFileContains(appTsxPath, 'crashlyticsService.setUserId(null)', 'Crashlytics user id is cleared on logout/session reset')
+  );
+  checks.push(
+    checkFileContains(paymentServicePath, "crashlyticsService.setAttribute('payment_method'", 'Payment method context is captured')
+  );
+  checks.push(
+    checkFileContains(paymentServicePath, 'crashlyticsService.recordError(', 'Payment non-fatal errors are recorded')
+  );
+  checks.push(
+    checkFileContains(apiServicePath, 'crashlyticsService.recordError(', 'API non-fatal errors are recorded')
+  );
+  checks.push(
+    checkFileContains(ordersServicePath, 'crashlyticsService.recordError(', 'Order flow non-fatal errors are recorded')
+  );
+  checks.push(
+    checkFileContains(orderNotificationHandlerPath, 'crashlyticsService.recordError(', 'Order notification handler non-fatal errors are recorded')
+  );
+  checks.push(
+    checkFileContains(authServicePath, 'crashlyticsService.setUserId(null)', 'Auth service clears crash user on logout')
+  );
+  checks.push(
+    checkFileContains(crashServicePath, 'triggerTestCrash()', 'Force crash test helper exists')
+  );
+  checks.push(
+    checkFileContains(crashServicePath, 'simulateNonFatal(', 'Non-fatal simulation helper exists')
+  );
+  checks.push(
+    checkFileExists(checklistPath, 'Crashlytics release checklist document exists')
+  );
+
+  return checks.every(Boolean);
+}
+
 function main() {
   log('\n🔍 Tazty Buyer App - Release Readiness Verification\n', 'cyan');
   log('='.repeat(70), 'cyan');
@@ -744,6 +798,14 @@ function main() {
     }
   } else {
     warnings++;
+  }
+
+  // 11. Crashlytics Instrumentation & SOP
+  log('\n💥 11. Crashlytics Instrumentation & SOP', 'blue');
+  if (checkCrashlyticsInstrumentation()) {
+    passed++;
+  } else {
+    failed++;
   }
   
   // Summary

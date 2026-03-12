@@ -20,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { AddAddressFormScreen } from './AddAddressFormScreen';
+import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
 
 // Dynamic import for MapView to prevent crash in Expo Go
 let MapView: any = null;
@@ -500,6 +501,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       }
 
       if (permission.status !== 'granted') {
+        analyticsService.logEvent(AnalyticsEvents.LOCATION_PERMISSION_DENIED, { method: 'foreground' });
         // Still not granted – guide the user instead of silently falling back
         // Only show alert if user explicitly initiated this action
         if (isUserInitiated) {
@@ -535,6 +537,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
         return false;
       }
+      analyticsService.logEvent(AnalyticsEvents.LOCATION_PERMISSION_GRANTED, { method: 'foreground' });
 
       // Permission granted – fetch current location
       const location = await Location.getCurrentPositionAsync({

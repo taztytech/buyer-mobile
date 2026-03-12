@@ -18,6 +18,7 @@ import * as Location from 'expo-location';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { Snackbar } from '@/components/Snackbar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
 
 interface AddAddressFormScreenProps {
   visible: boolean;
@@ -421,6 +422,13 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
       }
 
       if (response.success) {
+        if (!editMode) {
+          analyticsService.logEvent(AnalyticsEvents.NEW_ADDRESS_ADDED, {
+            area_name: locality.trim().toLowerCase(),
+            city: 'madurai',
+            pincode: pincode.trim(),
+          });
+        }
         // Close the form modal immediately (without animation) before navigation
         if (onClose) {
           onClose();

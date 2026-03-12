@@ -4,6 +4,8 @@
  */
 
 import { apiService, ApiResponse } from './api.service';
+import { analyticsService, AnalyticsEvents } from './analytics.service';
+import { crashlyticsService } from './crashlytics.service';
 
 // Cart Item Interfaces
 export interface CartCustomization {
@@ -211,8 +213,27 @@ class OrdersService {
   async createOrder(request: CreateOrderRequest): Promise<ApiResponse<Order>> {
     try {
       const response = await apiService.post<any>('/api/buyer/orders', request);
+      if (!response.success) {
+        crashlyticsService.recordError(new Error(response.error || response.message || 'order_create_failed'), {
+          source: 'order_create',
+          endpoint: '/api/buyer/orders',
+          payment_method: request.payment_method,
+        });
+      }
+      if (response.success) {
+        const orderData = (response.data as any)?.order || response.data;
+        const orderId = (orderData as any)?.id || (orderData as any)?.order_id;
+        analyticsService.logEvent(AnalyticsEvents.ORDER_PLACED, {
+          order_id: orderId || undefined,
+        });
+      }
       return response;
     } catch (error: any) {
+      crashlyticsService.recordError(error, {
+        source: 'order_create_exception',
+        endpoint: '/api/buyer/orders',
+        payment_method: request.payment_method,
+      });
       return {
         success: false,
         error: error.message || 'Failed to create order',
@@ -290,8 +311,23 @@ class OrdersService {
         reason,
         cancelled_by: cancelledBy,
       });
+      if (!response.success) {
+        crashlyticsService.recordError(new Error(response.error || response.message || 'order_cancel_failed'), {
+          source: 'order_cancel',
+          endpoint: '/api/buyer/orders/cancel',
+        });
+      }
+      if (response.success) {
+        analyticsService.logEvent(AnalyticsEvents.ORDER_CANCELLED, {
+          order_id: orderNumber,
+        });
+      }
       return response;
     } catch (error: any) {
+      crashlyticsService.recordError(error, {
+        source: 'order_cancel_exception',
+        endpoint: '/api/buyer/orders/cancel',
+      });
       return {
         success: false,
         error: error.message || 'Failed to cancel order',
