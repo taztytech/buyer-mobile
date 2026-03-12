@@ -106,6 +106,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const [pendingHomeRefresh, setPendingHomeRefresh] = React.useState(false);
   const [isNetworkOnline, setIsNetworkOnline] = React.useState(true);
   const lastConnectionStatusRef = React.useRef<boolean | null>(null);
+  const startupNotificationNavigationRef = React.useRef(false);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -248,23 +249,33 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setOrderLookupFunction(getOrderByOrderNumber);
 
     // Set navigation callback to handle notification taps
-    // Navigate to My Orders screen and highlight the order
-    fcmNotificationService.setNavigationCallback((orderId: string) => {
+    // Route all notification taps to My Orders.
+    fcmNotificationService.setNavigationCallback(({ orderId }) => {
+      startupNotificationNavigationRef.current = true;
       console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
       onNotificationNavigateToOrders?.();
 
-      // Batch all screen position resets together to ensure Orders screen is visible
-      // and not covered by other overlays (like restaurant or checkout)
+      // Force-close all overlays so notification navigation wins from any screen.
+      homeScreenSlide.setValue(0);
       ordersScreenSlide.setValue(0);
-      orderDetailScreenSlide.setValue(SCREEN_WIDTH);
-      restaurantScreenSlide.setValue(SCREEN_WIDTH);
-      checkoutScreenSlide.setValue(SCREEN_WIDTH);
       profileScreenSlide.setValue(SCREEN_WIDTH);
       searchScreenSlide.setValue(SCREEN_WIDTH);
+      privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
+      termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
+      addressScreenSlide.setValue(SCREEN_WIDTH);
+      locationScreenSlide.setValue(SCREEN_WIDTH);
+      orderDetailScreenSlide.setValue(SCREEN_WIDTH);
+      helpScreenSlide.setValue(SCREEN_WIDTH);
+      contactUsScreenSlide.setValue(SCREEN_WIDTH);
+      faqScreenSlide.setValue(SCREEN_WIDTH);
+      restaurantScreenSlide.setValue(SCREEN_WIDTH);
+      checkoutScreenSlide.setValue(SCREEN_WIDTH);
+      setEditingAddress(null);
+      setSelectedOrderData(null);
 
       // Keep existing back behavior: Orders -> Profile for notification entry.
       setOrdersCameFrom('profile');
-      setHighlightOrderId(orderId);
+      setHighlightOrderId(orderId || null);
       setCurrentScreen('orders');
 
       // Clear highlight after 3 seconds (enough time for scroll animation)
@@ -430,8 +441,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             await crashlyticsService.setUserId(idString);
           }
 
-          // User has valid session, navigate to home
-          setCurrentScreen('home');
+          // If app was opened by tapping an FCM notification, keep the
+          // notification target screen (orders/track) and avoid overriding it.
+          if (!startupNotificationNavigationRef.current) {
+            setCurrentScreen('home');
+          }
         } else {
           // No valid session, go to login
           setCurrentScreen('login');
@@ -640,9 +654,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       has_email: !!email,
     });
 
-    // For new users, go directly to home
-    // HomeScreen will check for addresses and redirect if needed
-    setCurrentScreen('home');
+    // For brand-new users, go directly to location selection to avoid
+    // rendering Home briefly (which can cause a visible green flash).
+    setAddressSelectionCameFrom('home');
+    setLocationSelectionCameFrom('home');
+    setSearchQuery('');
+    setInitialLocationCoords(null);
+    setCurrentScreen('locationSelection');
+    locationScreenSlide.setValue(0);
     setIsRegistrationFlow(false);
 
     // Ensure cart (if any) is synced for this user
@@ -1429,7 +1448,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('login');
-        setLegalCameFrom('profile');
       });
     } else if (legalCameFrom === 'otp') {
       Animated.timing(privacyPolicyScreenSlide, {
@@ -1438,7 +1456,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('otp');
-        setLegalCameFrom('profile');
       });
     } else {
       Animated.parallel([
@@ -1495,7 +1512,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('login');
-        setLegalCameFrom('profile');
       });
     } else if (legalCameFrom === 'otp') {
       Animated.timing(termsConditionsScreenSlide, {
@@ -1504,7 +1520,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('otp');
-        setLegalCameFrom('profile');
       });
     } else {
       Animated.parallel([

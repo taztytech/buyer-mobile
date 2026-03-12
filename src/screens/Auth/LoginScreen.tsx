@@ -163,25 +163,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </ScrollView>
         </KeyboardAvoidingView>
 
-        {/* Terms & Privacy - Fixed to bottom */}
-        <View style={styles.bottomTermsContainer}>
-          <Text style={styles.termsText}>
-            By Clicking, You agree our{' '}
-            <Text
-              style={styles.termsLink}
-              onPress={onOpenTerms}
-            >
-              T&C
+        {/* Terms & Privacy anchored above system nav area */}
+        <SafeAreaView style={styles.bottomSafeArea} edges={['bottom']}>
+          <View style={styles.bottomTermsContainer}>
+            <Text style={styles.termsText}>
+              By Clicking, You agree our{' '}
+              <Text
+                style={styles.termsLink}
+                onPress={onOpenTerms}
+              >
+                T&C
+              </Text>
+              {' and '}
+              <Text
+                style={styles.termsLink}
+                onPress={onOpenPrivacy}
+              >
+                Privacy Policy
+              </Text>
             </Text>
-            {' and '}
-            <Text
-              style={styles.termsLink}
-              onPress={onOpenPrivacy}
-            >
-              Privacy Policy
-            </Text>
-          </Text>
-        </View>
+          </View>
+        </SafeAreaView>
       </View>
     </SafeAreaView>
   );
@@ -199,8 +201,12 @@ const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
   },
+  bottomSafeArea: {
+    backgroundColor: '#FFFFFF',
+  },
   bottomTermsContainer: {
-    paddingBottom: 20,
+    paddingTop: 8,
+    paddingBottom: 12,
     paddingHorizontal: 20,
     backgroundColor: '#FFFFFF',
   },

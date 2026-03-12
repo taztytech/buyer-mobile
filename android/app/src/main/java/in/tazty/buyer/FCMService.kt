@@ -144,7 +144,9 @@ class FCMService : FirebaseMessagingService() {
         }
         
         val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            // Bring the existing activity to front when possible instead of
+            // clearing the whole task (which looks like an app restart).
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             // Add action to identify notification tap
             action = "OPEN_FROM_NOTIFICATION"
             // Pass all notification data as extras
