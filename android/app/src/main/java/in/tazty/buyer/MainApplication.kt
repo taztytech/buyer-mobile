@@ -27,6 +27,8 @@ class MainApplication : Application(), ReactApplication {
               // add(MyReactNativePackage())
               // Add custom PiP module for portrait aspect ratio
               add(PipPackage())
+              // Add custom FCM intent bridge module
+              add(FCMEventEmitterPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
