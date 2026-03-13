@@ -110,16 +110,33 @@ class AuthService {
     otp: string
   ): Promise<ApiResponse<VerifyOtpResponse>> {
     try {
+      const requestPayload = {
+        phone_number: phoneNumber,
+        otp: parseInt(otp, 10),
+      };
+
       const response = await apiService.post<VerifyOtpResponse>(
         API_CONFIG.ENDPOINTS.AUTHENTICATION.LOGIN,
-        {
-          phone_number: phoneNumber,
-          otp: parseInt(otp, 10),
-        }
+        requestPayload
       );
       if (!response.success) {
         analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: response.error || response.message || 'otp_verify_failed' });
         analyticsService.logEvent(AnalyticsEvents.LOGIN_FAILED, { reason: response.error || response.message || 'login_failed' });
+        crashlyticsService.recordError(
+          new Error(response.error || response.message || 'otp_verify_failed'),
+          {
+            source: 'auth_verify_otp_failed',
+            otp_verify: {
+              request: requestPayload,
+              response: {
+                success: response.success,
+                statusCode: (response as ApiResponse<any>).statusCode ?? null,
+                error: response.error || null,
+                message: response.message || null,
+              },
+            },
+          }
+        );
       }
 
       // If verification successful, store tokens and user data
@@ -161,6 +178,24 @@ class AuthService {
     } catch (error: any) {
       analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: error?.message || 'otp_verify_exception' });
       analyticsService.logEvent(AnalyticsEvents.LOGIN_FAILED, { reason: error?.message || 'login_exception' });
+      crashlyticsService.recordError(
+        error,
+        {
+          source: 'auth_verify_otp_exception',
+          otp_verify: {
+            request: {
+              phone_number: phoneNumber,
+              otp: parseInt(otp, 10),
+            },
+            response: {
+              success: false,
+              statusCode: error?.status || error?.statusCode || null,
+              error: error?.message || 'otp_verify_exception',
+              message: error?.message || null,
+            },
+          },
+        }
+      );
       return {
         success: false,
         error: error.message || 'Failed to verify OTP',

@@ -31,7 +31,11 @@ interface CategoryResultsScreenProps {
   categoryName: string;
   categories?: CategoryItem[];
   onBack?: () => void;
-  onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
+  onNavigateToRestaurant?: (
+    restaurantId: number,
+    restaurantName: string,
+    meta?: { distanceKm?: number; isOpen?: boolean }
+  ) => void;
   selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
 }
 
@@ -732,7 +736,11 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
                         onPress={() => {
                           if (onNavigateToRestaurant) {
                             const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
-                            onNavigateToRestaurant(restaurantId, restaurant.name);
+                            const parsedDistance = parseFloat(String(restaurant.distance || '').replace(/[^0-9.]/g, ''));
+                            onNavigateToRestaurant(restaurantId, restaurant.name, {
+                              distanceKm: Number.isFinite(parsedDistance) ? parsedDistance : undefined,
+                              isOpen: typeof restaurant.isOpen === 'boolean' ? restaurant.isOpen : undefined,
+                            });
                           }
                         }}
                       />
