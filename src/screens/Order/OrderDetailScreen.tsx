@@ -1149,16 +1149,16 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Order Details</Text>
         <View style={styles.headerButtons}>
-          {/* {onHelp && (
+          {_onHelp && (
             <TouchableOpacity
               style={styles.helpButton}
-              onPress={onHelp}
+              onPress={_onHelp}
               activeOpacity={0.7}
             >
               <MaterialIcons name="help-outline" size={20} color="#FFFFFF" />
               <Text style={styles.helpButtonText}>Help</Text>
             </TouchableOpacity>
-          )} */}
+          )}
           {/* <TouchableOpacity
             style={styles.chatButton}
             onPress={handleCallSupport}

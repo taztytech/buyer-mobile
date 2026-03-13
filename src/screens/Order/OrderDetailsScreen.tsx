@@ -884,10 +884,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           setCustomTipAmount(''); // Reset custom tip amount
 
           showConfirmation({
-            title: 'Payment Successful! 🎉',
+            title: `${selectedPaymentMethod !== "cod" ? "Payment" : "Order"} Successful! 🎉'`,
             message: orderNumber !== 'N/A'
-              ? `Your order #${orderNumber} has been placed and paid successfully.`
-              : 'Your order has been placed and paid successfully.',
+              ?`${selectedPaymentMethod === "cod" ? `Your order #${orderNumber} has been placed successfully.` : 'Your order has been placed and paid successfully.'}`
+              : `${selectedPaymentMethod === "cod" ? "Your order has been placed successfully." : 'Your order has been placed and paid successfully.'}`,
             confirmText: 'View Order Details',
             cancelText: '',
             confirmButtonColor: '#00B14F',
