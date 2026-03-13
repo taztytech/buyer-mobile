@@ -23,6 +23,7 @@ import { paymentService, PaymentErrorType } from '@/services/payment.service';
 import { homeService } from '@/services/home.service';
 import { cartService, CartSummary } from '@/services/cart.service';
 import { restaurantService } from '@/services/restaurant.service';
+import { paymentConfigService } from '@/services/payment-config.service';
 import { useCart } from '@/context/CartContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
@@ -226,6 +227,24 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   };
 
   const estimatedDeliveryTime = formatEstimatedDeliveryTime(estimatedDeliveryTimeRaw);
+
+  // COD availability based on backend configuration from /home API
+  const codSettings = paymentConfigService.getCodSettings();
+  const isCodEnabled = codSettings?.cod_enabled ?? false;
+  const codMinAmount = codSettings?.cod_min_amount ?? 0;
+  const codMaxAmount = codSettings?.cod_max_amount ?? Number.MAX_SAFE_INTEGER;
+
+  const isCodAllowed =
+    isCodEnabled &&
+    totalAmount >= codMinAmount &&
+    totalAmount <= codMaxAmount;
+
+  useEffect(() => {
+    // If COD is no longer allowed (e.g. amount changed), force switch back to online
+    if (!isCodAllowed && selectedPaymentMethod === 'cod') {
+      setSelectedPaymentMethod('online');
+    }
+  }, [isCodAllowed, selectedPaymentMethod]);
 
   // Determine if a coupon is currently applied based on discount amount
   const isCouponApplied = !!cartSummary && (cartSummary.discount_amount ?? 0) > 0;
@@ -754,9 +773,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       // Create order with selected payment method
       const createOrderRequest = {
         delivery_address_id: parseInt(selectedAddressId),
-        payment_method: selectedPaymentMethod as 'online' | 'cod',
+        payment_method: selectedPaymentMethod,
         notes: notes || undefined,
       };
+
+      console.log(
+        '[OrderDetails][handlePlaceOrder] Creating order with payload:--',
+        createOrderRequest,
+      );
 
       const orderResponse = await ordersService.createOrder(createOrderRequest);
 
@@ -790,7 +814,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         const paymentDetails = responseData.payment_details;
 
         // Check if payment is required
-        if (!paymentDetails) {
+        if (!paymentDetails && selectedPaymentMethod !== "cod") {
           // If no payment_details, order might be COD or payment not required
           // Clear local cart for COD orders (backend handles API clearing)
           clearCart(false);
@@ -852,7 +876,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           });
         });
 
-        if (paymentResult.success) {
+        if (paymentResult.success || selectedPaymentMethod === "cod") {
           // Payment successful - clear local cart and reset form (backend handles API clearing)
           clearCart(false);
           setNotes(''); // Reset notes for next order
@@ -2160,7 +2184,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   <Text style={styles.sectionTitle}>Payment Method</Text>
                 </View>
 
-                <View style={styles.sectionContent}>
+                <View style={[styles.sectionContent, styles.paymentSectionContent]}>
                   <TouchableOpacity
                     style={[
                       styles.paymentOption,
@@ -2183,20 +2207,38 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   <TouchableOpacity
                     style={[
                       styles.paymentOption,
-                      selectedPaymentMethod === 'cod' && styles.paymentOptionSelected,
+                      !isCodAllowed && styles.paymentOptionDisabled,
+                      selectedPaymentMethod === 'cod' && isCodAllowed && styles.paymentOptionSelected,
                     ]}
-                    onPress={() => setSelectedPaymentMethod('cod')}
+                    onPress={() => {
+                      if (isCodAllowed) {
+                        setSelectedPaymentMethod('cod');
+                      }
+                    }}
+                    disabled={!isCodAllowed}
                     activeOpacity={0.8}
                   >
-                    <View style={styles.paymentOptionLeft}>
-                      <MaterialIcons name="account-balance-wallet" size={24} color="#00B14F" />
-                      <Text style={styles.paymentOptionText}>Cash on Delivery (COD)</Text>
+                    <View style={styles.paymentOptionContent}>
+                      <View style={styles.paymentOptionTopRow}>
+                        <View style={styles.paymentOptionLeft}>
+                          <MaterialIcons name="account-balance-wallet" size={24} color="#00B14F" />
+                          <Text style={styles.paymentOptionText}>Cash on Delivery (COD)</Text>
+                        </View>
+                        {isCodAllowed && (
+                          <MaterialIcons
+                            name={selectedPaymentMethod === 'cod' ? 'radio-button-checked' : 'radio-button-unchecked'}
+                            size={24}
+                            color={selectedPaymentMethod === 'cod' ? '#00B14F' : 'rgba(0, 0, 0, 0.25)'}
+                          />
+                        )}
+                      </View>
+
+                      {!isCodAllowed && (
+                        <Text style={styles.paymentOptionHelperText}>
+                          COD is available only for orders between ₹{codMinAmount} and ₹{codMaxAmount}.
+                        </Text>
+                      )}
                     </View>
-                    <MaterialIcons
-                      name={selectedPaymentMethod === 'cod' ? 'radio-button-checked' : 'radio-button-unchecked'}
-                      size={24}
-                      color={selectedPaymentMethod === 'cod' ? '#00B14F' : 'rgba(0, 0, 0, 0.25)'}
-                    />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -2520,6 +2562,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
+  paymentSectionContent: {
+    paddingBottom: 0,
+  },
   orderItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2831,7 +2876,7 @@ const styles = StyleSheet.create({
   },
   paymentOption: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -2849,6 +2894,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 1,
+  },
+  paymentOptionDisabled: {
+  },
+  paymentOptionHelperText: {
+    marginTop: 6,
+    marginLeft: 36,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 11,
+    lineHeight: 16,
+    color: 'rgba(0, 0, 0, 0.6)',
+  },
+  paymentOptionContent: {
+    flex: 1,
+  },
+  paymentOptionTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   paymentOptionLeft: {
     flexDirection: 'row',
