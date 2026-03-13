@@ -37,6 +37,7 @@ import { favoritesService } from '@/services/favorites.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { ItemTiming as ImportedItemTiming, isItemAvailable } from '@/utils/timing.utils';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
+import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -990,6 +991,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     setSelectedDetailItem(item);
     setSelectedDetailItemAvailable(itemAvailable);
     setShowDetailModal(true);
+    analyticsService.logEvent(AnalyticsEvents.PRODUCT_VIEWED, {
+      product_id: item.id,
+      restaurant_id: restaurantId,
+    });
   };
 
   // Toggle dietary filter

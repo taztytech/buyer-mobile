@@ -7,6 +7,8 @@ import { apiService, ApiResponse } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 import { storageService, UserData } from './storage.service';
 import { fcmNotificationService } from './fcmNotification.service';
+import { analyticsService, AnalyticsEvents } from './analytics.service';
+import { crashlyticsService } from './crashlytics.service';
 
 // Types
 export interface SendOtpRequest {
@@ -83,9 +85,15 @@ class AuthService {
           phone_number: parseInt(phoneNumber, 10),
         }
       );
+      if (response.success) {
+        analyticsService.logEvent(AnalyticsEvents.OTP_SENT, { method: 'sms' });
+      } else {
+        analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: response.error || response.message || 'send_otp_failed' });
+      }
 
       return response;
     } catch (error: any) {
+      analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: error?.message || 'send_otp_exception' });
       return {
         success: false,
         error: error.message || 'Failed to send OTP',
@@ -109,6 +117,10 @@ class AuthService {
           otp: parseInt(otp, 10),
         }
       );
+      if (!response.success) {
+        analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: response.error || response.message || 'otp_verify_failed' });
+        analyticsService.logEvent(AnalyticsEvents.LOGIN_FAILED, { reason: response.error || response.message || 'login_failed' });
+      }
 
       // If verification successful, store tokens and user data
       if (response.success && response.data) {
@@ -147,6 +159,8 @@ class AuthService {
 
       return response;
     } catch (error: any) {
+      analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: error?.message || 'otp_verify_exception' });
+      analyticsService.logEvent(AnalyticsEvents.LOGIN_FAILED, { reason: error?.message || 'login_exception' });
       return {
         success: false,
         error: error.message || 'Failed to verify OTP',
@@ -183,6 +197,7 @@ class AuthService {
       // Clear all tokens and user data regardless of API response
       // This ensures complete cleanup even if API call fails
       await apiService.clearTokens();
+      await crashlyticsService.setUserId(null);
 
       return response;
     } catch (error: any) {
@@ -190,6 +205,7 @@ class AuthService {
       await apiService.clearTokens().catch((clearError) => {
         console.error('⚠️  Failed to clear tokens on logout:', clearError);
       });
+      await crashlyticsService.setUserId(null);
 
       return {
         success: false,
@@ -212,6 +228,7 @@ class AuthService {
 
       // Clear all tokens and user data immediately
       await apiService.clearTokens();
+      await crashlyticsService.setUserId(null);
     } catch (error: any) {
       console.error('⚠️  Error during force logout:', error);
       // Still try to clear tokens even if FCM unregister fails

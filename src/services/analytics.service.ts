@@ -4,6 +4,7 @@
  */
 
 import { Platform, NativeModules } from 'react-native';
+import { APP_VERSION_CODE, APP_VERSION_NAME } from '@/config/appVersion.generated';
 
 // Conditionally import Firebase to avoid errors if native modules aren't linked
 let analytics: any = null;
@@ -59,74 +60,76 @@ export const FirebaseStandardParams = {
 
 // Event names constants
 export const AnalyticsEvents = {
+  // App & Session
+  APP_OPEN: 'app_open',
+  APP_STATE: 'app_state',
+
   // Authentication
-  LOGIN_START: 'login_start',
+  LOGIN_VIEW: 'login_view',
   LOGIN_SUCCESS: 'login_success',
-  LOGIN_FAILURE: 'login_failure',
+  LOGIN_FAILED: 'login_failed',
+  OTP_SENT: 'otp_sent',
+  OTP_VERIFIED: 'otp_verified',
+  OTP_FAILED: 'otp_failed',
   LOGOUT: 'logout',
-  SIGNUP_START: 'signup_start',
-  SIGNUP_SUCCESS: 'signup_success',
-  
-  // Navigation
-  SCREEN_VIEW: 'screen_view',
-  
-  // Home & Discovery
-  RESTAURANT_VIEW: 'restaurant_view',
-  RESTAURANT_SELECT: 'restaurant_select',
-  CATEGORY_VIEW: 'category_view',
-  CATEGORY_SELECT: 'category_select',
-  SEARCH_START: 'search_start',
-  SEARCH_RESULT_SELECT: 'search_result_select',
-  
-  // Cart & Checkout
+
+  // Location & Discovery
+  LOCATION_PERMISSION_GRANTED: 'location_permission_granted',
+  LOCATION_PERMISSION_DENIED: 'location_permission_denied',
+  LOCATION_SELECTED_MANUAL: 'location_selected_manual',
+  RESTAURANT_LIST_VIEWED: 'restaurant_list_viewed',
+  NEW_ADDRESS_ADDED: 'new_address_added',
+
+  // Restaurant & Menu
+  RESTAURANT_VIEWED: 'restaurant_viewed',
+  MENU_VIEWED: 'menu_viewed',
+  PRODUCT_VIEWED: 'product_viewed',
+  SEARCH: 'search',
+
+  // Cart
   ADD_TO_CART: 'add_to_cart',
   REMOVE_FROM_CART: 'remove_from_cart',
-  CART_VIEW: 'cart_view',
-  CHECKOUT_START: 'checkout_start',
-  CHECKOUT_STEP: 'checkout_step',
-  
-  // Orders
-  ORDER_PLACE_START: 'order_place_start',
-  ORDER_PLACE_SUCCESS: 'order_place_success',
-  ORDER_PLACE_FAILURE: 'order_place_failure',
-  ORDER_VIEW: 'order_view',
-  ORDER_DETAIL_VIEW: 'order_detail_view',
-  ORDER_REORDER: 'order_reorder',
-  ORDER_CANCEL: 'order_cancel',
-  ORDER_TRACK: 'order_track',
-  ORDER_RATE: 'order_rate',
-  
-  // Address & Location
-  ADDRESS_SELECT: 'address_select',
-  ADDRESS_ADD: 'address_add',
-  ADDRESS_EDIT: 'address_edit',
-  ADDRESS_DELETE: 'address_delete',
-  LOCATION_SELECT: 'location_select',
-  
-  // Profile
-  PROFILE_VIEW: 'profile_view',
-  PROFILE_EDIT: 'profile_edit',
-  PROFILE_UPDATE: 'profile_update',
-  
-  // Favorites
-  FAVORITE_ADD: 'favorite_add',
-  FAVORITE_REMOVE: 'favorite_remove',
-  FAVORITES_VIEW: 'favorites_view',
-  
-  // Help & Support
-  HELP_VIEW: 'help_view',
-  CONTACT_US: 'contact_us',
-  FAQ_VIEW: 'faq_view',
-  
-  // Payment
-  PAYMENT_START: 'payment_start',
+  CART_VIEWED: 'cart_viewed',
+  CART_ABANDONED: 'cart_abandoned',
+
+  // Checkout & Payment
+  CHECKOUT_STARTED: 'checkout_started',
+  PAYMENT_METHOD_SELECTED: 'payment_method_selected',
   PAYMENT_SUCCESS: 'payment_success',
-  PAYMENT_FAILURE: 'payment_failure',
-  
-  // App Events
-  APP_OPEN: 'app_open',
-  APP_BACKGROUND: 'app_background',
-  APP_FOREGROUND: 'app_foreground',
+  PAYMENT_FAILED: 'payment_failed',
+
+  // Order lifecycle
+  ORDER_PLACED: 'order_placed',
+  ORDER_CONFIRMED: 'order_confirmed',
+  ORDER_PICKED_UP: 'order_picked_up',
+  ORDER_DELIVERED: 'order_delivered',
+  ORDER_CANCELLED: 'order_cancelled',
+
+  // Error & performance
+  API_ERROR: 'api_error',
+  SCREEN_LOAD_SLOW: 'screen_load_slow',
+
+  // Compatibility aliases used across current app
+  LOGIN_START: 'login_view',
+  LOGIN_FAILURE: 'login_failed',
+  SIGNUP_START: 'login_view',
+  SIGNUP_SUCCESS: 'login_success',
+  RESTAURANT_VIEW: 'restaurant_viewed',
+  SEARCH_START: 'search',
+  ORDER_VIEW: 'order_placed',
+  APP_BACKGROUND: 'app_state',
+  APP_FOREGROUND: 'app_state',
+} as const;
+
+export const AnalyticsUserProperties = {
+  AREA_NAME: 'area_name',
+  CITY: 'city',
+  PINCODE: 'pincode',
+  PLATFORM: 'platform',
+  APP_VERSION: 'app_version',
+  APP_VERSION_CODE: 'app_version_code',
+  USER_TYPE: 'user_type',
+  LOGIN_STATE: 'login_state',
 } as const;
 
 // Screen names constants
@@ -161,6 +164,20 @@ class AnalyticsService {
   private isInitialized: boolean = false;
   private analyticsEnabled: boolean = true;
   private userId: string | null = null;
+  private readonly allowedEvents: Set<string> = new Set(Object.values(AnalyticsEvents));
+  private readonly piiKeyPatterns: RegExp[] = [
+    /phone/i,
+    /email/i,
+    /full_address/i,
+    /street_address/i,
+    /lat/i,
+    /lng/i,
+    /long/i,
+    /user_name/i,
+    /full_name/i,
+    /payment_id/i,
+    /razorpay_signature/i,
+  ];
 
   /**
    * Initialize analytics service
@@ -176,8 +193,12 @@ class AnalyticsService {
 
       // Set analytics collection enabled (defaults to true)
       await analytics().setAnalyticsCollectionEnabled(this.analyticsEnabled);
-      
       this.isInitialized = true;
+      await this.setUserProperties({
+        [AnalyticsUserProperties.PLATFORM]: Platform.OS,
+        [AnalyticsUserProperties.APP_VERSION]: APP_VERSION_NAME,
+        [AnalyticsUserProperties.APP_VERSION_CODE]: String(APP_VERSION_CODE),
+      });
       console.log('✅ Analytics: Initialized successfully');
     } catch (error) {
       console.warn('⚠️  Analytics: Initialization failed:', error);
@@ -226,9 +247,9 @@ class AnalyticsService {
     try {
       if (!this.isInitialized || !analytics) return;
       
-      const promises = Object.entries(properties).map(([name, value]) =>
-        analytics().setUserProperty(name, value)
-      );
+      const promises = Object.entries(properties)
+        .filter(([name]) => !this.isPIIKey(name))
+        .map(([name, value]) => analytics().setUserProperty(name, value));
       await Promise.all(promises);
     } catch (error) {
       console.warn('⚠️  Analytics: Failed to set user properties:', error);
@@ -257,7 +278,13 @@ class AnalyticsService {
   async logEvent(eventName: string, parameters?: Record<string, any>): Promise<void> {
     try {
       if (!this.isInitialized || !analytics || !this.analyticsEnabled) return;
-      
+      if (!this.isValidEventName(eventName)) {
+        console.warn(`⚠️  Analytics: invalid event name "${eventName}"`);
+        return;
+      }
+      if (!this.allowedEvents.has(eventName)) {
+        console.warn(`⚠️  Analytics: unregistered event "${eventName}"`);
+      }
       // Clean parameters (remove undefined values and convert to proper types)
       const cleanParams = this.cleanParameters(parameters);
       
@@ -441,6 +468,9 @@ class AnalyticsService {
     const cleaned: Record<string, any> = {};
     
     for (const [key, value] of Object.entries(parameters)) {
+      if (this.isPIIKey(key)) {
+        continue;
+      }
       // Skip undefined and null values
       if (value === undefined || value === null) continue;
       
@@ -461,6 +491,34 @@ class AnalyticsService {
     }
     
     return cleaned;
+  }
+
+  private isPIIKey(key: string): boolean {
+    return this.piiKeyPatterns.some((pattern) => pattern.test(key));
+  }
+
+  private isValidEventName(eventName: string): boolean {
+    if (eventName.length > 40) return false;
+    return /^[a-z]+(_[a-z0-9]+)*$/.test(eventName);
+  }
+
+  async trackEvent(
+    eventName: string,
+    params?: Record<string, string | number | boolean>,
+  ): Promise<void> {
+    await this.logEvent(eventName, params);
+  }
+
+  async trackScreen(screenName: string): Promise<void> {
+    await this.logScreenView(screenName);
+  }
+
+  async reset(): Promise<void> {
+    await this.resetAnalyticsData();
+    await this.setUserId(null);
+    await this.setUserProperties({
+      [AnalyticsUserProperties.LOGIN_STATE]: 'guest',
+    });
   }
 
   /**

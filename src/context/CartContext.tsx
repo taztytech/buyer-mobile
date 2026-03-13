@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useRe
 import { cartService, AddToCartRequest, CartSummary } from '@/services/cart.service';
 import { storageService } from '@/services/storage.service';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
+import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
 
 export interface CartVariant {
   id: string;
@@ -378,6 +379,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const addToCart = async (item: CartItem, overrideRestaurantId?: number) => {
     const normalizedItem = normalizeCartItemQuantities(item);
+    const effectiveRestaurantIdForEvent = overrideRestaurantId || restaurantId;
+    analyticsService.logEvent(AnalyticsEvents.ADD_TO_CART, {
+      restaurant_id: effectiveRestaurantIdForEvent || undefined,
+      item_id: normalizedItem.itemId || parseInt(normalizedItem.id, 10),
+      price: normalizedItem.price,
+      qty: normalizedItem.quantity || getCartItemTotalQuantity(normalizedItem) || 1,
+    });
 
       // Update local cart immediately for responsive UI
     setCart(prev => ({
@@ -505,6 +513,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const removeFromCart = async (itemId: string): Promise<CartSummary | null> => {
     const item = cart[itemId];
+    if (item) {
+      analyticsService.logEvent(AnalyticsEvents.REMOVE_FROM_CART, {
+        item_id: item.itemId || parseInt(item.id, 10),
+      });
+    }
 
     // Update local cart immediately for responsive UI
     setCart(prev => {
@@ -806,6 +819,25 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    *                          Set to false for payment success/failure (backend handles it).
    */
   const clearCart = async (syncWithBackend: boolean = true) => {
+    const preClearValue = Object.values(cart).reduce((sum, item) => {
+      if (item.isCustomizable && item.variants) {
+        return sum + item.variants.reduce((variantSum, variant) => variantSum + (variant.price * variant.quantity), 0);
+      }
+      return sum + (item.price * (item.quantity || 0));
+    }, 0);
+    const preClearItems = Object.values(cart).reduce((sum, item) => {
+      if (item.isCustomizable && item.variants) {
+        return sum + item.variants.reduce((variantSum, variant) => variantSum + variant.quantity, 0);
+      }
+      return sum + (item.quantity || 0);
+    }, 0);
+    if (preClearItems > 0) {
+      analyticsService.logEvent(AnalyticsEvents.CART_ABANDONED, {
+        cart_value: preClearValue,
+        last_action: syncWithBackend ? 'manual_clear' : 'flow_clear',
+      });
+    }
+
     // Update local cart immediately
     setCart({});
     setRestaurantId(null);

@@ -3,7 +3,7 @@
  * Firebase Crashlytics implementation for capturing crashes and non-fatal errors
  */
 
-import { NativeModules } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 
 // Conditionally import Firebase Crashlytics to avoid errors if native modules aren't linked
 let crashlytics: any = null;
@@ -25,6 +25,17 @@ try {
 class CrashlyticsService {
   private isInitialized: boolean = false;
   private enabled: boolean = true;
+  private readonly piiKeyPatterns: RegExp[] = [
+    /phone/i,
+    /email/i,
+    /address/i,
+    /lat/i,
+    /lng/i,
+    /long/i,
+    /payment_id/i,
+    /razorpay_signature/i,
+    /name/i,
+  ];
 
   /**
    * Initialize Crashlytics service
@@ -39,6 +50,9 @@ class CrashlyticsService {
 
       await crashlytics().setCrashlyticsCollectionEnabled(this.enabled);
       this.isInitialized = true;
+      await this.setGlobalContext({
+        platform: Platform.OS,
+      });
       console.log('✅ Crashlytics: Initialized successfully');
     } catch (error) {
       console.warn('⚠️  Crashlytics: Initialization failed:', error);
@@ -94,7 +108,7 @@ class CrashlyticsService {
       }
 
       const cleanedEntries = Object.entries(attributes).filter(
-        ([, value]) => value !== undefined && value !== null,
+        ([key, value]) => value !== undefined && value !== null && !this.isPIIKey(key),
       ) as Array<[string, string | number | boolean]>;
 
       for (const [key, value] of cleanedEntries) {
@@ -103,6 +117,23 @@ class CrashlyticsService {
     } catch (error) {
       console.warn('⚠️  Crashlytics: Failed to set attributes:', error);
     }
+  }
+
+  /**
+   * Set a single custom attribute
+   */
+  async setAttribute(key: string, value: string | number | boolean | null | undefined): Promise<void> {
+    if (value === undefined || value === null || this.isPIIKey(key)) {
+      return;
+    }
+    await this.setAttributes({ [key]: value });
+  }
+
+  /**
+   * Alias for business-level context setup
+   */
+  async setGlobalContext(attributes: Record<string, string | number | boolean | null | undefined>): Promise<void> {
+    await this.setAttributes(attributes);
   }
 
   /**
@@ -148,10 +179,42 @@ class CrashlyticsService {
   }
 
   /**
+   * Force a crash for QA validation.
+   * Use this only in test/staging builds and remove/disable from production UI.
+   */
+  async triggerTestCrash(): Promise<void> {
+    try {
+      if (!this.isInitialized || !crashlytics) {
+        return;
+      }
+      crashlytics().crash();
+    } catch (error) {
+      console.warn('⚠️  Crashlytics: Failed to trigger test crash:', error);
+    }
+  }
+
+  /**
+   * Create a deterministic non-fatal error for QA validation.
+   */
+  async simulateNonFatal(
+    label: string = 'qa_non_fatal_test',
+    context?: Record<string, string | number | boolean | null | undefined>
+  ): Promise<void> {
+    await this.recordError(new Error(label), {
+      source: 'qa_non_fatal_simulation',
+      ...context,
+    });
+  }
+
+  /**
    * Helper to know if Crashlytics is ready
    */
   isReady(): boolean {
     return this.isInitialized;
+  }
+
+  private isPIIKey(key: string): boolean {
+    return this.piiKeyPatterns.some((pattern) => pattern.test(key));
   }
 }
 

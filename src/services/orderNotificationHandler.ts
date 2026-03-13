@@ -6,6 +6,8 @@
 import { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
 import { ordersService } from './orders.service';
 import { OrderListItem } from './orders.service';
+import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from './analytics.service';
+import { crashlyticsService } from './crashlytics.service';
 
 // Action type for dispatching to orders store
 export type OrdersDispatch = (action: {
@@ -218,6 +220,22 @@ export async function handleOrderNotification(
         updated_at: new Date().toISOString(),
       },
     });
+    const normalizedStatus = status.toLowerCase();
+    if (normalizedStatus === 'confirmed') {
+      analyticsService.logEvent(AnalyticsEvents.ORDER_CONFIRMED, { order_id: orderIdNum });
+    } else if (normalizedStatus === 'picked_up' || normalizedStatus === 'pickedup' || normalizedStatus === 'picked-up') {
+      analyticsService.logEvent(AnalyticsEvents.ORDER_PICKED_UP, { order_id: orderIdNum });
+    } else if (normalizedStatus === 'delivered') {
+      analyticsService.logEvent(AnalyticsEvents.ORDER_DELIVERED, { order_id: orderIdNum });
+      analyticsService.setUserProperties({
+        [AnalyticsUserProperties.USER_TYPE]: 'returning',
+      });
+      crashlyticsService.setGlobalContext({
+        user_type: 'returning',
+      });
+    } else if (normalizedStatus === 'cancelled' || normalizedStatus === 'canceled') {
+      analyticsService.logEvent(AnalyticsEvents.ORDER_CANCELLED, { order_id: orderIdNum });
+    }
     console.log('✅ Order Handler: Status update dispatched to OrdersContext - Will update ALL screens automatically', {
       status,
       willUpdate: ['My Orders Screen', 'Order Details Screen', 'Track Order Bottom Sheet'],
@@ -247,6 +265,9 @@ export async function handleOrderNotification(
       }
     }
   } catch (error) {
+    crashlyticsService.recordError(error, {
+      source: 'fcm_order_notification_handler',
+    });
     console.error('❌ Order Handler: Error processing order notification', error);
     // Don't throw - allow app to continue
   }

@@ -8,6 +8,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { APP_VERSION_CODE, APP_VERSION_NAME } from '@/config/appVersion.generated';
 import { API_CONFIG, buildApiUrl } from '@/config/api.config';
 import { storageService } from './storage.service';
+import { analyticsService, AnalyticsEvents } from './analytics.service';
+import { crashlyticsService } from './crashlytics.service';
 
 // Types
 export interface ApiResponse<T = any> {
@@ -700,6 +702,23 @@ class ApiService {
       // be treated as user deletion or forced logout.
       if (!response.ok) {
         const statusCode = response.status;
+        analyticsService.logEvent(AnalyticsEvents.API_ERROR, {
+          endpoint,
+          http_code: statusCode,
+        });
+        const isRevenueCriticalEndpoint =
+          endpoint.includes('/api/buyer/orders') ||
+          endpoint.includes('/api/buyer/payment') ||
+          endpoint.includes('/api/buyer/cart') ||
+          endpoint.includes('/api/buyer/checkout');
+        if (isRevenueCriticalEndpoint || statusCode >= 500) {
+          crashlyticsService.recordError(new Error(`API ${method} ${endpoint} failed with ${statusCode}`), {
+            source: 'api_http_error',
+            endpoint,
+            http_code: statusCode,
+            method,
+          });
+        }
 
         const isProfileEndpoint = endpoint.includes('/user/profile');
         // Only treat `/user/profile` returning status 401 with the exact deletion
@@ -784,6 +803,23 @@ class ApiService {
         timestamp: new Date().toISOString(),
       }));
       const apiError = this.handleError(error);
+      analyticsService.logEvent(AnalyticsEvents.API_ERROR, {
+        endpoint,
+        http_code: apiError.status || 0,
+      });
+      const isRevenueCriticalEndpoint =
+        endpoint.includes('/api/buyer/orders') ||
+        endpoint.includes('/api/buyer/payment') ||
+        endpoint.includes('/api/buyer/cart') ||
+        endpoint.includes('/api/buyer/checkout');
+      if (isRevenueCriticalEndpoint || (apiError.status || 0) >= 500) {
+        crashlyticsService.recordError(error, {
+          source: 'api_network_or_runtime_error',
+          endpoint,
+          http_code: apiError.status || 0,
+          method,
+        });
+      }
       return {
         success: false,
         error: apiError.message,

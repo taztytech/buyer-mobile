@@ -19,6 +19,7 @@ import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { restaurantService } from '@/services/restaurant.service';
+import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BANNER_WIDTH = SCREEN_WIDTH - 40; // Fixed banner width with 20px padding on each side
@@ -147,6 +148,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showCategoryModal, setShowCategoryModal] = React.useState(false);
   const flatListRef = React.useRef<FlatList>(null);
   const scrollViewRef = React.useRef<ScrollView>(null);
+  const maxScrollCountTrackedRef = React.useRef(0);
   const scrollPositionRef = React.useRef(0);
   const autoSlideTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
@@ -509,6 +511,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       finalStatus = status;
 
       if (finalStatus === 'granted') {
+        analyticsService.logEvent(AnalyticsEvents.LOCATION_PERMISSION_GRANTED, { method: 'foreground' });
         const location = await Location.getCurrentPositionAsync({});
 
         const userLatitude = location.coords.latitude;
@@ -524,6 +527,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setCategoryData([]);
         await fetchHomeData(userLatitude, userLongitude);
       } else {
+        analyticsService.logEvent(AnalyticsEvents.LOCATION_PERMISSION_DENIED, { method: 'foreground' });
         setHasShownLocationModal(true); // Mark as shown to prevent repeated popups
         showConfirmation({
           title: 'Permission Denied',
@@ -934,6 +938,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           );
 
           setRestaurantData(uniqueRestaurants);
+          analyticsService.logEvent(AnalyticsEvents.RESTAURANT_LIST_VIEWED, {
+            restaurant_scroll_count: 0,
+            item_count: uniqueRestaurants.length,
+          });
 
           // Handle pagination metadata
           if (pagination) {
@@ -1350,6 +1358,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
     // Check if user has scrolled near the bottom (within 500px)
     const distanceFromBottom = contentHeight - (scrollY + layoutHeight);
+    const scrollCount = Math.max(0, Math.floor(scrollY / 500));
+    if (scrollCount > maxScrollCountTrackedRef.current) {
+      maxScrollCountTrackedRef.current = scrollCount;
+      analyticsService.logEvent(AnalyticsEvents.RESTAURANT_LIST_VIEWED, {
+        restaurant_scroll_count: scrollCount,
+      });
+    }
     if (distanceFromBottom < 500) {
       if (hasMoreRestaurants && !isLoadingMore && !isLoadingRestaurants) {
         loadMoreRestaurants();

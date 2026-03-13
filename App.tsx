@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState, InteractionManager, Platform } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
@@ -42,10 +42,11 @@ import { SearchSuggestion } from '@/services/search.service';
 import CustomSplashScreen from '@/components/CustomSplashScreen';
 import { fcmNotificationService } from '@/services/fcmNotification.service';
 import { NetworkStatusScreen } from '@/components/NetworkStatusScreen';
-import { analyticsService, AnalyticsEvents, AnalyticsScreens } from '@/services/analytics.service';
+import { analyticsService, AnalyticsEvents, AnalyticsScreens, AnalyticsUserProperties } from '@/services/analytics.service';
 import { inAppUpdateService } from '@/services/inAppUpdate.service';
 import { crashlyticsService } from '@/services/crashlytics.service';
 import { ForcedUpdateModal } from '@/components/ForcedUpdateModal';
+import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -60,6 +61,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     checkRestaurantConflict,
     clearCart,
     reloadCart,
+    getTotalItems,
+    getTotalPrice,
     restaurantId: cartRestaurantId,
     restaurantName: cartRestaurantName,
   } = useCart();
@@ -106,6 +109,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const [pendingHomeRefresh, setPendingHomeRefresh] = React.useState(false);
   const [isNetworkOnline, setIsNetworkOnline] = React.useState(true);
   const lastConnectionStatusRef = React.useRef<boolean | null>(null);
+  const screenTransitionStartRef = React.useRef<number>(Date.now());
+  const startupNotificationNavigationRef = React.useRef(false);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -238,6 +243,19 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     }
   }, [currentScreen, isCheckingAuth]);
 
+  React.useEffect(() => {
+    const criticalScreenAttributeMap: Partial<Record<typeof currentScreen, string>> = {
+      checkout: 'checkout',
+      orderTracking: 'order_status',
+      orderDetail: 'order_status',
+      orders: 'order_status',
+    };
+    const crashScreen = criticalScreenAttributeMap[currentScreen];
+    if (crashScreen) {
+      crashlyticsService.setAttribute('current_screen', crashScreen);
+    }
+  }, [currentScreen]);
+
   // Set up FCM handlers for order notifications
   React.useEffect(() => {
     // Set orders dispatch in FCM service
@@ -248,23 +266,33 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setOrderLookupFunction(getOrderByOrderNumber);
 
     // Set navigation callback to handle notification taps
-    // Navigate to My Orders screen and highlight the order
-    fcmNotificationService.setNavigationCallback((orderId: string) => {
+    // Route all notification taps to My Orders.
+    fcmNotificationService.setNavigationCallback(({ orderId }) => {
+      startupNotificationNavigationRef.current = true;
       console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
       onNotificationNavigateToOrders?.();
 
-      // Batch all screen position resets together to ensure Orders screen is visible
-      // and not covered by other overlays (like restaurant or checkout)
+      // Force-close all overlays so notification navigation wins from any screen.
+      homeScreenSlide.setValue(0);
       ordersScreenSlide.setValue(0);
-      orderDetailScreenSlide.setValue(SCREEN_WIDTH);
-      restaurantScreenSlide.setValue(SCREEN_WIDTH);
-      checkoutScreenSlide.setValue(SCREEN_WIDTH);
       profileScreenSlide.setValue(SCREEN_WIDTH);
       searchScreenSlide.setValue(SCREEN_WIDTH);
+      privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
+      termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
+      addressScreenSlide.setValue(SCREEN_WIDTH);
+      locationScreenSlide.setValue(SCREEN_WIDTH);
+      orderDetailScreenSlide.setValue(SCREEN_WIDTH);
+      helpScreenSlide.setValue(SCREEN_WIDTH);
+      contactUsScreenSlide.setValue(SCREEN_WIDTH);
+      faqScreenSlide.setValue(SCREEN_WIDTH);
+      restaurantScreenSlide.setValue(SCREEN_WIDTH);
+      checkoutScreenSlide.setValue(SCREEN_WIDTH);
+      setEditingAddress(null);
+      setSelectedOrderData(null);
 
       // Keep existing back behavior: Orders -> Profile for notification entry.
       setOrdersCameFrom('profile');
-      setHighlightOrderId(orderId);
+      setHighlightOrderId(orderId || null);
       setCurrentScreen('orders');
 
       // Clear highlight after 3 seconds (enough time for scroll animation)
@@ -297,10 +325,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         }
 
         // Track app foreground
-        analyticsService.logEvent(AnalyticsEvents.APP_FOREGROUND);
+        analyticsService.logEvent(AnalyticsEvents.APP_STATE, { state: 'foreground' });
       } else if (nextAppState === 'background') {
         // Track app background
-        analyticsService.logEvent(AnalyticsEvents.APP_BACKGROUND);
+        analyticsService.logEvent(AnalyticsEvents.APP_STATE, { state: 'background' });
       }
     });
 
@@ -311,6 +339,24 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
     return () => {
       subscription.remove();
+    };
+  }, [currentScreen]);
+
+  React.useEffect(() => {
+    const startedAt = Date.now();
+    screenTransitionStartRef.current = startedAt;
+    const interactionTask = InteractionManager.runAfterInteractions(() => {
+      const loadTimeMs = Date.now() - startedAt;
+      if (loadTimeMs > 2500) {
+        analyticsService.logEvent(AnalyticsEvents.SCREEN_LOAD_SLOW, {
+          screen_name: currentScreen,
+          load_time_ms: loadTimeMs,
+        });
+      }
+    });
+
+    return () => {
+      interactionTask.cancel();
     };
   }, [currentScreen]);
 
@@ -331,6 +377,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
             // Reset analytics user data
             await analyticsService.resetAnalyticsData();
+            await crashlyticsService.setUserId(null);
 
             // Clear address cache
             addressService.clearCache();
@@ -368,6 +415,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
             // Reset analytics user data
             await analyticsService.resetAnalyticsData();
+            await crashlyticsService.setUserId(null);
 
             // Clear address cache
             addressService.clearCache();
@@ -397,6 +445,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
         // Initialize Crashlytics
         await crashlyticsService.initialize();
+        await crashlyticsService.setGlobalContext({
+          app_version: APP_VERSION_NAME,
+          platform: Platform.OS,
+        });
 
         // Initialize Analytics
         await analyticsService.initialize();
@@ -429,11 +481,26 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             await analyticsService.setUserId(idString);
             await crashlyticsService.setUserId(idString);
           }
+          await crashlyticsService.setGlobalContext({
+            app_version: APP_VERSION_NAME,
+            login_state: 'logged_in',
+          });
+          await analyticsService.setUserProperties({
+            [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
+          });
 
           // User has valid session, navigate to home
           setCurrentScreen('home');
         } else {
           // No valid session, go to login
+          await crashlyticsService.setUserId(null);
+          await crashlyticsService.setGlobalContext({
+            app_version: APP_VERSION_NAME,
+            login_state: 'guest',
+          });
+          await analyticsService.setUserProperties({
+            [AnalyticsUserProperties.LOGIN_STATE]: 'guest',
+          });
           setCurrentScreen('login');
         }
       } catch (error) {
@@ -561,7 +628,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const handleLoginSuccess = (phone: string) => {
     setPhoneNumber(phone);
     setCurrentScreen('otp');
-    analyticsService.logEvent(AnalyticsEvents.LOGIN_START, { phone_number: phone });
+    analyticsService.logEvent(AnalyticsEvents.LOGIN_VIEW, { method: 'otp' });
+    analyticsService.logEvent(AnalyticsEvents.OTP_SENT, { method: 'sms' });
   };
 
   // Ensure notification permission after login
@@ -590,10 +658,18 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       const currentUser = await authService.getCurrentUser();
       if (currentUser?.id) {
         await analyticsService.setUserId(currentUser.id.toString());
+        await crashlyticsService.setUserId(currentUser.id.toString());
       }
 
-      await analyticsService.logEvent(AnalyticsEvents.LOGIN_SUCCESS, {
-        is_existing_user: true,
+      await analyticsService.logEvent(AnalyticsEvents.OTP_VERIFIED, { method: 'sms' });
+      await analyticsService.logEvent(AnalyticsEvents.LOGIN_SUCCESS, { method: 'otp' });
+      await analyticsService.setUserProperties({
+        [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
+      });
+      await crashlyticsService.setGlobalContext({
+        app_version: APP_VERSION_NAME,
+        login_state: 'logged_in',
+        user_type: 'returning',
       });
 
       setCurrentScreen('home');
@@ -602,7 +678,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       ensureNotificationPermission();
     } else {
       // New user - show welcome screen for profile completion
-      await analyticsService.logEvent(AnalyticsEvents.SIGNUP_START);
+      await analyticsService.logEvent(AnalyticsEvents.OTP_VERIFIED, { method: 'sms' });
       setCurrentScreen('welcome');
       setIsRegistrationFlow(true);
       ensureNotificationPermission();
@@ -625,9 +701,15 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
         // Set analytics user ID and properties
         await analyticsService.setUserId(currentUser.id.toString());
+        await crashlyticsService.setUserId(currentUser.id.toString());
         await analyticsService.setUserProperties({
-          user_name: name,
-          user_email: email,
+          [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
+          [AnalyticsUserProperties.USER_TYPE]: 'new',
+        });
+        await crashlyticsService.setGlobalContext({
+          app_version: APP_VERSION_NAME,
+          login_state: 'logged_in',
+          user_type: 'new',
         });
       }
     } catch (error) {
@@ -635,14 +717,16 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     }
 
     // Log signup success
-    await analyticsService.logEvent(AnalyticsEvents.SIGNUP_SUCCESS, {
-      has_name: !!name,
-      has_email: !!email,
-    });
+    await analyticsService.logEvent(AnalyticsEvents.LOGIN_SUCCESS, { method: 'otp' });
 
-    // For new users, go directly to home
-    // HomeScreen will check for addresses and redirect if needed
-    setCurrentScreen('home');
+    // For brand-new users, go directly to location selection to avoid
+    // rendering Home briefly (which can cause a visible green flash).
+    setAddressSelectionCameFrom('home');
+    setLocationSelectionCameFrom('home');
+    setSearchQuery('');
+    setInitialLocationCoords(null);
+    setCurrentScreen('locationSelection');
+    locationScreenSlide.setValue(0);
     setIsRegistrationFlow(false);
 
     // Ensure cart (if any) is synced for this user
@@ -654,7 +738,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     await analyticsService.logEvent(AnalyticsEvents.LOGOUT);
 
     // Reset analytics user data
-    await analyticsService.resetAnalyticsData();
+    await analyticsService.reset();
+    await crashlyticsService.setUserId(null);
+    await crashlyticsService.setGlobalContext({
+      login_state: 'guest',
+    });
 
     // Clear authentication tokens and user data
     await authService.logout();
@@ -901,6 +989,23 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       latitude: location.latitude ?? location.lat,
       longitude: location.longitude ?? location.lng,
     });
+    const resolvedCity = String(location.city || '').toLowerCase();
+    const resolvedPincode = String(location.pincode || '');
+    const resolvedAreaName = String(location.name || location.locationName || '').toLowerCase();
+    analyticsService.setUserProperties({
+      [AnalyticsUserProperties.CITY]: resolvedCity || null,
+      [AnalyticsUserProperties.PINCODE]: resolvedPincode || null,
+      [AnalyticsUserProperties.AREA_NAME]: resolvedAreaName || null,
+    });
+    crashlyticsService.setGlobalContext({
+      city: resolvedCity || undefined,
+      pincode: resolvedPincode || undefined,
+    });
+    analyticsService.logEvent(AnalyticsEvents.LOCATION_SELECTED_MANUAL, {
+      city: resolvedCity || undefined,
+      pincode: resolvedPincode || undefined,
+      area_name: resolvedAreaName || undefined,
+    });
 
     // Trigger homepage refresh when address changes
     handleAddressChange();
@@ -1000,6 +1105,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setSelectedRestaurantName(restaurantName);
     setRestaurantCameFrom('category');
     setCurrentScreen('restaurant');
+    analyticsService.logEvent(AnalyticsEvents.MENU_VIEWED, {
+      restaurant_id: restaurantId,
+    });
 
     // Animate restaurant screen sliding in from right
     Animated.timing(restaurantScreenSlide, {
@@ -1018,10 +1126,12 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setCurrentScreen('restaurant');
 
     // Track restaurant view
-    analyticsService.logEvent(AnalyticsEvents.RESTAURANT_VIEW, {
+    analyticsService.logEvent(AnalyticsEvents.RESTAURANT_VIEWED, {
       restaurant_id: restaurantId,
-      restaurant_name: restaurantName,
       source: 'home',
+    });
+    analyticsService.logEvent(AnalyticsEvents.MENU_VIEWED, {
+      restaurant_id: restaurantId,
     });
 
     // Animate restaurant screen sliding in from right
@@ -1046,6 +1156,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
     // Set screen to checkout
     setCurrentScreen('checkout');
+    analyticsService.logEvent(AnalyticsEvents.CART_VIEWED, {
+      cart_value: getTotalPrice(),
+      item_count: getTotalItems(),
+    });
+    analyticsService.logEvent(AnalyticsEvents.CHECKOUT_STARTED, {
+      cart_value: getTotalPrice(),
+    });
 
     // Animate checkout screen sliding in from right (next frame)
     requestAnimationFrame(() => {
@@ -1056,7 +1173,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start();
     });
-  }, [checkoutScreenSlide]);
+  }, [checkoutScreenSlide, getTotalItems, getTotalPrice]);
 
   // Back from Checkout
   const handleBackFromCheckout = useCallback(() => {
@@ -1261,7 +1378,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setCurrentScreen('orders');
     // Reset orders screen position to show it
     ordersScreenSlide.setValue(0);
-    analyticsService.logEvent(AnalyticsEvents.ORDER_VIEW);
+    analyticsService.logEvent(AnalyticsEvents.RESTAURANT_LIST_VIEWED, { source: 'orders' });
   };
 
   const handleBackFromOrders = () => {
@@ -1429,7 +1546,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('login');
-        setLegalCameFrom('profile');
       });
     } else if (legalCameFrom === 'otp') {
       Animated.timing(privacyPolicyScreenSlide, {
@@ -1438,7 +1554,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('otp');
-        setLegalCameFrom('profile');
       });
     } else {
       Animated.parallel([
@@ -1495,7 +1610,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('login');
-        setLegalCameFrom('profile');
       });
     } else if (legalCameFrom === 'otp') {
       Animated.timing(termsConditionsScreenSlide, {
@@ -1504,7 +1618,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start(() => {
         setCurrentScreen('otp');
-        setLegalCameFrom('profile');
       });
     } else {
       Animated.parallel([
@@ -1796,7 +1909,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setCurrentScreen('search');
 
     // Track search start
-    analyticsService.logEvent(AnalyticsEvents.SEARCH_START);
+    analyticsService.logEvent(AnalyticsEvents.SEARCH, { source: 'home_search' });
 
     // Keep home fixed and slide search over it to avoid exposing base white layer.
     Animated.timing(searchScreenSlide, {
