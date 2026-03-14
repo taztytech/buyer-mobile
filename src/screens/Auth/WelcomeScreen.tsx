@@ -594,13 +594,15 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#00B14F',
+    // Keep root background white so keyboard/layout shifts never expose green at the bottom.
+    backgroundColor: '#FFFFFF',
   },
   container: {
     flex: 1,
   },
   scrollView: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
     flexGrow: 1,
