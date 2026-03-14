@@ -5,7 +5,9 @@ import ReactAppDependencyProvider
 import GoogleMaps
 import UserNotifications
 
+
 @UIApplicationMain
+
 public class AppDelegate: ExpoAppDelegate, UNUserNotificationCenterDelegate {
   var window: UIWindow?
 

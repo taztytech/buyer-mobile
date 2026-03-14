@@ -23,6 +23,7 @@ import { paymentService, PaymentErrorType } from '@/services/payment.service';
 import { homeService } from '@/services/home.service';
 import { cartService, CartSummary } from '@/services/cart.service';
 import { restaurantService } from '@/services/restaurant.service';
+import { paymentConfigService } from '@/services/payment-config.service';
 import { useCart } from '@/context/CartContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
@@ -139,6 +140,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
   const [selectedTip, setSelectedTip] = useState<number | null>(null);
   const [customTipAmount, setCustomTipAmount] = useState('');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'online' | 'cod'>('online');
   const [selfPickup, setSelfPickup] = useState(false);
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
@@ -225,6 +227,24 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   };
 
   const estimatedDeliveryTime = formatEstimatedDeliveryTime(estimatedDeliveryTimeRaw);
+
+  // COD availability based on backend configuration from /home API
+  const codSettings = paymentConfigService.getCodSettings();
+  const isCodEnabled = codSettings?.cod_enabled ?? false;
+  const codMinAmount = codSettings?.cod_min_amount ?? 0;
+  const codMaxAmount = codSettings?.cod_max_amount ?? Number.MAX_SAFE_INTEGER;
+
+  const isCodAllowed =
+    isCodEnabled &&
+    totalAmount >= codMinAmount &&
+    totalAmount <= codMaxAmount;
+
+  useEffect(() => {
+    // If COD is no longer allowed (e.g. amount changed), force switch back to online
+    if (!isCodAllowed && selectedPaymentMethod === 'cod') {
+      setSelectedPaymentMethod('online');
+    }
+  }, [isCodAllowed, selectedPaymentMethod]);
 
   // Determine if a coupon is currently applied based on discount amount
   const isCouponApplied = !!cartSummary && (cartSummary.discount_amount ?? 0) > 0;
@@ -750,12 +770,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       // Cart is already synced with backend via CartContext
       // So we can directly create order from the backend cart
 
-      // Create order with online payment
+      // Create order with selected payment method
       const createOrderRequest = {
         delivery_address_id: parseInt(selectedAddressId),
-        payment_method: 'online' as const,
+        payment_method: selectedPaymentMethod,
         notes: notes || undefined,
       };
+
+      console.log(
+        '[OrderDetails][handlePlaceOrder] Creating order with payload:--',
+        createOrderRequest,
+      );
 
       const orderResponse = await ordersService.createOrder(createOrderRequest);
 
@@ -789,7 +814,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         const paymentDetails = responseData.payment_details;
 
         // Check if payment is required
-        if (!paymentDetails) {
+        if (!paymentDetails && selectedPaymentMethod !== "cod") {
           // If no payment_details, order might be COD or payment not required
           // Clear local cart for COD orders (backend handles API clearing)
           clearCart(false);
@@ -851,7 +876,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           });
         });
 
-        if (paymentResult.success) {
+        if (paymentResult.success || selectedPaymentMethod === "cod") {
           // Payment successful - clear local cart and reset form (backend handles API clearing)
           clearCart(false);
           setNotes(''); // Reset notes for next order
@@ -859,10 +884,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           setCustomTipAmount(''); // Reset custom tip amount
 
           showConfirmation({
-            title: 'Payment Successful! 🎉',
+            title: `${selectedPaymentMethod !== "cod" ? "Payment" : "Order"} Successful! 🎉'`,
             message: orderNumber !== 'N/A'
-              ? `Your order #${orderNumber} has been placed and paid successfully.`
-              : 'Your order has been placed and paid successfully.',
+              ?`${selectedPaymentMethod === "cod" ? `Your order #${orderNumber} has been placed successfully.` : 'Your order has been placed and paid successfully.'}`
+              : `${selectedPaymentMethod === "cod" ? "Your order has been placed successfully." : 'Your order has been placed and paid successfully.'}`,
             confirmText: 'View Order Details',
             cancelText: '',
             confirmButtonColor: '#00B14F',
@@ -2153,6 +2178,71 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 )}
               </View>
 
+              {/* Payment Method Section */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Payment Method</Text>
+                </View>
+
+                <View style={[styles.sectionContent, styles.paymentSectionContent]}>
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentOption,
+                      selectedPaymentMethod === 'online' && styles.paymentOptionSelected,
+                    ]}
+                    onPress={() => setSelectedPaymentMethod('online')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.paymentOptionLeft}>
+                      <MaterialIcons name="credit-card" size={24} color="#00B14F" />
+                      <Text style={styles.paymentOptionText}>Online Payment</Text>
+                    </View>
+                    <MaterialIcons
+                      name={selectedPaymentMethod === 'online' ? 'radio-button-checked' : 'radio-button-unchecked'}
+                      size={24}
+                      color={selectedPaymentMethod === 'online' ? '#00B14F' : 'rgba(0, 0, 0, 0.25)'}
+                    />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentOption,
+                      !isCodEnabled && styles.paymentOptionDisabled,
+                      selectedPaymentMethod === 'cod' && isCodAllowed && styles.paymentOptionSelected,
+                    ]}
+                    onPress={() => {
+                      if (isCodAllowed) {
+                        setSelectedPaymentMethod('cod');
+                      }
+                    }}
+                    disabled={!isCodAllowed}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.paymentOptionContent}>
+                      <View style={styles.paymentOptionTopRow}>
+                        <View style={styles.paymentOptionLeft}>
+                          <MaterialIcons name="account-balance-wallet" size={24} color="#00B14F" />
+                          <Text style={styles.paymentOptionText}>Cash on Delivery (COD)</Text>
+                        </View>
+                        {isCodAllowed && (
+                          <MaterialIcons
+                            name={selectedPaymentMethod === 'cod' ? 'radio-button-checked' : 'radio-button-unchecked'}
+                            size={24}
+                            color={selectedPaymentMethod === 'cod' ? '#00B14F' : 'rgba(0, 0, 0, 0.25)'}
+                          />
+                        )}
+                      </View>
+
+                      {isCodEnabled && !isCodAllowed && (
+                        <Text style={styles.paymentOptionHelperText}>
+                          COD is available only for orders between ₹{codMinAmount} and ₹{codMaxAmount}.
+                        </Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               {/* Delivery Location Warning Section */}
               <View style={styles.section}>
                 <TouchableOpacity
@@ -2214,13 +2304,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             <View style={styles.footerContent}>
               <View style={styles.paymentInfo}>
                 <MaterialIcons
-                  name="credit-card"
+                  name={selectedPaymentMethod === 'online' ? 'credit-card' : 'account-balance-wallet'}
                   size={20}
                   color="#00B14F"
                 />
                 <View style={styles.paymentInfoTextContainer}>
-                  <Text style={styles.paymentInfoTitle}>Online Payment</Text>
-                  <Text style={styles.paymentInfoSubtitle}>UPI, Cards & More</Text>
+                  <Text style={styles.paymentInfoTitle}>
+                    {selectedPaymentMethod === 'online' ? 'Online Payment' : 'Cash on Delivery'}
+                  </Text>
+                  <Text style={styles.paymentInfoSubtitle}>
+                    {selectedPaymentMethod === 'online' ? 'UPI, Cards & More' : 'Pay at your doorstep'}
+                  </Text>
                 </View>
               </View>
 
@@ -2467,6 +2561,9 @@ const styles = StyleSheet.create({
   sectionContent: {
     paddingHorizontal: 20,
     paddingBottom: 20,
+  },
+  paymentSectionContent: {
+    paddingBottom: 0,
   },
   orderItem: {
     flexDirection: 'row',
@@ -2777,6 +2874,58 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.5)',
     textAlign: 'center',
   },
+  paymentOption: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.10)',
+    backgroundColor: '#FFFFFF',
+    marginBottom: 14,
+  },
+  paymentOptionSelected: {
+    borderColor: 'rgba(0, 177, 79, 0.45)',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  paymentOptionDisabled: {
+    opacity: 0.5,
+  },
+  paymentOptionHelperText: {
+    marginTop: 6,
+    marginLeft: 36,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 11,
+    lineHeight: 16,
+    color: 'rgba(0, 0, 0, 0.6)',
+  },
+  paymentOptionContent: {
+    flex: 1,
+  },
+  paymentOptionTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  paymentOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  paymentOptionText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#000000',
+    marginLeft: 12,
+  },
   customTipContainer: {
     marginTop: 16,
     marginBottom: 12,
@@ -2967,9 +3116,11 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.10)',
+    borderRadius: 12,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     marginRight: 12,
   },
@@ -2992,7 +3143,7 @@ const styles = StyleSheet.create({
   placeOrderButton: {
     flexDirection: 'row',
     backgroundColor: '#00B14F',
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 20,
     paddingVertical: 14,
     alignItems: 'center',
