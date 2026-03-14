@@ -1278,12 +1278,17 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setCurrentScreen('restaurant');
     analyticsService.logEvent(AnalyticsEvents.RESTAURANT_VIEWED, {
       restaurant_id: restaurantId,
+      restaurant_name: restaurantName || undefined,
       source: 'category',
       distance_km: Number.isFinite(meta?.distanceKm as number) ? meta?.distanceKm : 0,
       is_open: typeof meta?.isOpen === 'boolean' ? meta.isOpen : true,
+      screen_name: AnalyticsScreens.RESTAURANT,
     });
     analyticsService.logEvent(AnalyticsEvents.MENU_VIEWED, {
       restaurant_id: restaurantId,
+      restaurant_name: restaurantName || undefined,
+      source: 'category',
+      screen_name: AnalyticsScreens.RESTAURANT,
     });
 
     // Animate restaurant screen sliding in from right
@@ -1309,12 +1314,17 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     // Track restaurant view
     analyticsService.logEvent(AnalyticsEvents.RESTAURANT_VIEWED, {
       restaurant_id: restaurantId,
+      restaurant_name: restaurantName || undefined,
       source: 'home',
       distance_km: Number.isFinite(meta?.distanceKm as number) ? meta?.distanceKm : 0,
       is_open: typeof meta?.isOpen === 'boolean' ? meta.isOpen : true,
+      screen_name: AnalyticsScreens.RESTAURANT,
     });
     analyticsService.logEvent(AnalyticsEvents.MENU_VIEWED, {
       restaurant_id: restaurantId,
+      restaurant_name: restaurantName || undefined,
+      source: 'home',
+      screen_name: AnalyticsScreens.RESTAURANT,
     });
 
     // Animate restaurant screen sliding in from right
@@ -1342,10 +1352,19 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     analyticsService.logEvent(AnalyticsEvents.CART_VIEWED, {
       cart_value: getTotalPrice(),
       item_count: getTotalItems(),
+      restaurant_id: restaurantId,
+      restaurant_name: restaurantName || undefined,
+      screen_name: AnalyticsScreens.CHECKOUT,
     });
     analyticsService.logEvent(AnalyticsEvents.CHECKOUT_STARTED, {
       cart_value: getTotalPrice(),
       delivery_fee: 0,
+      item_count: getTotalItems(),
+      currency: 'INR',
+      restaurant_id: restaurantId,
+      restaurant_name: restaurantName || undefined,
+      source: from,
+      screen_name: AnalyticsScreens.CHECKOUT,
     });
 
     // Animate checkout screen sliding in from right (next frame)

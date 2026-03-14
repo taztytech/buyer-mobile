@@ -387,6 +387,9 @@ class PaymentService {
       await analyticsService.logEvent(AnalyticsEvents.PAYMENT_SUCCESS, {
         order_id: orderId,
         final_amount: paymentDetails.amount,
+        currency: (paymentDetails.currency || 'INR').toUpperCase(),
+        payment_method: 'online',
+        gateway: 'razorpay',
       });
       const purchaseValue = Number(paymentDetails.amount);
       const purchaseCurrency = (paymentDetails.currency || 'INR').toUpperCase();
