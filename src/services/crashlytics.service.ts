@@ -4,6 +4,7 @@
  */
 
 import { NativeModules, Platform } from 'react-native';
+import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 
 // Conditionally import Firebase Crashlytics to avoid errors if native modules aren't linked
 let crashlytics: any = null;
@@ -25,6 +26,21 @@ try {
 class CrashlyticsService {
   private isInitialized: boolean = false;
   private enabled: boolean = true;
+  private readonly baselineContext: Record<string, string> = {
+    app_version: APP_VERSION_NAME,
+    platform: Platform.OS,
+    login_state: 'guest',
+    current_screen: 'unknown',
+    user_type: 'unknown',
+    endpoint: 'unknown',
+    method: 'unknown',
+    order_id: 'unknown',
+    payment_method: 'unknown',
+    gateway: 'unknown',
+    http_code: 'unknown',
+    source: 'unknown',
+    error_type: 'unknown',
+  };
   private readonly piiKeyPatterns: RegExp[] = [
     /phone/i,
     /email/i,
@@ -50,9 +66,7 @@ class CrashlyticsService {
 
       await crashlytics().setCrashlyticsCollectionEnabled(this.enabled);
       this.isInitialized = true;
-      await this.setGlobalContext({
-        platform: Platform.OS,
-      });
+      await this.setGlobalContext(this.baselineContext);
       console.log('✅ Crashlytics: Initialized successfully');
     } catch (error) {
       console.warn('⚠️  Crashlytics: Initialization failed:', error);
@@ -164,13 +178,12 @@ class CrashlyticsService {
       const err =
         error instanceof Error ? error : new Error(typeof error === 'string' ? error : 'Unknown error');
 
-      if (context && Object.keys(context).length > 0) {
-        await this.setAttributes(
-          Object.fromEntries(
-            Object.entries(context).map(([key, value]) => [key, this.serializeContextValue(value)]),
-          ),
-        );
-      }
+      const mergedContext = this.mergeWithBaselineContext(context);
+      await this.setAttributes(
+        Object.fromEntries(
+          Object.entries(mergedContext).map(([key, value]) => [key, this.serializeContextValue(value)]),
+        ),
+      );
 
       await crashlytics().recordError(err);
     } catch (e) {
@@ -232,6 +245,21 @@ class CrashlyticsService {
     } catch {
       return String(value);
     }
+  }
+
+  private mergeWithBaselineContext(
+    context?: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const merged: Record<string, unknown> = { ...this.baselineContext };
+    if (!context) {
+      return merged;
+    }
+    for (const [key, value] of Object.entries(context)) {
+      if (value !== undefined && value !== null) {
+        merged[key] = value;
+      }
+    }
+    return merged;
   }
 }
 
