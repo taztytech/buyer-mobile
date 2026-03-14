@@ -153,6 +153,7 @@ module.exports = {
   expo: {
     name: "Tazty",
     slug: "Tazty",
+    scheme: "in.tazty.buyer",
     version: "1.0.3",
     orientation: "portrait",
     icon: "./src/assets/icon.png",
@@ -173,6 +174,9 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "in.tazty.buyer",
+      associatedDomains: [
+        "applinks:in.tazty.buyer"
+      ],
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
           "Tazty needs your location to show nearby restaurants and deliver food to your address.",
@@ -207,7 +211,30 @@ module.exports = {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
         }
-      }
+      },
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: [
+            {
+              scheme: "https",
+              host: "in.tazty.buyer"
+            }
+          ],
+          category: ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          action: "VIEW",
+          data: [
+            {
+              scheme: "https",
+              host: "pg-router.dev.razorpay.in"
+            }
+          ],
+          category: ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     web: {
       favicon: "./src/assets/favicon.png"

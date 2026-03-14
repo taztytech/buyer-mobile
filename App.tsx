@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState, InteractionManager, Platform } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState, InteractionManager, Platform, Linking } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
@@ -118,6 +118,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const startupNotificationNavigationRef = React.useRef(false);
   const sessionStartTimeRef = React.useRef<number | null>(null);
   const isAuthenticatedRef = React.useRef(false);
+  const pendingDeepLinkUrlRef = React.useRef<string | null>(null);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -144,6 +145,61 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     'Poppins_600SemiBold': Poppins_600SemiBold,
     'Poppins_700Bold': Poppins_700Bold,
   });
+
+  const handleDeepLinkNavigation = React.useCallback((incomingUrl: string): boolean => {
+    try {
+      const normalizedUrl = (incomingUrl || '').trim();
+      const match = normalizedUrl.match(/^https?:\/\/([^/]+)(\/[^?#]*)?/i);
+      if (!match) {
+        return false;
+      }
+
+      const host = (match[1] || '').toLowerCase();
+      const path = (match[2] || '/').toLowerCase();
+      const isOwnedHost = host === 'in.tazty.buyer' || host === 'www.in.tazty.buyer';
+      const isRazorpayRouter = host === 'pg-router.dev.razorpay.in';
+
+      if (!isOwnedHost && !isRazorpayRouter) {
+        return false;
+      }
+
+      // Razorpay router links are part of payment return flows.
+      // Keep user on checkout if possible; otherwise route to home/login safely.
+      if (isRazorpayRouter) {
+        if (isAuthenticatedRef.current) {
+          if (currentScreen !== 'checkout') {
+            setCurrentScreen('home');
+          }
+        } else {
+          setCurrentScreen('login');
+        }
+        return true;
+      }
+
+      if (!isAuthenticatedRef.current) {
+        setCurrentScreen('login');
+        return true;
+      }
+
+      const isOrderPath =
+        path.includes('/orders') ||
+        path.includes('/my-orders') ||
+        path.includes('/order');
+
+      if (isOrderPath) {
+        setOrdersCameFrom('notification');
+        setCurrentScreen('orders');
+        return true;
+      }
+
+      // Default route for other supported app links.
+      setCurrentScreen('home');
+      return true;
+    } catch (error) {
+      console.warn('⚠️ Failed to parse deep link URL:', incomingUrl, error);
+      return false;
+    }
+  }, [currentScreen]);
 
   // Set Poppins as default font for all Text components
   React.useEffect(() => {
@@ -359,6 +415,47 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       subscription.remove();
     };
   }, [currentScreen]);
+
+  React.useEffect(() => {
+    const queueDeepLink = (url: string) => {
+      pendingDeepLinkUrlRef.current = url;
+      if (!isCheckingAuth) {
+        const pendingUrl = pendingDeepLinkUrlRef.current;
+        pendingDeepLinkUrlRef.current = null;
+        if (pendingUrl) {
+          handleDeepLinkNavigation(pendingUrl);
+        }
+      }
+    };
+
+    Linking.getInitialURL()
+      .then((initialUrl) => {
+        if (initialUrl) {
+          queueDeepLink(initialUrl);
+        }
+      })
+      .catch((error) => {
+        console.warn('⚠️ Failed to read initial deep link URL:', error);
+      });
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      if (url) {
+        queueDeepLink(url);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [handleDeepLinkNavigation, isCheckingAuth]);
+
+  React.useEffect(() => {
+    if (!isCheckingAuth && pendingDeepLinkUrlRef.current) {
+      const pendingUrl = pendingDeepLinkUrlRef.current;
+      pendingDeepLinkUrlRef.current = null;
+      handleDeepLinkNavigation(pendingUrl);
+    }
+  }, [handleDeepLinkNavigation, isCheckingAuth]);
 
   React.useEffect(() => {
     const startedAt = Date.now();
