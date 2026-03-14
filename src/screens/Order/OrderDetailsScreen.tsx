@@ -2207,7 +2207,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   <TouchableOpacity
                     style={[
                       styles.paymentOption,
-                      !isCodAllowed && styles.paymentOptionDisabled,
+                      !isCodEnabled && styles.paymentOptionDisabled,
                       selectedPaymentMethod === 'cod' && isCodAllowed && styles.paymentOptionSelected,
                     ]}
                     onPress={() => {
@@ -2233,7 +2233,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                         )}
                       </View>
 
-                      {!isCodAllowed && (
+                      {isCodEnabled && !isCodAllowed && (
                         <Text style={styles.paymentOptionHelperText}>
                           COD is available only for orders between ₹{codMinAmount} and ₹{codMaxAmount}.
                         </Text>
@@ -2896,6 +2896,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   paymentOptionDisabled: {
+    opacity: 0.5,
   },
   paymentOptionHelperText: {
     marginTop: 6,
