@@ -63,6 +63,9 @@ export const AnalyticsEvents = {
   // App & Session
   APP_OPEN: 'app_open',
   APP_STATE: 'app_state',
+  SESSION_END: 'session_end',
+  USER_SESSION_START: 'user_session_start',
+  USER_SESSION_END: 'user_session_end',
 
   // Authentication
   LOGIN_VIEW: 'login_view',
@@ -122,10 +125,13 @@ export const AnalyticsEvents = {
 } as const;
 
 export const AnalyticsUserProperties = {
+  USER_ID: 'user_id',
   AREA_NAME: 'area_name',
   CITY: 'city',
   PINCODE: 'pincode',
   PLATFORM: 'platform',
+  LATITUDE: 'latitude',
+  LONGITUDE: 'longitude',
   APP_VERSION: 'app_version',
   APP_VERSION_CODE: 'app_version_code',
   USER_TYPE: 'user_type',
@@ -170,14 +176,19 @@ class AnalyticsService {
     /email/i,
     /full_address/i,
     /street_address/i,
-    /lat/i,
-    /lng/i,
-    /long/i,
+    /(^|_)(lat|latitude)(_|$)/i,
+    /(^|_)(lng|long|longitude)(_|$)/i,
     /user_name/i,
     /full_name/i,
     /payment_id/i,
     /razorpay_signature/i,
   ];
+  private readonly allowedSensitiveKeys: Set<string> = new Set([
+    AnalyticsUserProperties.PLATFORM,
+    AnalyticsUserProperties.LATITUDE,
+    AnalyticsUserProperties.LONGITUDE,
+    AnalyticsUserProperties.USER_ID,
+  ]);
 
   /**
    * Initialize analytics service
@@ -494,6 +505,9 @@ class AnalyticsService {
   }
 
   private isPIIKey(key: string): boolean {
+    if (this.allowedSensitiveKeys.has(key)) {
+      return false;
+    }
     return this.piiKeyPatterns.some((pattern) => pattern.test(key));
   }
 

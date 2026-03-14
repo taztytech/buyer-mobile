@@ -54,6 +54,11 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // SplashScreen.preventAutoHideAsync();
 
 // Inner component with cart and confirmation context access
+type RestaurantAnalyticsMeta = {
+  distanceKm?: number;
+  isOpen?: boolean;
+};
+
 function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigateToOrders?: () => void }) {
   const {
     addToCart,
@@ -111,6 +116,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const lastConnectionStatusRef = React.useRef<boolean | null>(null);
   const screenTransitionStartRef = React.useRef<number>(Date.now());
   const startupNotificationNavigationRef = React.useRef(false);
+  const sessionStartTimeRef = React.useRef<number | null>(null);
+  const isAuthenticatedRef = React.useRef(false);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -329,6 +336,15 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       } else if (nextAppState === 'background') {
         // Track app background
         analyticsService.logEvent(AnalyticsEvents.APP_STATE, { state: 'background' });
+        if (isAuthenticatedRef.current) {
+          const durationSec = sessionStartTimeRef.current
+            ? Math.max(0, Math.round((Date.now() - sessionStartTimeRef.current) / 1000))
+            : 0;
+          analyticsService.logEvent(AnalyticsEvents.SESSION_END, {
+            reason: 'background',
+            duration_sec: durationSec,
+          });
+        }
       }
     });
 
@@ -378,6 +394,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             // Reset analytics user data
             await analyticsService.resetAnalyticsData();
             await crashlyticsService.setUserId(null);
+            isAuthenticatedRef.current = false;
+            sessionStartTimeRef.current = null;
 
             // Clear address cache
             addressService.clearCache();
@@ -416,6 +434,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             // Reset analytics user data
             await analyticsService.resetAnalyticsData();
             await crashlyticsService.setUserId(null);
+            isAuthenticatedRef.current = false;
+            sessionStartTimeRef.current = null;
 
             // Clear address cache
             addressService.clearCache();
@@ -480,6 +500,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             const idString = currentUser.id.toString();
             await analyticsService.setUserId(idString);
             await crashlyticsService.setUserId(idString);
+            await analyticsService.setUserProperties({
+              [AnalyticsUserProperties.USER_ID]: idString,
+              [AnalyticsUserProperties.USER_TYPE]: 'returning',
+            });
           }
           await crashlyticsService.setGlobalContext({
             app_version: APP_VERSION_NAME,
@@ -487,7 +511,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           });
           await analyticsService.setUserProperties({
             [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
+            [AnalyticsUserProperties.USER_TYPE]: 'returning',
+            [AnalyticsUserProperties.USER_ID]: currentUser?.id ? currentUser.id.toString() : null,
           });
+          isAuthenticatedRef.current = true;
+          if (!sessionStartTimeRef.current) {
+            sessionStartTimeRef.current = Date.now();
+          }
 
           // User has valid session, navigate to home
           setCurrentScreen('home');
@@ -500,11 +530,17 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           });
           await analyticsService.setUserProperties({
             [AnalyticsUserProperties.LOGIN_STATE]: 'guest',
+            [AnalyticsUserProperties.USER_ID]: null,
+            [AnalyticsUserProperties.USER_TYPE]: 'guest',
           });
+          isAuthenticatedRef.current = false;
+          sessionStartTimeRef.current = null;
           setCurrentScreen('login');
         }
       } catch (error) {
         // If auth check fails, go to login screen
+        isAuthenticatedRef.current = false;
+        sessionStartTimeRef.current = null;
         setCurrentScreen('login');
       } finally {
         setIsCheckingAuth(false);
@@ -663,8 +699,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
       await analyticsService.logEvent(AnalyticsEvents.OTP_VERIFIED, { method: 'sms' });
       await analyticsService.logEvent(AnalyticsEvents.LOGIN_SUCCESS, { method: 'otp' });
+      await analyticsService.logEvent(AnalyticsEvents.USER_SESSION_START, { trigger: 'login' });
+      sessionStartTimeRef.current = Date.now();
+      isAuthenticatedRef.current = true;
       await analyticsService.setUserProperties({
         [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
+        [AnalyticsUserProperties.USER_ID]: currentUser?.id ? currentUser.id.toString() : null,
+        [AnalyticsUserProperties.USER_TYPE]: 'returning',
       });
       await crashlyticsService.setGlobalContext({
         app_version: APP_VERSION_NAME,
@@ -703,6 +744,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         await analyticsService.setUserId(currentUser.id.toString());
         await crashlyticsService.setUserId(currentUser.id.toString());
         await analyticsService.setUserProperties({
+          [AnalyticsUserProperties.USER_ID]: currentUser.id.toString(),
           [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
           [AnalyticsUserProperties.USER_TYPE]: 'new',
         });
@@ -718,6 +760,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
     // Log signup success
     await analyticsService.logEvent(AnalyticsEvents.LOGIN_SUCCESS, { method: 'otp' });
+    await analyticsService.logEvent(AnalyticsEvents.USER_SESSION_START, { trigger: 'login' });
+    sessionStartTimeRef.current = Date.now();
+    isAuthenticatedRef.current = true;
 
     // For brand-new users, go directly to location selection to avoid
     // rendering Home briefly (which can cause a visible green flash).
@@ -734,11 +779,24 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const handleLogout = async () => {
+    const durationSec = sessionStartTimeRef.current
+      ? Math.max(0, Math.round((Date.now() - sessionStartTimeRef.current) / 1000))
+      : 0;
+
     // Log logout event
     await analyticsService.logEvent(AnalyticsEvents.LOGOUT);
+    await analyticsService.logEvent(AnalyticsEvents.SESSION_END, {
+      reason: 'logout',
+      duration_sec: durationSec,
+    });
+    await analyticsService.logEvent(AnalyticsEvents.USER_SESSION_END, { trigger: 'logout' });
 
     // Reset analytics user data
     await analyticsService.reset();
+    await analyticsService.setUserProperties({
+      [AnalyticsUserProperties.USER_ID]: null,
+      [AnalyticsUserProperties.USER_TYPE]: 'guest',
+    });
     await crashlyticsService.setUserId(null);
     await crashlyticsService.setGlobalContext({
       login_state: 'guest',
@@ -766,6 +824,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     // Reset state
     setCurrentScreen('login');
     setPhoneNumber('');
+    isAuthenticatedRef.current = false;
+    sessionStartTimeRef.current = null;
   };
 
   const handleBackToLogin = () => {
@@ -992,10 +1052,16 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     const resolvedCity = String(location.city || '').toLowerCase();
     const resolvedPincode = String(location.pincode || '');
     const resolvedAreaName = String(location.name || location.locationName || '').toLowerCase();
+    const resolvedLatitudeRaw = location.latitude ?? location.lat;
+    const resolvedLongitudeRaw = location.longitude ?? location.lng;
+    const resolvedLatitude = typeof resolvedLatitudeRaw === 'number' ? resolvedLatitudeRaw.toFixed(6) : null;
+    const resolvedLongitude = typeof resolvedLongitudeRaw === 'number' ? resolvedLongitudeRaw.toFixed(6) : null;
     analyticsService.setUserProperties({
       [AnalyticsUserProperties.CITY]: resolvedCity || null,
       [AnalyticsUserProperties.PINCODE]: resolvedPincode || null,
       [AnalyticsUserProperties.AREA_NAME]: resolvedAreaName || null,
+      [AnalyticsUserProperties.LATITUDE]: resolvedLatitude,
+      [AnalyticsUserProperties.LONGITUDE]: resolvedLongitude,
     });
     crashlyticsService.setGlobalContext({
       city: resolvedCity || undefined,
@@ -1100,11 +1166,21 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   // Restaurant Navigation from Category
-  const handleNavigateToRestaurantFromCategory = (restaurantId: number, restaurantName: string) => {
+  const handleNavigateToRestaurantFromCategory = (
+    restaurantId: number,
+    restaurantName: string,
+    meta?: RestaurantAnalyticsMeta
+  ) => {
     setSelectedRestaurantId(restaurantId);
     setSelectedRestaurantName(restaurantName);
     setRestaurantCameFrom('category');
     setCurrentScreen('restaurant');
+    analyticsService.logEvent(AnalyticsEvents.RESTAURANT_VIEWED, {
+      restaurant_id: restaurantId,
+      source: 'category',
+      distance_km: Number.isFinite(meta?.distanceKm as number) ? meta?.distanceKm : 0,
+      is_open: typeof meta?.isOpen === 'boolean' ? meta.isOpen : true,
+    });
     analyticsService.logEvent(AnalyticsEvents.MENU_VIEWED, {
       restaurant_id: restaurantId,
     });
@@ -1119,7 +1195,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   // Restaurant Navigation from Home
-  const handleNavigateToRestaurantFromHome = (restaurantId: number, restaurantName: string) => {
+  const handleNavigateToRestaurantFromHome = (
+    restaurantId: number,
+    restaurantName: string,
+    meta?: RestaurantAnalyticsMeta
+  ) => {
     setSelectedRestaurantId(restaurantId);
     setSelectedRestaurantName(restaurantName);
     setRestaurantCameFrom('home');
@@ -1129,6 +1209,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     analyticsService.logEvent(AnalyticsEvents.RESTAURANT_VIEWED, {
       restaurant_id: restaurantId,
       source: 'home',
+      distance_km: Number.isFinite(meta?.distanceKm as number) ? meta?.distanceKm : 0,
+      is_open: typeof meta?.isOpen === 'boolean' ? meta.isOpen : true,
     });
     analyticsService.logEvent(AnalyticsEvents.MENU_VIEWED, {
       restaurant_id: restaurantId,
@@ -1162,6 +1244,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     });
     analyticsService.logEvent(AnalyticsEvents.CHECKOUT_STARTED, {
       cart_value: getTotalPrice(),
+      delivery_fee: 0,
     });
 
     // Animate checkout screen sliding in from right (next frame)

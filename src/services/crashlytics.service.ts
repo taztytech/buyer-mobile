@@ -167,7 +167,7 @@ class CrashlyticsService {
       if (context && Object.keys(context).length > 0) {
         await this.setAttributes(
           Object.fromEntries(
-            Object.entries(context).map(([key, value]) => [key, String(value)]),
+            Object.entries(context).map(([key, value]) => [key, this.serializeContextValue(value)]),
           ),
         );
       }
@@ -215,6 +215,23 @@ class CrashlyticsService {
 
   private isPIIKey(key: string): boolean {
     return this.piiKeyPatterns.some((pattern) => pattern.test(key));
+  }
+
+  private serializeContextValue(value: unknown): string {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
   }
 }
 
