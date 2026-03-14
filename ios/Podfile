@@ -45,13 +45,14 @@ target 'Tazty' do
   use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
   use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
   
-  # Enable modular headers only for specific pods that need it
+  # Enable modular headers only for specific pods that need it (required for Swift Firebase pods)
   pod 'GoogleUtilities', :modular_headers => true
   pod 'FirebaseCore', :modular_headers => true
   pod 'FirebaseCoreInternal', :modular_headers => true
   pod 'FirebaseCoreExtension', :modular_headers => true
   pod 'GoogleDataTransport', :modular_headers => true
   pod 'FirebaseInstallations', :modular_headers => true
+  pod 'FirebaseSessions', :modular_headers => true
   pod 'nanopb', :modular_headers => true
   pod 'FirebaseInstallations', :modular_headers => true
   pod 'FirebaseCoreExtension', :modular_headers => true

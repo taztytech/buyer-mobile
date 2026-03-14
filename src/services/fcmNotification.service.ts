@@ -5,6 +5,7 @@
  */
 
 import { Platform, NativeEventEmitter, NativeModules, PermissionsAndroid } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { apiService } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -102,6 +103,18 @@ class FCMNotificationService {
    */
   async initialize(): Promise<boolean> {
     try {
+      // On iOS, set expo-notifications handler so foreground FCM messages can be shown as local notifications
+      if (Platform.OS === 'ios') {
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowBanner: true,
+            shouldShowList: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+          }),
+        });
+      }
+
       // Check if Firebase messaging is available
       if (!messaging) {
         console.warn('⚠️  FCM: Native module not available. Rebuild native app to enable FCM.');
@@ -429,9 +442,8 @@ class FCMNotificationService {
     });
 
     // Foreground message listener
-    // In foreground, FCM doesn't automatically show notifications
-    // The native FCMService.kt will handle showing system notifications
-    // We just need to handle the data for navigation and order updates
+    // In foreground, FCM delivers to onMessage but does NOT show a system notification on iOS.
+    // Android: FCMService.kt shows the notification. iOS: we show a local notification here.
     this.messageListener = messaging().onMessage(async (remoteMessage: any) => {
       console.log('📨 FCM: Foreground message received:', remoteMessage.messageId);
       console.log('   Title:', remoteMessage.notification?.title || 'N/A');
@@ -448,6 +460,23 @@ class FCMNotificationService {
       // Store recent message
       this.addRecentMessage(payload);
 
+      // On iOS, FCM does not display notifications in foreground — show a local notification
+      if (Platform.OS === 'ios') {
+        try {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: remoteMessage.notification?.title ?? 'Notification',
+              body: remoteMessage.notification?.body ?? '',
+              data: (remoteMessage.data as Record<string, unknown>) ?? {},
+              sound: true,
+            },
+            trigger: null, // show immediately
+          });
+        } catch (err) {
+          console.warn('⚠️  FCM: Failed to show foreground notification on iOS:', err);
+        }
+      }
+
       // Handle order notification updates if dispatch is available
       if (this.ordersDispatch && remoteMessage.data?.type === 'order') {
         console.log('✅ FCM: Processing order notification update - Status will be updated in all screens');
@@ -460,10 +489,6 @@ class FCMNotificationService {
           notificationType: remoteMessage.data?.type,
         });
       }
-
-      // Note: System notification is shown by native FCMService.kt
-      // We handle navigation when user taps the notification
-      // No need to manually show notification here - native layer handles it
     });
 
     // Notification opened listener (when user taps notification)
