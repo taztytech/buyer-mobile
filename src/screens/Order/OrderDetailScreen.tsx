@@ -30,7 +30,6 @@ import { authService } from '@/services/auth.service';
 import { useOrders } from '@/context/OrdersContext';
 import { mapOrderStatusToUI, getFallbackTimelineForStatus } from '@/utils/orderStatusMapping';
 import { exotelService } from '@/services/exotel.service';
-import { paymentConfigService } from '@/services/payment-config.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { useAndroidPip } from '@/hooks/useAndroidPip';
 import { extractRestaurantCoordinate, extractCustomerCoordinate } from './orderTrackingLocationUtils';
@@ -1150,7 +1149,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Order Details</Text>
         <View style={styles.headerButtons}>
-          {_onHelp && (paymentConfigService.getCodSettings()?.cod_enabled ?? false) && (
+          {_onHelp && orderData?.payment_method === 'cod' && (
             <TouchableOpacity
               style={styles.helpButton}
               onPress={_onHelp}
