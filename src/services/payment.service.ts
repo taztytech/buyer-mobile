@@ -388,6 +388,15 @@ class PaymentService {
         order_id: orderId,
         final_amount: paymentDetails.amount,
       });
+      const purchaseValue = Number(paymentDetails.amount);
+      const purchaseCurrency = (paymentDetails.currency || 'INR').toUpperCase();
+      if (Number.isFinite(purchaseValue) && purchaseValue > 0) {
+        await analyticsService.logPurchase(
+          String(orderId),
+          purchaseValue,
+          purchaseCurrency,
+        );
+      }
 
       return {
         success: true,
