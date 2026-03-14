@@ -154,7 +154,7 @@ module.exports = {
     name: "Tazty",
     slug: "Tazty",
     scheme: "in.tazty.buyer",
-    version: "1.0.3",
+    version: "1.0.4",
     orientation: "portrait",
     icon: "./src/assets/icon.png",
     userInterfaceStyle: "light",
