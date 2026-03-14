@@ -74,6 +74,24 @@ class ApiService {
   private lastProfileCheckTime: number = 0; // Timestamp of last profile check
   private profileCheckInProgress: boolean = false; // Prevent multiple simultaneous profile checks
   private readonly PROFILE_CHECK_INTERVAL_MS = 60 * 1000; // Check profile every 60 seconds max (reduced frequency)
+  private readonly crashlyticsBlockedKeyPatterns: RegExp[] = [
+    /authorization/i,
+    /token/i,
+    /password/i,
+    /secret/i,
+    /signature/i,
+    /cookie/i,
+    /session/i,
+    /api[_-]?key/i,
+    /otp/i,
+    /phone/i,
+    /email/i,
+    /address/i,
+    /lat/i,
+    /lng/i,
+    /long/i,
+    /name/i,
+  ];
 
   /**
    * Set callback to be called when user deletion is detected
@@ -149,6 +167,105 @@ class ApiService {
       'X-App-Version-Name': versionName,
       'X-App-Version-Code': versionCode,
     };
+  }
+
+  private isCrashlyticsBlockedKey(key: string): boolean {
+    return this.crashlyticsBlockedKeyPatterns.some((pattern) => pattern.test(key));
+  }
+
+  private sanitizeForCrashlytics(value: any, depth: number = 0): any {
+    if (depth > 5) {
+      return '[truncated-depth]';
+    }
+    if (value === null || value === undefined) {
+      return value;
+    }
+    if (typeof value === 'string') {
+      return value.length > 400 ? `${value.slice(0, 400)}...[truncated]` : value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      const trimmed = value.slice(0, 25).map((item) => this.sanitizeForCrashlytics(item, depth + 1));
+      if (value.length > 25) {
+        trimmed.push('[truncated-items]');
+      }
+      return trimmed;
+    }
+    if (typeof value === 'object') {
+      const output: Record<string, any> = {};
+      for (const [k, v] of Object.entries(value)) {
+        if (this.isCrashlyticsBlockedKey(k)) {
+          output[k] = '[redacted]';
+          continue;
+        }
+        output[k] = this.sanitizeForCrashlytics(v, depth + 1);
+      }
+      return output;
+    }
+    return String(value);
+  }
+
+  private toBreadcrumbString(label: string, payload: any): string {
+    const serialized = safeStringify(payload, 0);
+    const compact = serialized.replace(/\s+/g, ' ').trim();
+    const maxLen = 850;
+    const truncated = compact.length > maxLen ? `${compact.slice(0, maxLen)}...[truncated]` : compact;
+    return `${label}: ${truncated}`;
+  }
+
+  private async logApiErrorToCrashlytics(params: {
+    method: string;
+    url: string;
+    status?: number;
+    request?: any;
+    response?: any;
+    reason?: string;
+    source: string;
+  }): Promise<void> {
+    const sanitizedReq = this.sanitizeForCrashlytics(params.request);
+    const sanitizedResponse = this.sanitizeForCrashlytics(params.response);
+    const apiStatus = typeof params.status === 'number' ? params.status : 0;
+
+    await crashlyticsService.log(
+      this.toBreadcrumbString('api_error_context', {
+        api_method: params.method,
+        api_url: params.url,
+        api_status: apiStatus,
+        source: params.source,
+        reason: params.reason || 'unknown_api_error',
+        req: sanitizedReq,
+        response: sanitizedResponse,
+      }),
+    );
+
+    await crashlyticsService.recordError(new Error('API Call Error'), {
+      source: params.source,
+      api_method: params.method,
+      api_url: params.url,
+      api_status: apiStatus,
+      error_reason: params.reason || 'unknown_api_error',
+      req: sanitizedReq,
+      response: sanitizedResponse,
+    });
+  }
+
+  private async logTokenRefreshFailureToCrashlytics(params: {
+    reason: string;
+    status?: number;
+    request?: any;
+    response?: any;
+  }): Promise<void> {
+    await this.logApiErrorToCrashlytics({
+      method: 'POST',
+      url: buildApiUrl('/authentication/refresh-token'),
+      status: typeof params.status === 'number' ? params.status : 0,
+      request: params.request,
+      response: params.response,
+      reason: params.reason,
+      source: 'token_refresh_failure',
+    });
   }
 
   /**
@@ -340,6 +457,15 @@ class ApiService {
 
       if (!refreshToken || refreshToken.trim() === '') {
         console.warn('[apiService] No refresh token available for refresh');
+        await this.logTokenRefreshFailureToCrashlytics({
+          reason: 'missing_refresh_token',
+          status: 0,
+          request: { refresh_token: null },
+          response: {
+            success: false,
+            message: 'No refresh token available for refresh',
+          },
+        });
         await this.clearTokens();
         return 'hard_fail';
       }
@@ -408,6 +534,16 @@ class ApiService {
 
         if (!newAccessToken || newAccessToken.trim() === '') {
           console.warn('[apiService] Refresh token response missing access token');
+          await this.logTokenRefreshFailureToCrashlytics({
+            reason: 'missing_access_token_in_refresh_response',
+            status: response.status,
+            request: sanitizedBody,
+            response: {
+              success: false,
+              status: response.status,
+              data,
+            },
+          });
           // Keep existing tokens - don't clear them (might be temporary backend issue)
           return 'soft_fail';
         }
@@ -450,22 +586,61 @@ class ApiService {
 
         if (isInvalidToken) {
           console.warn('[apiService] Refresh token is invalid/expired, clearing session');
+          await this.logTokenRefreshFailureToCrashlytics({
+            reason: 'invalid_or_expired_refresh_token',
+            status: response.status,
+            request: sanitizedBody,
+            response: {
+              success: false,
+              status: response.status,
+              data,
+            },
+          });
           await this.clearTokens();
           return 'hard_fail';
         }
 
         // Server returned a non-auth error (e.g. 500, 502) — keep tokens, try again later
         console.warn('[apiService] Refresh token failed (non-auth error), keeping tokens');
+        await this.logTokenRefreshFailureToCrashlytics({
+          reason: 'refresh_non_auth_http_error',
+          status: response.status,
+          request: sanitizedBody,
+          response: {
+            success: false,
+            status: response.status,
+            data,
+          },
+        });
         return 'soft_fail';
       }
     } catch (error: any) {
       if (error.name === 'AbortError') {
         console.warn('[apiService] Refresh token request timed out');
+        await this.logTokenRefreshFailureToCrashlytics({
+          reason: 'refresh_request_timeout',
+          status: 0,
+          request: { endpoint: '/authentication/refresh-token' },
+          response: {
+            success: false,
+            message: error?.message || 'refresh_request_timeout',
+          },
+        });
         return 'soft_fail';
       }
 
       // Network error — keep tokens, user might just have temporary connectivity issues
       console.error('[apiService] Refresh token error:', error);
+      await this.logTokenRefreshFailureToCrashlytics({
+        reason: 'refresh_request_exception',
+        status: error?.status || error?.statusCode || 0,
+        request: { endpoint: '/authentication/refresh-token' },
+        response: {
+          success: false,
+          name: error?.name || null,
+          message: error?.message || 'refresh_request_exception',
+        },
+      });
       return 'soft_fail';
     }
   }
@@ -555,6 +730,10 @@ class ApiService {
     customHeaders?: Record<string, string>,
     retryCount: number = 0
   ): Promise<ApiResponse<T>> {
+    const shouldHaveBody =
+      method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+    const sanitizedRequestPayload = data && shouldHaveBody ? this.sanitizePayload(data) : undefined;
+
     try {
       // Ensure tokens are loaded from storage
       await this.ensureTokensLoaded();
@@ -568,12 +747,8 @@ class ApiService {
       };
       
       // Sanitize payload to avoid sending null/undefined values to the API
-      const shouldHaveBody =
-        method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
-
-      if (data && shouldHaveBody) {
-        const sanitizedData = this.sanitizePayload(data);
-        config.body = JSON.stringify(sanitizedData);
+      if (sanitizedRequestPayload !== undefined) {
+        config.body = JSON.stringify(sanitizedRequestPayload);
       }
 
       // Centralized request logging for debugging purposes
@@ -706,17 +881,23 @@ class ApiService {
           endpoint,
           http_code: statusCode,
         });
-        const isRevenueCriticalEndpoint =
-          endpoint.includes('/api/buyer/orders') ||
-          endpoint.includes('/api/buyer/payment') ||
-          endpoint.includes('/api/buyer/cart') ||
-          endpoint.includes('/api/buyer/checkout');
-        if (isRevenueCriticalEndpoint || statusCode >= 500) {
-          crashlyticsService.recordError(new Error(`API ${method} ${endpoint} failed with ${statusCode}`), {
-            source: 'api_http_error',
-            endpoint,
-            http_code: statusCode,
+        if (statusCode !== 401) {
+          await this.logApiErrorToCrashlytics({
             method,
+            url,
+            status: statusCode,
+            request: {
+              endpoint,
+              payload: requestBody,
+            },
+            response: {
+              success: false,
+              status: response.status,
+              statusText: response.statusText,
+              data: responseData,
+            },
+            reason: responseData?.error || responseData?.message || `http_${statusCode}`,
+            source: 'api_http_error',
           });
         }
 
@@ -807,17 +988,24 @@ class ApiService {
         endpoint,
         http_code: apiError.status || 0,
       });
-      const isRevenueCriticalEndpoint =
-        endpoint.includes('/api/buyer/orders') ||
-        endpoint.includes('/api/buyer/payment') ||
-        endpoint.includes('/api/buyer/cart') ||
-        endpoint.includes('/api/buyer/checkout');
-      if (isRevenueCriticalEndpoint || (apiError.status || 0) >= 500) {
-        crashlyticsService.recordError(error, {
-          source: 'api_network_or_runtime_error',
-          endpoint,
-          http_code: apiError.status || 0,
+      const errorStatus = apiError.status || 0;
+      if (errorStatus !== 401) {
+        await this.logApiErrorToCrashlytics({
           method,
+          url: buildApiUrl(endpoint),
+          status: errorStatus,
+          request: {
+            endpoint,
+            payload: sanitizedRequestPayload,
+          },
+          response: {
+            success: false,
+            name: error?.name || null,
+            message: error?.message || apiError.message,
+            status: errorStatus,
+          },
+          reason: apiError.message || error?.message || 'network_or_runtime_error',
+          source: 'api_network_or_runtime_error',
         });
       }
       return {
