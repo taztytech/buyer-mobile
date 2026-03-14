@@ -670,6 +670,14 @@ class ApiService {
 
       const responseData = await response.json();
 
+      // Dedicated logging for home API responses to debug home screen issues
+      if (isHomeEndpoint) {
+        console.log(
+          '[apiService][home][response]--------========',
+          responseData?.data?.data?.cod_settings
+        );
+      }
+
       console.log('[apiService][response]', safeStringify({
         method,
         endpoint: url,
@@ -713,15 +721,14 @@ class ApiService {
         }
 
         const isProfileEndpoint = endpoint.includes('/user/profile');
-        // Only treat `/user/profile` returning status 400 with the exact deletion
-        // message as a hard deletion signal. Both conditions must match — status 400
-        // alone is not enough (could be a malformed request), and the message alone
+        // Only treat `/user/profile` returning status 401 with the exact deletion
+        // message as a hard deletion signal. Both conditions must match — status 401
+        // alone is not enough (could be auth failure), and the message alone
         // is not checked on other endpoints to avoid false logouts.
         const profileErrorMessage = (responseData.message || responseData.error || '').toLowerCase();
         const isUserDeleted =
           isProfileEndpoint &&
-          statusCode === 400 &&
-          profileErrorMessage.includes('failed to retrieve user profile');
+          statusCode === 401 
 
         // If user deletion is detected, clear tokens and notify callback
         if (isUserDeleted) {

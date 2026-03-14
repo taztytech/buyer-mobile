@@ -49,8 +49,12 @@ target 'Tazty' do
   pod 'GoogleUtilities', :modular_headers => true
   pod 'FirebaseCore', :modular_headers => true
   pod 'FirebaseCoreInternal', :modular_headers => true
+  pod 'FirebaseCoreExtension', :modular_headers => true
   pod 'GoogleDataTransport', :modular_headers => true
+  pod 'FirebaseInstallations', :modular_headers => true
   pod 'nanopb', :modular_headers => true
+  pod 'FirebaseInstallations', :modular_headers => true
+  pod 'FirebaseCoreExtension', :modular_headers => true
   rn_maps_path = '../node_modules/react-native-maps'
 pod 'react-native-maps/Google', :path => rn_maps_path
 

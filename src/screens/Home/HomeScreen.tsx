@@ -5,6 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
 import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/home.service';
+import { paymentConfigService } from '@/services/payment-config.service';
 import { addressService } from '@/services/address.service';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { Shimmer } from '@/components/Shimmer';
@@ -743,6 +744,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         const pagination = actualData.pagination;
         const appOperationStatusData = actualData.app_operation_status;
         const homeScreenRestaurantCardStyle = actualData.home_screen_restaurant_card_style;
+        const codSettings = actualData.cod_settings;
+
+        // Store COD settings globally for checkout/payment screens
+        paymentConfigService.setCodSettings(codSettings);
 
         // Store app operation status
         if (appOperationStatusData) {
