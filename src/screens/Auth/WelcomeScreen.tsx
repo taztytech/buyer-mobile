@@ -108,7 +108,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
 
     // Animate focused input with subtle scale and border
     if (inputType === 'name') {
-      // Hide green section and move form up when name is focused
+      // Keep green section visible; only animate input/form behavior.
       setIsFormMoved(true);
       Animated.parallel([
         Animated.spring(nameInputScale, {
@@ -121,18 +121,6 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
           duration: 250,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: false,
-        }),
-        Animated.timing(greenSectionOpacity, {
-          toValue: 0,
-          duration: 350,
-          easing: smoothEasing,
-          useNativeDriver: true,
-        }),
-        Animated.timing(greenSectionTranslateY, {
-          toValue: -300,
-          duration: 350,
-          easing: smoothEasing,
-          useNativeDriver: true,
         }),
         Animated.timing(formContainerTranslateY, {
           toValue: -120,
@@ -157,7 +145,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
         }),
       ]).start();
     } else {
-      // Email focused - move form to same position as name field and hide green section
+      // Email focused - keep green section visible and move form consistently.
       setIsFormMoved(true);
       Animated.parallel([
         Animated.spring(emailInputScale, {
@@ -170,18 +158,6 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
           duration: 250,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: false,
-        }),
-        Animated.timing(greenSectionOpacity, {
-          toValue: 0,
-          duration: 350,
-          easing: smoothEasing,
-          useNativeDriver: true,
-        }),
-        Animated.timing(greenSectionTranslateY, {
-          toValue: -300,
-          duration: 350,
-          easing: smoothEasing,
-          useNativeDriver: true,
         }),
         Animated.timing(formContainerTranslateY, {
           toValue: -120,
