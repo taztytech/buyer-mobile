@@ -71,7 +71,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     restaurantId: cartRestaurantId,
     restaurantName: cartRestaurantName,
   } = useCart();
-  const { showConfirmation } = useConfirmation();
+  const { showConfirmation, hideConfirmation } = useConfirmation();
 
   const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
@@ -277,6 +277,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     fcmNotificationService.setNavigationCallback(({ orderId }) => {
       startupNotificationNavigationRef.current = true;
       console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
+      // Dismiss any currently visible global confirmation (e.g. payment success)
+      // so notification-driven navigation never re-shows stale modal UI on Orders.
+      hideConfirmation();
       onNotificationNavigateToOrders?.();
       // Force fresh fetch when arriving from notification tap.
       resetOrdersPersistence();
@@ -315,7 +318,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       fcmNotificationService.setNavigationCallback(null);
       fcmNotificationService.setOrdersDispatch(null);
     };
-  }, [ordersDispatch, getOrderByOrderNumber, onNotificationNavigateToOrders]);
+  }, [ordersDispatch, getOrderByOrderNumber, onNotificationNavigateToOrders, hideConfirmation]);
 
   // Handle app state changes to check for notifications when app becomes active
   React.useEffect(() => {
