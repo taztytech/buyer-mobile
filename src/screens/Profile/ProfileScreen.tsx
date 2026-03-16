@@ -6,6 +6,7 @@ import {
   StatusBar,
   TouchableOpacity,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -41,6 +42,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onFaq,
   onLogout,
 }) => {
+  const DELETE_ACCOUNT_URL = 'https://www.tazty.in/delete-account';
   const { showConfirmation } = useConfirmation();
   const [userName, setUserName] = useState('User');
   const [userPhone, setUserPhone] = useState('');
@@ -99,6 +101,33 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           showConfirmation({
             title: 'Error',
             message: 'Failed to logout. Please try again.',
+            confirmText: 'OK',
+            cancelText: 'Close',
+            onConfirm: () => { },
+          });
+        }
+      },
+    });
+  };
+
+  const handleDeleteAccount = () => {
+    showConfirmation({
+      title: 'Delete Account',
+      message: 'Are you sure you want to delete your account?',
+      confirmText: 'Yes',
+      cancelText: 'No',
+      confirmButtonColor: '#DC2626',
+      onConfirm: async () => {
+        try {
+          const supported = await Linking.canOpenURL(DELETE_ACCOUNT_URL);
+          if (!supported) {
+            throw new Error('Unsupported URL');
+          }
+          await Linking.openURL(DELETE_ACCOUNT_URL);
+        } catch (error) {
+          showConfirmation({
+            title: 'Unable to Open Link',
+            message: 'Please try again later.',
             confirmText: 'OK',
             cancelText: 'Close',
             onConfirm: () => { },
@@ -244,6 +273,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 label="Terms & Conditions"
                 icon="description"
                 onPress={onTermsConditions}
+              />
+              <MenuItem
+                label="Delete Account"
+                icon="delete-forever"
+                onPress={handleDeleteAccount}
                 showDivider={false}
               />
             </View>
