@@ -100,3 +100,44 @@ export const extractCustomerCoordinate = (order: any): Coordinate | null => {
   );
 };
 
+export const extractAgentCoordinate = (order: any): Coordinate | null => {
+  if (!order) return null;
+
+  const tracking = Array.isArray(order.tracking) ? [...order.tracking].reverse() : [];
+  for (const item of tracking) {
+    const coord = extractCoordinate(item);
+    if (coord) return coord;
+  }
+
+  return (
+    extractCoordinate(order.agent?.location) ||
+    extractCoordinate(order.agent) ||
+    extractCoordinate(order.delivery_partner?.location) ||
+    extractCoordinate(order.delivery_partner) ||
+    extractCoordinate(order.rider?.location) ||
+    extractCoordinate(order.rider) ||
+    null
+  );
+};
+
+export const extractTrackingPathCoordinates = (order: any): Coordinate[] => {
+  if (!order || !Array.isArray(order.tracking)) return [];
+  const points: Coordinate[] = [];
+
+  for (const item of order.tracking) {
+    const point = extractCoordinate(item);
+    if (!point) continue;
+
+    const prev = points[points.length - 1];
+    if (
+      !prev ||
+      Math.abs(prev.latitude - point.latitude) > 0.00001 ||
+      Math.abs(prev.longitude - point.longitude) > 0.00001
+    ) {
+      points.push(point);
+    }
+  }
+
+  return points;
+};
+

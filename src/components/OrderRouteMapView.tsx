@@ -7,6 +7,7 @@ let MapView: any = null;
 let Marker: any = null;
 let Polyline: any = null;
 let PROVIDER_GOOGLE: any = null;
+let AnimatedRegion: any = null;
 let isMapAvailable = false;
 
 try {
@@ -15,6 +16,7 @@ try {
   Marker = MapViewModule.Marker;
   Polyline = MapViewModule.Polyline;
   PROVIDER_GOOGLE = MapViewModule.PROVIDER_GOOGLE;
+  AnimatedRegion = MapViewModule.AnimatedRegion;
   isMapAvailable = true;
 } catch {
   isMapAvailable = false;
@@ -28,6 +30,9 @@ export interface OrderRouteCoordinate {
 interface OrderRouteMapViewProps {
   restaurantCoordinate: OrderRouteCoordinate;
   customerCoordinate: OrderRouteCoordinate;
+  agentCoordinate?: OrderRouteCoordinate | null;
+  routeCoordinates?: OrderRouteCoordinate[];
+  mode?: 'ready' | 'live';
   restaurantName?: string;
   customerAddress?: string;
   /** Pass isInPipMode here — changing it triggers re-fit and re-mount on exit */
@@ -38,6 +43,9 @@ interface OrderRouteMapViewProps {
 export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   restaurantCoordinate,
   customerCoordinate,
+  agentCoordinate,
+  routeCoordinates,
+  mode = 'ready',
   restaurantName,
   customerAddress,
   resizeTrigger,
@@ -52,6 +60,17 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   // We do this when returning from PiP (resizeTrigger true → false) so all
   // markers re-render fresh and nothing is left in a stale state.
   const [mapKey, setMapKey] = useState(0);
+  const agentAnimatedCoordinateRef = useRef<any>(null);
+  const lastAgentCoordinateRef = useRef<OrderRouteCoordinate | null>(null);
+
+  if (!agentAnimatedCoordinateRef.current && AnimatedRegion && agentCoordinate) {
+    agentAnimatedCoordinateRef.current = new AnimatedRegion({
+      latitude: agentCoordinate.latitude,
+      longitude: agentCoordinate.longitude,
+      latitudeDelta: 0,
+      longitudeDelta: 0,
+    });
+  }
 
   // Whether we are in PiP mode — controls marker label visibility and marker size
   const inPip = !!resizeTrigger;
@@ -79,10 +98,14 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
           }
         : { top: 120, right: 120, bottom: 200, left: 120 };
     mapRef.current.fitToCoordinates(
-      [restaurantCoordinate, customerCoordinate],
+      [
+        restaurantCoordinate,
+        customerCoordinate,
+        ...(agentCoordinate ? [agentCoordinate] : []),
+      ],
       { edgePadding: padding, animated }
     );
-  }, [restaurantCoordinate, customerCoordinate]);
+  }, [restaurantCoordinate, customerCoordinate, agentCoordinate]);
 
   const scheduleFit = useCallback((delay: number, animated = true) => {
     clearFitTimer();
@@ -130,6 +153,68 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     [scheduleFit]
   );
 
+  useEffect(() => {
+    if (!AnimatedRegion) return;
+    if (!agentCoordinate) {
+      agentAnimatedCoordinateRef.current = null;
+      lastAgentCoordinateRef.current = null;
+      return;
+    }
+
+    if (!agentAnimatedCoordinateRef.current) {
+      agentAnimatedCoordinateRef.current = new AnimatedRegion({
+        latitude: agentCoordinate.latitude,
+        longitude: agentCoordinate.longitude,
+        latitudeDelta: 0,
+        longitudeDelta: 0,
+      });
+      lastAgentCoordinateRef.current = {
+        latitude: agentCoordinate.latitude,
+        longitude: agentCoordinate.longitude,
+      };
+      return;
+    }
+
+    try {
+      const prev = lastAgentCoordinateRef.current;
+      const next = { latitude: agentCoordinate.latitude, longitude: agentCoordinate.longitude };
+      const toRadians = (deg: number) => (deg * Math.PI) / 180;
+      const distanceMeters = prev
+        ? (() => {
+            const earthRadius = 6371000;
+            const dLat = toRadians(next.latitude - prev.latitude);
+            const dLng = toRadians(next.longitude - prev.longitude);
+            const a =
+              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(toRadians(prev.latitude)) *
+                Math.cos(toRadians(next.latitude)) *
+                Math.sin(dLng / 2) *
+                Math.sin(dLng / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return earthRadius * c;
+          })()
+        : 0;
+      const duration = Math.max(300, Math.min(1600, Math.round(distanceMeters * 6)));
+
+      agentAnimatedCoordinateRef.current.timing({
+        latitude: agentCoordinate.latitude,
+        longitude: agentCoordinate.longitude,
+        duration,
+        useNativeDriver: false,
+      }).start();
+      lastAgentCoordinateRef.current = next;
+    } catch {
+      agentAnimatedCoordinateRef.current.setValue({
+        latitude: agentCoordinate.latitude,
+        longitude: agentCoordinate.longitude,
+      });
+      lastAgentCoordinateRef.current = {
+        latitude: agentCoordinate.latitude,
+        longitude: agentCoordinate.longitude,
+      };
+    }
+  }, [agentCoordinate?.latitude, agentCoordinate?.longitude]);
+
   if (!isMapAvailable || !MapView || !Marker || !Polyline) {
     return (
       <View style={[styles.container, style]} onLayout={handleLayout}>
@@ -159,20 +244,28 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
         showsMyLocationButton={false}
         moveOnMarkerPress={false}
       >
-        {/* White outline behind the route */}
+        {/* White outline behind route */}
         <Polyline
-          coordinates={[restaurantCoordinate, customerCoordinate]}
+          coordinates={
+            routeCoordinates && routeCoordinates.length > 1
+              ? routeCoordinates
+              : [restaurantCoordinate, customerCoordinate]
+          }
           strokeColor="rgba(255,255,255,0.85)"
           strokeWidth={9}
           lineCap="round"
           lineJoin="round"
         />
-        {/* Green dashed route line */}
+        {/* Main route */}
         <Polyline
-          coordinates={[restaurantCoordinate, customerCoordinate]}
-          strokeColor="#00B14F"
+          coordinates={
+            routeCoordinates && routeCoordinates.length > 1
+              ? routeCoordinates
+              : [restaurantCoordinate, customerCoordinate]
+          }
+          strokeColor={mode === 'live' ? '#F97316' : '#00B14F'}
           strokeWidth={5}
-          lineDashPattern={[18, 10]}
+          lineDashPattern={mode === 'live' ? undefined : [18, 10]}
           lineCap="round"
           lineJoin="round"
         />
@@ -226,6 +319,19 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
             ) : null}
           </View>
         </Marker>
+
+        {agentCoordinate ? (
+          <Marker.Animated
+            key="agent-marker"
+            coordinate={agentAnimatedCoordinateRef.current || agentCoordinate}
+            anchor={{ x: 0.5, y: 0.5 }}
+            title="Delivery Partner"
+          >
+            <View style={styles.agentMarker}>
+              <MaterialIcons name="two-wheeler" size={16} color="#FFFFFF" />
+            </View>
+          </Marker.Animated>
+        ) : null}
       </MapView>
     </View>
   );
@@ -294,6 +400,21 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
+  },
+  agentMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F97316',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 5,
   },
   labelBubble: {
     marginTop: 5,
