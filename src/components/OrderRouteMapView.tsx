@@ -1,13 +1,22 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { View, Text, StyleSheet, LayoutChangeEvent } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  LayoutChangeEvent,
+  TouchableOpacity,
+  Animated,
+  Image,
+  Appearance,
+} from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useLiveRiderTracking, LiveRiderLocationUpdate } from '@/hooks/useLiveRiderTracking';
 
 // Same map setup as LocationSelectionScreen: react-native-maps with Google provider
 let MapView: any = null;
 let Marker: any = null;
 let Polyline: any = null;
 let PROVIDER_GOOGLE: any = null;
-let AnimatedRegion: any = null;
 let isMapAvailable = false;
 
 try {
@@ -16,7 +25,6 @@ try {
   Marker = MapViewModule.Marker;
   Polyline = MapViewModule.Polyline;
   PROVIDER_GOOGLE = MapViewModule.PROVIDER_GOOGLE;
-  AnimatedRegion = MapViewModule.AnimatedRegion;
   isMapAvailable = true;
 } catch {
   isMapAvailable = false;
@@ -30,7 +38,7 @@ export interface OrderRouteCoordinate {
 interface OrderRouteMapViewProps {
   restaurantCoordinate: OrderRouteCoordinate;
   customerCoordinate: OrderRouteCoordinate;
-  agentCoordinate?: OrderRouteCoordinate | null;
+  agentLocationUpdate?: LiveRiderLocationUpdate | null;
   routeCoordinates?: OrderRouteCoordinate[];
   mode?: 'ready' | 'live';
   restaurantName?: string;
@@ -40,10 +48,21 @@ interface OrderRouteMapViewProps {
   style?: object;
 }
 
+const riderDayAsset = require('../../assets/map_bike_day.png');
+const riderNightAsset = require('../../assets/map_bike_night.png');
+const routeOutlineColor = 'rgba(255,255,255,0.92)';
+const routePrimaryColor = '#1E5BE0';
+const nightMapStyle = [
+  { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
+];
+
 export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   restaurantCoordinate,
   customerCoordinate,
-  agentCoordinate,
+  agentLocationUpdate,
   routeCoordinates,
   mode = 'ready',
   restaurantName,
@@ -60,17 +79,17 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   // We do this when returning from PiP (resizeTrigger true → false) so all
   // markers re-render fresh and nothing is left in a stale state.
   const [mapKey, setMapKey] = useState(0);
-  const agentAnimatedCoordinateRef = useRef<any>(null);
-  const lastAgentCoordinateRef = useRef<OrderRouteCoordinate | null>(null);
+  const [followMode, setFollowMode] = useState(true);
 
-  if (!agentAnimatedCoordinateRef.current && AnimatedRegion && agentCoordinate) {
-    agentAnimatedCoordinateRef.current = new AnimatedRegion({
-      latitude: agentCoordinate.latitude,
-      longitude: agentCoordinate.longitude,
-      latitudeDelta: 0,
-      longitudeDelta: 0,
-    });
-  }
+  const {
+    animatedCoordinate,
+    rotation,
+    applyLocationUpdate,
+    getCurrentCenter,
+    getCurrentHeading,
+  } = useLiveRiderTracking();
+
+  const hasAgent = !!agentLocationUpdate;
 
   // Whether we are in PiP mode — controls marker label visibility and marker size
   const inPip = !!resizeTrigger;
@@ -97,15 +116,16 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
             left:   Math.max(100, Math.round(layout.width * 0.22)),
           }
         : { top: 120, right: 120, bottom: 200, left: 120 };
+    const currentCenter = getCurrentCenter();
     mapRef.current.fitToCoordinates(
       [
         restaurantCoordinate,
         customerCoordinate,
-        ...(agentCoordinate ? [agentCoordinate] : []),
+        ...(currentCenter ? [currentCenter] : []),
       ],
       { edgePadding: padding, animated }
     );
-  }, [restaurantCoordinate, customerCoordinate, agentCoordinate]);
+  }, [restaurantCoordinate, customerCoordinate, getCurrentCenter]);
 
   const scheduleFit = useCallback((delay: number, animated = true) => {
     clearFitTimer();
@@ -154,66 +174,56 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   );
 
   useEffect(() => {
-    if (!AnimatedRegion) return;
-    if (!agentCoordinate) {
-      agentAnimatedCoordinateRef.current = null;
-      lastAgentCoordinateRef.current = null;
-      return;
-    }
+    if (!agentLocationUpdate) return;
+    applyLocationUpdate(agentLocationUpdate);
+  }, [applyLocationUpdate, agentLocationUpdate]);
 
-    if (!agentAnimatedCoordinateRef.current) {
-      agentAnimatedCoordinateRef.current = new AnimatedRegion({
-        latitude: agentCoordinate.latitude,
-        longitude: agentCoordinate.longitude,
-        latitudeDelta: 0,
-        longitudeDelta: 0,
-      });
-      lastAgentCoordinateRef.current = {
-        latitude: agentCoordinate.latitude,
-        longitude: agentCoordinate.longitude,
-      };
-      return;
-    }
+  useEffect(() => {
+    if (!followMode || !mapRef.current || !hasAgent) return;
+    const center = getCurrentCenter();
+    if (!center) return;
 
-    try {
-      const prev = lastAgentCoordinateRef.current;
-      const next = { latitude: agentCoordinate.latitude, longitude: agentCoordinate.longitude };
-      const toRadians = (deg: number) => (deg * Math.PI) / 180;
-      const distanceMeters = prev
-        ? (() => {
-            const earthRadius = 6371000;
-            const dLat = toRadians(next.latitude - prev.latitude);
-            const dLng = toRadians(next.longitude - prev.longitude);
-            const a =
-              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(toRadians(prev.latitude)) *
-                Math.cos(toRadians(next.latitude)) *
-                Math.sin(dLng / 2) *
-                Math.sin(dLng / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return earthRadius * c;
-          })()
-        : 0;
-      const duration = Math.max(300, Math.min(1600, Math.round(distanceMeters * 6)));
+    mapRef.current.animateCamera(
+      {
+        center,
+        heading: getCurrentHeading(),
+        pitch: 0,
+        zoom: inPip ? 16 : 17,
+      },
+      { duration: 800 },
+    );
+  }, [followMode, hasAgent, getCurrentCenter, getCurrentHeading, inPip, resizeTrigger]);
 
-      agentAnimatedCoordinateRef.current.timing({
-        latitude: agentCoordinate.latitude,
-        longitude: agentCoordinate.longitude,
-        duration,
-        useNativeDriver: false,
-      }).start();
-      lastAgentCoordinateRef.current = next;
-    } catch {
-      agentAnimatedCoordinateRef.current.setValue({
-        latitude: agentCoordinate.latitude,
-        longitude: agentCoordinate.longitude,
-      });
-      lastAgentCoordinateRef.current = {
-        latitude: agentCoordinate.latitude,
-        longitude: agentCoordinate.longitude,
-      };
-    }
-  }, [agentCoordinate?.latitude, agentCoordinate?.longitude]);
+  const handleRecenter = useCallback(() => {
+    setFollowMode(true);
+    const center = getCurrentCenter();
+    if (!center || !mapRef.current) return;
+    mapRef.current.animateCamera(
+      {
+        center,
+        heading: getCurrentHeading(),
+        pitch: 0,
+        zoom: inPip ? 16 : 17,
+      },
+      { duration: 550 },
+    );
+  }, [getCurrentCenter, getCurrentHeading, inPip]);
+
+  const riderRotationStyle = {
+    transform: [
+      {
+        rotate: rotation.interpolate({
+          inputRange: [0, 360],
+          outputRange: ['0deg', '360deg'],
+        }),
+      },
+    ],
+  };
+
+  const isNightByTime = new Date().getHours() >= 18;
+  const isDarkMode = Appearance.getColorScheme() === 'dark';
+  const useNightTheme = isNightByTime || isDarkMode;
+  const riderIconSource = useNightTheme ? riderNightAsset : riderDayAsset;
 
   if (!isMapAvailable || !MapView || !Marker || !Polyline) {
     return (
@@ -233,6 +243,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={StyleSheet.absoluteFill}
+        customMapStyle={useNightTheme ? nightMapStyle : []}
         initialRegion={{
           latitude: (restaurantCoordinate.latitude + customerCoordinate.latitude) / 2,
           longitude: (restaurantCoordinate.longitude + customerCoordinate.longitude) / 2,
@@ -243,29 +254,33 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
         showsUserLocation={false}
         showsMyLocationButton={false}
         moveOnMarkerPress={false}
+        onPanDrag={() => {
+          if (followMode) {
+            setFollowMode(false);
+          }
+        }}
       >
-        {/* White outline behind route */}
+        {/* White outline behind route (Rider-style road emphasis) */}
         <Polyline
           coordinates={
             routeCoordinates && routeCoordinates.length > 1
               ? routeCoordinates
               : [restaurantCoordinate, customerCoordinate]
           }
-          strokeColor="rgba(255,255,255,0.85)"
-          strokeWidth={9}
+          strokeColor={routeOutlineColor}
+          strokeWidth={10}
           lineCap="round"
           lineJoin="round"
         />
-        {/* Main route */}
+        {/* Main route (deep blue, consistent with Rider map style) */}
         <Polyline
           coordinates={
             routeCoordinates && routeCoordinates.length > 1
               ? routeCoordinates
               : [restaurantCoordinate, customerCoordinate]
           }
-          strokeColor={mode === 'live' ? '#F97316' : '#00B14F'}
-          strokeWidth={5}
-          lineDashPattern={mode === 'live' ? undefined : [18, 10]}
+          strokeColor={routePrimaryColor}
+          strokeWidth={6}
           lineCap="round"
           lineJoin="round"
         />
@@ -320,19 +335,33 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
           </View>
         </Marker>
 
-        {agentCoordinate ? (
+        {hasAgent && animatedCoordinate ? (
           <Marker.Animated
             key="agent-marker"
-            coordinate={agentAnimatedCoordinateRef.current || agentCoordinate}
+            coordinate={animatedCoordinate}
             anchor={{ x: 0.5, y: 0.5 }}
             title="Delivery Partner"
+            flat
           >
-            <View style={styles.agentMarker}>
-              <MaterialIcons name="two-wheeler" size={16} color="#FFFFFF" />
-            </View>
+            <Animated.View style={riderRotationStyle}>
+              <Image
+                source={riderIconSource}
+                style={styles.agentBikeImage}
+                resizeMode="contain"
+              />
+            </Animated.View>
           </Marker.Animated>
         ) : null}
       </MapView>
+      {hasAgent && !followMode ? (
+        <TouchableOpacity
+          style={styles.recenterButton}
+          onPress={handleRecenter}
+          activeOpacity={0.85}
+        >
+          <MaterialIcons name="my-location" size={20} color="#00B14F" />
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 };
@@ -414,6 +443,28 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3,
+    elevation: 5,
+  },
+  agentBikeImage: {
+    width: 46,
+    height: 46,
+  },
+  recenterButton: {
+    position: 'absolute',
+    right: 16,
+    bottom: 22,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
     elevation: 5,
   },
   labelBubble: {

@@ -30,6 +30,7 @@ import { useOrders } from '@/context/OrdersContext';
 import { mapOrderStatusToUI, getFallbackTimelineForStatus } from '@/utils/orderStatusMapping';
 import { authService } from '@/services/auth.service';
 import { exotelService } from '@/services/exotel.service';
+import { deliveryTrackingService } from '@/services/deliveryTracking.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { useAndroidPip } from '@/hooks/useAndroidPip';
 import { APP_VERSION_NAME, APP_VERSION_CODE } from '@/config/appVersion.generated';
@@ -38,9 +39,100 @@ import {
   extractCustomerCoordinate,
   extractAgentCoordinate,
   extractTrackingPathCoordinates,
+  extractLatestAgentTrackingUpdate,
 } from './orderTrackingLocationUtils';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const toRadians = (deg: number): number => (deg * Math.PI) / 180;
+const routeDistanceMeters = (
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+): number => {
+  const earthRadius = 6371000;
+  const dLat = toRadians(b.latitude - a.latitude);
+  const dLng = toRadians(b.longitude - a.longitude);
+  const q =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(a.latitude)) *
+      Math.cos(toRadians(b.latitude)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
+  return earthRadius * c;
+};
+
+const decodeRoutePolyline = (encoded: string): Array<{ latitude: number; longitude: number }> => {
+  const points: Array<{ latitude: number; longitude: number }> = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    let b: number;
+    let shift = 0;
+    let result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlat = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlng = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+    lng += dlng;
+
+    points.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
+  }
+
+  return points;
+};
+
+const normalizeOrderStatus = (status: string | null | undefined): string => {
+  return String(status || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[_\s]+/g, '-');
+};
+
+const shouldFetchDeliveryTrackStatus = (status: string | null | undefined): boolean => {
+  const normalizedStatus = normalizeOrderStatus(status);
+  const eligibleStatuses = [
+    'assigned',
+    'agent-assigned',
+    'rider-assigned',
+    'agent-arrived-restaurant',
+    'rider-accepted',
+    'accepted',
+    'picked',
+    'picked-up',
+    'ready-for-pickup',
+    'ready-for-delivery',
+    'out-for-delivery',
+    'on-the-way',
+    'en-route',
+    'in-transit',
+  ];
+  const excludedStatuses = [
+    'pending',
+    'confirmed',
+    'billed',
+    'packed',
+    'delivered',
+    'completed',
+    'cancelled',
+    'canceled',
+  ];
+  return eligibleStatuses.includes(normalizedStatus) && !excludedStatuses.includes(normalizedStatus);
+};
 
 // Module-level state to persist across component remounts (for scroll position and pagination)
 let persistedOrders: OrderListItem[] = [];
@@ -581,6 +673,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [showTrackingWebView, setShowTrackingWebView] = useState(false);
   const [selectedOrderIdForTracking, setSelectedOrderIdForTracking] = useState<string | null>(null);
   const [trackingOrderData, setTrackingOrderData] = useState<any>(null);
+  const [roadRouteCoordinates, setRoadRouteCoordinates] = useState<Array<{ latitude: number; longitude: number }> | null>(null);
   const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
   const [isClosingTracking, setIsClosingTracking] = useState(false);
@@ -690,6 +783,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             : (trackingOrderData as any)?.tracking,
           restaurant: (latestContextOrder as any)?.restaurant || (trackingOrderData as any)?.restaurant,
           delivery_address: (latestContextOrder as any)?.delivery_address || (trackingOrderData as any)?.delivery_address,
+          rider: {
+            ...((trackingOrderData as any)?.rider || {}),
+            ...((latestContextOrder as any)?.rider || {}),
+            current_location:
+              (latestContextOrder as any)?.rider?.current_location ||
+              (trackingOrderData as any)?.rider?.current_location ||
+              (trackingOrderData as any)?.track_status?.rider?.current_location ||
+              null,
+          },
         }
       : trackingOrderData;
     if (!displayOrder) return null;
@@ -699,16 +801,21 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     if (!restaurantCoordinate || !customerCoordinate) return null;
 
     const agentCoordinate = extractAgentCoordinate(displayOrder);
+    const latestAgentLocationUpdate = extractLatestAgentTrackingUpdate(displayOrder);
     const trackingPath = extractTrackingPathCoordinates(displayOrder);
 
     const rawStatus = (displayOrder.status || '').toString().toLowerCase().trim();
     const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
     const prePickupStatusSet = new Set([
+      'assigned',
       'agent-assigned',
       'agent-arrived-restaurant',
+      'accepted',
     ]);
     const postPickupStatusSet = new Set([
       'picked',
+      'picked-up',
+      'in-transit',
       'out-for-delivery',
       'on-the-way',
       'delivered',
@@ -718,6 +825,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       !!agentCoordinate ||
       prePickupStatusSet.has(normalizedStatus) ||
       postPickupStatusSet.has(normalizedStatus);
+    const hasUsableAgentCoordinate = !!agentCoordinate;
 
     const routeCoordinates =
       hasAgentAssignedSignal && trackingPath.length > 1
@@ -739,6 +847,16 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       restaurantCoordinate,
       customerCoordinate,
       agentCoordinate,
+      latestAgentLocationUpdate,
+      routeOriginCoordinate:
+        hasUsableAgentCoordinate && hasAgentAssignedSignal
+          ? agentCoordinate
+          : restaurantCoordinate,
+      routeTargetCoordinate:
+        hasUsableAgentCoordinate && hasAgentAssignedSignal && prePickupStatusSet.has(normalizedStatus)
+          ? restaurantCoordinate
+          : customerCoordinate,
+      stageKey: normalizedStatus,
       routeCoordinates,
       mode: hasAgentAssignedSignal ? 'live' as const : 'ready' as const,
       restaurantName,
@@ -811,11 +929,18 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const bottomSheetHeight = useRef(new Animated.Value(OPEN_HEIGHT)).current; // Start open
   const dragStartHeight = useRef(OPEN_HEIGHT);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(true); // Start open
+  const lastRouteFetchRef = useRef<{
+    stage: string;
+    origin: { latitude: number; longitude: number };
+    destination: { latitude: number; longitude: number };
+  } | null>(null);
 
-  const handleTrackOrder = (orderId: string) => {
+  const handleTrackOrder = async (orderId: string, orderStatus?: string) => {
     if (!orderId) return;
     // Reset closing state immediately if we re-track before cleanup finished
     setIsClosingTracking(false);
+    setRoadRouteCoordinates(null);
+    lastRouteFetchRef.current = null;
     setSelectedOrderIdForTracking(orderId);
 
     // Optimistically seed tracking data from the existing orders list
@@ -826,8 +951,44 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       setTrackingOrderData((prev: any) => prev ?? shallowOrder);
     }
 
+    const effectiveStatus =
+      orderStatus ??
+      shallowOrder?.status ??
+      trackingOrderData?.status;
+
     // Show the tracking overlay right away for a faster first-time experience.
     setShowTrackingWebView(true);
+
+    // For statuses from Agent Assigned until before Delivered, fetch rider live
+    // location from delivery tracking API (/api/track/:id/status).
+    if (shouldFetchDeliveryTrackStatus(effectiveStatus)) {
+      try {
+        const trackResponse = await deliveryTrackingService.getTrackStatus(orderId);
+        const trackData = trackResponse.data;
+        if (trackResponse.success && trackData) {
+          setTrackingOrderData((prev: any) => ({
+            ...(prev || {}),
+            rider: {
+              ...(prev?.rider || {}),
+              ...(trackData.rider || {}),
+              current_location:
+                trackData?.rider?.current_location ||
+                prev?.rider?.current_location ||
+                null,
+            },
+            track_status: trackData,
+          }));
+        }
+      } catch (error) {
+        console.warn('Track status API failed:', error);
+      }
+    } else {
+      console.log('[DeliveryTracking] skipped by status gate', {
+        orderId,
+        orderStatus,
+        effectiveStatus,
+      });
+    }
 
     // Still fetch full order details in the background; this refreshes bottom-sheet + map data.
     fetchTrackingOrderData(orderId, true);
@@ -858,30 +1019,44 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         // Always update trackingOrderData when API response arrives
         // This ensures bottom sheet reloads with latest data
         setTrackingOrderData((prevData: any) => {
+          const latestApiData: any = response.data;
+          const mergedData = {
+            ...latestApiData,
+            rider: {
+              ...(latestApiData?.rider || {}),
+              current_location:
+                latestApiData?.rider?.current_location ||
+                prevData?.rider?.current_location ||
+                prevData?.track_status?.rider?.current_location ||
+                null,
+            },
+            track_status: latestApiData?.track_status || prevData?.track_status,
+          };
+
           // Check if API response has newer data than what we have
           if (!prevData ||
-            response.data.updated_at !== prevData.updated_at ||
-            response.data.status !== prevData.status) {
+            latestApiData.updated_at !== prevData.updated_at ||
+            latestApiData.status !== prevData.status) {
             console.log('✅ Tracking: API response has updated data - Reloading bottom sheet', {
               orderId,
               oldStatus: prevData?.status,
-              newStatus: response.data.status,
+              newStatus: latestApiData.status,
               oldUpdatedAt: prevData?.updated_at,
-              newUpdatedAt: response.data.updated_at,
+              newUpdatedAt: latestApiData.updated_at,
               source: 'API',
               willReload: true,
             });
             // Return new data - this triggers bottom sheet reload
-            return response.data;
+            return mergedData;
           }
 
           // Even if status hasn't changed, update with latest API data to ensure we have full data
           console.log('📦 Tracking: API response received - Updating with latest full data', {
             orderId,
-            status: response.data.status,
+            status: latestApiData.status,
             source: 'API',
           });
-          return response.data;
+          return mergedData;
         });
 
         if (!silent) {
@@ -908,6 +1083,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     setShowTrackingWebView(false);
     setSelectedOrderIdForTracking(null);
     setTrackingOrderData(null);
+    setRoadRouteCoordinates(null);
+    lastRouteFetchRef.current = null;
     webViewLoadedRef.current = false;
 
     // Reset bottom sheet to open state when closing modal
@@ -1247,6 +1424,111 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     handleCloseTrackingWebView,
   ]);
 
+  // Periodic full-order refresh while tracking overlay is visible.
+  // Helps keep route/polyline and rider updates fresh even without FCM pushes.
+  useEffect(() => {
+    if (!showTrackingWebView || !selectedOrderIdForTracking) return;
+
+    const interval = setInterval(() => {
+      fetchTrackingOrderData(selectedOrderIdForTracking, true).catch((err) => {
+        console.warn('Tracking periodic refresh failed:', err);
+      });
+
+      const liveStatus = (trackingContextOrder || trackingOrderData)?.status;
+      if (shouldFetchDeliveryTrackStatus(liveStatus)) {
+        deliveryTrackingService.getTrackStatus(selectedOrderIdForTracking).then((trackResponse) => {
+          const trackData = trackResponse.data;
+          if (trackResponse.success && trackData) {
+            setTrackingOrderData((prev: any) => ({
+              ...(prev || {}),
+              rider: {
+                ...(prev?.rider || {}),
+                ...(trackData.rider || {}),
+                current_location:
+                  trackData?.rider?.current_location ||
+                  prev?.rider?.current_location ||
+                  null,
+              },
+              track_status: trackData,
+            }));
+          }
+        }).catch((error) => {
+          console.warn('Tracking status refresh failed:', error);
+        });
+      }
+    }, 8000);
+
+    return () => clearInterval(interval);
+  }, [
+    showTrackingWebView,
+    selectedOrderIdForTracking,
+    fetchTrackingOrderData,
+    trackingContextOrder?.status,
+    trackingOrderData?.status,
+  ]);
+
+  // Street-level route polyline (Google Directions) so map follows actual roads.
+  // Refetch only on stage switch or meaningful origin/target deviation.
+  useEffect(() => {
+    if (!showTrackingWebView || !fallbackMapCoords) return;
+
+    const mapsApiKey = (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '').trim();
+    if (!mapsApiKey) {
+      setRoadRouteCoordinates(null);
+      return;
+    }
+
+    const origin = fallbackMapCoords.routeOriginCoordinate;
+    const destination = fallbackMapCoords.routeTargetCoordinate;
+    const stage = fallbackMapCoords.stageKey || 'unknown';
+    const prev = lastRouteFetchRef.current;
+
+    const shouldRefetch =
+      !prev ||
+      prev.stage !== stage ||
+      routeDistanceMeters(prev.origin, origin) > 80 ||
+      routeDistanceMeters(prev.destination, destination) > 60;
+
+    if (!shouldRefetch) return;
+
+    let cancelled = false;
+
+    const fetchRoadRoute = async () => {
+      try {
+        const url =
+          `https://maps.googleapis.com/maps/api/directions/json` +
+          `?origin=${encodeURIComponent(`${origin.latitude},${origin.longitude}`)}` +
+          `&destination=${encodeURIComponent(`${destination.latitude},${destination.longitude}`)}` +
+          `&mode=driving&alternatives=false&key=${encodeURIComponent(mapsApiKey)}`;
+        const response = await fetch(url);
+        const payload = await response.json();
+        const encoded = payload?.routes?.[0]?.overview_polyline?.points;
+
+        if (!cancelled && typeof encoded === 'string' && encoded.length > 0) {
+          const decoded = decodeRoutePolyline(encoded);
+          if (decoded.length > 1) {
+            setRoadRouteCoordinates(decoded);
+            lastRouteFetchRef.current = { stage, origin, destination };
+            return;
+          }
+        }
+
+        if (!cancelled) {
+          setRoadRouteCoordinates(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setRoadRouteCoordinates(null);
+        }
+      }
+    };
+
+    fetchRoadRoute();
+    return () => {
+      cancelled = true;
+    };
+  }, [showTrackingWebView, fallbackMapCoords]);
+
   const handleDeliveredOverlayDone = useCallback(() => {
     setShowDeliveredOverlay(false);
     handleCloseTrackingWebView();
@@ -1518,15 +1800,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 // Define enabled statuses - tracking works from "packed" / "agent-assigned" status onward
                 const enabledStatuses = [
                   'packed',
+                  'assigned',
                   'agent-assigned',
-                  'agent_assigned',
+                  'accepted',
                   'agent-arrived-restaurant',
-                  'agent_arrived_restaurant',
                   'picked',
+                  'picked-up',
+                  'in-transit',
                   'out-for-delivery',
-                  'out_for_delivery',
                   'on-the-way',
-                  'on_the_way',
                   'delivered',
                   'completed'
                 ];
@@ -1544,7 +1826,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                       styles.reorderButton,
                       !isTrackingEnabled && styles.disabledButton
                     ]}
-                    onPress={() => handleTrackOrder(order.id.toString())}
+                    onPress={() => handleTrackOrder(order.id.toString(), order.status)}
                     activeOpacity={!isTrackingEnabled ? 1 : 0.8}
                     disabled={!isTrackingEnabled}
                   >
@@ -1797,8 +2079,23 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
               <OrderRouteMapView
                 restaurantCoordinate={fallbackMapCoords.restaurantCoordinate}
                 customerCoordinate={fallbackMapCoords.customerCoordinate}
-                agentCoordinate={fallbackMapCoords.agentCoordinate}
-                routeCoordinates={fallbackMapCoords.routeCoordinates}
+                agentLocationUpdate={
+                  fallbackMapCoords.latestAgentLocationUpdate
+                    ? {
+                        lat: fallbackMapCoords.latestAgentLocationUpdate.latitude,
+                        lng: fallbackMapCoords.latestAgentLocationUpdate.longitude,
+                        timestamp: fallbackMapCoords.latestAgentLocationUpdate.timestamp,
+                        heading: fallbackMapCoords.latestAgentLocationUpdate.heading,
+                        speed: fallbackMapCoords.latestAgentLocationUpdate.speed,
+                        accuracy: fallbackMapCoords.latestAgentLocationUpdate.accuracy,
+                      }
+                    : null
+                }
+                routeCoordinates={
+                  roadRouteCoordinates && roadRouteCoordinates.length > 1
+                    ? roadRouteCoordinates
+                    : fallbackMapCoords.routeCoordinates
+                }
                 mode={fallbackMapCoords.mode}
                 restaurantName={fallbackMapCoords.restaurantName}
                 customerAddress={fallbackMapCoords.customerAddress}

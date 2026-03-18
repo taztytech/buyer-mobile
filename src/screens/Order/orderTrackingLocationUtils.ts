@@ -12,6 +12,21 @@ const toNumber = (value: any): number | null => {
   return null;
 };
 
+const toEpochMs = (value: any): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1000000000000 ? value : value * 1000;
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) {
+      return numeric > 1000000000000 ? numeric : numeric * 1000;
+    }
+    const parsedDate = Date.parse(value);
+    return Number.isFinite(parsedDate) ? parsedDate : null;
+  }
+  return null;
+};
+
 const extractCoordinate = (source: any): Coordinate | null => {
   if (!source || typeof source !== 'object') return null;
 
@@ -110,10 +125,16 @@ export const extractAgentCoordinate = (order: any): Coordinate | null => {
   }
 
   return (
+    extractCoordinate(order.track_status?.rider?.current_location) ||
+    extractCoordinate(order.track_status?.delivery_partner?.current_location) ||
+    extractCoordinate(order.track_status?.agent?.current_location) ||
+    extractCoordinate(order.agent?.current_location) ||
     extractCoordinate(order.agent?.location) ||
     extractCoordinate(order.agent) ||
+    extractCoordinate(order.delivery_partner?.current_location) ||
     extractCoordinate(order.delivery_partner?.location) ||
     extractCoordinate(order.delivery_partner) ||
+    extractCoordinate(order.rider?.current_location) ||
     extractCoordinate(order.rider?.location) ||
     extractCoordinate(order.rider) ||
     null
@@ -139,5 +160,82 @@ export const extractTrackingPathCoordinates = (order: any): Coordinate[] => {
   }
 
   return points;
+};
+
+export interface AgentTrackingUpdate extends Coordinate {
+  timestamp?: number;
+  heading?: number;
+  speed?: number;
+  accuracy?: number;
+}
+
+export const extractLatestAgentTrackingUpdate = (order: any): AgentTrackingUpdate | null => {
+  if (!order) return null;
+
+  const tracking = Array.isArray(order.tracking) ? [...order.tracking].reverse() : [];
+  for (const item of tracking) {
+    const coord = extractCoordinate(item);
+    if (!coord) continue;
+    return {
+      ...coord,
+      timestamp:
+        toEpochMs(item?.timestamp) ??
+        toEpochMs(item?.updated_at) ??
+        toEpochMs(item?.created_at) ??
+        undefined,
+      heading: toNumber(item?.heading ?? item?.bearing ?? item?.course) ?? undefined,
+      speed: toNumber(item?.speed ?? item?.velocity) ?? undefined,
+      accuracy: toNumber(item?.accuracy ?? item?.gps_accuracy) ?? undefined,
+    };
+  }
+
+  const fallbackCoord = extractAgentCoordinate(order);
+  if (!fallbackCoord) return null;
+  return {
+    ...fallbackCoord,
+    timestamp:
+      toEpochMs(order?.updated_at) ??
+      toEpochMs(order?.timestamp) ??
+      Date.now(),
+    heading:
+      toNumber(
+        order?.track_status?.rider?.current_location?.heading ??
+          order?.track_status?.delivery_partner?.current_location?.heading ??
+          order?.track_status?.agent?.current_location?.heading ??
+        order?.agent?.current_location?.heading ??
+          order?.delivery_partner?.current_location?.heading ??
+          order?.rider?.current_location?.heading ??
+          order?.agent?.heading ??
+          order?.delivery_partner?.heading ??
+          order?.rider?.heading,
+      ) ??
+      undefined,
+    speed:
+      toNumber(
+        order?.track_status?.rider?.current_location?.speed ??
+          order?.track_status?.delivery_partner?.current_location?.speed ??
+          order?.track_status?.agent?.current_location?.speed ??
+        order?.agent?.current_location?.speed ??
+          order?.delivery_partner?.current_location?.speed ??
+          order?.rider?.current_location?.speed ??
+          order?.agent?.speed ??
+          order?.delivery_partner?.speed ??
+          order?.rider?.speed,
+      ) ??
+      undefined,
+    accuracy:
+      toNumber(
+        order?.track_status?.rider?.current_location?.accuracy ??
+          order?.track_status?.delivery_partner?.current_location?.accuracy ??
+          order?.track_status?.agent?.current_location?.accuracy ??
+        order?.agent?.current_location?.accuracy ??
+          order?.delivery_partner?.current_location?.accuracy ??
+          order?.rider?.current_location?.accuracy ??
+          order?.agent?.accuracy ??
+          order?.delivery_partner?.accuracy ??
+          order?.rider?.accuracy,
+      ) ??
+      undefined,
+  };
 };
 
