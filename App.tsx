@@ -57,6 +57,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 type RestaurantAnalyticsMeta = {
   distanceKm?: number;
   isOpen?: boolean;
+  itemCount?: number;
 };
 
 function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigateToOrders?: () => void }) {
@@ -303,6 +304,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     const screenName = screenNameMap[currentScreen];
     if (screenName) {
       analyticsService.logScreenView(screenName);
+    }
+    if (currentScreen === 'login') {
+      analyticsService.logEvent(AnalyticsEvents.LOGIN_VIEW, { method: 'otp' });
     }
   }, [currentScreen, isCheckingAuth]);
 
@@ -595,22 +599,25 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         if (isLoggedIn) {
           // Get current user and set analytics / crashlytics user ID
           const currentUser = await authService.getCurrentUser();
+          const persistedUserType =
+            (currentUser as any)?.user_type === 'returning' ? 'returning' : 'new';
           if (currentUser?.id) {
             const idString = currentUser.id.toString();
             await analyticsService.setUserId(idString);
             await crashlyticsService.setUserId(idString);
             await analyticsService.setUserProperties({
               [AnalyticsUserProperties.USER_ID]: idString,
-              [AnalyticsUserProperties.USER_TYPE]: 'returning',
+              [AnalyticsUserProperties.USER_TYPE]: persistedUserType,
             });
           }
           await crashlyticsService.setGlobalContext({
             app_version: APP_VERSION_NAME,
             login_state: 'logged_in',
+            user_type: persistedUserType,
           });
           await analyticsService.setUserProperties({
             [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
-            [AnalyticsUserProperties.USER_TYPE]: 'returning',
+            [AnalyticsUserProperties.USER_TYPE]: persistedUserType,
             [AnalyticsUserProperties.USER_ID]: currentUser?.id ? currentUser.id.toString() : null,
           });
           isAuthenticatedRef.current = true;
@@ -765,8 +772,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const handleLoginSuccess = (phone: string) => {
     setPhoneNumber(phone);
     setCurrentScreen('otp');
-    analyticsService.logEvent(AnalyticsEvents.LOGIN_VIEW, { method: 'otp' });
-    analyticsService.logEvent(AnalyticsEvents.OTP_SENT, { method: 'sms' });
   };
 
   // Ensure notification permission after login
@@ -793,6 +798,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       // Existing user - go directly to home (skip address selection)
       // Set analytics user ID
       const currentUser = await authService.getCurrentUser();
+      const persistedUserType =
+        (currentUser as any)?.user_type === 'returning' ? 'returning' : 'new';
       if (currentUser?.id) {
         await analyticsService.setUserId(currentUser.id.toString());
         await crashlyticsService.setUserId(currentUser.id.toString());
@@ -806,12 +813,12 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       await analyticsService.setUserProperties({
         [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
         [AnalyticsUserProperties.USER_ID]: currentUser?.id ? currentUser.id.toString() : null,
-        [AnalyticsUserProperties.USER_TYPE]: 'returning',
+        [AnalyticsUserProperties.USER_TYPE]: persistedUserType,
       });
       await crashlyticsService.setGlobalContext({
         app_version: APP_VERSION_NAME,
         login_state: 'logged_in',
-        user_type: 'returning',
+        user_type: persistedUserType,
       });
 
       setCurrentScreen('home');
@@ -838,6 +845,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           ...currentUser,
           name,
           email,
+          user_type: 'new',
         };
         await storageService.saveUser(updatedUser);
 
@@ -1284,12 +1292,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       is_open: typeof meta?.isOpen === 'boolean' ? meta.isOpen : true,
       screen_name: AnalyticsScreens.RESTAURANT,
     });
-    analyticsService.logEvent(AnalyticsEvents.MENU_VIEWED, {
-      restaurant_id: restaurantId,
-      restaurant_name: restaurantName || undefined,
-      source: 'category',
-      screen_name: AnalyticsScreens.RESTAURANT,
-    });
 
     // Animate restaurant screen sliding in from right
     Animated.timing(restaurantScreenSlide, {
@@ -1318,12 +1320,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       source: 'home',
       distance_km: Number.isFinite(meta?.distanceKm as number) ? meta?.distanceKm : 0,
       is_open: typeof meta?.isOpen === 'boolean' ? meta.isOpen : true,
-      screen_name: AnalyticsScreens.RESTAURANT,
-    });
-    analyticsService.logEvent(AnalyticsEvents.MENU_VIEWED, {
-      restaurant_id: restaurantId,
-      restaurant_name: restaurantName || undefined,
-      source: 'home',
       screen_name: AnalyticsScreens.RESTAURANT,
     });
 
