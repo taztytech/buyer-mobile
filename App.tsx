@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState, InteractionManager, Platform } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { OTPVerificationScreen } from '@/screens/Auth/OTPVerificationScreen';
 import { WelcomeScreen } from '@/screens/Auth/WelcomeScreen';
@@ -49,6 +50,7 @@ import { ForcedUpdateModal } from '@/components/ForcedUpdateModal';
 import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const GUEST_SELECTED_LOCATION_KEY = 'selectedLocation';
 
 // Let native splash auto-hide immediately - don't prevent it
 // SplashScreen.preventAutoHideAsync();
@@ -73,7 +75,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   } = useCart();
   const { showConfirmation } = useConfirmation();
 
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat'>('locationSelection');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -118,6 +120,37 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const startupNotificationNavigationRef = React.useRef(false);
   const sessionStartTimeRef = React.useRef<number | null>(null);
   const isAuthenticatedRef = React.useRef(false);
+
+  const loadPersistedGuestLocation = React.useCallback(async () => {
+    try {
+      const savedLocationStr = await AsyncStorage.getItem(GUEST_SELECTED_LOCATION_KEY);
+      if (!savedLocationStr) return null;
+      const parsed = JSON.parse(savedLocationStr);
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (!parsed.name || !parsed.address) return null;
+      return {
+        name: String(parsed.name),
+        address: String(parsed.address),
+        latitude: typeof parsed.latitude === 'number' ? parsed.latitude : undefined,
+        longitude: typeof parsed.longitude === 'number' ? parsed.longitude : undefined,
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const saveGuestLocation = React.useCallback(async (location: {
+    name: string;
+    address: string;
+    latitude?: number;
+    longitude?: number;
+  }) => {
+    try {
+      await AsyncStorage.setItem(GUEST_SELECTED_LOCATION_KEY, JSON.stringify(location));
+    } catch {
+      // Non-critical: guest location persistence failure should not block UX.
+    }
+  }, []);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -415,13 +448,33 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             locationScreenSlide.setValue(SCREEN_WIDTH);
             helpScreenSlide.setValue(SCREEN_WIDTH);
 
-            // Navigate to login screen
-            setCurrentScreen('login');
-            setPhoneNumber('');
+            // Navigate based on auth state:
+            // - Logged-in users: go to login
+            // - Guests / expired sessions: continue in guest location setup flow
+            if (isAuthenticatedRef.current) {
+              setCurrentScreen('login');
+              setPhoneNumber('');
+            } else {
+              setAddressSelectionCameFrom('home');
+              setLocationSelectionCameFrom('home');
+              setSearchQuery('');
+              setInitialLocationCoords(null);
+              setCurrentScreen('locationSelection');
+              locationScreenSlide.setValue(0);
+            }
           } catch (error) {
             console.error('[App] Error handling user deletion:', error);
-            // Still navigate to login even if cleanup fails
-            setCurrentScreen('login');
+            // Fallback to guest location setup if user is not authenticated
+            if (isAuthenticatedRef.current) {
+              setCurrentScreen('login');
+            } else {
+              setAddressSelectionCameFrom('home');
+              setLocationSelectionCameFrom('home');
+              setSearchQuery('');
+              setInitialLocationCoords(null);
+              setCurrentScreen('locationSelection');
+              locationScreenSlide.setValue(0);
+            }
           }
         });
 
@@ -455,13 +508,33 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             locationScreenSlide.setValue(SCREEN_WIDTH);
             helpScreenSlide.setValue(SCREEN_WIDTH);
 
-            // Navigate to login screen
-            setCurrentScreen('login');
-            setPhoneNumber('');
+            // Navigate based on auth state:
+            // - Logged-in users: go to login
+            // - Guests / expired sessions: continue in guest location setup flow
+            if (isAuthenticatedRef.current) {
+              setCurrentScreen('login');
+              setPhoneNumber('');
+            } else {
+              setAddressSelectionCameFrom('home');
+              setLocationSelectionCameFrom('home');
+              setSearchQuery('');
+              setInitialLocationCoords(null);
+              setCurrentScreen('locationSelection');
+              locationScreenSlide.setValue(0);
+            }
           } catch (error) {
             console.error('[App] Error handling session expiration:', error);
-            // Still navigate to login even if cleanup fails
-            setCurrentScreen('login');
+            // Fallback to guest location setup if user is not authenticated
+            if (isAuthenticatedRef.current) {
+              setCurrentScreen('login');
+            } else {
+              setAddressSelectionCameFrom('home');
+              setLocationSelectionCameFrom('home');
+              setSearchQuery('');
+              setInitialLocationCoords(null);
+              setCurrentScreen('locationSelection');
+              locationScreenSlide.setValue(0);
+            }
           }
         });
 
@@ -526,7 +599,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             setCurrentScreen('home');
           }
         } else {
-          // No valid session, go to login
+          // No valid session: run guest flow with location gating.
           await crashlyticsService.setUserId(null);
           await crashlyticsService.setGlobalContext({
             app_version: APP_VERSION_NAME,
@@ -539,13 +612,27 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           });
           isAuthenticatedRef.current = false;
           sessionStartTimeRef.current = null;
-          setCurrentScreen('login');
+          const persistedGuestLocation = await loadPersistedGuestLocation();
+          if (persistedGuestLocation) {
+            setSelectedLocation(persistedGuestLocation);
+          }
+          setAddressSelectionCameFrom('home');
+          setLocationSelectionCameFrom('home');
+          setSearchQuery('');
+          setInitialLocationCoords(null);
+          setCurrentScreen('locationSelection');
+          locationScreenSlide.setValue(0);
         }
       } catch (error) {
-        // If auth check fails, go to login screen
+        // If auth check fails, default to guest location selection.
         isAuthenticatedRef.current = false;
         sessionStartTimeRef.current = null;
-        setCurrentScreen('login');
+        setAddressSelectionCameFrom('home');
+        setLocationSelectionCameFrom('home');
+        setSearchQuery('');
+        setInitialLocationCoords(null);
+        setCurrentScreen('locationSelection');
+        locationScreenSlide.setValue(0);
       } finally {
         setIsCheckingAuth(false);
       }
@@ -977,6 +1064,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const handleBackFromLocationSelection = () => {
+    // For guests without a confirmed location, keep them on location selection.
+    if (!isAuthenticatedRef.current && !selectedLocation) {
+      return;
+    }
+
     // Clear editing address when going back
     setEditingAddress(null);
 
@@ -1044,15 +1136,20 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const handleLocationConfirm = (location: any) => {
-    // Update selected location
-    setSelectedLocation({
+    const confirmedLocation = {
       name: location.name || location.locationName,
       address: location.locationAddress || location.address,
       // Do NOT silently fall back to hardcoded Madurai coordinates.
       // Only use coordinates that were explicitly selected/confirmed.
       latitude: location.latitude ?? location.lat,
       longitude: location.longitude ?? location.lng,
-    });
+    };
+
+    // Update selected location
+    setSelectedLocation(confirmedLocation);
+    if (!isAuthenticatedRef.current) {
+      saveGuestLocation(confirmedLocation);
+    }
     const resolvedCity = String(location.city || '').toLowerCase();
     const resolvedPincode = String(location.pincode || '');
     const resolvedAreaName = String(location.name || location.locationName || '').toLowerCase();
