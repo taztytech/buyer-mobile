@@ -7,6 +7,7 @@
     "start:dev": "cross-env ENV_FILE=.env.dev expo start",
     "start:prod": "cross-env ENV_FILE=.env.prod expo start",
     "android": "expo run:android",
+    "android:clean": "cd android && rm -rf app/.cxx app/build build && cd ..",
     "android:dev": "cross-env ENV_FILE=.env.dev npx expo run:android --variant devDebug",
     "android:prod": "cross-env ENV_FILE=.env.prod expo run:android --variant prodDebug",
     "ios": "expo run:ios",
