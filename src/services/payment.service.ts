@@ -286,7 +286,8 @@ class PaymentService {
    */
   async processPayment(
     orderId: number,
-    paymentDetails: PaymentDetails
+    paymentDetails: PaymentDetails,
+    analyticsAmountRupees?: number,
   ): Promise<PaymentResult> {
     try {
       await crashlyticsService.setAttribute('current_screen', 'payment');
@@ -384,14 +385,23 @@ class PaymentService {
         };
       }
 
+      const fallbackAmount = Number(paymentDetails.amount);
+      const explicitAnalyticsAmount =
+        typeof analyticsAmountRupees === 'number' && Number.isFinite(analyticsAmountRupees)
+          ? analyticsAmountRupees
+          : null;
+      const normalizedAnalyticsAmount =
+        explicitAnalyticsAmount !== null && explicitAnalyticsAmount > 0
+          ? explicitAnalyticsAmount
+          : fallbackAmount;
       await analyticsService.logEvent(AnalyticsEvents.PAYMENT_SUCCESS, {
         order_id: orderId,
-        final_amount: paymentDetails.amount,
+        final_amount: normalizedAnalyticsAmount,
         currency: (paymentDetails.currency || 'INR').toUpperCase(),
         payment_method: 'online',
         gateway: 'razorpay',
       });
-      const purchaseValue = Number(paymentDetails.amount);
+      const purchaseValue = normalizedAnalyticsAmount;
       const purchaseCurrency = (paymentDetails.currency || 'INR').toUpperCase();
       if (Number.isFinite(purchaseValue) && purchaseValue > 0) {
         await analyticsService.logPurchase(

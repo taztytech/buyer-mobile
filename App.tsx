@@ -69,6 +69,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     reloadCart,
     getTotalItems,
     getTotalPrice,
+    cartSummary,
     restaurantId: cartRestaurantId,
     restaurantName: cartRestaurantName,
   } = useCart();
@@ -120,6 +121,127 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const sessionStartTimeRef = React.useRef<number | null>(null);
   const isAuthenticatedRef = React.useRef(false);
   const pendingDeepLinkUrlRef = React.useRef<string | null>(null);
+
+  const normalizeOrderStatus = React.useCallback((status: unknown): string => {
+    return String(status || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[\s-]+/g, '_');
+  }, []);
+
+  const extractOrdersArray = React.useCallback((payload: unknown): any[] => {
+    if (Array.isArray(payload)) return payload;
+    if (!payload || typeof payload !== 'object') return [];
+    const candidate = payload as Record<string, any>;
+    const containers = [
+      candidate.orders,
+      candidate.data?.orders,
+      candidate.items,
+      candidate.results,
+      candidate.list,
+    ];
+    for (const container of containers) {
+      if (Array.isArray(container)) {
+        return container;
+      }
+    }
+    return [];
+  }, []);
+
+  const toFixedStringOrNull = React.useCallback((value: unknown): string | null => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value.toFixed(6);
+    }
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed.toFixed(6);
+    }
+    return null;
+  }, []);
+
+  const buildProfileUserProperties = React.useCallback((profile: any) => {
+    const city = String(
+      profile?.city ||
+      profile?.address?.city ||
+      profile?.default_address?.city ||
+      '',
+    ).toLowerCase();
+    const pincode = String(
+      profile?.pincode ||
+      profile?.zip_code ||
+      profile?.postal_code ||
+      profile?.address?.pincode ||
+      profile?.default_address?.pincode ||
+      '',
+    );
+    const areaName = String(
+      profile?.area_name ||
+      profile?.area ||
+      profile?.locality ||
+      profile?.address?.area_name ||
+      profile?.default_address?.area_name ||
+      '',
+    ).toLowerCase();
+
+    const latitude = toFixedStringOrNull(
+      profile?.latitude ??
+      profile?.lat ??
+      profile?.address?.latitude ??
+      profile?.address?.lat ??
+      profile?.default_address?.latitude ??
+      profile?.default_address?.lat,
+    );
+    const longitude = toFixedStringOrNull(
+      profile?.longitude ??
+      profile?.lng ??
+      profile?.long ??
+      profile?.address?.longitude ??
+      profile?.address?.lng ??
+      profile?.default_address?.longitude ??
+      profile?.default_address?.lng,
+    );
+
+    return {
+      city: city || null,
+      pincode: pincode || null,
+      areaName: areaName || null,
+      latitude,
+      longitude,
+    };
+  }, [toFixedStringOrNull]);
+
+  const resolveUserTypeWithOrderHistory = React.useCallback(async (currentUser: any): Promise<'new' | 'returning'> => {
+    const persistedUserType = currentUser?.user_type === 'returning' ? 'returning' : 'new';
+    if (persistedUserType === 'returning') {
+      return 'returning';
+    }
+
+    try {
+      const deliveredOnlyResponse = await ordersService.getOrders(30, 1, 'delivered');
+      if (deliveredOnlyResponse.success) {
+        const deliveredOrders = extractOrdersArray(deliveredOnlyResponse.data);
+        if (deliveredOrders.length > 0) {
+          return 'returning';
+        }
+      }
+
+      const fallbackResponse = await ordersService.getOrders(30, 1);
+      if (fallbackResponse.success) {
+        const allOrders = extractOrdersArray(fallbackResponse.data);
+        const hasDelivered = allOrders.some((order: any) => {
+          const normalizedStatus = normalizeOrderStatus(order?.status || order?.order_status);
+          return normalizedStatus === 'delivered' || normalizedStatus === 'completed';
+        });
+        if (hasDelivered) {
+          return 'returning';
+        }
+      }
+    } catch (error) {
+      console.warn('[Analytics] Failed to resolve user_type from order history:', error);
+    }
+
+    return persistedUserType;
+  }, [extractOrdersArray, normalizeOrderStatus]);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -599,26 +721,42 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         if (isLoggedIn) {
           // Get current user and set analytics / crashlytics user ID
           const currentUser = await authService.getCurrentUser();
-          const persistedUserType =
-            (currentUser as any)?.user_type === 'returning' ? 'returning' : 'new';
+          const resolvedUserType = await resolveUserTypeWithOrderHistory(currentUser);
+          const profileProps = buildProfileUserProperties(currentUser);
+          if (resolvedUserType === 'returning' && currentUser && currentUser.user_type !== 'returning') {
+            await storageService.saveUser({
+              ...(currentUser as any),
+              user_type: 'returning',
+            });
+          }
           if (currentUser?.id) {
             const idString = currentUser.id.toString();
             await analyticsService.setUserId(idString);
             await crashlyticsService.setUserId(idString);
             await analyticsService.setUserProperties({
               [AnalyticsUserProperties.USER_ID]: idString,
-              [AnalyticsUserProperties.USER_TYPE]: persistedUserType,
+              [AnalyticsUserProperties.USER_TYPE]: resolvedUserType,
+              [AnalyticsUserProperties.CITY]: profileProps.city,
+              [AnalyticsUserProperties.PINCODE]: profileProps.pincode,
+              [AnalyticsUserProperties.AREA_NAME]: profileProps.areaName,
+              [AnalyticsUserProperties.LATITUDE]: profileProps.latitude,
+              [AnalyticsUserProperties.LONGITUDE]: profileProps.longitude,
             });
           }
           await crashlyticsService.setGlobalContext({
             app_version: APP_VERSION_NAME,
             login_state: 'logged_in',
-            user_type: persistedUserType,
+            user_type: resolvedUserType,
           });
           await analyticsService.setUserProperties({
             [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
-            [AnalyticsUserProperties.USER_TYPE]: persistedUserType,
+            [AnalyticsUserProperties.USER_TYPE]: resolvedUserType,
             [AnalyticsUserProperties.USER_ID]: currentUser?.id ? currentUser.id.toString() : null,
+            [AnalyticsUserProperties.CITY]: profileProps.city,
+            [AnalyticsUserProperties.PINCODE]: profileProps.pincode,
+            [AnalyticsUserProperties.AREA_NAME]: profileProps.areaName,
+            [AnalyticsUserProperties.LATITUDE]: profileProps.latitude,
+            [AnalyticsUserProperties.LONGITUDE]: profileProps.longitude,
           });
           isAuthenticatedRef.current = true;
           if (!sessionStartTimeRef.current) {
@@ -798,8 +936,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       // Existing user - go directly to home (skip address selection)
       // Set analytics user ID
       const currentUser = await authService.getCurrentUser();
-      const persistedUserType =
-        (currentUser as any)?.user_type === 'returning' ? 'returning' : 'new';
+      const resolvedUserType = await resolveUserTypeWithOrderHistory(currentUser);
+      const profileProps = buildProfileUserProperties(currentUser);
+      if (resolvedUserType === 'returning' && currentUser && currentUser.user_type !== 'returning') {
+        await storageService.saveUser({
+          ...(currentUser as any),
+          user_type: 'returning',
+        });
+      }
       if (currentUser?.id) {
         await analyticsService.setUserId(currentUser.id.toString());
         await crashlyticsService.setUserId(currentUser.id.toString());
@@ -813,12 +957,17 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       await analyticsService.setUserProperties({
         [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
         [AnalyticsUserProperties.USER_ID]: currentUser?.id ? currentUser.id.toString() : null,
-        [AnalyticsUserProperties.USER_TYPE]: persistedUserType,
+        [AnalyticsUserProperties.USER_TYPE]: resolvedUserType,
+        [AnalyticsUserProperties.CITY]: profileProps.city,
+        [AnalyticsUserProperties.PINCODE]: profileProps.pincode,
+        [AnalyticsUserProperties.AREA_NAME]: profileProps.areaName,
+        [AnalyticsUserProperties.LATITUDE]: profileProps.latitude,
+        [AnalyticsUserProperties.LONGITUDE]: profileProps.longitude,
       });
       await crashlyticsService.setGlobalContext({
         app_version: APP_VERSION_NAME,
         login_state: 'logged_in',
-        user_type: persistedUserType,
+        user_type: resolvedUserType,
       });
 
       setCurrentScreen('home');
@@ -1334,6 +1483,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
   // Checkout Navigation
   const handleNavigateToCheckout = useCallback((restaurantId: number, restaurantName: string, restaurantAddress?: string, from: 'home' | 'restaurant' = 'home') => {
+    const checkoutDeliveryFee = Number(cartSummary?.delivery_fee ?? 0);
     setSelectedRestaurantId(restaurantId);
     setSelectedRestaurantName(restaurantName);
     setSelectedRestaurantAddress(restaurantAddress || '');
@@ -1354,7 +1504,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     });
     analyticsService.logEvent(AnalyticsEvents.CHECKOUT_STARTED, {
       cart_value: getTotalPrice(),
-      delivery_fee: 0,
+      delivery_fee: Number.isFinite(checkoutDeliveryFee) ? checkoutDeliveryFee : 0,
       item_count: getTotalItems(),
       currency: 'INR',
       restaurant_id: restaurantId,
@@ -1372,7 +1522,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start();
     });
-  }, [checkoutScreenSlide, getTotalItems, getTotalPrice]);
+  }, [cartSummary?.delivery_fee, checkoutScreenSlide, getTotalItems, getTotalPrice]);
 
   // Back from Checkout
   const handleBackFromCheckout = useCallback(() => {
