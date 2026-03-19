@@ -5,9 +5,8 @@ import {
   StyleSheet,
   LayoutChangeEvent,
   TouchableOpacity,
-  Animated,
-  Image,
   Appearance,
+  Image,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLiveRiderTracking, LiveRiderLocationUpdate } from '@/hooks/useLiveRiderTracking';
@@ -64,7 +63,6 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   customerCoordinate,
   agentLocationUpdate,
   routeCoordinates,
-  mode = 'ready',
   restaurantName,
   customerAddress,
   resizeTrigger,
@@ -81,16 +79,15 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   // markers re-render fresh and nothing is left in a stale state.
   const [mapKey, setMapKey] = useState(0);
   const [followMode, setFollowMode] = useState(true);
+  const [zoomBucket, setZoomBucket] = useState<'near' | 'far'>('near');
 
   const {
     animatedCoordinate,
-    rotation,
     applyLocationUpdate,
     getCurrentCenter,
     getCurrentHeading,
   } = useLiveRiderTracking();
 
-  const hasAgent = !!agentLocationUpdate;
   const hasValidAgentCoordinate =
     !!agentLocationUpdate &&
     Number.isFinite(agentLocationUpdate.lat) &&
@@ -222,20 +219,15 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     );
   }, [getCurrentCenter, getCurrentHeading]);
 
-  const riderRotationStyle = {
-    transform: [
-      {
-        rotate: rotation.interpolate({
-          inputRange: [0, 360],
-          outputRange: ['0deg', '360deg'],
-        }),
-      },
-    ],
-  };
-
   const isDarkMode = Appearance.getColorScheme() === 'dark';
   const useNightTheme = isDarkMode;
   const riderIconSource = useNightTheme ? riderNightAsset : riderDayAsset;
+  const riderResolvedAsset = Image.resolveAssetSource(riderIconSource);
+  const riderMarkerSource = {
+    uri: riderResolvedAsset.uri,
+    // Lower scale => larger marker. Keep zoomed-out only slightly larger.
+    scale: zoomBucket === 'far' ? 10 : 12,
+  };
 
   if (!isMapAvailable || !MapView || !Marker || !Polyline) {
     return (
@@ -263,6 +255,12 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
           longitudeDelta: Math.max(0.01, Math.abs(restaurantCoordinate.longitude - customerCoordinate.longitude) * 2.5),
         }}
         onMapReady={handleMapReady}
+        onRegionChangeComplete={(region: any) => {
+          const delta = Number(region?.latitudeDelta);
+          if (!Number.isFinite(delta)) return;
+          const nextBucket: 'near' | 'far' = delta >= 0.035 ? 'far' : 'near';
+          setZoomBucket((prev) => (prev === nextBucket ? prev : nextBucket));
+        }}
         showsUserLocation={false}
         showsMyLocationButton={false}
         moveOnMarkerPress={false}
@@ -356,22 +354,10 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
             zIndex={30}
             anchor={{ x: 0.5, y: 0.5 }}
             title="Delivery Partner"
+            image={riderMarkerSource}
+            tracksViewChanges={true}
             flat
-          >
-            <Animated.View
-              style={[
-                styles.agentIconWrap,
-                useNightTheme ? styles.agentIconWrapNight : styles.agentIconWrapDay,
-                riderRotationStyle,
-              ]}
-            >
-              <Image
-                source={riderIconSource}
-                style={[styles.agentBikeImage, useNightTheme ? styles.agentBikeImageNight : styles.agentBikeImageDay]}
-                resizeMode="cover"
-              />
-            </Animated.View>
-          </Marker.Animated>
+          />
         ) : hasValidAgentCoordinate && agentLocationUpdate ? (
           <Marker
             key="agent-marker-fallback"
@@ -382,21 +368,10 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
             zIndex={30}
             anchor={{ x: 0.5, y: 0.5 }}
             title="Delivery Partner"
+            image={riderMarkerSource}
+            tracksViewChanges={true}
             flat
-          >
-            <View
-              style={[
-                styles.agentIconWrap,
-                useNightTheme ? styles.agentIconWrapNight : styles.agentIconWrapDay,
-              ]}
-            >
-              <Image
-                source={riderIconSource}
-                style={[styles.agentBikeImage, useNightTheme ? styles.agentBikeImageNight : styles.agentBikeImageDay]}
-                resizeMode="cover"
-              />
-            </View>
-          </Marker>
+          />
         ) : null}
       </MapView>
       {hasValidAgentCoordinate && !followMode ? (
@@ -490,41 +465,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3,
     elevation: 5,
-  },
-  agentBikeImage: {
-    width: 74,
-    height: 74,
-  },
-  agentBikeImageDay: {
-    width: 78,
-    height: 78,
-  },
-  agentBikeImageNight: {
-    width: 78,
-    height: 78,
-  },
-  agentIconWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.24,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  agentIconWrapDay: {
-    backgroundColor: '#102B52',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.85)',
-  },
-  agentIconWrapNight: {
-    backgroundColor: '#102B52',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.85)',
   },
   recenterButton: {
     position: 'absolute',
