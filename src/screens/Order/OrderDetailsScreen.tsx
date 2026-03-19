@@ -821,6 +821,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           setNotes(''); // Reset notes for next order
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount
+          // Clear promo UI state so it doesn't persist into next checkout
+          setPromoCode('');
+          setPromoError('');
 
           setIsPlacingOrder(false); // Reset loading state before showing confirmation
 
@@ -890,6 +893,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           setNotes(''); // Reset notes for next order
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount
+          // Clear promo UI state so it doesn't persist into next checkout
+          setPromoCode('');
+          setPromoError('');
 
           showConfirmation({
             title: `${selectedPaymentMethod !== "cod" ? "Payment" : "Order"} Successful! 🎉'`,

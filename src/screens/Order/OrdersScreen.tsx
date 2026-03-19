@@ -1867,10 +1867,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       statusToMap = 'payment_failed';
     } else if (
       order.payment_status?.toLowerCase() === 'pending' &&
-      (order.status?.toLowerCase() === 'pending' || order.status?.toLowerCase() === 'cancelled')
+      (order.status?.toLowerCase() === 'pending' )
     ) {
       // If payment is pending but order is cancelled/pending, it's likely a payment failure
       statusToMap = 'payment_failed';
+    }
+    else if (
+      order.status?.toLowerCase() === 'cancelled'
+    ) {
+      statusToMap = 'cancelled';
     }
 
     // Get status config from mapping utility
