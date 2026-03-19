@@ -401,7 +401,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         address1: houseNo,
         address2: building,
         address3: address3Value,
-        city: 'Madurai',
+        city: geocodingData?.city || geocodingData?.district || initialData?.city || 'Madurai',
         state: 'Tamil Nadu',
         pincode: pincode,
         latitude: latitude,
@@ -423,9 +423,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
 
       if (response.success) {
         if (!editMode) {
+          const analyticsCity =
+            addressData.city?.toString().trim().toLowerCase() || 'unknown';
           analyticsService.logEvent(AnalyticsEvents.NEW_ADDRESS_ADDED, {
             area_name: locality.trim().toLowerCase(),
-            city: 'madurai',
+            city: analyticsCity,
             pincode: pincode.trim(),
           });
         }

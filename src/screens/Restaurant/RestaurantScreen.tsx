@@ -37,7 +37,7 @@ import { favoritesService } from '@/services/favorites.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { ItemTiming as ImportedItemTiming, isItemAvailable } from '@/utils/timing.utils';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
-import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
+import { analyticsService, AnalyticsEvents, AnalyticsScreens } from '@/services/analytics.service';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -1504,6 +1504,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             };
           });
 
+          const itemCount = sections.reduce((count, section) => count + section.items.length, 0);
+          analyticsService.logEvent(AnalyticsEvents.MENU_VIEWED, {
+            restaurant_id: restaurantId,
+            restaurant_name: restaurantName || restaurant?.name || undefined,
+            item_count: itemCount,
+            source: 'restaurant_screen',
+            screen_name: AnalyticsScreens.RESTAURANT,
+          });
           setMenuSections(sections);
         }
       }
