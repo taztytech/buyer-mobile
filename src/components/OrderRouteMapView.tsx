@@ -74,6 +74,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   const layoutRef = useRef<{ width: number; height: number } | null>(null);
   const prevResizeTriggerRef = useRef(resizeTrigger);
   const fitScheduledRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasInitialFitRef = useRef(false);
 
   // Incrementing this key force-remounts the MapView completely.
   // We do this when returning from PiP (resizeTrigger true → false) so all
@@ -90,6 +91,10 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   } = useLiveRiderTracking();
 
   const hasAgent = !!agentLocationUpdate;
+  const hasValidAgentCoordinate =
+    !!agentLocationUpdate &&
+    Number.isFinite(agentLocationUpdate.lat) &&
+    Number.isFinite(agentLocationUpdate.lng);
 
   // Whether we are in PiP mode — controls marker label visibility and marker size
   const inPip = !!resizeTrigger;
@@ -125,6 +130,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
       ],
       { edgePadding: padding, animated }
     );
+    hasInitialFitRef.current = true;
   }, [restaurantCoordinate, customerCoordinate, getCurrentCenter]);
 
   const scheduleFit = useCallback((delay: number, animated = true) => {
@@ -134,10 +140,10 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
 
   // Initial fit after mount
   useEffect(() => {
-    if (!isMapAvailable || !MapView) return;
+    if (!isMapAvailable || !MapView || hasInitialFitRef.current) return;
     scheduleFit(450);
     return clearFitTimer;
-  }, [scheduleFit, clearFitTimer]);
+  }, []);
 
   // React to PiP ↔ normal transitions
   useEffect(() => {
@@ -159,6 +165,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   }, [resizeTrigger, scheduleFit]);
 
   const handleMapReady = useCallback(() => {
+    if (hasInitialFitRef.current) return;
     scheduleFit(300);
   }, [scheduleFit]);
 
@@ -167,6 +174,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
       const { width, height } = e.nativeEvent.layout;
       if (width > 0 && height > 0) {
         layoutRef.current = { width, height };
+        if (hasInitialFitRef.current) return;
         scheduleFit(300);
       }
     },
@@ -174,25 +182,31 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   );
 
   useEffect(() => {
-    if (!agentLocationUpdate) return;
+    if (!hasValidAgentCoordinate || !agentLocationUpdate) return;
     applyLocationUpdate(agentLocationUpdate);
-  }, [applyLocationUpdate, agentLocationUpdate]);
+  }, [applyLocationUpdate, hasValidAgentCoordinate, agentLocationUpdate]);
 
   useEffect(() => {
-    if (!followMode || !mapRef.current || !hasAgent) return;
+    if (!followMode || !mapRef.current || !hasValidAgentCoordinate) return;
     const center = getCurrentCenter();
-    if (!center) return;
+    const fallbackCenter = hasValidAgentCoordinate
+      ? {
+          latitude: agentLocationUpdate!.lat,
+          longitude: agentLocationUpdate!.lng,
+        }
+      : null;
+    const resolvedCenter = center || fallbackCenter;
+    if (!resolvedCenter) return;
 
     mapRef.current.animateCamera(
       {
-        center,
+        center: resolvedCenter,
         heading: getCurrentHeading(),
         pitch: 0,
-        zoom: inPip ? 16 : 17,
       },
       { duration: 800 },
     );
-  }, [followMode, hasAgent, getCurrentCenter, getCurrentHeading, inPip, resizeTrigger]);
+  }, [followMode, hasValidAgentCoordinate, getCurrentCenter, getCurrentHeading, inPip, resizeTrigger, agentLocationUpdate]);
 
   const handleRecenter = useCallback(() => {
     setFollowMode(true);
@@ -203,11 +217,10 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
         center,
         heading: getCurrentHeading(),
         pitch: 0,
-        zoom: inPip ? 16 : 17,
       },
       { duration: 550 },
     );
-  }, [getCurrentCenter, getCurrentHeading, inPip]);
+  }, [getCurrentCenter, getCurrentHeading]);
 
   const riderRotationStyle = {
     transform: [
@@ -220,9 +233,8 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     ],
   };
 
-  const isNightByTime = new Date().getHours() >= 18;
   const isDarkMode = Appearance.getColorScheme() === 'dark';
-  const useNightTheme = isNightByTime || isDarkMode;
+  const useNightTheme = isDarkMode;
   const riderIconSource = useNightTheme ? riderNightAsset : riderDayAsset;
 
   if (!isMapAvailable || !MapView || !Marker || !Polyline) {
@@ -289,6 +301,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
         <Marker
           key={`store-${restaurantCoordinate.latitude}-${restaurantCoordinate.longitude}`}
           coordinate={restaurantCoordinate}
+          zIndex={10}
           anchor={{ x: 0.5, y: inPip ? 0.5 : 0.28 }}
           title={restaurantName || 'Restaurant'}
         >
@@ -314,6 +327,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
         <Marker
           key={`customer-${customerCoordinate.latitude}-${customerCoordinate.longitude}`}
           coordinate={customerCoordinate}
+          zIndex={20}
           anchor={{ x: 0.5, y: inPip ? 0.5 : 0.28 }}
           title={customerAddress || 'Delivery location'}
         >
@@ -335,25 +349,57 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
           </View>
         </Marker>
 
-        {hasAgent && animatedCoordinate ? (
+        {hasValidAgentCoordinate && animatedCoordinate ? (
           <Marker.Animated
             key="agent-marker"
             coordinate={animatedCoordinate}
+            zIndex={30}
             anchor={{ x: 0.5, y: 0.5 }}
             title="Delivery Partner"
             flat
           >
-            <Animated.View style={riderRotationStyle}>
+            <Animated.View
+              style={[
+                styles.agentIconWrap,
+                useNightTheme ? styles.agentIconWrapNight : styles.agentIconWrapDay,
+                riderRotationStyle,
+              ]}
+            >
               <Image
                 source={riderIconSource}
-                style={styles.agentBikeImage}
-                resizeMode="contain"
+                style={[styles.agentBikeImage, useNightTheme ? styles.agentBikeImageNight : styles.agentBikeImageDay]}
+                resizeMode="cover"
               />
             </Animated.View>
           </Marker.Animated>
+        ) : hasValidAgentCoordinate && agentLocationUpdate ? (
+          <Marker
+            key="agent-marker-fallback"
+            coordinate={{
+              latitude: agentLocationUpdate.lat,
+              longitude: agentLocationUpdate.lng,
+            }}
+            zIndex={30}
+            anchor={{ x: 0.5, y: 0.5 }}
+            title="Delivery Partner"
+            flat
+          >
+            <View
+              style={[
+                styles.agentIconWrap,
+                useNightTheme ? styles.agentIconWrapNight : styles.agentIconWrapDay,
+              ]}
+            >
+              <Image
+                source={riderIconSource}
+                style={[styles.agentBikeImage, useNightTheme ? styles.agentBikeImageNight : styles.agentBikeImageDay]}
+                resizeMode="cover"
+              />
+            </View>
+          </Marker>
         ) : null}
       </MapView>
-      {hasAgent && !followMode ? (
+      {hasValidAgentCoordinate && !followMode ? (
         <TouchableOpacity
           style={styles.recenterButton}
           onPress={handleRecenter}
@@ -446,8 +492,39 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   agentBikeImage: {
-    width: 46,
-    height: 46,
+    width: 74,
+    height: 74,
+  },
+  agentBikeImageDay: {
+    width: 78,
+    height: 78,
+  },
+  agentBikeImageNight: {
+    width: 78,
+    height: 78,
+  },
+  agentIconWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.24,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  agentIconWrapDay: {
+    backgroundColor: '#102B52',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.85)',
+  },
+  agentIconWrapNight: {
+    backgroundColor: '#102B52',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.85)',
   },
   recenterButton: {
     position: 'absolute',

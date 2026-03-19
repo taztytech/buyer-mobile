@@ -118,6 +118,18 @@ export const extractCustomerCoordinate = (order: any): Coordinate | null => {
 export const extractAgentCoordinate = (order: any): Coordinate | null => {
   if (!order) return null;
 
+  const liveCurrentLocation =
+    extractCoordinate(order.track_status?.rider?.current_location) ||
+    extractCoordinate(order.track_status?.delivery_partner?.current_location) ||
+    extractCoordinate(order.track_status?.agent?.current_location) ||
+    extractCoordinate(order.rider?.current_location) ||
+    extractCoordinate(order.delivery_partner?.current_location) ||
+    extractCoordinate(order.agent?.current_location);
+
+  if (liveCurrentLocation) {
+    return liveCurrentLocation;
+  }
+
   const tracking = Array.isArray(order.tracking) ? [...order.tracking].reverse() : [];
   for (const item of tracking) {
     const coord = extractCoordinate(item);
@@ -171,6 +183,29 @@ export interface AgentTrackingUpdate extends Coordinate {
 
 export const extractLatestAgentTrackingUpdate = (order: any): AgentTrackingUpdate | null => {
   if (!order) return null;
+
+  const currentLocation =
+    order?.track_status?.rider?.current_location ||
+    order?.track_status?.delivery_partner?.current_location ||
+    order?.track_status?.agent?.current_location ||
+    order?.rider?.current_location ||
+    order?.delivery_partner?.current_location ||
+    order?.agent?.current_location;
+
+  const liveCoord = extractCoordinate(currentLocation);
+  if (liveCoord) {
+    return {
+      ...liveCoord,
+      timestamp:
+        toEpochMs(currentLocation?.timestamp) ??
+        toEpochMs(currentLocation?.updated_at) ??
+        toEpochMs(order?.updated_at) ??
+        Date.now(),
+      heading: toNumber(currentLocation?.heading ?? currentLocation?.bearing ?? currentLocation?.course) ?? undefined,
+      speed: toNumber(currentLocation?.speed ?? currentLocation?.velocity) ?? undefined,
+      accuracy: toNumber(currentLocation?.accuracy ?? currentLocation?.gps_accuracy) ?? undefined,
+    };
+  }
 
   const tracking = Array.isArray(order.tracking) ? [...order.tracking].reverse() : [];
   for (const item of tracking) {

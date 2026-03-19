@@ -34,13 +34,13 @@ class DeliveryTrackingService {
     return String(baseUrl).trim().replace(/\/+$/, '');
   }
 
-  async getTrackStatus(orderId: number | string): Promise<ApiResponse<DeliveryTrackStatusResponse>> {
-    const normalizedId = String(orderId ?? '').trim();
+  async getTrackStatus(trackingId: number | string): Promise<ApiResponse<DeliveryTrackStatusResponse>> {
+    const normalizedId = String(trackingId ?? '').trim();
     if (!normalizedId) {
       return {
         success: false,
-        error: 'order_id_missing',
-        message: 'Order id is required',
+        error: 'tracking_id_missing',
+        message: 'Tracking id is required',
       };
     }
 
@@ -63,7 +63,7 @@ class DeliveryTrackingService {
         Accept: 'application/json',
       },
       params: {
-        order_id: normalizedId,
+        tracking_id: normalizedId,
       },
     };
     console.log('[DeliveryTracking] request', requestMeta);

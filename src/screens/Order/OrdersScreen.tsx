@@ -134,6 +134,48 @@ const shouldFetchDeliveryTrackStatus = (status: string | null | undefined): bool
   return eligibleStatuses.includes(normalizedStatus) && !excludedStatuses.includes(normalizedStatus);
 };
 
+const extractTrackingIdFromUrl = (trackingUrl: unknown): string | null => {
+  if (typeof trackingUrl !== 'string') return null;
+  const trimmed = trackingUrl.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/\/track\/([^/?#]+)/i);
+  return match?.[1] ? String(match[1]).trim() : null;
+};
+
+const resolveDeliveryTrackingId = (...sources: any[]): string | null => {
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue;
+
+    const direct =
+      source.tracking_id ??
+      source.trackingId ??
+      source.track_id ??
+      source.trackId ??
+      source?.track_status?.tracking_id ??
+      source?.track_status?.trackingId;
+
+    if (direct !== undefined && direct !== null) {
+      const normalized = String(direct).trim();
+      if (normalized) return normalized;
+    }
+
+    const fromTrackingUrl =
+      extractTrackingIdFromUrl(source.tracking_url) ||
+      extractTrackingIdFromUrl(source.trackingUrl) ||
+      extractTrackingIdFromUrl(source?.track_status?.tracking_url) ||
+      extractTrackingIdFromUrl(source?.track_status?.trackingUrl);
+    if (fromTrackingUrl) return fromTrackingUrl;
+
+    const fromTrackingArray = Array.isArray(source.tracking)
+      ? source.tracking
+          .map((entry: any) => extractTrackingIdFromUrl(entry?.tracking_url || entry?.trackingUrl))
+          .find((value: string | null) => !!value)
+      : null;
+    if (fromTrackingArray) return fromTrackingArray;
+  }
+  return null;
+};
+
 // Module-level state to persist across component remounts (for scroll position and pagination)
 let persistedOrders: OrderListItem[] = [];
 let persistedScrollPosition: number = 0;
@@ -781,6 +823,21 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           tracking: Array.isArray((latestContextOrder as any)?.tracking) && (latestContextOrder as any).tracking.length > 0
             ? (latestContextOrder as any).tracking
             : (trackingOrderData as any)?.tracking,
+          tracking_id:
+            (latestContextOrder as any)?.tracking_id ??
+            (latestContextOrder as any)?.trackingId ??
+            (trackingOrderData as any)?.tracking_id ??
+            (trackingOrderData as any)?.trackingId,
+          tracking_url:
+            (latestContextOrder as any)?.tracking_url ||
+            (latestContextOrder as any)?.trackingUrl ||
+            (trackingOrderData as any)?.tracking_url ||
+            (trackingOrderData as any)?.trackingUrl,
+          track_status:
+            (latestContextOrder as any)?.track_status ||
+            (latestContextOrder as any)?.trackStatus ||
+            (trackingOrderData as any)?.track_status ||
+            (trackingOrderData as any)?.trackStatus,
           restaurant: (latestContextOrder as any)?.restaurant || (trackingOrderData as any)?.restaurant,
           delivery_address: (latestContextOrder as any)?.delivery_address || (trackingOrderData as any)?.delivery_address,
           rider: {
@@ -827,14 +884,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       postPickupStatusSet.has(normalizedStatus);
     const hasUsableAgentCoordinate = !!agentCoordinate;
 
-    const routeCoordinates =
-      hasAgentAssignedSignal && trackingPath.length > 1
-        ? trackingPath
-        : hasAgentAssignedSignal && agentCoordinate
-          ? prePickupStatusSet.has(normalizedStatus)
-            ? [agentCoordinate, restaurantCoordinate]
-            : [agentCoordinate, customerCoordinate]
-        : [restaurantCoordinate, customerCoordinate];
+    // Track-order route should always represent store -> customer path.
+    // Rider location is shown separately by bike marker.
+    const routeCoordinates = [restaurantCoordinate, customerCoordinate];
 
     const restaurantName = displayOrder.restaurant?.name?.trim() || 'Restaurant';
     const addr = displayOrder.delivery_address;
@@ -848,14 +900,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       customerCoordinate,
       agentCoordinate,
       latestAgentLocationUpdate,
-      routeOriginCoordinate:
-        hasUsableAgentCoordinate && hasAgentAssignedSignal
-          ? agentCoordinate
-          : restaurantCoordinate,
-      routeTargetCoordinate:
-        hasUsableAgentCoordinate && hasAgentAssignedSignal && prePickupStatusSet.has(normalizedStatus)
-          ? restaurantCoordinate
-          : customerCoordinate,
+      routeOriginCoordinate: restaurantCoordinate,
+      routeTargetCoordinate: customerCoordinate,
       stageKey: normalizedStatus,
       routeCoordinates,
       mode: hasAgentAssignedSignal ? 'live' as const : 'ready' as const,
@@ -960,24 +1006,39 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     setShowTrackingWebView(true);
 
     // For statuses from Agent Assigned until before Delivered, fetch rider live
-    // location from delivery tracking API (/api/track/:id/status).
+    // location from delivery tracking API (/api/track/:id/status) using tracking_id.
     if (shouldFetchDeliveryTrackStatus(effectiveStatus)) {
       try {
-        const trackResponse = await deliveryTrackingService.getTrackStatus(orderId);
-        const trackData = trackResponse.data;
-        if (trackResponse.success && trackData) {
-          setTrackingOrderData((prev: any) => ({
-            ...(prev || {}),
-            rider: {
-              ...(prev?.rider || {}),
-              ...(trackData.rider || {}),
-              current_location:
-                trackData?.rider?.current_location ||
-                prev?.rider?.current_location ||
-                null,
-            },
-            track_status: trackData,
-          }));
+        const latestOrderData = await fetchTrackingOrderData(orderId, true);
+        const trackingIdentifier = resolveDeliveryTrackingId(
+          latestOrderData,
+          shallowOrder,
+          trackingOrderData,
+          state.byId[orderId],
+        );
+
+        if (!trackingIdentifier) {
+          console.log('[DeliveryTracking] skipped: tracking_id unavailable', {
+            orderId,
+            effectiveStatus,
+          });
+        } else {
+          const trackResponse = await deliveryTrackingService.getTrackStatus(trackingIdentifier);
+          const trackData = trackResponse.data;
+          if (trackResponse.success && trackData) {
+            setTrackingOrderData((prev: any) => ({
+              ...(prev || {}),
+              rider: {
+                ...(prev?.rider || {}),
+                ...(trackData.rider || {}),
+                current_location:
+                  trackData?.rider?.current_location ||
+                  prev?.rider?.current_location ||
+                  null,
+              },
+              track_status: trackData,
+            }));
+          }
         }
       } catch (error) {
         console.warn('Track status API failed:', error);
@@ -998,7 +1059,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // This gets the FULL order data (not just status from FCM)
   // This is called initially and also when FCM updates arrive to get latest full data
   const fetchTrackingOrderData = useCallback(async (orderId: string, silent: boolean = false) => {
-    if (!orderId) return;
+    if (!orderId) return null;
 
     try {
       if (!silent) {
@@ -1063,6 +1124,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           // For non-silent calls, ensure the overlay is visible.
           setShowTrackingWebView(true);
         }
+        return response.data as any;
       }
     } catch (err: any) {
       console.error('Failed to fetch tracking order data:', err);
@@ -1071,6 +1133,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         setIsLoadingTrackingData(false);
       }
     }
+    return null;
   }, []);
 
   // Handle closing the tracking WebView modal and refresh orders
@@ -1319,8 +1382,33 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             // FCM payloads are minimal — preserve rich fields from the previous API response
             // so agent details, delivery address, and ETA aren't wiped out on status updates.
             tracking: (latestContextOrder as any).tracking?.length ? (latestContextOrder as any).tracking : prevData.tracking,
+            tracking_id:
+              (latestContextOrder as any)?.tracking_id ??
+              (latestContextOrder as any)?.trackingId ??
+              (prevData as any)?.tracking_id ??
+              (prevData as any)?.trackingId,
+            tracking_url:
+              (latestContextOrder as any)?.tracking_url ||
+              (latestContextOrder as any)?.trackingUrl ||
+              (prevData as any)?.tracking_url ||
+              (prevData as any)?.trackingUrl,
+            track_status:
+              (latestContextOrder as any)?.track_status ||
+              (latestContextOrder as any)?.trackStatus ||
+              (prevData as any)?.track_status ||
+              (prevData as any)?.trackStatus,
             delivery_address: (latestContextOrder as any).delivery_address || prevData.delivery_address,
             estimated_delivery_time: (latestContextOrder as any).estimated_delivery_time || prevData.estimated_delivery_time,
+            rider: {
+              ...(prevData?.rider || {}),
+              ...((latestContextOrder as any)?.rider || {}),
+              current_location:
+                (latestContextOrder as any)?.rider?.current_location ||
+                prevData?.rider?.current_location ||
+                (latestContextOrder as any)?.track_status?.rider?.current_location ||
+                prevData?.track_status?.rider?.current_location ||
+                null,
+            },
           };
 
           // Step 2: Fetch latest full order data from API (silent fetch - no loading indicator)
@@ -1436,7 +1524,21 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
       const liveStatus = (trackingContextOrder || trackingOrderData)?.status;
       if (shouldFetchDeliveryTrackStatus(liveStatus)) {
-        deliveryTrackingService.getTrackStatus(selectedOrderIdForTracking).then((trackResponse) => {
+        const displayOrderForTracking = trackingContextOrder || trackingOrderData;
+        const trackingIdentifier = resolveDeliveryTrackingId(
+          displayOrderForTracking,
+          state.byId[selectedOrderIdForTracking],
+        );
+
+        if (!trackingIdentifier) {
+          console.log('[DeliveryTracking] periodic skipped: tracking_id unavailable', {
+            orderId: selectedOrderIdForTracking,
+            liveStatus,
+          });
+          return;
+        }
+
+        deliveryTrackingService.getTrackStatus(trackingIdentifier).then((trackResponse) => {
           const trackData = trackResponse.data;
           if (trackResponse.success && trackData) {
             setTrackingOrderData((prev: any) => ({
@@ -2089,6 +2191,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                         speed: fallbackMapCoords.latestAgentLocationUpdate.speed,
                         accuracy: fallbackMapCoords.latestAgentLocationUpdate.accuracy,
                       }
+                    : fallbackMapCoords.agentCoordinate
+                      ? {
+                          lat: fallbackMapCoords.agentCoordinate.latitude,
+                          lng: fallbackMapCoords.agentCoordinate.longitude,
+                          timestamp: Date.now(),
+                        }
                     : null
                 }
                 routeCoordinates={
