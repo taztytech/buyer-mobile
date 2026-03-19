@@ -37,6 +37,7 @@ export interface UserData {
   email?: string;
   support_email?: string;
   support_number?: string;
+  user_type?: 'new' | 'returning' | 'guest';
   // Add other user fields as needed
 }
 

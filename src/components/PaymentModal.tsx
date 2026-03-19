@@ -9,7 +9,6 @@ import {
   TextInput,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
 
 interface PaymentModalProps {
   visible: boolean;
@@ -43,9 +42,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
   const handleSelectPayment = (method: string) => {
     setSelectedMethod(method);
-    analyticsService.logEvent(AnalyticsEvents.PAYMENT_METHOD_SELECTED, {
-      method,
-    });
     onSelectPayment(method);
   };
 

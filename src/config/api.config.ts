@@ -73,7 +73,7 @@ export const APP_CONFIG = {
 
   // App Info
   APP_NAME: 'Tazty',
-  APP_VERSION: '1.0.3',
+  APP_VERSION: '1.0.4',
 };
 
 // Helper to build full API URL
