@@ -1189,7 +1189,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Order Details</Text>
         <View style={styles.headerButtons}>
-          {_onHelp && orderData?.payment_method === 'cod' && (
+          {_onHelp && (
             <TouchableOpacity
               style={styles.helpButton}
               onPress={_onHelp}
