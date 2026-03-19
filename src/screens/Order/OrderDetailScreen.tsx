@@ -75,9 +75,49 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
   const [isClosingTracking, setIsClosingTracking] = useState(false);
   const [showDeliveredOverlay, setShowDeliveredOverlay] = useState(false);
+  const [cancelSecondsLeft, setCancelSecondsLeft] = useState<number>(0);
   const webViewLoadedRef = useRef<boolean>(false);
   const webViewRef = useRef<any>(null);
   const appStateRef = useRef(AppState.currentState);
+
+  const CANCEL_WINDOW_SECONDS = 30;
+
+  const canShowCancelForOrder = useMemo(() => {
+    if (!orderData) return false;
+    const paymentMethod = String(orderData.payment_method || '').toLowerCase();
+    if (paymentMethod !== 'cod') return false;
+
+    const status = String(orderData.status || '').toLowerCase().trim();
+    // Allow cancel only before the order moves forward from placement
+    const cancelEligibleStatuses = ['pending', 'confirmed'];
+    if (!cancelEligibleStatuses.includes(status)) return false;
+
+    return true;
+  }, [orderData]);
+
+  useEffect(() => {
+    if (!orderData || !canShowCancelForOrder) {
+      setCancelSecondsLeft(0);
+      return;
+    }
+
+    const createdAt = orderData.created_at ? new Date(orderData.created_at) : null;
+    if (!createdAt || Number.isNaN(createdAt.getTime())) {
+      // If created_at is missing/invalid, don't show countdown-based cancel UI
+      setCancelSecondsLeft(0);
+      return;
+    }
+
+    const tick = () => {
+      const elapsedSeconds = Math.floor((Date.now() - createdAt.getTime()) / 1000);
+      const remaining = Math.max(0, CANCEL_WINDOW_SECONDS - elapsedSeconds);
+      setCancelSecondsLeft(remaining);
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [orderData, canShowCancelForOrder]);
 
   const effectiveTrackingUrl = useMemo(
     () => {
@@ -1460,6 +1500,29 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                           <Text style={styles.trackingDisabledMessage}>
                             Tracking unlocks after agent assigned.
                           </Text>
+                        )}
+                        {canShowCancelForOrder && (
+                          <TouchableOpacity
+                            style={[
+                              styles.cancelButton,
+                              cancelSecondsLeft <= 0 && styles.cancelButtonDisabled,
+                            ]}
+                            onPress={() => {
+                              // Route cancellation through Help flow (reason selection + API verification)
+                              _onHelp?.();
+                            }}
+                            disabled={cancelSecondsLeft <= 0}
+                            activeOpacity={0.8}
+                          >
+                            <Text
+                              style={[
+                                styles.cancelButtonText,
+                                cancelSecondsLeft <= 0 && styles.cancelButtonTextDisabled,
+                              ]}
+                            >
+                              Cancel Order{cancelSecondsLeft > 0 ? ` (${cancelSecondsLeft}s)` : ''}
+                            </Text>
+                          </TouchableOpacity>
                         )}
                       </>
                     );
@@ -2870,6 +2933,31 @@ const styles = StyleSheet.create({
   trackOrderContainer: {
     flex: 1,
     alignItems: 'center',
+  },
+  cancelButton: {
+    marginTop: 12,
+    borderWidth: 2,
+    borderColor: '#DC2626',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    width: '100%',
+    maxWidth: 280,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  cancelButtonDisabled: {
+    borderColor: '#D1D5DB',
+    backgroundColor: '#F3F4F6',
+  },
+  cancelButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#DC2626',
+  },
+  cancelButtonTextDisabled: {
+    color: '#9CA3AF',
   },
   cancellationCard: {
     backgroundColor: '#FEF2F2',
