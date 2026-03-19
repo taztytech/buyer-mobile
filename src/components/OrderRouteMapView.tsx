@@ -39,6 +39,7 @@ interface OrderRouteMapViewProps {
   customerCoordinate: OrderRouteCoordinate;
   agentLocationUpdate?: LiveRiderLocationUpdate | null;
   routeCoordinates?: OrderRouteCoordinate[];
+  storeToAgentRouteCoordinates?: OrderRouteCoordinate[] | null;
   mode?: 'ready' | 'live';
   restaurantName?: string;
   customerAddress?: string;
@@ -51,6 +52,25 @@ const riderDayAsset = require('../../assets/map_bike_day.png');
 const riderNightAsset = require('../../assets/map_bike_night.png');
 const routeOutlineColor = 'rgba(255,255,255,0.92)';
 const routePrimaryColor = '#1E5BE0';
+const toRadians = (deg: number): number => (deg * Math.PI) / 180;
+const normalizeAngle = (angle: number): number => ((angle % 360) + 360) % 360;
+const shortestAngleDelta = (from: number, to: number): number =>
+  ((to - from + 540) % 360) - 180;
+const computeBearing = (
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number => {
+  const phi1 = toRadians(lat1);
+  const phi2 = toRadians(lat2);
+  const dLng = toRadians(lng2 - lng1);
+  const y = Math.sin(dLng) * Math.cos(phi2);
+  const x =
+    Math.cos(phi1) * Math.sin(phi2) -
+    Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLng);
+  return normalizeAngle((Math.atan2(y, x) * 180) / Math.PI);
+};
 const nightMapStyle = [
   { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
@@ -63,6 +83,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   customerCoordinate,
   agentLocationUpdate,
   routeCoordinates,
+  storeToAgentRouteCoordinates,
   restaurantName,
   customerAddress,
   resizeTrigger,
@@ -72,14 +93,18 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   const layoutRef = useRef<{ width: number; height: number } | null>(null);
   const prevResizeTriggerRef = useRef(resizeTrigger);
   const fitScheduledRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasInitialFitRef = useRef(false);
+  const hasInitialStoreFocusRef = useRef(false);
 
   // Incrementing this key force-remounts the MapView completely.
   // We do this when returning from PiP (resizeTrigger true → false) so all
   // markers re-render fresh and nothing is left in a stale state.
   const [mapKey, setMapKey] = useState(0);
-  const [followMode, setFollowMode] = useState(true);
+  const [followMode, setFollowMode] = useState(false);
   const [zoomBucket, setZoomBucket] = useState<'near' | 'far'>('near');
+  const [markerRotation, setMarkerRotation] = useState(0);
+  const lastMarkerCoordRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastHeadingRef = useRef(0);
+  const headingAnimTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const {
     animatedCoordinate,
@@ -103,42 +128,28 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     }
   }, []);
 
-  const fitToRoute = useCallback((animated = true) => {
+  const focusStoreOnOpen = useCallback((animated = true) => {
     if (!mapRef.current) return;
-    const layout = layoutRef.current;
-    const isPip = !!prevResizeTriggerRef.current;
-    // Generous padding so both markers and their label bubbles are fully visible.
-    const padding = isPip
-      ? { top: 36, right: 36, bottom: 36, left: 36 }
-      : layout
-        ? {
-            top:    Math.max(100, Math.round(layout.height * 0.22)),
-            right:  Math.max(100, Math.round(layout.width * 0.22)),
-            bottom: Math.max(180, Math.round(layout.height * 0.28)),
-            left:   Math.max(100, Math.round(layout.width * 0.22)),
-          }
-        : { top: 120, right: 120, bottom: 200, left: 120 };
-    const currentCenter = getCurrentCenter();
-    mapRef.current.fitToCoordinates(
-      [
-        restaurantCoordinate,
-        customerCoordinate,
-        ...(currentCenter ? [currentCenter] : []),
-      ],
-      { edgePadding: padding, animated }
+    mapRef.current.animateCamera(
+      {
+        center: restaurantCoordinate,
+        pitch: 0,
+        zoom: inPip ? 15 : 16,
+      },
+      { duration: animated ? 400 : 0 },
     );
-    hasInitialFitRef.current = true;
-  }, [restaurantCoordinate, customerCoordinate, getCurrentCenter]);
+    hasInitialStoreFocusRef.current = true;
+  }, [restaurantCoordinate, inPip]);
 
-  const scheduleFit = useCallback((delay: number, animated = true) => {
+  const scheduleStoreFocus = useCallback((delay: number, animated = true) => {
     clearFitTimer();
-    fitScheduledRef.current = setTimeout(() => fitToRoute(animated), delay);
-  }, [fitToRoute, clearFitTimer]);
+    fitScheduledRef.current = setTimeout(() => focusStoreOnOpen(animated), delay);
+  }, [focusStoreOnOpen, clearFitTimer]);
 
   // Initial fit after mount
   useEffect(() => {
-    if (!isMapAvailable || !MapView || hasInitialFitRef.current) return;
-    scheduleFit(450);
+    if (!isMapAvailable || !MapView || hasInitialStoreFocusRef.current) return;
+    scheduleStoreFocus(450);
     return clearFitTimer;
   }, []);
 
@@ -155,33 +166,91 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     if (wasInPip && !nowInPip) {
       // Returning from PiP → force-remount so all markers re-render cleanly
       setMapKey(k => k + 1);
+      hasInitialStoreFocusRef.current = false;
     } else if (!wasInPip && nowInPip) {
-      // Entering PiP → re-fit after the window has shrunk
-      scheduleFit(500, false);
+      // Entering PiP → keep a stable camera around store first.
+      hasInitialStoreFocusRef.current = false;
+      scheduleStoreFocus(500, false);
     }
-  }, [resizeTrigger, scheduleFit]);
+  }, [resizeTrigger, scheduleStoreFocus]);
 
   const handleMapReady = useCallback(() => {
-    if (hasInitialFitRef.current) return;
-    scheduleFit(300);
-  }, [scheduleFit]);
+    if (hasInitialStoreFocusRef.current) return;
+    scheduleStoreFocus(300);
+  }, [scheduleStoreFocus]);
 
   const handleLayout = useCallback(
     (e: LayoutChangeEvent) => {
       const { width, height } = e.nativeEvent.layout;
       if (width > 0 && height > 0) {
         layoutRef.current = { width, height };
-        if (hasInitialFitRef.current) return;
-        scheduleFit(300);
+        if (hasInitialStoreFocusRef.current) return;
+        scheduleStoreFocus(300);
       }
     },
-    [scheduleFit]
+    [scheduleStoreFocus]
   );
 
   useEffect(() => {
     if (!hasValidAgentCoordinate || !agentLocationUpdate) return;
     applyLocationUpdate(agentLocationUpdate);
   }, [applyLocationUpdate, hasValidAgentCoordinate, agentLocationUpdate]);
+
+  useEffect(() => {
+    if (!hasValidAgentCoordinate || !agentLocationUpdate) return;
+
+    const lat = agentLocationUpdate.lat;
+    const lng = agentLocationUpdate.lng;
+    const providedHeading = Number.isFinite(agentLocationUpdate.heading as number)
+      ? normalizeAngle(Number(agentLocationUpdate.heading))
+      : null;
+
+    let targetHeading = providedHeading;
+    const previous = lastMarkerCoordRef.current;
+    if (targetHeading === null && previous) {
+      targetHeading = computeBearing(previous.lat, previous.lng, lat, lng);
+    }
+    lastMarkerCoordRef.current = { lat, lng };
+
+    if (targetHeading === null) return;
+
+    if (headingAnimTimerRef.current) {
+      clearInterval(headingAnimTimerRef.current);
+      headingAnimTimerRef.current = null;
+    }
+
+    const from = normalizeAngle(lastHeadingRef.current);
+    const delta = shortestAngleDelta(from, targetHeading);
+    const to = normalizeAngle(from + delta * 0.65); // smooth heading changes
+
+    const durationMs = 520;
+    const intervalMs = 16;
+    const steps = Math.max(1, Math.round(durationMs / intervalMs));
+    let step = 0;
+
+    headingAnimTimerRef.current = setInterval(() => {
+      step += 1;
+      const t = Math.min(1, step / steps);
+      // ease-out for natural rotation at turns
+      const eased = 1 - Math.pow(1 - t, 3);
+      const current = normalizeAngle(from + shortestAngleDelta(from, to) * eased);
+      setMarkerRotation(current);
+      if (t >= 1 && headingAnimTimerRef.current) {
+        clearInterval(headingAnimTimerRef.current);
+        headingAnimTimerRef.current = null;
+        lastHeadingRef.current = to;
+      }
+    }, intervalMs);
+  }, [agentLocationUpdate, hasValidAgentCoordinate]);
+
+  useEffect(() => {
+    return () => {
+      if (headingAnimTimerRef.current) {
+        clearInterval(headingAnimTimerRef.current);
+        headingAnimTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!followMode || !mapRef.current || !hasValidAgentCoordinate) return;
@@ -225,8 +294,9 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   const riderResolvedAsset = Image.resolveAssetSource(riderIconSource);
   const riderMarkerSource = {
     uri: riderResolvedAsset.uri,
-    // Lower scale => larger marker. Keep zoomed-out only slightly larger.
-    scale: zoomBucket === 'far' ? 10 : 12,
+    // Lower scale => larger marker.
+    // Keep icon slightly larger than store marker icon but smaller than previous size.
+    scale: zoomBucket === 'far' ? 16 : 18,
   };
 
   if (!isMapAvailable || !MapView || !Marker || !Polyline) {
@@ -294,6 +364,16 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
           lineCap="round"
           lineJoin="round"
         />
+        {/* Secondary route (store -> rider), subtle grey with 50% opacity */}
+        {storeToAgentRouteCoordinates && storeToAgentRouteCoordinates.length > 1 ? (
+          <Polyline
+            coordinates={storeToAgentRouteCoordinates}
+            strokeColor="rgba(200, 205, 215, 0.5)"
+            strokeWidth={4}
+            lineCap="round"
+            lineJoin="round"
+          />
+        ) : null}
 
         {/* Restaurant marker — key ensures it re-renders when coords change */}
         <Marker
@@ -356,6 +436,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
             title="Delivery Partner"
             image={riderMarkerSource}
             tracksViewChanges={true}
+            rotation={markerRotation}
             flat
           />
         ) : hasValidAgentCoordinate && agentLocationUpdate ? (
@@ -370,6 +451,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
             title="Delivery Partner"
             image={riderMarkerSource}
             tracksViewChanges={true}
+            rotation={markerRotation}
             flat
           />
         ) : null}

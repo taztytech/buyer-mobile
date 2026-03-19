@@ -134,6 +134,20 @@ const shouldFetchDeliveryTrackStatus = (status: string | null | undefined): bool
   return eligibleStatuses.includes(normalizedStatus) && !excludedStatuses.includes(normalizedStatus);
 };
 
+const shouldShowStoreToAgentRoute = (status: string | null | undefined): boolean => {
+  const normalizedStatus = normalizeOrderStatus(status);
+  const prePickupStatuses = new Set([
+    'assigned',
+    'agent-assigned',
+    'rider-assigned',
+    'agent-arrived-restaurant',
+    'rider-accepted',
+    'accepted',
+    'ready-for-pickup',
+  ]);
+  return prePickupStatuses.has(normalizedStatus);
+};
+
 const extractTrackingIdFromUrl = (trackingUrl: unknown): string | null => {
   if (typeof trackingUrl !== 'string') return null;
   const trimmed = trackingUrl.trim();
@@ -716,6 +730,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [selectedOrderIdForTracking, setSelectedOrderIdForTracking] = useState<string | null>(null);
   const [trackingOrderData, setTrackingOrderData] = useState<any>(null);
   const [roadRouteCoordinates, setRoadRouteCoordinates] = useState<Array<{ latitude: number; longitude: number }> | null>(null);
+  const [storeToAgentRouteCoordinates, setStoreToAgentRouteCoordinates] = useState<Array<{ latitude: number; longitude: number }> | null>(null);
   const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
   const [isClosingTracking, setIsClosingTracking] = useState(false);
@@ -905,6 +920,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       stageKey: normalizedStatus,
       routeCoordinates,
       mode: hasAgentAssignedSignal ? 'live' as const : 'ready' as const,
+      showStoreToAgentRoute: shouldShowStoreToAgentRoute(normalizedStatus),
       restaurantName,
       customerAddress,
     };
@@ -980,13 +996,19 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     origin: { latitude: number; longitude: number };
     destination: { latitude: number; longitude: number };
   } | null>(null);
+  const lastStoreToAgentRouteFetchRef = useRef<{
+    origin: { latitude: number; longitude: number };
+    destination: { latitude: number; longitude: number };
+  } | null>(null);
 
   const handleTrackOrder = async (orderId: string, orderStatus?: string) => {
     if (!orderId) return;
     // Reset closing state immediately if we re-track before cleanup finished
     setIsClosingTracking(false);
     setRoadRouteCoordinates(null);
+    setStoreToAgentRouteCoordinates(null);
     lastRouteFetchRef.current = null;
+    lastStoreToAgentRouteFetchRef.current = null;
     setSelectedOrderIdForTracking(orderId);
 
     // Optimistically seed tracking data from the existing orders list
@@ -1147,7 +1169,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     setSelectedOrderIdForTracking(null);
     setTrackingOrderData(null);
     setRoadRouteCoordinates(null);
+    setStoreToAgentRouteCoordinates(null);
     lastRouteFetchRef.current = null;
+    lastStoreToAgentRouteFetchRef.current = null;
     webViewLoadedRef.current = false;
 
     // Reset bottom sheet to open state when closing modal
@@ -1558,7 +1582,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           console.warn('Tracking status refresh failed:', error);
         });
       }
-    }, 8000);
+    }, 2500);
 
     return () => clearInterval(interval);
   }, [
@@ -1630,6 +1654,78 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       cancelled = true;
     };
   }, [showTrackingWebView, fallbackMapCoords]);
+
+  // Secondary street route: store -> rider (light grey) for user exploration.
+  useEffect(() => {
+    if (
+      !showTrackingWebView ||
+      !fallbackMapCoords?.showStoreToAgentRoute ||
+      !fallbackMapCoords?.restaurantCoordinate ||
+      !fallbackMapCoords?.agentCoordinate
+    ) {
+      setStoreToAgentRouteCoordinates(null);
+      return;
+    }
+
+    const mapsApiKey = (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '').trim();
+    if (!mapsApiKey) {
+      setStoreToAgentRouteCoordinates(null);
+      return;
+    }
+
+    const origin = fallbackMapCoords.restaurantCoordinate;
+    const destination = fallbackMapCoords.agentCoordinate;
+    const prev = lastStoreToAgentRouteFetchRef.current;
+    const shouldRefetch =
+      !prev ||
+      routeDistanceMeters(prev.origin, origin) > 40 ||
+      routeDistanceMeters(prev.destination, destination) > 25;
+
+    if (!shouldRefetch) return;
+
+    let cancelled = false;
+
+    const fetchStoreToAgentRoute = async () => {
+      try {
+        const url =
+          `https://maps.googleapis.com/maps/api/directions/json` +
+          `?origin=${encodeURIComponent(`${origin.latitude},${origin.longitude}`)}` +
+          `&destination=${encodeURIComponent(`${destination.latitude},${destination.longitude}`)}` +
+          `&mode=driving&alternatives=false&key=${encodeURIComponent(mapsApiKey)}`;
+
+        const response = await fetch(url);
+        const payload = await response.json();
+        const encoded = payload?.routes?.[0]?.overview_polyline?.points;
+
+        if (!cancelled && typeof encoded === 'string' && encoded.length > 0) {
+          const decoded = decodeRoutePolyline(encoded);
+          if (decoded.length > 1) {
+            setStoreToAgentRouteCoordinates(decoded);
+            lastStoreToAgentRouteFetchRef.current = { origin, destination };
+            return;
+          }
+        }
+
+        if (!cancelled) {
+          setStoreToAgentRouteCoordinates(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setStoreToAgentRouteCoordinates(null);
+        }
+      }
+    };
+
+    fetchStoreToAgentRoute();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    showTrackingWebView,
+    fallbackMapCoords?.showStoreToAgentRoute,
+    fallbackMapCoords?.restaurantCoordinate,
+    fallbackMapCoords?.agentCoordinate,
+  ]);
 
   const handleDeliveredOverlayDone = useCallback(() => {
     setShowDeliveredOverlay(false);
@@ -2204,6 +2300,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                     ? roadRouteCoordinates
                     : fallbackMapCoords.routeCoordinates
                 }
+                storeToAgentRouteCoordinates={storeToAgentRouteCoordinates}
                 mode={fallbackMapCoords.mode}
                 restaurantName={fallbackMapCoords.restaurantName}
                 customerAddress={fallbackMapCoords.customerAddress}
