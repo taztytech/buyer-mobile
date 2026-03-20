@@ -859,9 +859,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         });
 
         // Process online payment via Razorpay using payment_details from order response
+        const analyticsAmountRupees = Number(
+          responseData?.summary?.final_amount ??
+          orderData?.summary?.final_amount ??
+          orderData?.total_amount ??
+          responseData?.total_amount ??
+          NaN,
+        );
         const paymentResult = await paymentService.processPayment(
           orderId,
-          paymentDetails
+          paymentDetails,
+          Number.isFinite(analyticsAmountRupees) ? analyticsAmountRupees : undefined,
         );
 
         // CRITICAL: After Razorpay closes, ensure UI is fully restored before showing dialogs

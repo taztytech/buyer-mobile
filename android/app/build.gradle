@@ -106,7 +106,7 @@ android {
     productFlavors {
         dev {
             dimension "environment"
-            versionNameSuffix "-dev"
+            versionNameSuffix "-${appVersionCode}"
             resValue "string", "app_name", "Tazty Dev"
         }
         prod {
@@ -213,6 +213,15 @@ android {
 
 // Apply Google Services plugin at the end
 apply plugin: 'com.google.gms.google-services'
+
+// New Architecture can generate clean-time failures when autolinking references
+// codegen JNI folders that were already deleted. We skip only native clean tasks;
+// regular clean still runs, and native outputs are removed by android:clean script.
+tasks.configureEach { task ->
+    if (task.name.startsWith("externalNativeBuildClean")) {
+        task.enabled = true
+    }
+}
 
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
