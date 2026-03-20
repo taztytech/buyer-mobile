@@ -33,6 +33,8 @@ import { exotelService } from '@/services/exotel.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { useAndroidPip } from '@/hooks/useAndroidPip';
 import { extractRestaurantCoordinate, extractCustomerCoordinate } from './orderTrackingLocationUtils';
+import { CancelReasonModal } from '@/components/CancelReasonModal';
+import { appConfigService } from '@/services/app-config.service';
 
 interface OrderDetailScreenProps {
   orderId?: string;
@@ -76,11 +78,12 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [isClosingTracking, setIsClosingTracking] = useState(false);
   const [showDeliveredOverlay, setShowDeliveredOverlay] = useState(false);
   const [cancelSecondsLeft, setCancelSecondsLeft] = useState<number>(0);
+  const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
   const webViewLoadedRef = useRef<boolean>(false);
   const webViewRef = useRef<any>(null);
   const appStateRef = useRef(AppState.currentState);
 
-  const CANCEL_WINDOW_SECONDS = 30;
+  const cancelWindowSeconds = appConfigService.getCancelTimer();
 
   const canShowCancelForOrder = useMemo(() => {
     if (!orderData) return false;
@@ -110,14 +113,14 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
     const tick = () => {
       const elapsedSeconds = Math.floor((Date.now() - createdAt.getTime()) / 1000);
-      const remaining = Math.max(0, CANCEL_WINDOW_SECONDS - elapsedSeconds);
+      const remaining = Math.max(0, cancelWindowSeconds - elapsedSeconds);
       setCancelSecondsLeft(remaining);
     };
 
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [orderData, canShowCancelForOrder]);
+  }, [orderData, canShowCancelForOrder, cancelWindowSeconds]);
 
   const effectiveTrackingUrl = useMemo(
     () => {
@@ -479,6 +482,21 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       setIsRefreshing(false);
     }
   };
+
+  const handleCancelOrderPress = useCallback(() => {
+    if (!orderData || !canShowCancelForOrder) return;
+    const ordNum = orderData.order_number;
+    if (!ordNum) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Order number is missing. Please try again.',
+        confirmText: 'OK',
+        onConfirm: () => {},
+      });
+      return;
+    }
+    setShowCancelReasonModal(true);
+  }, [orderData, canShowCancelForOrder, showConfirmation]);
 
   // Fetch order details for tracking bottom sheet from API
   // This gets the FULL order data (not just status from FCM)
@@ -1507,10 +1525,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                               styles.cancelButton,
                               cancelSecondsLeft <= 0 && styles.cancelButtonDisabled,
                             ]}
-                            onPress={() => {
-                              // Route cancellation through Help flow (reason selection + API verification)
-                              _onHelp?.();
-                            }}
+                            onPress={handleCancelOrderPress}
                             disabled={cancelSecondsLeft <= 0}
                             activeOpacity={0.8}
                           >
@@ -2202,6 +2217,26 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           )}
         </View>
       )}
+
+      {/* Cancel Reason Modal - same flow as Help section */}
+      <CancelReasonModal
+        visible={showCancelReasonModal}
+        orderNumber={orderData?.order_number || ''}
+        onClose={() => setShowCancelReasonModal(false)}
+        onSuccess={() => {
+          setShowCancelReasonModal(false);
+          fetchOrderDetails();
+        }}
+        onError={(message) => {
+          showConfirmation({
+            title: 'Error',
+            message,
+            confirmText: 'OK',
+            onConfirm: () => {},
+            onCancel: () => {},
+          });
+        }}
+      />
     </View>
   );
 };
