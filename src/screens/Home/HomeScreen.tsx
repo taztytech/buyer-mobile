@@ -6,6 +6,7 @@ import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
 import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/home.service';
 import { paymentConfigService } from '@/services/payment-config.service';
+import { appConfigService } from '@/services/app-config.service';
 import { addressService } from '@/services/address.service';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { Shimmer } from '@/components/Shimmer';
@@ -744,6 +745,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         // Store COD settings globally for checkout/payment screens
         paymentConfigService.setCodSettings(codSettings);
+
+        // Store cancel timer for order cancellation countdown (Order Detail screen)
+        if (actualData.cancel_timer != null) {
+          appConfigService.setCancelTimer(actualData.cancel_timer);
+        }
 
         // Store app operation status
         if (appOperationStatusData) {
