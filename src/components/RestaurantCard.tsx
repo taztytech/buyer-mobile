@@ -42,6 +42,8 @@ interface RestaurantCardProps {
    * 2 = vertical (style 2)
    */
   layoutMode?: 1 | 2;
+  isGuest?: boolean;
+  onNavigateToLogin?: () => void;
 }
 
 export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
@@ -50,6 +52,8 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   onFavoriteToggle,
   onImageLoad,
   layoutMode = 1,
+  isGuest = false,
+  onNavigateToLogin,
 }) => {
   const [isFavorite, setIsFavorite] = useState(restaurant.isFavorite || false);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
@@ -157,6 +161,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
 
   // Handle favorite toggle with API call
   const handleFavoriteToggle = async () => {
+    if (isGuest && onNavigateToLogin) {
+      onNavigateToLogin();
+      return;
+    }
     if (isTogglingFavorite) return; // Prevent multiple simultaneous calls
 
     setIsTogglingFavorite(true);
@@ -521,7 +529,9 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
     prevProps.restaurant.name === nextProps.restaurant.name &&
     prevProps.restaurant.isOpen === nextProps.restaurant.isOpen &&
     timingsEqual &&
-    prevProps.layoutMode === nextProps.layoutMode
+    prevProps.layoutMode === nextProps.layoutMode &&
+    prevProps.isGuest === nextProps.isGuest &&
+    prevProps.onNavigateToLogin === nextProps.onNavigateToLogin
   );
 });
 

@@ -37,6 +37,8 @@ interface CategoryResultsScreenProps {
     meta?: { distanceKm?: number; isOpen?: boolean; itemCount?: number }
   ) => void;
   selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
+  isGuest?: boolean;
+  onNavigateToLogin?: () => void;
 }
 
 // TopRatedItem interface commented out as Top Rated section is commented
@@ -133,6 +135,8 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
   onBack,
   onNavigateToRestaurant,
   selectedLocation,
+  isGuest = false,
+  onNavigateToLogin,
 }) => {
   const { vegMode } = useVegMode();
   const [searchQuery, setSearchQuery] = useState('');
@@ -164,6 +168,13 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
 
   // Fetch default address coordinates
   useEffect(() => {
+    // Guests: skip getAddresses (API requires registered user)
+    if (isGuest) {
+      setDefaultAddressCoords(null);
+      setHasFetchedDefaultAddress(true);
+      return;
+    }
+
     const fetchDefaultAddress = async () => {
       try {
         const response = await addressService.getAddresses();
@@ -192,7 +203,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
     };
 
     fetchDefaultAddress();
-  }, []);
+  }, [isGuest]);
 
   const fetchRestaurants = async () => {
     try {
@@ -751,6 +762,8 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
                             });
                           }
                         }}
+                        isGuest={isGuest}
+                        onNavigateToLogin={onNavigateToLogin}
                       />
                     </View>
                   ))}

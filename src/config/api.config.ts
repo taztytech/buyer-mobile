@@ -26,6 +26,7 @@ export const API_CONFIG = {
       LOGIN: '/authentication/login',
       REFRESH_TOKEN: '/authentication/refresh-token',
       LOGOUT: '/authentication/logout',
+      GUEST_LOGIN: '/authentication/guest-login',
     },
     // User endpoints
     USER: {

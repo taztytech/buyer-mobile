@@ -202,6 +202,8 @@ interface RestaurantScreenProps {
   onNavigateToHome?: () => void;
   onNavigateToCheckout?: (restaurantId: number, restaurantName: string, restaurantAddress?: string, from?: 'home' | 'restaurant') => void;
   selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
+  isGuest?: boolean;
+  onNavigateToLogin?: () => void;
 }
 
 interface AddOn {
@@ -290,6 +292,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   onNavigateToDetails,
   onNavigateToCheckout,
   selectedLocation,
+  isGuest = false,
+  onNavigateToLogin,
 }) => {
   const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, reloadCart, flushPendingQuantityUpdate, checkRestaurantConflict, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName, restaurantLogo: cartRestaurantLogo } = useCart();
   const { vegMode, setVegMode } = useVegMode();
@@ -432,6 +436,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const handleToggleFavoriteItem = async (sectionId: string, itemId: string) => {
     if (togglingFavoriteItemId === itemId) return; // Prevent multiple simultaneous calls
 
+    // Guest mode: navigate to login when pressing heart (favorite)
+    if (isGuest && onNavigateToLogin) {
+      onNavigateToLogin();
+      return;
+    }
+
     setTogglingFavoriteItemId(itemId);
 
     // Find the item to get its current favorite state
@@ -544,6 +554,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   };
 
   const addToCart = (item: MenuItem) => {
+    if (isGuest && onNavigateToLogin) {
+      onNavigateToLogin();
+      return;
+    }
     if (!ensureRestaurantOpen()) {
       return;
     }
@@ -702,6 +716,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   };
 
   const handleCustomizableItemClick = (item: MenuItem) => {
+    if (isGuest && onNavigateToLogin) {
+      onNavigateToLogin();
+      return;
+    }
     if (!ensureRestaurantOpen()) {
       return;
     }
@@ -733,6 +751,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 
   // Handle adding customizable item to cart with add-ons
   const handleAddCustomizableItem = (itemId: string, quantity: number, selectedAddOns: string[]) => {
+    if (isGuest && onNavigateToLogin) {
+      onNavigateToLogin();
+      return;
+    }
     if (!ensureRestaurantOpen()) {
       return;
     }
@@ -1122,6 +1144,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   }, [showConfirmation]);
 
   const handleAddFromDetail = useCallback((itemId: string, quantity: number) => {
+    if (isGuest && onNavigateToLogin) {
+      onNavigateToLogin();
+      return;
+    }
     // Current flow: Check if restaurant is open first
     if (!ensureRestaurantOpen()) {
       return;
@@ -1271,7 +1297,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         handleAddToCartError(error);
       });
     }
-  }, [cart, menuSections, updateQuantity, addToCartContext, checkRestaurantConflict, restaurantId, restaurantData, restaurantName, setRestaurantInfo, clearCart, showConfirmation, showMaxQuantityAlert, ensureRestaurantOpen]);
+  }, [isGuest, onNavigateToLogin, cart, menuSections, updateQuantity, addToCartContext, checkRestaurantConflict, restaurantId, restaurantData, restaurantName, setRestaurantInfo, clearCart, showConfirmation, showMaxQuantityAlert, ensureRestaurantOpen]);
 
   const cartReloadedRef = useRef(false);
 
@@ -1301,6 +1327,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   useEffect(() => {
     // If selectedLocation is provided, don't fetch address API
     if (selectedLocation?.latitude && selectedLocation?.longitude) {
+      return;
+    }
+
+    // Guests: skip getAddresses (API requires registered user)
+    if (isGuest) {
+      setDefaultAddressCoords(null);
       return;
     }
 
