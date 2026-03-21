@@ -52,6 +52,7 @@ interface LocationSelectionScreenProps {
   editingAddress?: any;
   initialLatitude?: number;
   initialLongitude?: number;
+  isGuest?: boolean;
 }
 
 export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = ({
@@ -61,6 +62,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   initialSearchQuery = '',
   initialLatitude,
   initialLongitude,
+  isGuest = false,
 }) => {
   const isEditing = !!editingAddress;
 
@@ -98,6 +100,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const [hasSelectedLocation, setHasSelectedLocation] = useState(false);
   const [isCurrentLocationSet, setIsCurrentLocationSet] = useState(false);
   const [isGeocodingInProgress, setIsGeocodingInProgress] = useState(false);
+  const [isSearchInProgress, setIsSearchInProgress] = useState(false);
   const [hasUserChangedLocation, setHasUserChangedLocation] = useState(false); // Track if user manually changed location during editing
   const bottomPosition = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<any>(null);
@@ -135,6 +138,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     setShowAddressForm(false);
     setIsCurrentLocationSet(false);
     setIsGeocodingInProgress(false);
+    setIsSearchInProgress(false);
     setHasUserChangedLocation(false); // Reset location change flag
 
     // Reset permission tracking and auto-location flag
@@ -1200,7 +1204,20 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       }
 
       // Use geocoding to search for the location
+      setIsGeocodingInProgress(true);
+      setIsSearchInProgress(true);
       const results = await Location.geocodeAsync(query);
+
+      if (results.length === 0) {
+        setIsGeocodingInProgress(false);
+        setIsSearchInProgress(false);
+        Alert.alert(
+          'Location not found',
+          `No results found for "${query}". Try a more specific address, street name, or landmark.`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
 
       if (results.length > 0) {
         const result = results[0];
@@ -1257,8 +1274,17 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         // Dismiss keyboard
         Keyboard.dismiss();
       }
+      setIsGeocodingInProgress(false);
+      setIsSearchInProgress(false);
     } catch (error) {
+      setIsGeocodingInProgress(false);
+      setIsSearchInProgress(false);
       Keyboard.dismiss();
+      Alert.alert(
+        'Search failed',
+        'Unable to search for the location. Please check your connection and try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -1292,7 +1318,24 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
               returnKeyType="search"
               underlineColorAndroid="transparent"
               onSubmitEditing={handleSearch}
+              editable={!isSearchInProgress}
             />
+            <TouchableOpacity
+              onPress={handleSearch}
+              style={styles.searchButton}
+              disabled={isSearchInProgress || !searchText.trim()}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              {isSearchInProgress ? (
+                <ActivityIndicator size="small" color="#00B14F" />
+              ) : (
+                <MaterialIcons
+                  name="search"
+                  size={24}
+                  color={searchText.trim() ? '#00B14F' : '#999'}
+                />
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </SafeAreaView>
@@ -1426,6 +1469,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           editMode={!!editingAddress}
           addressId={editingAddress?.id?.toString()}
           hasUserChangedLocation={hasUserChangedLocation}
+          isGuest={isGuest}
           locationName={locationName}
           locationAddress={locationAddress}
           latitude={currentMapRegion.current.latitude}
@@ -1585,6 +1629,11 @@ const styles = StyleSheet.create({
     margin: 0,
     textAlignVertical: 'center',
     includeFontPadding: false,
+  },
+  searchButton: {
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   locationCard: {
     padding: 16,

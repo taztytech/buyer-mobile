@@ -19,6 +19,7 @@ const STORAGE_KEYS = {
   FCM_TOKEN: '@tazty_fcm_token',
   PUSH_TOKEN: '@tazty_push_token',
   DEVICE_ID: '@tazty_device_id',
+  IDENTITY_TOKEN: '@tazty_identity_token',
   BACKGROUND_NOTIFICATIONS: '@tazty_background_notifications',
   // App version tracking for cache clearing
   APP_VERSION_CODE: '@tazty_app_version_code',
@@ -46,16 +47,16 @@ class StorageService {
    */
   async saveTokens(tokenData: TokenData): Promise<void> {
     try {
-      // Validate tokens are not undefined or null
-      if (!tokenData.accessToken || !tokenData.refreshToken) {
-        throw new Error('Access token and refresh token are required');
+      if (!tokenData.accessToken) {
+        throw new Error('Access token is required');
       }
+      const refreshToken = tokenData.refreshToken || tokenData.accessToken;
 
       const expiryTime = Date.now() + tokenData.expiresIn * 1000;
 
       await AsyncStorage.multiSet([
         [STORAGE_KEYS.ACCESS_TOKEN, tokenData.accessToken],
-        [STORAGE_KEYS.REFRESH_TOKEN, tokenData.refreshToken],
+        [STORAGE_KEYS.REFRESH_TOKEN, refreshToken],
         [STORAGE_KEYS.TOKEN_EXPIRY, expiryTime.toString()],
       ]);
     } catch (error) {
@@ -83,6 +84,60 @@ class StorageService {
       return await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
     } catch (error) {
       return null;
+    }
+  }
+
+  /**
+   * Save identity token for guest session linking (persisted across app restarts)
+   */
+  async saveIdentityToken(token: string): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.IDENTITY_TOKEN, token);
+    } catch (error) {
+      console.warn('[Storage] Failed to save identity token:', error);
+    }
+  }
+
+  /**
+   * Get stored identity token for guest login
+   */
+  async getIdentityToken(): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem(STORAGE_KEYS.IDENTITY_TOKEN);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Clear identity token (called when guest logs in via OTP)
+   */
+  async clearIdentityToken(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.IDENTITY_TOKEN);
+    } catch (error) {
+      console.warn('[Storage] Failed to clear identity token:', error);
+    }
+  }
+
+  /**
+   * Get or create device ID for guest login and analytics
+   * Preserved across logout so the same device keeps its identity
+   */
+  async getOrCreateDeviceId(): Promise<string> {
+    try {
+      let deviceId = await AsyncStorage.getItem(STORAGE_KEYS.DEVICE_ID);
+      if (!deviceId) {
+        deviceId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === 'x' ? r : (r & 0x3) | 0x8;
+          return v.toString(16).toUpperCase();
+        });
+        await AsyncStorage.setItem(STORAGE_KEYS.DEVICE_ID, deviceId);
+      }
+      return deviceId;
+    } catch (error) {
+      return `TEMP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     }
   }
 
@@ -312,7 +367,7 @@ class StorageService {
         // FCM and notification data is cleared on logout
         STORAGE_KEYS.FCM_TOKEN,
         STORAGE_KEYS.PUSH_TOKEN,
-        STORAGE_KEYS.DEVICE_ID,
+        // DEVICE_ID preserved for guest login and analytics identity
         STORAGE_KEYS.BACKGROUND_NOTIFICATIONS,
       ]);
       // Note: VEG_MODE is not cleared on logout - it persists as a device preference

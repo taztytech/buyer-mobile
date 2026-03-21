@@ -223,6 +223,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
 
+      // Guests: cart API requires registered user. Use storage only.
+      const loggedIn = await storageService.isLoggedIn();
+      if (!loggedIn) {
+        setIsCartLoaded(true);
+        return;
+      }
+
       const backendCart = await cartService.getCart();
 
       // Log for debugging

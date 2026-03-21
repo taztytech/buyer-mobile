@@ -30,6 +30,7 @@ interface AddAddressFormScreenProps {
   onBack?: () => void;
   onSave?: (addressData: any) => void;
   onClose?: () => void;
+  isGuest?: boolean; // When true, save to AsyncStorage instead of calling API
   // Edit mode props
   editMode?: boolean;
   addressId?: string;
@@ -56,6 +57,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
   geocodingData,
   onSave,
   onClose,
+  isGuest = false,
   editMode = false,
   addressId,
   hasUserChangedLocation = false,
@@ -391,12 +393,50 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
     setLoading(true);
 
     try {
-      // Prepare address data for API
-      // Option B: Pack landmark into existing address3 field along with locality
+      // Prepare address data
       const address3Value = landmark.trim()
         ? `${locality.trim()}, ${landmark.trim()}`
         : locality.trim();
 
+      const fullAddress = [houseNo, building, address3Value, 'Madurai', 'Tamil Nadu', pincode]
+        .filter(Boolean)
+        .join(', ');
+
+      // Guest mode: skip API - pass data to onSave; handleLocationConfirm will save to AsyncStorage
+      if (isGuest) {
+        const guestLocation = {
+          name: locationName || selectedTag,
+          address: fullAddress,
+          latitude,
+          longitude,
+          city: 'Madurai',
+          pincode: pincode.trim(),
+          address1: houseNo,
+          address2: building,
+          address3: address3Value,
+          state: 'Tamil Nadu',
+          type: selectedTag.toLowerCase() as 'home' | 'work' | 'other',
+        };
+
+        analyticsService.logEvent(AnalyticsEvents.NEW_ADDRESS_ADDED, {
+          area_name: locality.trim().toLowerCase(),
+          city: 'madurai',
+          pincode: pincode.trim(),
+        });
+
+        if (onClose) {
+          onClose();
+        }
+
+        setTimeout(() => {
+          if (onSave) {
+            onSave(guestLocation);
+          }
+        }, 50);
+        return;
+      }
+
+      // Logged-in mode: call API
       const addressData: AddAddressRequest = {
         address1: houseNo,
         address2: building,
@@ -408,16 +448,14 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         longitude: longitude,
         type: selectedTag.toLowerCase() as 'home' | 'work' | 'other',
         alternate_phone_number: alternateMobile ? parseInt(alternateMobile, 10) : undefined,
-        is_default: true, // Set as default for both new and updated addresses
+        is_default: true,
       };
 
       let response;
 
       if (editMode && addressId) {
-        // Call update API
         response = await addressService.updateAddress(addressId, addressData);
       } else {
-        // Call add API
         response = await addressService.addAddress(addressData);
       }
 
@@ -429,20 +467,16 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
             pincode: pincode.trim(),
           });
         }
-        // Close the form modal immediately (without animation) before navigation
         if (onClose) {
           onClose();
         }
 
-        // Small delay to ensure modal state updates before navigation
         setTimeout(() => {
-          // Call onSave to handle navigation back to home
           if (onSave) {
             onSave(response.data);
           }
         }, 50);
       } else {
-        // Show API error in toast
         let errorMessage = response.message || (editMode ? 'Failed to update address' : 'Failed to add address');
         if (response.error && response.error !== '[undefined]') {
           errorMessage = response.error;

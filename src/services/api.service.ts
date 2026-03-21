@@ -71,6 +71,7 @@ class ApiService {
   private isInitialized: boolean = false;
   private onUserDeletedCallback: (() => void) | null = null;
   private onSessionExpiredCallback: (() => void) | null = null;
+  private guestLoginRetryCallback: (() => Promise<boolean>) | null = null;
   private lastProfileCheckTime: number = 0; // Timestamp of last profile check
   private profileCheckInProgress: boolean = false; // Prevent multiple simultaneous profile checks
   private readonly PROFILE_CHECK_INTERVAL_MS = 60 * 1000; // Check profile every 60 seconds max (reduced frequency)
@@ -89,6 +90,14 @@ class ApiService {
    */
   setSessionExpiredCallback(callback: () => void): void {
     this.onSessionExpiredCallback = callback;
+  }
+
+  /**
+   * Set callback for guest login retry on 401. When in guest mode with identity_token,
+   * this is called to get fresh tokens before retrying the failed request.
+   */
+  setGuestLoginRetryCallback(callback: () => Promise<boolean>): void {
+    this.guestLoginRetryCallback = callback;
   }
 
   /**
@@ -631,6 +640,22 @@ class ApiService {
             return this.request<T>(method, endpoint, data, customHeaders, retryCount + 1);
           }
 
+          // Refresh failed. In guest mode with identity_token, try guest_login to get fresh tokens
+          const isGuest = !(await storageService.isLoggedIn());
+          const hasIdentityToken = !!(await storageService.getIdentityToken());
+          if (isGuest && hasIdentityToken && this.guestLoginRetryCallback) {
+            console.log('[apiService] Guest mode + identity_token: attempting guest_login retry...');
+            try {
+              const guestLoginOk = await this.guestLoginRetryCallback();
+              if (guestLoginOk) {
+                console.log('[apiService] ✅ Guest login retry successful, retrying original request...');
+                return this.request<T>(method, endpoint, data, customHeaders, retryCount + 1);
+              }
+            } catch (guestErr: any) {
+              console.warn('[apiService] Guest login retry failed:', guestErr?.message ?? guestErr);
+            }
+          }
+
           if (refreshResult === 'soft_fail') {
             // Temporary error (network/server) — do NOT logout.
             // Return a generic error so the feature layer can retry or show an error.
@@ -771,6 +796,7 @@ class ApiService {
         this.accessToken !== null &&
         !endpoint.includes('/authentication/generate-otp') &&
         !endpoint.includes('/authentication/login') &&
+        !endpoint.includes('/authentication/guest-login') &&
         !endpoint.includes('/authentication/refresh-token');
       
       // Only check profile for important endpoints to reduce API calls
