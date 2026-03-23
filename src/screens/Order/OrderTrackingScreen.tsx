@@ -827,7 +827,6 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
                           {trackingItem.agent_name && (
                             <Text style={styles.timelineAgent}>
                               Agent: {trackingItem.agent_name}
-                              {trackingItem.agent_phone && ` • ${trackingItem.agent_phone}`}
                             </Text>
                           )}
                         </View>

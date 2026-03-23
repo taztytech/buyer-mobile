@@ -33,6 +33,7 @@ import { exotelService } from '@/services/exotel.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { useAndroidPip } from '@/hooks/useAndroidPip';
 import { extractRestaurantCoordinate, extractCustomerCoordinate } from './orderTrackingLocationUtils';
+import { resolveTrackingDisplayOrder, resolveAgentPhoneForExotel } from './trackingDisplayUtils';
 import { CancelReasonModal } from '@/components/CancelReasonModal';
 import { appConfigService } from '@/services/app-config.service';
 
@@ -218,7 +219,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       forceTrackingWebViewResize();
       if (wasInPip && !isInPipMode) {
         const ctxOrder = selectedOrderIdForTracking ? state.byId[selectedOrderIdForTracking] : undefined;
-        const displayOrder = ctxOrder || trackingOrderData;
+        const displayOrder = resolveTrackingDisplayOrder(ctxOrder, trackingOrderData);
         const rawStatus = (displayOrder?.status || '').toString().toLowerCase().trim();
         const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
         if (normalizedStatus === 'delivered' || normalizedStatus === 'completed') {
@@ -641,6 +642,11 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   // Get the order directly from state.byId - this will update when FCM notifications arrive
   const trackingContextOrder = selectedOrderIdForTracking ? state.byId[selectedOrderIdForTracking] : undefined;
 
+  const trackingDisplayOrder = useMemo(
+    () => resolveTrackingDisplayOrder(trackingContextOrder, trackingOrderData),
+    [trackingContextOrder, trackingOrderData],
+  );
+
   // Get status and updated_at as separate values for reliable change detection
   const contextStatus = trackingContextOrder?.status;
   const contextUpdatedAt = trackingContextOrder?.updated_at;
@@ -655,11 +661,11 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       fcmUpdatedAt: contextUpdatedAt || 'N/A',
       apiStatus: trackingOrderData?.status || 'N/A',
       apiUpdatedAt: trackingOrderData?.updated_at || 'N/A',
-      displayStatus: (trackingContextOrder || trackingOrderData)?.status || 'N/A',
+      displayStatus: trackingDisplayOrder?.status || 'N/A',
       hasFCMData: !!trackingContextOrder,
       hasAPIData: !!trackingOrderData,
     });
-  }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, trackingOrderData?.status, trackingOrderData?.updated_at]);
+  }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, trackingOrderData?.status, trackingOrderData?.updated_at, trackingDisplayOrder?.status]);
 
   // FCM LISTENER + API WATCHER: Listen to FCM updates AND watch API response data
   // When FCM status update arrives:
@@ -803,7 +809,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   useEffect(() => {
     if (!showTrackingWebView || !isInPipMode) return;
 
-    const displayOrder = trackingContextOrder || trackingOrderData;
+    const displayOrder = trackingDisplayOrder;
     const rawStatus = (displayOrder?.status || '').toString().toLowerCase().trim();
     const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
 
@@ -840,8 +846,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   }, [
     showTrackingWebView,
     isInPipMode,
-    trackingContextOrder?.status,
-    trackingOrderData?.status,
+    trackingDisplayOrder?.status,
     closeTrackingOverlay,
   ]);
 
@@ -893,7 +898,6 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     // Clean phone numbers (remove spaces, dashes, etc.)
     const userPhone = currentUser.phoneNumber.replace(/\D/g, '');
     const agentPhoneClean = agentPhone.replace(/\D/g, '');
-    console.log('displayOrder userPhone', userPhone, 'displayOrder agentPhoneClean', agentPhoneClean);
     if (!userPhone || !agentPhoneClean) {
       showConfirmation({
         title: 'Error',
@@ -1340,11 +1344,6 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                           {orderData.tracking[0].agent_name}
                         </Text>
                         <Text style={styles.driverLabel}>Your delivery driver</Text>
-                        {orderData.tracking[0].agent_phone && (
-                          <Text style={styles.driverPhone}>
-                            {orderData.tracking[0].agent_phone}
-                          </Text>
-                        )}
                       </View>
                     </View>
 
@@ -1897,7 +1896,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
           {/* PiP navigation widget — always shown in PiP; background reflects current status color */}
           {isInPipMode && trackingOrderData && (() => {
-            const pipDisplayOrder = trackingContextOrder || trackingOrderData;
+            const pipDisplayOrder = trackingDisplayOrder || trackingOrderData;
             const pipStatusConfig = mapOrderStatusToUI(pipDisplayOrder?.status);
             return (
               <View key={`pip-status-${pipSyncKey}`} style={styles.navigationWidget} pointerEvents="box-none">
@@ -1949,8 +1948,8 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
             {/* Top Section: Always visible (restaurant info, status, address3) - draggable when closed */}
             {trackingOrderData && !isLoadingTrackingData && (() => {
-              const orderForFullDetails = trackingOrderData || trackingContextOrder;
-              const displayOrder = trackingContextOrder || trackingOrderData;
+              const orderForFullDetails = trackingDisplayOrder || trackingOrderData || trackingContextOrder;
+              const displayOrder = trackingDisplayOrder || trackingOrderData || trackingContextOrder;
               const displayStatus = displayOrder?.status;
               const statusConfigRaw = mapOrderStatusToUI(displayStatus);
               const statusConfig =
@@ -2023,24 +2022,16 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 nestedScrollEnabled={true}
               >
                 {(() => {
-                  const orderForFullDetails = trackingOrderData || trackingContextOrder;
-                  const displayOrder = trackingContextOrder || trackingOrderData;
+                  const orderForFullDetails = trackingDisplayOrder || trackingOrderData || trackingContextOrder;
+                  const displayOrder = trackingDisplayOrder || trackingOrderData || trackingContextOrder;
                   const displayStatus = displayOrder?.status;
                   const trackingArray = orderForFullDetails?.tracking ?? [];
                   let agentName: string | null = null;
-                  let agentPhone: string | null = null;
                   for (let i = trackingArray.length - 1; i >= 0; i--) {
                     const trackingEntry = trackingArray[i];
-                    if (trackingEntry) {
-                      if (trackingEntry.agent_name) {
-                        agentName = trackingEntry.agent_name;
-                        agentPhone = trackingEntry.agent_phone || null;
-                        break;
-                      }
-                      if (trackingEntry.agent_phone && !agentName) {
-                        agentName = null;
-                        agentPhone = trackingEntry.agent_phone;
-                      }
+                    if (trackingEntry?.agent_name) {
+                      agentName = trackingEntry.agent_name;
+                      break;
                     }
                   }
                   const sortedApiTracking = [...trackingArray].sort((a: any, b: any) =>
@@ -2122,10 +2113,36 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                             </View>
                           )}
                         </View>
-                        {agentPhone && (
+                        {(orderForFullDetails?.order_number && (isAgentAssignedish || agentDisplayName)) ? (
                           <TouchableOpacity
                             style={styles.trackingCallButtonInScroll}
-                            onPress={() => handleCallDeliveryAgent((orderForFullDetails || displayOrder)?.order_number, agentPhone)}
+                            onPress={() => {
+                              const orderNum = (orderForFullDetails || displayOrder)?.order_number;
+                              const phone = resolveAgentPhoneForExotel(orderForFullDetails);
+                              if (!orderNum) {
+                                showConfirmation({
+                                  title: 'Error',
+                                  message: 'Order number is missing. Cannot initiate call.',
+                                  confirmText: 'OK',
+                                  cancelText: '',
+                                  confirmButtonColor: '#00B14F',
+                                  onConfirm: () => {},
+                                });
+                                return;
+                              }
+                              if (!phone) {
+                                showConfirmation({
+                                  title: 'Call unavailable',
+                                  message: 'The delivery partner line is not available yet. Please try again in a moment.',
+                                  confirmText: 'OK',
+                                  cancelText: '',
+                                  confirmButtonColor: '#00B14F',
+                                  onConfirm: () => {},
+                                });
+                                return;
+                              }
+                              handleCallDeliveryAgent(String(orderNum), phone);
+                            }}
                             disabled={isInitiatingCall}
                             activeOpacity={0.7}
                           >
@@ -2135,7 +2152,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                               <MaterialIcons name="phone" size={18} color="#00B14F" />
                             )}
                           </TouchableOpacity>
-                        )}
+                        ) : null}
                       </View>
                       {isDelivered ? (
                         <View style={styles.trackingCompletedContainer}>
