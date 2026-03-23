@@ -90,6 +90,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     address: string;
     latitude?: number;
     longitude?: number;
+    type?: 'home' | 'work' | 'other';
   } | undefined>(undefined);
   const [selectedCategory, setSelectedCategory] = React.useState('Briyani');
   const [categoryData, setCategoryData] = React.useState<any[]>([]);
@@ -252,11 +253,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       const parsed = JSON.parse(savedLocationStr);
       if (!parsed || typeof parsed !== 'object') return null;
       if (!parsed.name || !parsed.address) return null;
+      const savedType = parsed.type as string | undefined;
+      const validType = savedType && ['home', 'work', 'other'].includes(savedType) ? savedType as 'home' | 'work' | 'other' : undefined;
       return {
         name: String(parsed.name),
         address: String(parsed.address),
         latitude: typeof parsed.latitude === 'number' ? parsed.latitude : undefined,
         longitude: typeof parsed.longitude === 'number' ? parsed.longitude : undefined,
+        type: validType,
       };
     } catch {
       return null;
@@ -268,6 +272,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     address: string;
     latitude?: number;
     longitude?: number;
+    type?: 'home' | 'work' | 'other';
   }) => {
     try {
       await AsyncStorage.setItem(GUEST_SELECTED_LOCATION_KEY, JSON.stringify(location));
@@ -719,7 +724,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
         // Set callback for guest login retry on 401 (guest mode + identity_token)
         apiService.setGuestLoginRetryCallback(async () => {
-          const result = await authService.guestLogin();
+          const result = await authService.guestLogin({ forceRefresh: true });
           return result.success === true;
         });
 
@@ -1309,10 +1314,18 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     }
   };
 
-  const handleNavigateToProfile = () => {
-    // Guests: redirect to login page
-    if (!isAuthenticatedRef.current) {
+  const transitionGuestToLogin = React.useCallback(() => {
+    setTimeout(() => {
       setCurrentScreen('login');
+      setAddressSelectionCameFrom('home');
+      addressScreenSlide.setValue(SCREEN_WIDTH);
+    }, 250);
+  }, []);
+
+  const handleNavigateToProfile = () => {
+    // Guests: redirect to login page with smooth transition
+    if (!isAuthenticatedRef.current) {
+      transitionGuestToLogin();
       return;
     }
 
@@ -1376,8 +1389,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const handleBackFromAddressSelection = () => {
-    // For guests without a confirmed location, keep them on address selection
+    // Guest without location: go back to login with smooth transition
     if (!isAuthenticatedRef.current && !selectedLocation) {
+      transitionGuestToLogin();
       return;
     }
     if (addressSelectionCameFrom === 'myAddresses') {
@@ -1529,6 +1543,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const handleLocationConfirm = (location: any) => {
+    const locationType = location.type as 'home' | 'work' | 'other' | undefined;
+    const validType = locationType && ['home', 'work', 'other'].includes(locationType) ? locationType : 'other';
     const confirmedLocation = {
       name: location.name || location.locationName,
       address: location.locationAddress || location.address,
@@ -1536,6 +1552,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       // Only use coordinates that were explicitly selected/confirmed.
       latitude: location.latitude ?? location.lat,
       longitude: location.longitude ?? location.lng,
+      type: validType,
     };
 
     // Update selected location
@@ -2774,11 +2791,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           <NetworkStatusScreen selectedLocation={selectedLocation} />
         ) : !isCheckingAuth && (currentScreen === 'login' || (['termsConditions', 'privacyPolicy'].includes(currentScreen) && legalCameFrom === 'login')) ? (
           <LoginScreen
-            initialPhoneNumber={phoneNumber}
-            onLoginSuccess={handleLoginSuccess}
-            onBack={handleBackFromLogin}
-            onOpenTerms={() => handleNavigateToTermsConditions('login')}
-            onOpenPrivacy={() => handleNavigateToPrivacyPolicy('login')}
+              initialPhoneNumber={phoneNumber}
+              onLoginSuccess={handleLoginSuccess}
+              onBack={handleBackFromLogin}
+              onOpenTerms={() => handleNavigateToTermsConditions('login')}
+              onOpenPrivacy={() => handleNavigateToPrivacyPolicy('login')}
           />
         ) : !isCheckingAuth && (currentScreen === 'otp' || (['termsConditions', 'privacyPolicy'].includes(currentScreen) && legalCameFrom === 'otp')) ? (
           <OTPVerificationScreen
@@ -2816,7 +2833,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               addressRefreshTrigger={addressRefreshTrigger}
               onForcedUpdateRequired={handleForcedUpdateRequired}
               isGuest={!isAuthenticatedRef.current}
-              onNavigateToLogin={() => setCurrentScreen('login')}
+              onNavigateToLogin={transitionGuestToLogin}
               />
             </Animated.View>
 
@@ -2869,6 +2886,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                   address: `${address.address}, ${address.city}`,
                   latitude: address.latitude,
                   longitude: address.longitude,
+                  type: address.type,
                 };
                 setSelectedLocation(location);
                 // Persist guest selection to AsyncStorage for next app open
@@ -3176,7 +3194,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                   onNavigateToRestaurant={handleNavigateToRestaurantFromCategory}
                   selectedLocation={selectedLocation}
                   isGuest={!isAuthenticatedRef.current}
-                  onNavigateToLogin={() => setCurrentScreen('login')}
+                  onNavigateToLogin={transitionGuestToLogin}
                 />
               </View>
             )}
@@ -3199,7 +3217,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                 onNavigateToCheckout={handleNavigateToCheckout}
                 onNavigateToDetails={handleNavigateToRestaurantDetails}
                 isGuest={!isAuthenticatedRef.current}
-                onNavigateToLogin={() => setCurrentScreen('login')}
+                onNavigateToLogin={transitionGuestToLogin}
                 onNavigateToOrders={(orderId) => {
                   // Close restaurant screen and navigate to orders
                   Animated.timing(restaurantScreenSlide, {
@@ -3279,7 +3297,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                   longitude={selectedLocation?.longitude || 78.1198}
                   onBack={handleBackFromRestaurantDetails}
                   isGuest={!isAuthenticatedRef.current}
-                  onNavigateToLogin={() => setCurrentScreen('login')}
+                  onNavigateToLogin={transitionGuestToLogin}
                 />
               </View>
             )}

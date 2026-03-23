@@ -24,6 +24,8 @@ interface CancelReasonModalProps {
   onClose: () => void;
   onSuccess: () => void;
   onError?: (message: string) => void;
+  /** Remaining seconds for cancellation - shown on confirm button when > 0 */
+  cancelSecondsLeft?: number;
 }
 
 export const CancelReasonModal: React.FC<CancelReasonModalProps> = ({
@@ -32,6 +34,7 @@ export const CancelReasonModal: React.FC<CancelReasonModalProps> = ({
   onClose,
   onSuccess,
   onError,
+  cancelSecondsLeft = 0,
 }) => {
   const [cancelReasons, setCancelReasons] = useState<CancelReason[]>([]);
   const [selectedReason, setSelectedReason] = useState<CancelReason | null>(null);
@@ -66,6 +69,13 @@ export const CancelReasonModal: React.FC<CancelReasonModalProps> = ({
       setShowDropdown(false);
     }
   }, [visible]);
+
+  // Close modal when cancellation duration finishes (time ran out)
+  useEffect(() => {
+    if (visible && cancelSecondsLeft <= 0) {
+      onClose();
+    }
+  }, [visible, cancelSecondsLeft, onClose]);
 
   const isOtherReason =
     selectedReason?.code?.toLowerCase().includes('other') ||
@@ -230,17 +240,22 @@ export const CancelReasonModal: React.FC<CancelReasonModalProps> = ({
                   style={[
                     styles.button,
                     styles.buttonPrimary,
+                    styles.buttonPrimaryFixed,
                     (!canSubmit || submitting) && styles.buttonDisabled,
                   ]}
                   onPress={handleSubmit}
                   disabled={!canSubmit || submitting}
                   activeOpacity={0.8}
                 >
-                  {submitting ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.buttonTextPrimary}>Submit</Text>
-                  )}
+                  <View style={styles.buttonContent}>
+                    {submitting ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.buttonTextPrimary}>
+                        Confirm{cancelSecondsLeft > 0 ? ` (${cancelSecondsLeft}s)` : ''}
+                      </Text>
+                    )}
+                  </View>
                 </TouchableOpacity>
               </View>
             </>
@@ -382,6 +397,14 @@ const styles = StyleSheet.create({
   },
   buttonPrimary: {
     backgroundColor: colors.primary,
+  },
+  buttonPrimaryFixed: {
+    minWidth: 140,
+  },
+  buttonContent: {
+    minWidth: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonSecondary: {
     backgroundColor: '#F5F5F5',
