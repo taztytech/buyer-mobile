@@ -2139,6 +2139,27 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           )}
         </View>
       )}
+
+      {/* Cancel Reason Modal - same flow as Help section */}
+      <CancelReasonModal
+        visible={showCancelReasonModal}
+        orderNumber={orderData?.order_number || ''}
+        cancelSecondsLeft={cancelSecondsLeft}
+        onClose={() => setShowCancelReasonModal(false)}
+        onSuccess={() => {
+          setShowCancelReasonModal(false);
+          fetchOrderDetails();
+        }}
+        onError={(message) => {
+          showConfirmation({
+            title: 'Error',
+            message,
+            confirmText: 'OK',
+            onConfirm: () => {},
+            onCancel: () => {},
+          });
+        }}
+      />
     </View>
   );
 };

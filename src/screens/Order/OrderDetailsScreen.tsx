@@ -351,29 +351,22 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   };
 
-  // Fetch addresses and cart summary from API
-  useEffect(() => {
-    fetchAddresses();
-    fetchCartSummary();
-  }, []);
-
-  // Refetch addresses when screen becomes visible (e.g., after account switch)
+  // Fetch addresses only when checkout is visible (avoids duplicate calls on mount + visible)
   useEffect(() => {
     if (visible) {
       fetchAddresses();
     }
   }, [visible]);
 
-  // Fetch cart summary when cart changes (debounced to avoid too many API calls)
+  // Fetch cart summary only when visible AND cart changes (debounced to avoid too many API calls)
   useEffect(() => {
-    // Use a timeout to debounce the API call
+    if (!visible) return;
     const timeoutId = setTimeout(() => {
       fetchCartSummary();
-    }, 300); // Wait 300ms after cart changes before fetching
-
+    }, 150); // Shorter debounce for faster cart load
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [Object.keys(cart).length, localCartItems.length]); // Use cart length instead of JSON.stringify
+  }, [visible, Object.keys(cart).length, localCartItems.length]);
 
   // Automatically remove promo code if total amount goes below ₹100
   useEffect(() => {
@@ -752,6 +745,26 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       return;
     }
 
+    // COD: Show confirmation before placing order
+    if (selectedPaymentMethod === 'cod') {
+      showConfirmation({
+        title: 'Confirm Cash on Delivery',
+        message: 'You will pay in cash when your order is delivered. Do you want to place this order?',
+        confirmText: 'Confirm',
+        cancelText: 'Cancel',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {
+          proceedWithPlaceOrder();
+        },
+      });
+      return;
+    }
+
+    proceedWithPlaceOrder();
+  };
+
+  const proceedWithPlaceOrder = async () => {
+    if (!selectedAddressId) return;
     // Final guard: ensure restaurant is open before creating order & starting payment
     setIsPlacingOrder(true);
 

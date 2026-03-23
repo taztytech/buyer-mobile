@@ -82,9 +82,11 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         setGuestAddress(null);
         return;
       }
+      const savedType = parsed.type as string | undefined;
+      const validType = savedType && ['home', 'work', 'other'].includes(savedType) ? savedType as 'home' | 'work' | 'other' : 'other';
       setGuestAddress({
         id: 'guest',
-        type: 'other',
+        type: validType,
         address: parsed.address,
         city: parsed.name || '',
         latitude: typeof parsed.latitude === 'number' ? parsed.latitude : 0,
