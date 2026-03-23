@@ -205,6 +205,95 @@ class AuthService {
   }
 
   /**
+   * Guest login - issue restricted guest JWT for discovery APIs
+   * Call when entering guest stage (no OTP required)
+   * Saves tokens so API calls work; does NOT set user/IS_LOGGED_IN
+   * If identity_token exists in storage, passes it with the request for session linking
+   * Skips API call when identity_token and valid access_token already exist (don't call every time in guest mode)
+   * When forceRefresh is true (e.g. 401 retry), always calls the API to get fresh tokens
+   */
+  async guestLogin(options?: { forceRefresh?: boolean }): Promise<ApiResponse<{ access_token: string; refresh_token?: string; expires_in?: number; identity_token?: string }>> {
+    try {
+      const identityToken = await storageService.getIdentityToken();
+
+      // If we already have identity_token and valid access token, skip API call (unless 401 retry)
+      if (!options?.forceRefresh && identityToken) {
+        const accessToken = await storageService.getAccessToken();
+        const isExpired = await storageService.isTokenExpired();
+        if (accessToken && !isExpired) {
+          console.log('[AuthService] guestLogin skipped - identity_token and valid tokens already present');
+          // Tokens are in storage; apiService will load them on first request
+          return {
+            success: true,
+            data: { access_token: accessToken },
+          };
+        }
+      }
+
+      console.log('[AuthService] guestLogin called', identityToken ? '(with stored identity_token)' : '(first call)');
+
+      const deviceId = await storageService.getOrCreateDeviceId();
+      const payload: Record<string, string> = {
+        platform: Platform.OS,
+        device_id: deviceId,
+        app_version: APP_VERSION_NAME,
+      };
+      if (identityToken) {
+        payload.identity_token = identityToken;
+      }
+
+      console.log('[AuthService] guest_login API request:', {
+        platform: payload.platform,
+        device_id: deviceId,
+        app_version: payload.app_version,
+        has_identity_token: !!identityToken,
+      });
+
+      const response = await apiService.post<{
+        access_token: string;
+        refresh_token?: string;
+        expires_in?: number;
+        identity_token?: string;
+      }>(API_CONFIG.ENDPOINTS.AUTHENTICATION.GUEST_LOGIN, payload);
+
+      const respData = response.data as { access_token?: string; identity_token?: string } | undefined;
+      console.log('[AuthService] guest_login API response:', {
+        success: response.success,
+        has_access_token: !!respData?.access_token,
+        has_identity_token: !!respData?.identity_token,
+        error: response.success ? null : (response as { error?: string }).error ?? null,
+      });
+
+      if (response.success && response.data?.access_token) {
+        const { access_token, refresh_token, expires_in, identity_token } = response.data;
+        if (identity_token) {
+          console.log('[AuthService] guest_login: saving identity_token to storage, length:', identity_token.length);
+          await storageService.saveIdentityToken(identity_token);
+        }
+        await storageService.saveTokens({
+          accessToken: access_token,
+          refreshToken: refresh_token || access_token,
+          expiresIn: expires_in ?? 3600,
+        });
+        await apiService.setTokens(
+          access_token,
+          refresh_token || access_token,
+          expires_in ?? 3600
+        );
+      }
+
+      return response;
+    } catch (error: any) {
+      console.log('[AuthService] guest_login API error:', error?.message ?? error);
+      return {
+        success: false,
+        error: error.message || 'Failed to get guest token',
+        message: error.message,
+      };
+    }
+  }
+
+  /**
    * Logout user
    * Clears all user data including tokens, FCM tokens, device ID, and background notifications
    */
@@ -342,9 +431,19 @@ class AuthService {
 
   /**
    * Get user profile
+   * Skips API call for guest mode - profile requires a registered user (would return 403)
    */
   async getProfile(): Promise<ApiResponse<any>> {
     try {
+      const isLoggedIn = await storageService.isLoggedIn();
+      if (!isLoggedIn) {
+        return {
+          success: false,
+          error: 'Profile requires a registered user',
+          message: 'Profile requires a registered user',
+        };
+      }
+
       const response = await apiService.get<any>(
         API_CONFIG.ENDPOINTS.USER.PROFILE
       );

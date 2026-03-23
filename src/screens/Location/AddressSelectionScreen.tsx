@@ -63,6 +63,35 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
   const [updatingAddressId, setUpdatingAddressId] = useState<string | null>(null);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
 
+  // Load persisted guest location from AsyncStorage (for guest mode)
+  const loadGuestAddress = React.useCallback(async () => {
+    try {
+      const saved = await AsyncStorage.getItem(GUEST_SELECTED_LOCATION_KEY);
+      if (!saved) {
+        setGuestAddress(null);
+        return;
+      }
+      const parsed = JSON.parse(saved);
+      if (!parsed?.name || !parsed?.address) {
+        setGuestAddress(null);
+        return;
+      }
+      const savedType = parsed.type as string | undefined;
+      const validType = savedType && ['home', 'work', 'other'].includes(savedType) ? savedType as 'home' | 'work' | 'other' : 'other';
+      setGuestAddress({
+        id: 'guest',
+        type: validType,
+        address: parsed.address,
+        city: parsed.name || '',
+        latitude: typeof parsed.latitude === 'number' ? parsed.latitude : 0,
+        longitude: typeof parsed.longitude === 'number' ? parsed.longitude : 0,
+        isDefault: true,
+      });
+    } catch {
+      setGuestAddress(null);
+    }
+  }, []);
+
   // Fetch addresses on initial mount
   useEffect(() => {
     getCurrentLocationName();

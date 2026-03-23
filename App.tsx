@@ -88,6 +88,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     address: string;
     latitude?: number;
     longitude?: number;
+    type?: 'home' | 'work' | 'other';
   } | undefined>(undefined);
   const [selectedCategory, setSelectedCategory] = React.useState('Briyani');
   const [categoryData, setCategoryData] = React.useState<any[]>([]);
@@ -242,6 +243,41 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
     return persistedUserType;
   }, [extractOrdersArray, normalizeOrderStatus]);
+
+  const loadPersistedGuestLocation = React.useCallback(async () => {
+    try {
+      const savedLocationStr = await AsyncStorage.getItem(GUEST_SELECTED_LOCATION_KEY);
+      if (!savedLocationStr) return null;
+      const parsed = JSON.parse(savedLocationStr);
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (!parsed.name || !parsed.address) return null;
+      const savedType = parsed.type as string | undefined;
+      const validType = savedType && ['home', 'work', 'other'].includes(savedType) ? savedType as 'home' | 'work' | 'other' : undefined;
+      return {
+        name: String(parsed.name),
+        address: String(parsed.address),
+        latitude: typeof parsed.latitude === 'number' ? parsed.latitude : undefined,
+        longitude: typeof parsed.longitude === 'number' ? parsed.longitude : undefined,
+        type: validType,
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const saveGuestLocation = React.useCallback(async (location: {
+    name: string;
+    address: string;
+    latitude?: number;
+    longitude?: number;
+    type?: 'home' | 'work' | 'other';
+  }) => {
+    try {
+      await AsyncStorage.setItem(GUEST_SELECTED_LOCATION_KEY, JSON.stringify(location));
+    } catch {
+      // Non-critical: guest location persistence failure should not block UX.
+    }
+  }, []);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -643,9 +679,32 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             setPhoneNumber('');
           } catch (error) {
             console.error('[App] Error handling user deletion:', error);
-            // Still navigate to login even if cleanup fails
-            setCurrentScreen('login');
+            // Fallback to guest location setup if user is not authenticated
+            if (isAuthenticatedRef.current) {
+              setCurrentScreen('login');
+            } else {
+              await authService.guestLogin().catch(() => {});
+              setAddressSelectionCameFrom('home');
+              setLocationSelectionCameFrom('home');
+              setSearchQuery('');
+              setInitialLocationCoords(null);
+              const persisted = await loadPersistedGuestLocation();
+              if (persisted) {
+                setSelectedLocation(persisted);
+                setCurrentScreen('home');
+                homeScreenSlide.setValue(0);
+              } else {
+                setCurrentScreen('addressSelection');
+                addressScreenSlide.setValue(0);
+              }
+            }
           }
+        });
+
+        // Set callback for guest login retry on 401 (guest mode + identity_token)
+        apiService.setGuestLoginRetryCallback(async () => {
+          const result = await authService.guestLogin({ forceRefresh: true });
+          return result.success === true;
         });
 
         // Set callback for session expiration
@@ -1090,7 +1149,76 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setCurrentScreen('login');
   };
 
+  const handleBackFromLogin = async () => {
+    // Skip: start guest procedure (guest login, analytics) then navigate
+    await authService.guestLogin().catch((err) => {
+      console.warn('[App] Guest login failed on Skip:', err?.message);
+    });
+    await crashlyticsService.setUserId(null);
+    await crashlyticsService.setGlobalContext({
+      app_version: APP_VERSION_NAME,
+      login_state: 'guest',
+    });
+    await analyticsService.setUserProperties({
+      [AnalyticsUserProperties.LOGIN_STATE]: 'guest',
+      [AnalyticsUserProperties.USER_ID]: null,
+      [AnalyticsUserProperties.USER_TYPE]: 'guest',
+    });
+
+    // Reset all overlays so home (hotel list) is visible
+    homeScreenSlide.setValue(0);
+    profileScreenSlide.setValue(SCREEN_WIDTH);
+    searchScreenSlide.setValue(SCREEN_WIDTH);
+    addressScreenSlide.setValue(SCREEN_WIDTH);
+    locationScreenSlide.setValue(SCREEN_WIDTH);
+    ordersScreenSlide.setValue(SCREEN_WIDTH);
+    orderDetailScreenSlide.setValue(SCREEN_WIDTH);
+    restaurantScreenSlide.setValue(SCREEN_WIDTH);
+    checkoutScreenSlide.setValue(SCREEN_WIDTH);
+    helpScreenSlide.setValue(SCREEN_WIDTH);
+    contactUsScreenSlide.setValue(SCREEN_WIDTH);
+    faqScreenSlide.setValue(SCREEN_WIDTH);
+    privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
+    termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
+
+    // Go to hotel list if we have location, else address selection
+    const persistedGuestLocation = await loadPersistedGuestLocation();
+    if (persistedGuestLocation) {
+      setSelectedLocation(persistedGuestLocation);
+      setCurrentScreen('home');
+    } else {
+      setSelectedLocation(undefined);
+      setCurrentScreen('addressSelection');
+      Animated.parallel([
+        Animated.timing(homeScreenSlide, {
+          toValue: -SCREEN_WIDTH,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(addressScreenSlide, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  };
+
+  const transitionGuestToLogin = React.useCallback(() => {
+    setTimeout(() => {
+      setCurrentScreen('login');
+      setAddressSelectionCameFrom('home');
+      addressScreenSlide.setValue(SCREEN_WIDTH);
+    }, 250);
+  }, []);
+
   const handleNavigateToProfile = () => {
+    // Guests: redirect to login page with smooth transition
+    if (!isAuthenticatedRef.current) {
+      transitionGuestToLogin();
+      return;
+    }
+
     // Reset persisted orders and scroll position when navigating to profile
     // This ensures a fresh state when user returns to orders screen
     resetOrdersPersistence();
@@ -1154,6 +1282,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const handleBackFromAddressSelection = () => {
+    // Guest without location: go back to login with smooth transition
+    if (!isAuthenticatedRef.current && !selectedLocation) {
+      transitionGuestToLogin();
+      return;
+    }
     if (addressSelectionCameFrom === 'myAddresses') {
       setCurrentScreen('myAddresses');
       setAddressSelectionCameFrom('home');
@@ -1298,15 +1431,23 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const handleLocationConfirm = (location: any) => {
-    // Update selected location
-    setSelectedLocation({
+    const locationType = location.type as 'home' | 'work' | 'other' | undefined;
+    const validType = locationType && ['home', 'work', 'other'].includes(locationType) ? locationType : 'other';
+    const confirmedLocation = {
       name: location.name || location.locationName,
       address: location.locationAddress || location.address,
       // Do NOT silently fall back to hardcoded Madurai coordinates.
       // Only use coordinates that were explicitly selected/confirmed.
       latitude: location.latitude ?? location.lat,
       longitude: location.longitude ?? location.lng,
-    });
+      type: validType,
+    };
+
+    // Update selected location
+    setSelectedLocation(confirmedLocation);
+    if (!isAuthenticatedRef.current) {
+      saveGuestLocation(confirmedLocation);
+    }
     const resolvedCity = String(location.city || '').toLowerCase();
     const resolvedPincode = String(location.pincode || '');
     const resolvedAreaName = String(location.name || location.locationName || '').toLowerCase();
@@ -2538,10 +2679,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           <NetworkStatusScreen selectedLocation={selectedLocation} />
         ) : !isCheckingAuth && (currentScreen === 'login' || (['termsConditions', 'privacyPolicy'].includes(currentScreen) && legalCameFrom === 'login')) ? (
           <LoginScreen
-            initialPhoneNumber={phoneNumber}
-            onLoginSuccess={handleLoginSuccess}
-            onOpenTerms={() => handleNavigateToTermsConditions('login')}
-            onOpenPrivacy={() => handleNavigateToPrivacyPolicy('login')}
+              initialPhoneNumber={phoneNumber}
+              onLoginSuccess={handleLoginSuccess}
+              onBack={handleBackFromLogin}
+              onOpenTerms={() => handleNavigateToTermsConditions('login')}
+              onOpenPrivacy={() => handleNavigateToPrivacyPolicy('login')}
           />
         ) : !isCheckingAuth && (currentScreen === 'otp' || (['termsConditions', 'privacyPolicy'].includes(currentScreen) && legalCameFrom === 'otp')) ? (
           <OTPVerificationScreen
@@ -2578,6 +2720,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               isFocused={currentScreen === 'home'}
               addressRefreshTrigger={addressRefreshTrigger}
               onForcedUpdateRequired={handleForcedUpdateRequired}
+              isGuest={!isAuthenticatedRef.current}
+              onNavigateToLogin={transitionGuestToLogin}
               />
             </Animated.View>
 
@@ -2631,8 +2775,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                   // If an address has no coordinates yet, keep them undefined until user sets them.
                   latitude: address.latitude,
                   longitude: address.longitude,
-                });
-                // Trigger homepage refresh when address changes
+                  type: address.type,
+                };
+                setSelectedLocation(location);
+                // Persist guest selection to AsyncStorage for next app open
+                if (!isAuthenticatedRef.current) {
+                  saveGuestLocation(location).catch(() => {});
+                }
                 handleAddressChange();
                 handleBackFromAddressSelection();
               }}
@@ -2932,6 +3081,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                   onBack={handleBackFromCategoryResults}
                   onNavigateToRestaurant={handleNavigateToRestaurantFromCategory}
                   selectedLocation={selectedLocation}
+                  isGuest={!isAuthenticatedRef.current}
+                  onNavigateToLogin={transitionGuestToLogin}
                 />
               </View>
             )}
@@ -2953,6 +3104,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                 onBack={handleBackFromRestaurant}
                 onNavigateToCheckout={handleNavigateToCheckout}
                 onNavigateToDetails={handleNavigateToRestaurantDetails}
+                isGuest={!isAuthenticatedRef.current}
+                onNavigateToLogin={transitionGuestToLogin}
                 onNavigateToOrders={(orderId) => {
                   // Close restaurant screen and navigate to orders
                   Animated.timing(restaurantScreenSlide, {
@@ -3031,6 +3184,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                   latitude={selectedLocation?.latitude || 9.9252}
                   longitude={selectedLocation?.longitude || 78.1198}
                   onBack={handleBackFromRestaurantDetails}
+                  isGuest={!isAuthenticatedRef.current}
+                  onNavigateToLogin={transitionGuestToLogin}
                 />
               </View>
             )}
