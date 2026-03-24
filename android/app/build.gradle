@@ -219,15 +219,6 @@ tasks.register("installDebug") {
 // Apply Google Services plugin at the end
 apply plugin: 'com.google.gms.google-services'
 
-// New Architecture can generate clean-time failures when autolinking references
-// codegen JNI folders that were already deleted. We skip only native clean tasks;
-// regular clean still runs, and native outputs are removed by android:clean script.
-tasks.configureEach { task ->
-    if (task.name.startsWith("externalNativeBuildClean")) {
-        task.enabled = true
-    }
-}
-
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
@@ -260,5 +251,24 @@ dependencies {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
+    }
+}
+
+// New Architecture: every `externalNativeBuildClean*` (Debug, Release, DevRelease, etc.) runs
+// ninja/cmake regenerate and fails when codegen JNI dirs are missing. Disable them all.
+// Do NOT use `enabled = true` here — that keeps native clean running and breaks `./gradlew clean`.
+tasks.configureEach { task ->
+    if (task.name.startsWith("externalNativeBuildClean")) {
+        task.enabled = false
+    } else if (task.name == "clean") {
+        task.doFirst {
+            delete file("${projectDir}/.cxx")
+        }
+    }
+}
+
+gradle.projectsEvaluated {
+    tasks.matching { it.name.startsWith("externalNativeBuildClean") }.configureEach {
+        it.enabled = false
     }
 }

@@ -23,12 +23,23 @@ import { ordersService } from '@/services/orders.service';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 
 interface OrderItem {
-  id?: number;
-  item_id?: number;
+  id?: number | string;
+  item_id?: number | string;
+  product_id?: number | string;
   name?: string;
   item_name?: string;
   image?: string;
   quantity: number;
+}
+
+/** Stable key for per-item ratings; must match modal list and submit payload. */
+function getOrderItemRatingKey(item: OrderItem, index: number): string {
+  const raw = item.product_id ?? item.item_id ?? item.id ?? index;
+  return String(raw);
+}
+
+function productIdForReview(item: OrderItem, index: number): string {
+  return String(item.product_id ?? item.item_id ?? item.id ?? index);
 }
 
 interface RateOrderScreenProps {
@@ -55,8 +66,8 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [photos, setPhotos] = useState<Array<{ url: string; type: string }>>([]);
 
-  // Dynamic food item ratings - Map of item_id to { rating, comment }
-  const [itemRatings, setItemRatings] = useState<Record<number, { rating: number; comment: string }>>({});
+  // Per-line food ratings; keys from getOrderItemRatingKey(item, index)
+  const [itemRatings, setItemRatings] = useState<Record<string, { rating: number; comment: string }>>({});
 
   // Animation values
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -140,43 +151,25 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
     }
 
     try {
-      console.log('orderItems', orderItems);
-      console.log('foodRating:', foodRating);
-      console.log('itemRatings:', itemRatings);
-
-      // Prepare food ratings array with comments only if they exist
-      const food_ratings = orderItems.map((item) => {
-        const itemId = item.item_id || 0;
-        const itemRating = itemRatings[itemId];
-
-        // For single item: use foodRating if itemRatings is empty
-        // For multiple items: use itemRatings[itemId]?.rating, fallback to foodRating
+      const food_quality = orderItems.map((item, index) => {
+        const key = getOrderItemRatingKey(item, index);
+        const itemRating = itemRatings[key];
         let rating = itemRating?.rating || 0;
         if (rating === 0 && foodRating > 0) {
-          // If no item-specific rating but foodRating is set, use foodRating
           rating = foodRating;
         }
-
-        const foodItem: any = {
-          item_id: itemId,
-          rating: rating,
+        return {
+          product_id: productIdForReview(item, index),
+          rating,
         };
-
-        // Only include comment if it exists and is not empty
-        if (itemRating?.comment && itemRating.comment.trim()) {
-          foodItem.comment = itemRating.comment.trim();
-        }
-
-        return foodItem;
       });
 
-      // Prepare review data matching API structure
       const reviewData: any = {
         order_id: orderId,
         overall_rating: overallRating,
         restaurant_rating: restaurantRating,
         delivery_partner_rating: deliveryPartnerRating,
-        food_ratings,
+        food_quality,
       };
 
       // Only include restaurant_comment if it exists and is not empty
@@ -184,13 +177,14 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
         reviewData.restaurant_comment = restaurantComment.trim();
       }
 
+      if (foodComment && foodComment.trim()) {
+        reviewData.comments = foodComment.trim();
+      }
+
       // Only include photos if they exist
       if (photos.length > 0) {
         reviewData.photos = photos;
       }
-
-      // Log the payload for debugging
-      console.log('📦 Rate Order Payload:', JSON.stringify(reviewData, null, 2));
 
       // Submit review to API
       const response = await ordersService.submitReview(reviewData);
@@ -232,21 +226,21 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
     }
   };
 
-  const handleItemRatingChange = (itemId: number, rating: number) => {
+  const handleItemRatingChange = (itemKey: string, rating: number) => {
     setItemRatings(prev => ({
       ...prev,
-      [itemId]: {
+      [itemKey]: {
         rating,
-        comment: prev[itemId]?.comment || '',
+        comment: prev[itemKey]?.comment || '',
       },
     }));
   };
 
-  const handleItemCommentChange = (itemId: number, comment: string) => {
+  const handleItemCommentChange = (itemKey: string, comment: string) => {
     setItemRatings(prev => ({
       ...prev,
-      [itemId]: {
-        rating: prev[itemId]?.rating || 0,
+      [itemKey]: {
+        rating: prev[itemKey]?.rating || 0,
         comment,
       },
     }));
@@ -394,8 +388,8 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
     if (!orderItems || orderItems.length === 0) return 0;
     const ratings = orderItems
       .map((item: OrderItem, index: number) => {
-        const itemId = item.id || item.item_id || index;
-        return itemRatings[itemId]?.rating || 0;
+        const key = getOrderItemRatingKey(item, index);
+        return itemRatings[key]?.rating || 0;
       })
       .filter((rating: number) => rating > 0);
     if (ratings.length === 0) return 0;
@@ -531,13 +525,13 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
                 showsVerticalScrollIndicator={false}
               >
                 {orderItems.map((item, index) => {
-                  const itemId = item.id || item.item_id || index;
+                  const itemKey = getOrderItemRatingKey(item, index);
                   const itemName = item.name || item.item_name || 'Unknown Item';
-                  const itemRating = itemRatings[itemId]?.rating || 0;
+                  const itemRating = itemRatings[itemKey]?.rating || 0;
                   const isLastItem = index === orderItems.length - 1;
 
                   return (
-                    <View key={itemId}>
+                    <View key={itemKey}>
                       <View style={styles.foodItemCard}>
                         <View style={styles.foodItemInfo}>
                           <Text style={styles.foodItemName} numberOfLines={2}>
@@ -550,7 +544,7 @@ export const RateOrderScreen: React.FC<RateOrderScreenProps> = ({
                         <View style={styles.foodItemRatingContainer}>
                           {renderModalStars(
                             itemRating,
-                            (rating) => handleItemRatingChange(itemId, rating)
+                            (rating) => handleItemRatingChange(itemKey, rating)
                           )}
                           {itemRating > 0 && (
                             <Text style={styles.ratingText}>{itemRating}/5</Text>
