@@ -2217,7 +2217,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: '#000000',
+            backgroundColor: '#FFFFFF',
             zIndex: 1000,
             elevation: 10,
           }}
@@ -2250,7 +2250,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             </SafeAreaView>
           )}
 
-          <View style={{ flex: 1, backgroundColor: '#000000' }}>
+          <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
             {fallbackMapCoords ? (
               <OrderRouteMapView
                 restaurantCoordinate={fallbackMapCoords.restaurantCoordinate}
@@ -2288,7 +2288,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             ) : (
               <View style={isInPipMode ? styles.webViewLoadingContainerPip : styles.webViewLoadingContainer}>
                 <ActivityIndicator size="large" color="#00B14F" />
-                <Text style={{ marginTop: 16, color: isInPipMode ? '#FFFFFF' : '#666', fontFamily: 'Poppins_400Regular' }}>
+                <Text style={{ marginTop: 16, color: '#666', fontFamily: 'Poppins_400Regular' }}>
                   Loading tracking map...
                 </Text>
               </View>
@@ -3056,7 +3056,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
+    backgroundColor: '#FFFFFF',
   },
   navigationWidget: {
     position: 'absolute',
