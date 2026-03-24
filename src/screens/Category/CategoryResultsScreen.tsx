@@ -34,9 +34,11 @@ interface CategoryResultsScreenProps {
   onNavigateToRestaurant?: (
     restaurantId: number,
     restaurantName: string,
-    meta?: { distanceKm?: number; isOpen?: boolean }
+    meta?: { distanceKm?: number; isOpen?: boolean; itemCount?: number }
   ) => void;
   selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
+  isGuest?: boolean;
+  onNavigateToLogin?: () => void;
 }
 
 // TopRatedItem interface commented out as Top Rated section is commented
@@ -133,6 +135,8 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
   onBack,
   onNavigateToRestaurant,
   selectedLocation,
+  isGuest = false,
+  onNavigateToLogin,
 }) => {
   const { vegMode } = useVegMode();
   const [searchQuery, setSearchQuery] = useState('');
@@ -164,6 +168,13 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
 
   // Fetch default address coordinates
   useEffect(() => {
+    // Guests: skip getAddresses (API requires registered user)
+    if (isGuest) {
+      setDefaultAddressCoords(null);
+      setHasFetchedDefaultAddress(true);
+      return;
+    }
+
     const fetchDefaultAddress = async () => {
       try {
         const response = await addressService.getAddresses();
@@ -192,7 +203,7 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
     };
 
     fetchDefaultAddress();
-  }, []);
+  }, [isGuest]);
 
   const fetchRestaurants = async () => {
     try {
@@ -737,12 +748,22 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
                           if (onNavigateToRestaurant) {
                             const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
                             const parsedDistance = parseFloat(String(restaurant.distance || '').replace(/[^0-9.]/g, ''));
+                            const parsedItemCount = Number(
+                              (restaurant as any)?.item_count ??
+                              (restaurant as any)?.items_count ??
+                              (restaurant as any)?.total_items ??
+                              (restaurant as any)?.menu_item_count ??
+                              0
+                            );
                             onNavigateToRestaurant(restaurantId, restaurant.name, {
                               distanceKm: Number.isFinite(parsedDistance) ? parsedDistance : undefined,
                               isOpen: typeof restaurant.isOpen === 'boolean' ? restaurant.isOpen : undefined,
+                              itemCount: Number.isFinite(parsedItemCount) ? parsedItemCount : undefined,
                             });
                           }
                         }}
+                        isGuest={isGuest}
+                        onNavigateToLogin={onNavigateToLogin}
                       />
                     </View>
                   ))}

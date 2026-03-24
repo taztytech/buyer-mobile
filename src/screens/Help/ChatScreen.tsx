@@ -23,7 +23,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
 import { colors } from '@/theme/colors';
 import { useOrders } from '@/context/OrdersContext';
-import { ordersService, CancelReason } from '@/services/orders.service';
+import { ordersService } from '@/services/orders.service';
 import { exotelService } from '@/services/exotel.service';
 import { authService } from '@/services/auth.service';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
@@ -67,13 +67,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [selectedVideoUri, setSelectedVideoUri] = useState<string | null>(null);
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
-  const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
-  const [cancelReasons, setCancelReasons] = useState<CancelReason[]>([]);
-  const [selectedCancelReason, setSelectedCancelReason] = useState<CancelReason | null>(null);
-  const [showCancelReasonDropdown, setShowCancelReasonDropdown] = useState(false);
-  const [loadingCancelReasons, setLoadingCancelReasons] = useState(false);
   const [orderNumber, setOrderNumber] = useState<string>('');
-  const [manualCancelReason, setManualCancelReason] = useState<string>('');
   const [supportPhoneNumber, setSupportPhoneNumber] = useState<string>('');
   const [supportPhoneNumbers, setSupportPhoneNumbers] = useState<string[]>([]);
   const [currentSupportPhoneIndex, setCurrentSupportPhoneIndex] = useState<number>(0);
@@ -285,23 +279,28 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
 
       try {
         // Try to load existing chat history
-        const savedMessages = await chatHistoryService.getChatHistory(orderId);
+        const savedHistory = await chatHistoryService.getChatHistory(orderId);
         
-        if (savedMessages && savedMessages.length > 0) {
+        if (savedHistory && savedHistory.messages.length > 0) {
           // Restore saved messages
-          setMessages(savedMessages);
+          setMessages(savedHistory.messages);
           historyLoadedRef.current = true;
           
-          // Show options if there are messages (user has interacted before)
-          const statusLower = orderStatus?.toLowerCase() || '';
-          if (statusLower !== 'cancelled' && statusLower !== 'delivered') {
-            setTimeout(() => {
-              setShowOptions(true);
-            }, 300);
+          // Restore showSupportCallButton when it was persisted (e.g. after "I want to cancel my order")
+          if (savedHistory.showSupportCallButton === true) {
+            setTimeout(() => setShowSupportCallButton(true), 300);
+            const statusLower = orderStatus?.toLowerCase() || '';
+            if (statusLower !== 'cancelled' && statusLower !== 'delivered') {
+              setTimeout(() => setShowOptions(true), 300);
+            }
           } else {
-            setTimeout(() => {
-              setShowSupportCallButton(true);
-            }, 300);
+            // Fallback: show based on order status
+            const statusLower = orderStatus?.toLowerCase() || '';
+            if (statusLower !== 'cancelled' && statusLower !== 'delivered') {
+              setTimeout(() => setShowOptions(true), 300);
+            } else {
+              setTimeout(() => setShowSupportCallButton(true), 300);
+            }
           }
         } else {
           // No saved history - show initial greeting
@@ -385,8 +384,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     // Increased debounce time to 1 second for better performance
     const saveTimeout = setTimeout(async () => {
       try {
-        // Only save if messages actually changed (prevent unnecessary saves)
-        await chatHistoryService.saveChatHistory(orderId, messages);
+        // Save messages and showSupportCallButton so Call Support card persists after exit
+        await chatHistoryService.saveChatHistory(orderId, messages, showSupportCallButton);
       } catch (error) {
         console.error('[ChatScreen] Error saving chat history:', error);
         // Don't block UI if save fails
@@ -394,7 +393,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     }, 1000); // Save after 1 second of no changes (optimized for performance)
 
     return () => clearTimeout(saveTimeout);
-  }, [messages, orderId]);
+  }, [messages, orderId, showSupportCallButton]);
 
   // Monitor order status changes and clear history when delivered or cancelled
   useEffect(() => {
@@ -934,53 +933,10 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     }, 1500);
   };
 
-  // Fetch cancel reasons when modal opens
+  // Fetch order number when available
   useEffect(() => {
-    const fetchCancelReasons = async () => {
-      if (showCancelReasonModal && cancelReasons.length === 0) {
-        setLoadingCancelReasons(true);
-        try {
-          const response = await ordersService.getCancelReasons();
-          if (response.success && response.data) {
-            setCancelReasons(response.data);
-          } else {
-            setConfirmationModal({
-              visible: true,
-              title: 'Error',
-              message: response.error || 'Failed to load cancel reasons',
-              confirmText: 'OK',
-              cancelText: '',
-              onConfirm: () => {
-                setConfirmationModal(prev => ({ ...prev, visible: false }));
-              },
-              onCancel: () => {
-                setConfirmationModal(prev => ({ ...prev, visible: false }));
-              },
-            });
-          }
-        } catch (error: any) {
-          setConfirmationModal({
-            visible: true,
-            title: 'Error',
-            message: 'Failed to load cancel reasons. Please try again.',
-            confirmText: 'OK',
-            cancelText: '',
-            onConfirm: () => {
-              setConfirmationModal(prev => ({ ...prev, visible: false }));
-            },
-            onCancel: () => {
-              setConfirmationModal(prev => ({ ...prev, visible: false }));
-            },
-          });
-        } finally {
-          setLoadingCancelReasons(false);
-        }
-      }
-    };
-
-    // Also fetch order number when modal opens
     const fetchOrderNumber = async () => {
-      if (showCancelReasonModal && orderId && !orderNumber) {
+      if (orderId && !orderNumber) {
         try {
           const contextOrder = getOrderById(orderId);
           if (contextOrder?.order_number) {
@@ -992,16 +948,13 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
             }
           }
         } catch (error) {
-          console.error('Failed to fetch order number:', error);
+          console.error("Failed to fetch order number:", error);
         }
       }
     };
+    fetchOrderNumber();
+  }, [orderId, orderNumber, getOrderById]);
 
-    if (showCancelReasonModal) {
-      fetchCancelReasons();
-      fetchOrderNumber();
-    }
-  }, [showCancelReasonModal, orderId, getOrderById]);
 
   const handleCallSupport = async () => {
     // Get support phone numbers - try to fetch if not available
@@ -1244,220 +1197,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     }
   };
 
-  const handleCancelOrder = async () => {
-    // Always verify order status via API call before attempting cancellation
-    try {
-      if (!orderId) {
-        setConfirmationModal({
-          visible: true,
-          title: 'Error',
-          message: 'Order ID is missing. Please try again.',
-          confirmText: 'OK',
-          cancelText: '',
-          onConfirm: () => {
-            setConfirmationModal(prev => ({ ...prev, visible: false }));
-          },
-          onCancel: () => {
-            setConfirmationModal(prev => ({ ...prev, visible: false }));
-          },
-        });
-        return;
-      }
-
-      // Make API call to verify current order status
-      const orderIdNum = Number(orderId);
-      const orderResponse = await ordersService.getOrderById(orderIdNum);
-
-      let latestStatus: string | null | undefined = null;
-
-      if (orderResponse.success && orderResponse.data?.status) {
-        latestStatus = orderResponse.data.status;
-      }
-
-      const normalizedStatus = latestStatus?.toLowerCase().trim();
-
-      // Allow cancellation only if order is strictly before "billed" state
-      // Statuses before "billed": pending, confirmed (explicitly only)
-      // Statuses at or after "billed": billed, packed, agent-assigned, picked, out-for-delivery, delivered, etc.
-      // Reject undefined/null/empty - status must be explicitly known
-      const isBeforeBilled =
-        normalizedStatus === 'pending' ||
-        normalizedStatus === 'confirmed';
-
-      if (!isBeforeBilled) {
-        setShowCancelReasonModal(false);
-        setSelectedCancelReason(null);
-        setOrderNumber('');
-        setManualCancelReason('');
-        setShowCancelReasonDropdown(false);
-        setShowOptions(true);
-
-        const errorMessage = normalizedStatus === undefined || normalizedStatus === null || normalizedStatus === ''
-          ? 'Unable to verify order status. Please try again or contact support for assistance.'
-          : 'This order has already moved beyond the billing stage and can no longer be cancelled. Please contact support for further assistance.';
-
-        setConfirmationModal({
-          visible: true,
-          title: 'Unable to cancel order',
-          message: errorMessage,
-          confirmText: 'OK',
-          cancelText: '',
-          onConfirm: () => {
-            setConfirmationModal(prev => ({ ...prev, visible: false }));
-          },
-          onCancel: () => {
-            setConfirmationModal(prev => ({ ...prev, visible: false }));
-          },
-        });
-
-        return;
-      }
-    } catch (error: any) {
-      // If the API call fails, log error and block cancellation
-      console.error('[ChatScreen][CancelOrder] Failed to verify order status:', error);
-
-      setShowCancelReasonModal(false);
-      setSelectedCancelReason(null);
-      setOrderNumber('');
-      setManualCancelReason('');
-      setShowCancelReasonDropdown(false);
-      setShowOptions(true);
-
-      setConfirmationModal({
-        visible: true,
-        title: 'Error',
-        message: 'Unable to verify order status. Please try again or contact support for assistance.',
-        confirmText: 'OK',
-        cancelText: '',
-        onConfirm: () => {
-          setConfirmationModal(prev => ({ ...prev, visible: false }));
-        },
-        onCancel: () => {
-          setConfirmationModal(prev => ({ ...prev, visible: false }));
-        },
-      });
-      return;
-    }
-
-    if (!orderNumber) {
-      setConfirmationModal({
-        visible: true,
-        title: 'Error',
-        message: 'Order number is missing',
-        confirmText: 'OK',
-        cancelText: '',
-        onConfirm: () => {
-          setConfirmationModal(prev => ({ ...prev, visible: false }));
-        },
-        onCancel: () => {
-          setConfirmationModal(prev => ({ ...prev, visible: false }));
-        },
-      });
-      setShowCancelReasonModal(false);
-      setSelectedCancelReason(null);
-      setShowOptions(true);
-      return;
-    }
-
-    if (!selectedCancelReason) {
-      setConfirmationModal({
-        visible: true,
-        title: 'Required',
-        message: 'Please select a cancellation reason',
-        confirmText: 'OK',
-        cancelText: '',
-        onConfirm: () => {
-          setConfirmationModal(prev => ({ ...prev, visible: false }));
-        },
-        onCancel: () => {
-          setConfirmationModal(prev => ({ ...prev, visible: false }));
-        },
-      });
-      return;
-    }
-
-    // Check if "other" reason is selected and manual reason is required
-    const isOtherReason = selectedCancelReason.code?.toLowerCase().includes('other') || 
-                          selectedCancelReason.reason?.toLowerCase().includes('other');
-    
-    if (isOtherReason && !manualCancelReason.trim()) {
-      setConfirmationModal({
-        visible: true,
-        title: 'Required',
-        message: 'Please provide a reason for cancellation',
-        confirmText: 'OK',
-        cancelText: '',
-        onConfirm: () => {
-          setConfirmationModal(prev => ({ ...prev, visible: false }));
-        },
-        onCancel: () => {
-          setConfirmationModal(prev => ({ ...prev, visible: false }));
-        },
-      });
-      return;
-    }
-
-    try {
-      // Use manual reason if provided, otherwise use the selected reason
-      const finalReason = isOtherReason && manualCancelReason.trim() 
-        ? manualCancelReason.trim() 
-        : selectedCancelReason.reason;
-
-      const response = await ordersService.cancelOrder(
-        orderNumber,
-        selectedCancelReason.code,
-        finalReason,
-        selectedCancelReason.cancelled_by
-      );
-      
-      setShowCancelReasonModal(false);
-      setSelectedCancelReason(null);
-      setOrderNumber('');
-      setManualCancelReason('');
-      setShowSupportCallButton(false);
-      animateLayout();
-      setShowOptions(true);
-
-      if (response.success) {
-        const botMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: 'Your order cancellation request has been submitted successfully. Our team will process your refund if applicable.',
-          sender: 'bot',
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, botMessage]);
-      } else {
-        // Show support call button on API failure
-        animateLayout();
-        setShowSupportCallButton(true);
-        setShowOptions(true);
-        const botMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: response.error || 'Failed to cancel order. Please try again or contact support.',
-          sender: 'bot',
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, botMessage]);
-      }
-    } catch (error: any) {
-      setShowCancelReasonModal(false);
-      setSelectedCancelReason(null);
-      setOrderNumber('');
-      setManualCancelReason('');
-      // Show support call button on error
-      animateLayout();
-      setShowSupportCallButton(true);
-      setShowOptions(true);
-      const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: 'An error occurred while canceling your order. Please try again or contact support.',
-        sender: 'bot',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, botMessage]);
-    }
-  };
-
   const handleOptionPress = (option: ChatOption) => {
     animateLayout();
     const userMessage: Message = {
@@ -1473,12 +1212,13 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
     // Also hide support call button until reply is shown
     setShowSupportCallButton(false);
 
-    // Handle cancel order separately - show modal for reason
+    // Handle cancel order separately - cancel directly without reason modal
     if (option.id === 'cancel_order') {
       // Check order status via API call before showing cancel modal
       const checkOrderStatusBeforeCancel = async () => {
         try {
           if (!orderId) {
+            setShowSupportCallButton(true);
             setConfirmationModal({
               visible: true,
               title: 'Error',
@@ -1532,19 +1272,45 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
                 setConfirmationModal(prev => ({ ...prev, visible: false }));
               },
             });
+            setShowSupportCallButton(true);
             return;
           }
 
-          // If status is before billed, show the cancel modal
-          setSelectedCancelReason(null);
-          setManualCancelReason('');
-          setOrderNumber('');
-          setShowSupportCallButton(false);
-          setShowCancelReasonModal(true);
-        } catch (error: any) {
-          // If the API call fails, log error and block modal
-          console.error('[ChatScreen][CancelOrder] Failed to verify order status (before modal):', error);
+          // If status is before billed, cancel directly without showing reason modal
+          let ordNumber = '';
+          const contextOrder = getOrderById(orderId);
+          if (contextOrder?.order_number) {
+            ordNumber = contextOrder.order_number;
+          } else if (orderResponse.success && orderResponse.data?.order_number) {
+            ordNumber = orderResponse.data.order_number;
+          }
 
+          if (!ordNumber) {
+            setConfirmationModal({
+              visible: true,
+              title: 'Error',
+              message: 'Order number is missing. Please try again.',
+              confirmText: 'OK',
+              cancelText: '',
+              onConfirm: () => {
+                setConfirmationModal(prev => ({ ...prev, visible: false }));
+              },
+              onCancel: () => {
+                setConfirmationModal(prev => ({ ...prev, visible: false }));
+              },
+            });
+            setShowSupportCallButton(true);
+            return;
+          }
+
+          // Show Call Support button only (no success message)
+          animateLayout();
+          setShowSupportCallButton(true);
+        } catch (error: any) {
+          // If the API call fails, log error and show support call button
+          console.error('[ChatScreen][CancelOrder] Failed to verify order status (before cancel):', error);
+
+          setShowSupportCallButton(true);
           setConfirmationModal({
             visible: true,
             title: 'Error',
@@ -1939,197 +1705,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
           </Modal>
           */}
 
-          {/* Cancel Order Reason Modal */}
-          <Modal
-            visible={showCancelReasonModal}
-            transparent
-            animationType="fade"
-            onRequestClose={() => {
-              setShowCancelReasonModal(false);
-              setSelectedCancelReason(null);
-              setManualCancelReason('');
-              setOrderNumber('');
-              setShowCancelReasonDropdown(false);
-              setShowSupportCallButton(false);
-              setShowOptions(true);
-            }}
-          >
-            <KeyboardAvoidingView
-              style={styles.cancelReasonModalOverlay}
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-            >
-              <View style={styles.cancelReasonModalOverlay}>
-                <TouchableOpacity
-                  style={StyleSheet.absoluteFill}
-                  activeOpacity={1}
-                  onPress={() => {
-                    setShowCancelReasonModal(false);
-                    setSelectedCancelReason(null);
-                    setManualCancelReason('');
-                    setOrderNumber('');
-                    setShowCancelReasonDropdown(false);
-                    setShowSupportCallButton(false);
-                    setShowOptions(true);
-                  }}
-                />
-                <TouchableOpacity
-                  activeOpacity={1}
-                  onPress={() => setShowCancelReasonDropdown(false)}
-                >
-                  <View style={styles.cancelReasonModal}>
-                    <Text style={styles.cancelReasonTitle}>Cancel Order</Text>
-                    <Text style={styles.cancelReasonSubtitle}>
-                      Please select a reason for cancellation:
-                    </Text>
-                    
-                    {/* Dropdown */}
-                    <TouchableOpacity
-                      style={styles.cancelReasonDropdown}
-                      onPress={() => setShowCancelReasonDropdown(!showCancelReasonDropdown)}
-                      activeOpacity={0.7}
-                    >
-                    <Text
-                      style={[
-                        styles.cancelReasonDropdownText,
-                        !selectedCancelReason && styles.cancelReasonDropdownPlaceholder,
-                      ]}
-                    >
-                      {selectedCancelReason
-                        ? selectedCancelReason.reason
-                        : 'Select cancellation reason...'}
-                    </Text>
-                    <MaterialIcons
-                      name={showCancelReasonDropdown ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                      size={24}
-                      color={colors.textSecondary}
-                    />
-                  </TouchableOpacity>
-
-                  {/* Dropdown Options */}
-                  {showCancelReasonDropdown && (
-                    <View style={styles.cancelReasonDropdownOptions}>
-                      <ScrollView
-                        style={styles.cancelReasonDropdownScroll}
-                        nestedScrollEnabled
-                        showsVerticalScrollIndicator={false}
-                      >
-                        {loadingCancelReasons ? (
-                          <View style={styles.cancelReasonLoadingContainer}>
-                            <Text style={styles.cancelReasonLoadingText}>Loading reasons...</Text>
-                          </View>
-                        ) : cancelReasons.length > 0 ? (
-                          cancelReasons.map((reason) => (
-                            <TouchableOpacity
-                              key={reason.code}
-                              style={[
-                                styles.cancelReasonOption,
-                                selectedCancelReason?.code === reason.code &&
-                                  styles.cancelReasonOptionSelected,
-                              ]}
-                              onPress={() => {
-                                setSelectedCancelReason(reason);
-                                setShowCancelReasonDropdown(false);
-                                // Clear manual reason when selecting a new reason
-                                setManualCancelReason('');
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              <Text
-                                style={[
-                                  styles.cancelReasonOptionText,
-                                  selectedCancelReason?.code === reason.code &&
-                                    styles.cancelReasonOptionTextSelected,
-                                ]}
-                              >
-                                {reason.reason}
-                              </Text>
-                              {selectedCancelReason?.code === reason.code && (
-                                <MaterialIcons name="check" size={20} color={colors.primary} />
-                              )}
-                            </TouchableOpacity>
-                          ))
-                        ) : (
-                          <View style={styles.cancelReasonLoadingContainer}>
-                            <Text style={styles.cancelReasonLoadingText}>
-                              No reasons available
-                            </Text>
-                          </View>
-                        )}
-                      </ScrollView>
-                    </View>
-                  )}
-
-                  {/* Manual Reason Input - Show when "other" reason is selected */}
-                  {selectedCancelReason && (
-                    (selectedCancelReason.code?.toLowerCase().includes('other') || 
-                     selectedCancelReason.reason?.toLowerCase().includes('other')) && (
-                      <View style={styles.manualReasonContainer}>
-                        <Text style={styles.manualReasonLabel}>
-                          Please provide a reason for cancellation:
-                        </Text>
-                        <TextInput
-                          style={styles.manualReasonInput}
-                          placeholder="Enter your reason..."
-                          placeholderTextColor={colors.textSecondary}
-                          value={manualCancelReason}
-                          onChangeText={setManualCancelReason}
-                          multiline
-                          numberOfLines={4}
-                          maxLength={500}
-                          textAlignVertical="top"
-                        />
-                        <Text style={styles.manualReasonCharCount}>
-                          {manualCancelReason.length}/500
-                        </Text>
-                      </View>
-                    )
-                  )}
-
-                  <View style={styles.cancelReasonButtons}>
-                    <TouchableOpacity
-                      style={[styles.cancelReasonButton, styles.cancelReasonButtonSecondary]}
-                      onPress={() => {
-                        setShowCancelReasonModal(false);
-                        setSelectedCancelReason(null);
-                        setManualCancelReason('');
-                        setOrderNumber('');
-                        setShowCancelReasonDropdown(false);
-                        setShowOptions(true);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.cancelReasonButtonTextSecondary}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.cancelReasonButton,
-                        styles.cancelReasonButtonPrimary,
-                        (!selectedCancelReason || 
-                         (selectedCancelReason && 
-                          (selectedCancelReason.code?.toLowerCase().includes('other') || 
-                           selectedCancelReason.reason?.toLowerCase().includes('other')) && 
-                          !manualCancelReason.trim())) && styles.cancelReasonButtonDisabled,
-                      ]}
-                      onPress={handleCancelOrder}
-                      disabled={
-                        !selectedCancelReason || 
-                        (selectedCancelReason && 
-                         (selectedCancelReason.code?.toLowerCase().includes('other') || 
-                          selectedCancelReason.reason?.toLowerCase().includes('other')) && 
-                         !manualCancelReason.trim())
-                      }
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.cancelReasonButtonTextPrimary}>Submit</Text>
-                    </TouchableOpacity>
-                  </View>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            </KeyboardAvoidingView>
-          </Modal>
-
           {/* Video Player Modal */}
           <Modal
             visible={selectedVideoUri !== null}
@@ -2489,118 +2064,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  cancelReasonModalOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cancelReasonModal: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    margin: 20,
-    maxWidth: 400,
-    width: '90%',
-  },
-  cancelReasonTitle: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 20,
-    color: '#000000',
-    marginBottom: 8,
-  },
-  cancelReasonSubtitle: {
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 16,
-  },
-  cancelReasonInput: {
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    color: '#000000',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 20,
-    minHeight: 100,
-    borderWidth: 1,
-    borderColor: '#E4E4E4',
-  },
-  cancelReasonDropdown: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E4E4E4',
-    minHeight: 48,
-  },
-  cancelReasonDropdownText: {
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    color: '#000000',
-    flex: 1,
-  },
-  cancelReasonDropdownPlaceholder: {
-    color: colors.textSecondary,
-  },
-  cancelReasonDropdownOptions: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E4E4E4',
-    marginBottom: 20,
-    maxHeight: 200,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cancelReasonDropdownScroll: {
-    maxHeight: 200,
-  },
-  cancelReasonOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
-  },
-  cancelReasonOptionSelected: {
-    backgroundColor: '#F0F9F4',
-  },
-  cancelReasonOptionText: {
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    color: '#000000',
-    flex: 1,
-  },
-  cancelReasonOptionTextSelected: {
-    fontFamily: 'Poppins_500Medium',
-    color: colors.primary,
-  },
-  cancelReasonLoadingContainer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  cancelReasonLoadingText: {
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  cancelReasonButtonDisabled: {
-    opacity: 0.5,
-  },
   supportCallContainer: {
     alignItems: 'flex-start',
     marginTop: 8,
@@ -2662,62 +2125,6 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: colors.textSecondary,
     marginHorizontal: 2,
-  },
-  cancelReasonButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-  },
-  cancelReasonButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    minWidth: 100,
-    alignItems: 'center',
-  },
-  cancelReasonButtonPrimary: {
-    backgroundColor: colors.primary,
-  },
-  cancelReasonButtonSecondary: {
-    backgroundColor: '#F5F5F5',
-  },
-  cancelReasonButtonTextPrimary: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 16,
-    color: '#FFFFFF',
-  },
-  cancelReasonButtonTextSecondary: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 16,
-    color: '#000000',
-  },
-  manualReasonContainer: {
-    marginBottom: 20,
-  },
-  manualReasonLabel: {
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    color: '#000000',
-    marginBottom: 8,
-  },
-  manualReasonInput: {
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    color: '#000000',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E4E4E4',
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  manualReasonCharCount: {
-    fontFamily: 'Poppins',
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'right',
-    marginTop: 4,
   },
 });
 

@@ -46,6 +46,8 @@ interface RestaurantDetailsScreenProps {
   longitude: number;
   onBack?: () => void;
   onShare?: () => void;
+  isGuest?: boolean;
+  onNavigateToLogin?: () => void;
 }
 
 export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = ({
@@ -55,6 +57,8 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
   longitude,
   onBack,
   onShare,
+  isGuest,
+  onNavigateToLogin,
 }) => {
   const [restaurantData, setRestaurantData] = useState<RestaurantDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,6 +96,12 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
   };
 
   const handleCall = async () => {
+    // Guest mode: navigate to login when pressing phone call
+    if (isGuest && onNavigateToLogin) {
+      onNavigateToLogin();
+      return;
+    }
+
     // Check if phone number is available in restaurant data
     const phoneNumber = (restaurantData as any)?.phone_number || (restaurantData as any)?.contact_number;
 

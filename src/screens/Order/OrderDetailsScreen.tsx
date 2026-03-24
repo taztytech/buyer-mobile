@@ -351,29 +351,22 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   };
 
-  // Fetch addresses and cart summary from API
-  useEffect(() => {
-    fetchAddresses();
-    fetchCartSummary();
-  }, []);
-
-  // Refetch addresses when screen becomes visible (e.g., after account switch)
+  // Fetch addresses only when checkout is visible (avoids duplicate calls on mount + visible)
   useEffect(() => {
     if (visible) {
       fetchAddresses();
     }
   }, [visible]);
 
-  // Fetch cart summary when cart changes (debounced to avoid too many API calls)
+  // Fetch cart summary only when visible AND cart changes (debounced to avoid too many API calls)
   useEffect(() => {
-    // Use a timeout to debounce the API call
+    if (!visible) return;
     const timeoutId = setTimeout(() => {
       fetchCartSummary();
-    }, 300); // Wait 300ms after cart changes before fetching
-
+    }, 150); // Shorter debounce for faster cart load
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [Object.keys(cart).length, localCartItems.length]); // Use cart length instead of JSON.stringify
+  }, [visible, Object.keys(cart).length, localCartItems.length]);
 
   // Automatically remove promo code if total amount goes below ₹100
   useEffect(() => {
@@ -752,6 +745,26 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       return;
     }
 
+    // COD: Show confirmation before placing order
+    if (selectedPaymentMethod === 'cod') {
+      showConfirmation({
+        title: 'Confirm Cash on Delivery',
+        message: 'You will pay in cash when your order is delivered. Do you want to place this order?',
+        confirmText: 'Confirm',
+        cancelText: 'Cancel',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {
+          proceedWithPlaceOrder();
+        },
+      });
+      return;
+    }
+
+    proceedWithPlaceOrder();
+  };
+
+  const proceedWithPlaceOrder = async () => {
+    if (!selectedAddressId) return;
     // Final guard: ensure restaurant is open before creating order & starting payment
     setIsPlacingOrder(true);
 
@@ -821,6 +834,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           setNotes(''); // Reset notes for next order
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount
+          // Clear promo UI state so it doesn't persist into next checkout
+          setPromoCode('');
+          setPromoError('');
 
           setIsPlacingOrder(false); // Reset loading state before showing confirmation
 
@@ -856,9 +872,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         });
 
         // Process online payment via Razorpay using payment_details from order response
+        const analyticsAmountRupees = Number(
+          responseData?.summary?.final_amount ??
+          orderData?.summary?.final_amount ??
+          orderData?.total_amount ??
+          responseData?.total_amount ??
+          NaN,
+        );
         const paymentResult = await paymentService.processPayment(
           orderId,
-          paymentDetails
+          paymentDetails,
+          Number.isFinite(analyticsAmountRupees) ? analyticsAmountRupees : undefined,
         );
 
         // CRITICAL: After Razorpay closes, ensure UI is fully restored before showing dialogs
@@ -882,6 +906,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           setNotes(''); // Reset notes for next order
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount
+          // Clear promo UI state so it doesn't persist into next checkout
+          setPromoCode('');
+          setPromoError('');
 
           showConfirmation({
             title: `${selectedPaymentMethod !== "cod" ? "Payment" : "Order"} Successful! 🎉'`,
@@ -1144,30 +1171,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       }
     });
 
-    // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
-    // This ensures discount is recalculated correctly when cart items change
-    // Note: We don't await this - it will be handled when cart_summary updates
-    // Skip applying coupon if cart has preorder items
-    if (isCouponApplied && promoCode && promoCode.trim() !== '' && !hasPreorderItems) {
-      // Delay promo re-application slightly to let cart_summary update first
-      setTimeout(async () => {
-        try {
-          const normalizedCode = promoCode.trim().toUpperCase();
-          const response = await cartService.applyCoupon(normalizedCode);
-          if (response.success && response.cart_summary) {
-            setCartSummary(response.cart_summary);
-            setPromoError('');
-          } else {
-            // If promo becomes invalid, clear it from state
-            setPromoCode('');
-            setPromoError(response.message || 'Promo code is no longer valid.');
-          }
-        } catch (error) {
-          // Silent fail - discount will be updated via cart summary
-          // If promo becomes invalid, it will be handled by auto-remove logic
-        }
-      }, 400); // Wait 400ms after quantity update (debounce + API call time)
-    }
+    // Note: Coupon is NOT re-applied on cart update. updateQuantity/removeFromCart return
+    // cart_summary with applied discount; re-validation only when explicitly applied or
+    // when total drops below minimum (handled by auto-remove useEffect).
 
     // Also call parent callback if provided (for backward compatibility)
     if (onUpdateCart) {
@@ -1229,29 +1235,6 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           pendingUpdateRef.current = null;
         }
       });
-
-      // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
-      // This ensures discount is recalculated correctly when cart items change
-      if (isCouponApplied && promoCode && promoCode.trim() !== '') {
-        // Delay promo re-application slightly to let cart_summary update first
-        setTimeout(async () => {
-          try {
-            const normalizedCode = promoCode.trim().toUpperCase();
-            const response = await cartService.applyCoupon(normalizedCode);
-            if (response.success && response.cart_summary) {
-              setCartSummary(response.cart_summary);
-              setPromoError('');
-            } else {
-              // If promo becomes invalid, clear it from state
-              setPromoCode('');
-              setPromoError(response.message || 'Promo code is no longer valid.');
-            }
-          } catch (error) {
-            // Silent fail - discount will be updated via fetchCartSummary
-            // If promo becomes invalid, it will be handled by auto-remove logic
-          }
-        }, 400); // Wait 400ms after remove (API call time)
-      }
 
       // Also call parent callback if provided (for backward compatibility)
       if (onUpdateCart) {
@@ -1339,30 +1322,6 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           pendingUpdateRef.current = null;
         }
       });
-
-      // Only re-apply promo code if it was previously successfully applied (after clicking Apply button)
-      // This ensures discount is recalculated correctly when cart items change
-      // Skip applying coupon if cart has preorder items
-      if (isCouponApplied && promoCode && promoCode.trim() !== '' && !hasPreorderItems) {
-        // Delay promo re-application slightly to let cart_summary update first
-        setTimeout(async () => {
-          try {
-            const normalizedCode = promoCode.trim().toUpperCase();
-            const response = await cartService.applyCoupon(normalizedCode);
-            if (response.success && response.cart_summary) {
-              setCartSummary(response.cart_summary);
-              setPromoError('');
-            } else {
-              // If promo becomes invalid, clear it from state
-              setPromoCode('');
-              setPromoError(response.message || 'Promo code is no longer valid.');
-            }
-          } catch (error) {
-            // Silent fail - discount will be updated via cart summary
-            // If promo becomes invalid, it will be handled by auto-remove logic
-          }
-        }, 400); // Wait 400ms after quantity update (debounce + API call time)
-      }
 
       // Also call parent callback if provided (for backward compatibility)
       if (onUpdateCart) {

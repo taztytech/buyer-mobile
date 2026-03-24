@@ -28,6 +28,12 @@ interface ChatHistoryData {
   orderId: string;
   messages: ChatMessage[];
   lastUpdated: string; // ISO timestamp
+  showSupportCallButton?: boolean;
+}
+
+export interface ChatHistoryResult {
+  messages: ChatMessage[];
+  showSupportCallButton?: boolean;
 }
 
 class ChatHistoryService {
@@ -45,7 +51,11 @@ class ChatHistoryService {
    * - Removes local file URIs (they're temporary anyway)
    * - Checks storage size before saving
    */
-  async saveChatHistory(orderId: string, messages: ChatMessage[]): Promise<void> {
+  async saveChatHistory(
+    orderId: string,
+    messages: ChatMessage[],
+    showSupportCallButton?: boolean
+  ): Promise<void> {
     try {
       if (!orderId) {
         console.warn('[ChatHistoryService] Cannot save chat history: orderId is missing');
@@ -77,6 +87,7 @@ class ChatHistoryService {
         orderId,
         messages: messagesForStorage,
         lastUpdated: new Date().toISOString(),
+        ...(showSupportCallButton !== undefined && { showSupportCallButton }),
       };
 
       const jsonString = JSON.stringify(historyData);
@@ -107,6 +118,7 @@ class ChatHistoryService {
           orderId,
           messages: reducedMessages,
           lastUpdated: new Date().toISOString(),
+          ...(showSupportCallButton !== undefined && { showSupportCallButton }),
         };
 
         const reducedJsonString = JSON.stringify(reducedData);
@@ -144,7 +156,7 @@ class ChatHistoryService {
   /**
    * Get chat history for a specific order
    */
-  async getChatHistory(orderId: string): Promise<ChatMessage[] | null> {
+  async getChatHistory(orderId: string): Promise<ChatHistoryResult | null> {
     try {
       if (!orderId) {
         return null;
@@ -169,7 +181,12 @@ class ChatHistoryService {
       }));
 
       console.log(`[ChatHistoryService] Loaded chat history for order ${orderId} (${messages.length} messages)`);
-      return messages;
+      return {
+        messages,
+        ...(historyData.showSupportCallButton !== undefined && {
+          showSupportCallButton: historyData.showSupportCallButton,
+        }),
+      };
     } catch (error) {
       console.error('[ChatHistoryService] Error loading chat history:', error);
       return null;

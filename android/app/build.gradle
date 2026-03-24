@@ -106,7 +106,7 @@ android {
     productFlavors {
         dev {
             dimension "environment"
-            versionNameSuffix "-dev"
+            versionNameSuffix "-${appVersionCode}"
             resValue "string", "app_name", "Tazty Dev"
         }
         prod {
@@ -191,6 +191,11 @@ android {
     }
 }
 
+// Fix for "ambiguous task 'installDebug'" when flavors are present
+tasks.register("installDebug") {
+    dependsOn("installDevDebug")
+}
+
 // Apply static values from `gradle.properties` to the `android.packagingOptions`
 // Accepts values in comma delimited lists, example:
 // android.packagingOptions.pickFirsts=/LICENSE,**/picasa.ini
@@ -246,5 +251,24 @@ dependencies {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
+    }
+}
+
+// New Architecture: every `externalNativeBuildClean*` (Debug, Release, DevRelease, etc.) runs
+// ninja/cmake regenerate and fails when codegen JNI dirs are missing. Disable them all.
+// Do NOT use `enabled = true` here — that keeps native clean running and breaks `./gradlew clean`.
+tasks.configureEach { task ->
+    if (task.name.startsWith("externalNativeBuildClean")) {
+        task.enabled = false
+    } else if (task.name == "clean") {
+        task.doFirst {
+            delete file("${projectDir}/.cxx")
+        }
+    }
+}
+
+gradle.projectsEvaluated {
+    tasks.matching { it.name.startsWith("externalNativeBuildClean") }.configureEach {
+        it.enabled = false
     }
 }
