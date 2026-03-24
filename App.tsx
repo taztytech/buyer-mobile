@@ -77,7 +77,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   } = useCart();
   const { showConfirmation } = useConfirmation();
 
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat'>('locationSelection');
+  // Default to login so we never flash location overlays before auth resolves; logged-in startup sets home/orders explicitly.
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -124,6 +125,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const sessionStartTimeRef = React.useRef<number | null>(null);
   const isAuthenticatedRef = React.useRef(false);
   const pendingDeepLinkUrlRef = React.useRef<string | null>(null);
+  const currentScreenRef = React.useRef(currentScreen);
+  currentScreenRef.current = currentScreen;
 
   const normalizeOrderStatus = React.useCallback((status: unknown): string => {
     return String(status || '')
@@ -650,6 +653,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         // This will be called when API detects user is deleted from database
         apiService.setUserDeletedCallback(async () => {
           console.warn('[App] User deletion detected, forcing logout...');
+          const wasRegisteredUser = isAuthenticatedRef.current;
           try {
             // Force logout without API call (user is already deleted)
             await authService.forceLogout();
@@ -676,10 +680,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             locationScreenSlide.setValue(SCREEN_WIDTH);
             helpScreenSlide.setValue(SCREEN_WIDTH);
 
-            // Navigate based on auth state:
+            // Navigate based on auth state (must use snapshot — ref is cleared above):
             // - Logged-in users: go to login
             // - Guests / expired sessions: continue in guest location setup flow
-            if (isAuthenticatedRef.current) {
+            if (wasRegisteredUser) {
               setCurrentScreen('login');
               setPhoneNumber('');
             } else {
@@ -701,7 +705,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           } catch (error) {
             console.error('[App] Error handling user deletion:', error);
             // Fallback to guest location setup if user is not authenticated
-            if (isAuthenticatedRef.current) {
+            if (wasRegisteredUser) {
               setCurrentScreen('login');
             } else {
               await authService.guestLogin().catch(() => {});
@@ -732,6 +736,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         // This will be called when refresh token is invalid/expired and session is cleared
         apiService.setSessionExpiredCallback(async () => {
           console.warn('[App] Session expired, navigating to login...');
+          const wasRegisteredUser = isAuthenticatedRef.current;
           try {
             // Force logout to clear all data
             await authService.forceLogout();
@@ -758,10 +763,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             locationScreenSlide.setValue(SCREEN_WIDTH);
             helpScreenSlide.setValue(SCREEN_WIDTH);
 
-            // Navigate based on auth state:
+            // Navigate based on auth state (must use snapshot — ref is cleared above):
             // - Logged-in users: go to login
             // - Guests / expired sessions: continue in guest location setup flow
-            if (isAuthenticatedRef.current) {
+            if (wasRegisteredUser) {
               setCurrentScreen('login');
               setPhoneNumber('');
             } else {
@@ -783,7 +788,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           } catch (error) {
             console.error('[App] Error handling session expiration:', error);
             // Fallback to guest location setup if user is not authenticated
-            if (isAuthenticatedRef.current) {
+            if (wasRegisteredUser) {
               setCurrentScreen('login');
             } else {
               await authService.guestLogin().catch(() => {});
@@ -932,17 +937,21 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   // Handle Android back button
   React.useEffect(() => {
     const backAction = () => {
+      // Always read latest route — avoids handling back with a stale screen before this effect re-runs
+      // (e.g. user on Login UI but listener still thinks previous screen was locationSelection).
+      const screen = currentScreenRef.current;
+
       // Block navigation when forced update is required, but ONLY on non-auth screens
       // Allow back button to work normally on login, welcome, and OTP screens
       const authScreens: Array<typeof currentScreen> = ['login', 'welcome', 'otp'];
-      const isOnAuthScreen = authScreens.includes(currentScreen);
+      const isOnAuthScreen = authScreens.includes(screen);
 
       if (forcedUpdateRequired && !isOnAuthScreen) {
         return true; // Prevent back button from doing anything on non-auth screens
       }
 
       // Handle back button based on current screen
-      switch (currentScreen) {
+      switch (screen) {
         case 'home':
           // On home screen, exit app
           BackHandler.exitApp();
@@ -1015,7 +1024,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           handleBackFromHelp();
           return true;
         case 'login':
-          handleBackFromLogin();
+          // Do not treat hardware back as Skip — only the Skip control starts guest flow.
+          if (Platform.OS === 'android') {
+            BackHandler.exitApp();
+          }
           return true;
         case 'otp':
           handleBackToLogin();
@@ -2903,6 +2915,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             pointerEvents={currentScreen === 'locationSelection' ? 'auto' : 'none'}
           >
             <LocationSelectionScreen
+              mapActive={currentScreen === 'locationSelection'}
+              deferMapMount
               initialSearchQuery={locationSearchQuery}
               editingAddress={editingAddress}
               initialLatitude={editingAddress?.latitude || initialLocationCoords?.latitude}
