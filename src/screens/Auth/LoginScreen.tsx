@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, Image, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, Image, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '@/theme';
@@ -23,6 +23,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [phoneNumber, setPhoneNumber] = useState(initialPhoneNumber || '');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Intercept Android back here so it never hits App's handler with a stale pre-login screen (e.g. locationSelection).
+  // BackHandler invokes listeners LIFO; this mounts after App's listener and runs first.
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      return undefined;
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      BackHandler.exitApp();
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
 
   const validatePhoneNumber = (number: string): boolean => {
     // Indian phone numbers: 10 digits, starting with 6-9
