@@ -331,8 +331,15 @@ class ApiService {
    * This is called after successful authenticated API calls (except profile itself)
    * Uses throttling to avoid performance issues
    * CRITICAL: Always makes a fresh API call (no cache) to detect user deletion immediately
+   * Skip for guest mode - guests don't have profiles and would get 403
    */
   private async checkProfileInBackground(): Promise<void> {
+    // Skip for guest mode - profile API requires a registered user
+    const isLoggedIn = await storageService.isLoggedIn();
+    if (!isLoggedIn) {
+      return;
+    }
+
     // Throttle: Only check if enough time has passed since last check
     const now = Date.now();
     if (now - this.lastProfileCheckTime < this.PROFILE_CHECK_INTERVAL_MS) {
@@ -980,14 +987,21 @@ class ApiService {
         !endpoint.includes('/authentication/guest-login') &&
         !endpoint.includes('/authentication/refresh-token');
       
-      // Only check profile for important endpoints to reduce API calls
+      // Only check profile for important endpoints - exclude cart to keep checkout fast
       const isImportantEndpoint = 
         endpoint.includes('/api/buyer/home') ||
-        endpoint.includes('/api/buyer/cart') ||
         endpoint.includes('/api/buyer/orders') ||
         endpoint.includes('/api/buyer/favorites');
       
-      if (response.ok && isAuthenticatedEndpoint && !endpoint.includes('/user/profile') && isImportantEndpoint) {
+      // Skip profile check for guests - they don't have profiles (would get 403)
+      const isLoggedIn = await storageService.isLoggedIn();
+      if (
+        response.ok &&
+        isLoggedIn &&
+        isAuthenticatedEndpoint &&
+        !endpoint.includes('/user/profile') &&
+        isImportantEndpoint
+      ) {
         this.checkProfileInBackground().catch((error) => {
           // Silent fail - profile check is fire-and-forget
           console.warn('[apiService] Background profile check failed:', error);

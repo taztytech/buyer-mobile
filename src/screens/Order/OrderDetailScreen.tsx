@@ -2239,6 +2239,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       <CancelReasonModal
         visible={showCancelReasonModal}
         orderNumber={orderData?.order_number || ''}
+        cancelSecondsLeft={cancelSecondsLeft}
         onClose={() => setShowCancelReasonModal(false)}
         onSuccess={() => {
           setShowCancelReasonModal(false);

@@ -214,10 +214,27 @@ class AuthService {
    * Call when entering guest stage (no OTP required)
    * Saves tokens so API calls work; does NOT set user/IS_LOGGED_IN
    * If identity_token exists in storage, passes it with the request for session linking
+   * Skips API call when identity_token and valid access_token already exist (don't call every time in guest mode)
+   * When forceRefresh is true (e.g. 401 retry), always calls the API to get fresh tokens
    */
-  async guestLogin(): Promise<ApiResponse<{ access_token: string; refresh_token?: string; expires_in?: number; identity_token?: string }>> {
+  async guestLogin(options?: { forceRefresh?: boolean }): Promise<ApiResponse<{ access_token: string; refresh_token?: string; expires_in?: number; identity_token?: string }>> {
     try {
       const identityToken = await storageService.getIdentityToken();
+
+      // If we already have identity_token and valid access token, skip API call (unless 401 retry)
+      if (!options?.forceRefresh && identityToken) {
+        const accessToken = await storageService.getAccessToken();
+        const isExpired = await storageService.isTokenExpired();
+        if (accessToken && !isExpired) {
+          console.log('[AuthService] guestLogin skipped - identity_token and valid tokens already present');
+          // Tokens are in storage; apiService will load them on first request
+          return {
+            success: true,
+            data: { access_token: accessToken },
+          };
+        }
+      }
+
       console.log('[AuthService] guestLogin called', identityToken ? '(with stored identity_token)' : '(first call)');
 
       const deviceId = await storageService.getOrCreateDeviceId();
@@ -419,9 +436,19 @@ class AuthService {
 
   /**
    * Get user profile
+   * Skips API call for guest mode - profile requires a registered user (would return 403)
    */
   async getProfile(): Promise<ApiResponse<any>> {
     try {
+      const isLoggedIn = await storageService.isLoggedIn();
+      if (!isLoggedIn) {
+        return {
+          success: false,
+          error: 'Profile requires a registered user',
+          message: 'Profile requires a registered user',
+        };
+      }
+
       const response = await apiService.get<any>(
         API_CONFIG.ENDPOINTS.USER.PROFILE
       );
