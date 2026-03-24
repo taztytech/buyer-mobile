@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Appearance,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLiveRiderTracking, LiveRiderLocationUpdate } from '@/hooks/useLiveRiderTracking';
@@ -51,7 +52,7 @@ interface OrderRouteMapViewProps {
 const riderDayAsset = require('../../assets/map_bike_day.png');
 const riderNightAsset = require('../../assets/map_bike_night.png');
 const routeOutlineColor = 'rgba(255,255,255,0.92)';
-const routePrimaryColor = '#1E5BE0';
+const routePrimaryColor = '#00B14F';
 const toRadians = (deg: number): number => (deg * Math.PI) / 180;
 const normalizeAngle = (angle: number): number => ((angle % 360) + 360) % 360;
 const shortestAngleDelta = (from: number, to: number): number =>
@@ -95,10 +96,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   const fitScheduledRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasInitialStoreFocusRef = useRef(false);
 
-  // Incrementing this key force-remounts the MapView completely.
-  // We do this when returning from PiP (resizeTrigger true → false) so all
-  // markers re-render fresh and nothing is left in a stale state.
-  const [mapKey, setMapKey] = useState(0);
+  const [mapReady, setMapReady] = useState(false);
   const [followMode, setFollowMode] = useState(false);
   const [markerRotation, setMarkerRotation] = useState(0);
   const lastMarkerCoordRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -116,18 +114,6 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     !!agentLocationUpdate &&
     Number.isFinite(agentLocationUpdate.lat) &&
     Number.isFinite(agentLocationUpdate.lng);
-
-  const prevHasValidAgentCoordinateRef = useRef(false);
-
-  // If agent coordinate arrives after cold start / relaunch,
-  // remount the native MapView so Android doesn't keep a stale blank snapshot.
-  useEffect(() => {
-    if (hasValidAgentCoordinate && !prevHasValidAgentCoordinateRef.current) {
-      setMapKey((k) => k + 1);
-      hasInitialStoreFocusRef.current = false;
-    }
-    prevHasValidAgentCoordinateRef.current = hasValidAgentCoordinate;
-  }, [hasValidAgentCoordinate]);
 
   // Whether we are in PiP mode — controls marker label visibility and marker size
   const inPip = !!resizeTrigger;
@@ -175,9 +161,9 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     const nowInPip = !!resizeTrigger;
 
     if (wasInPip && !nowInPip) {
-      // Returning from PiP → force-remount so all markers re-render cleanly
-      setMapKey(k => k + 1);
+      // Returning from PiP: refit camera only (avoid remount flicker)
       hasInitialStoreFocusRef.current = false;
+      scheduleStoreFocus(120, false);
     } else if (!wasInPip && nowInPip) {
       // Entering PiP → keep a stable camera around store first.
       hasInitialStoreFocusRef.current = false;
@@ -186,6 +172,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   }, [resizeTrigger, scheduleStoreFocus]);
 
   const handleMapReady = useCallback(() => {
+    setMapReady(true);
     if (hasInitialStoreFocusRef.current) return;
     scheduleStoreFocus(300);
   }, [scheduleStoreFocus]);
@@ -327,7 +314,6 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   return (
     <View style={[styles.container, style]} onLayout={handleLayout}>
       <MapView
-        key={mapKey}
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={StyleSheet.absoluteFill}
@@ -372,15 +358,24 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
           lineCap="round"
           lineJoin="round"
         />
-        {/* Secondary route (store -> rider), subtle grey with 50% opacity */}
+        {/* Secondary route (store -> rider), with white outline */}
         {storeToAgentRouteCoordinates && storeToAgentRouteCoordinates.length > 1 ? (
-          <Polyline
-            coordinates={storeToAgentRouteCoordinates}
-            strokeColor="rgba(200, 205, 215, 0.5)"
-            strokeWidth={4}
-            lineCap="round"
-            lineJoin="round"
-          />
+          <>
+            <Polyline
+              coordinates={storeToAgentRouteCoordinates}
+              strokeColor={routeOutlineColor}
+              strokeWidth={7}
+              lineCap="round"
+              lineJoin="round"
+            />
+            <Polyline
+              coordinates={storeToAgentRouteCoordinates}
+              strokeColor="#1E5BE0"
+              strokeWidth={4}
+              lineCap="round"
+              lineJoin="round"
+            />
+          </>
         ) : null}
 
         {/* Restaurant marker — key ensures it re-renders when coords change */}
@@ -463,6 +458,11 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
           </Marker>
         ) : null}
       </MapView>
+      {!mapReady && (
+        <View style={styles.mapLoadingShield}>
+          <ActivityIndicator size="small" color="#00B14F" />
+        </View>
+      )}
       {hasValidAgentCoordinate && !followMode ? (
         <TouchableOpacity
           style={styles.recenterButton}
@@ -482,6 +482,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#E9E9E9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapLoadingShield: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
