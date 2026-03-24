@@ -343,11 +343,11 @@ class OrdersService {
     overall_rating: number;
     restaurant_rating: number;
     restaurant_comment?: string;
+    comments?: string;
     delivery_partner_rating: number;
-    food_ratings: Array<{
-      item_id: number;
+    food_quality: Array<{
+      product_id: string;
       rating: number;
-      comment?: string;
     }>;
     photos?: Array<{
       url: string;
