@@ -1469,11 +1469,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const handleBackFromLocationSelection = () => {
-    // For guests without a confirmed location, keep them on location selection.
-    if (!isAuthenticatedRef.current && !selectedLocation) {
-      return;
-    }
-
     // Clear editing address when going back
     setEditingAddress(null);
 
