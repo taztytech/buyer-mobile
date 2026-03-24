@@ -74,8 +74,11 @@ const computeBearing = (
 };
 const nightMapStyle = [
   { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#EAF2FF' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0A1322' }] },
   { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#F2F6FF' }] },
+  { featureType: 'road', elementType: 'labels.text.stroke', stylers: [{ color: '#0A1322' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
 ];
 
