@@ -1315,11 +1315,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const transitionGuestToLogin = React.useCallback(() => {
-    setTimeout(() => {
-      setCurrentScreen('login');
-      setAddressSelectionCameFrom('home');
-      addressScreenSlide.setValue(SCREEN_WIDTH);
-    }, 250);
+    setCurrentScreen('login');
+    setAddressSelectionCameFrom('home');
+    addressScreenSlide.setValue(SCREEN_WIDTH);
   }, []);
 
   const handleNavigateToProfile = () => {
