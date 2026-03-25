@@ -90,12 +90,9 @@ export function useLiveRiderTracking(
       if (!update) return;
       if (!Number.isFinite(update.lat) || !Number.isFinite(update.lng)) return;
 
-      const ts = Number.isFinite(update.timestamp as number)
+      let ts = Number.isFinite(update.timestamp as number)
         ? Number(update.timestamp)
         : Date.now();
-      if (ts <= lastAppliedTimestampRef.current) {
-        return;
-      }
 
       if (!animatedCoordinateRef.current) {
         // Lazy-load to avoid importing map types in non-map contexts.
@@ -127,6 +124,13 @@ export function useLiveRiderTracking(
       }
 
       const distanceMeters = haversineMeters(prev.lat, prev.lng, update.lat, update.lng);
+      // Some backends send missing or non-increasing timestamps for current_location.
+      // In that case we still want to animate if lat/lng changed meaningfully.
+      // Ensure dtMs is forward-moving to avoid impliedSpeed spikes.
+      if (ts <= lastAppliedTimestampRef.current) {
+        if (distanceMeters < 0.5) return;
+        ts = lastAppliedTimestampRef.current + 1000;
+      }
       const dtMs = Math.max(1, ts - prev.ts);
       const impliedSpeedMps = distanceMeters / (dtMs / 1000);
 

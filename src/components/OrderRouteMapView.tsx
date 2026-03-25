@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Appearance,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLiveRiderTracking, LiveRiderLocationUpdate } from '@/hooks/useLiveRiderTracking';
@@ -51,7 +52,7 @@ interface OrderRouteMapViewProps {
 const riderDayAsset = require('../../assets/map_bike_day.png');
 const riderNightAsset = require('../../assets/map_bike_night.png');
 const routeOutlineColor = 'rgba(255,255,255,0.92)';
-const routePrimaryColor = '#1E5BE0';
+const routePrimaryColor = '#00B14F';
 const toRadians = (deg: number): number => (deg * Math.PI) / 180;
 const normalizeAngle = (angle: number): number => ((angle % 360) + 360) % 360;
 const shortestAngleDelta = (from: number, to: number): number =>
@@ -73,8 +74,11 @@ const computeBearing = (
 };
 const nightMapStyle = [
   { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#EAF2FF' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0A1322' }] },
   { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#F2F6FF' }] },
+  { featureType: 'road', elementType: 'labels.text.stroke', stylers: [{ color: '#0A1322' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
 ];
 
@@ -95,12 +99,8 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   const fitScheduledRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasInitialStoreFocusRef = useRef(false);
 
-  // Incrementing this key force-remounts the MapView completely.
-  // We do this when returning from PiP (resizeTrigger true → false) so all
-  // markers re-render fresh and nothing is left in a stale state.
-  const [mapKey, setMapKey] = useState(0);
+  const [mapReady, setMapReady] = useState(false);
   const [followMode, setFollowMode] = useState(false);
-  const [zoomBucket, setZoomBucket] = useState<'near' | 'far'>('near');
   const [markerRotation, setMarkerRotation] = useState(0);
   const lastMarkerCoordRef = useRef<{ lat: number; lng: number } | null>(null);
   const lastHeadingRef = useRef(0);
@@ -164,9 +164,9 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     const nowInPip = !!resizeTrigger;
 
     if (wasInPip && !nowInPip) {
-      // Returning from PiP → force-remount so all markers re-render cleanly
-      setMapKey(k => k + 1);
+      // Returning from PiP: refit camera only (avoid remount flicker)
       hasInitialStoreFocusRef.current = false;
+      scheduleStoreFocus(120, false);
     } else if (!wasInPip && nowInPip) {
       // Entering PiP → keep a stable camera around store first.
       hasInitialStoreFocusRef.current = false;
@@ -175,6 +175,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   }, [resizeTrigger, scheduleStoreFocus]);
 
   const handleMapReady = useCallback(() => {
+    setMapReady(true);
     if (hasInitialStoreFocusRef.current) return;
     scheduleStoreFocus(300);
   }, [scheduleStoreFocus]);
@@ -183,9 +184,19 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     (e: LayoutChangeEvent) => {
       const { width, height } = e.nativeEvent.layout;
       if (width > 0 && height > 0) {
+        const prev = layoutRef.current;
         layoutRef.current = { width, height };
-        if (hasInitialStoreFocusRef.current) return;
-        scheduleStoreFocus(300);
+
+        const significantLayoutChange =
+          !prev || Math.abs(prev.width - width) > 40 || Math.abs(prev.height - height) > 80;
+
+        if (!significantLayoutChange) return;
+
+        // Pinning/opening can temporarily change container height, which can
+        // cause a short "unfitted" camera render. Correct immediately with a
+        // fast non-animated camera adjustment.
+        hasInitialStoreFocusRef.current = false;
+        scheduleStoreFocus(150, false);
       }
     },
     [scheduleStoreFocus]
@@ -291,13 +302,6 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   const isDarkMode = Appearance.getColorScheme() === 'dark';
   const useNightTheme = isDarkMode;
   const riderIconSource = useNightTheme ? riderNightAsset : riderDayAsset;
-  const riderResolvedAsset = Image.resolveAssetSource(riderIconSource);
-  const riderMarkerSource = {
-    uri: riderResolvedAsset.uri,
-    // Lower scale => larger marker.
-    // Keep icon slightly larger than store marker icon but smaller than previous size.
-    scale: zoomBucket === 'far' ? 16 : 18,
-  };
 
   if (!isMapAvailable || !MapView || !Marker || !Polyline) {
     return (
@@ -313,7 +317,6 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   return (
     <View style={[styles.container, style]} onLayout={handleLayout}>
       <MapView
-        key={mapKey}
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={StyleSheet.absoluteFill}
@@ -325,12 +328,6 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
           longitudeDelta: Math.max(0.01, Math.abs(restaurantCoordinate.longitude - customerCoordinate.longitude) * 2.5),
         }}
         onMapReady={handleMapReady}
-        onRegionChangeComplete={(region: any) => {
-          const delta = Number(region?.latitudeDelta);
-          if (!Number.isFinite(delta)) return;
-          const nextBucket: 'near' | 'far' = delta >= 0.035 ? 'far' : 'near';
-          setZoomBucket((prev) => (prev === nextBucket ? prev : nextBucket));
-        }}
         showsUserLocation={false}
         showsMyLocationButton={false}
         moveOnMarkerPress={false}
@@ -348,7 +345,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
               : [restaurantCoordinate, customerCoordinate]
           }
           strokeColor={routeOutlineColor}
-          strokeWidth={10}
+          strokeWidth={8}
           lineCap="round"
           lineJoin="round"
         />
@@ -360,19 +357,28 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
               : [restaurantCoordinate, customerCoordinate]
           }
           strokeColor={routePrimaryColor}
-          strokeWidth={6}
+          strokeWidth={5}
           lineCap="round"
           lineJoin="round"
         />
-        {/* Secondary route (store -> rider), subtle grey with 50% opacity */}
+        {/* Secondary route (store -> rider), with white outline */}
         {storeToAgentRouteCoordinates && storeToAgentRouteCoordinates.length > 1 ? (
-          <Polyline
-            coordinates={storeToAgentRouteCoordinates}
-            strokeColor="rgba(200, 205, 215, 0.5)"
-            strokeWidth={4}
-            lineCap="round"
-            lineJoin="round"
-          />
+          <>
+            <Polyline
+              coordinates={storeToAgentRouteCoordinates}
+              strokeColor={routeOutlineColor}
+              strokeWidth={7}
+              lineCap="round"
+              lineJoin="round"
+            />
+            <Polyline
+              coordinates={storeToAgentRouteCoordinates}
+              strokeColor="#1E5BE0"
+              strokeWidth={4}
+              lineCap="round"
+              lineJoin="round"
+            />
+          </>
         ) : null}
 
         {/* Restaurant marker — key ensures it re-renders when coords change */}
@@ -413,35 +419,31 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
             <View style={[styles.customerMarker, inPip && styles.customerMarkerPip]}>
               <MaterialIcons
                 name="person"
-                size={inPip ? 14 : 20}
+                size={inPip ? 12 : 16}
                 color="#2196F3"
               />
             </View>
-            {!inPip && customerAddress ? (
-              <View style={[styles.labelBubble, styles.customerLabel]}>
-                <Text style={styles.labelText} numberOfLines={2}>
-                  {customerAddress}
-                </Text>
-              </View>
-            ) : null}
           </View>
         </Marker>
 
         {hasValidAgentCoordinate && animatedCoordinate ? (
           <Marker.Animated
-            key="agent-marker"
+            key={`agent-marker-s54-${useNightTheme ? 'night' : 'day'}`}
             coordinate={animatedCoordinate}
             zIndex={30}
             anchor={{ x: 0.5, y: 0.5 }}
             title="Delivery Partner"
-            image={riderMarkerSource}
             tracksViewChanges={true}
             rotation={markerRotation}
             flat
-          />
+          >
+            <View style={styles.agentMarkerImageWrap}>
+              <Image source={riderIconSource} style={styles.agentBikeImage} resizeMode="contain" />
+            </View>
+          </Marker.Animated>
         ) : hasValidAgentCoordinate && agentLocationUpdate ? (
           <Marker
-            key="agent-marker-fallback"
+            key={`agent-marker-fallback-s54-${useNightTheme ? 'night' : 'day'}`}
             coordinate={{
               latitude: agentLocationUpdate.lat,
               longitude: agentLocationUpdate.lng,
@@ -449,13 +451,21 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
             zIndex={30}
             anchor={{ x: 0.5, y: 0.5 }}
             title="Delivery Partner"
-            image={riderMarkerSource}
             tracksViewChanges={true}
             rotation={markerRotation}
             flat
-          />
+          >
+            <View style={styles.agentMarkerImageWrap}>
+              <Image source={riderIconSource} style={styles.agentBikeImage} resizeMode="contain" />
+            </View>
+          </Marker>
         ) : null}
       </MapView>
+      {!mapReady && (
+        <View style={styles.mapLoadingShield}>
+          <ActivityIndicator size="small" color="#00B14F" />
+        </View>
+      )}
       {hasValidAgentCoordinate && !followMode ? (
         <TouchableOpacity
           style={styles.recenterButton}
@@ -475,6 +485,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#E9E9E9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapLoadingShield: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -513,9 +529,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   customerMarker: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
@@ -532,6 +548,16 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
+  },
+  agentMarkerImageWrap: {
+    width: 66,
+    height: 86,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  agentBikeImage: {
+    width: 72,
+    height: 94,
   },
   agentMarker: {
     width: 32,
@@ -567,11 +593,11 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   labelBubble: {
-    marginTop: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 8,
-    maxWidth: 140,
+    maxWidth: 118,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
@@ -586,7 +612,7 @@ const styles = StyleSheet.create({
   },
   labelText: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 11,
+    fontSize: 10,
     color: '#FFFFFF',
     textAlign: 'center',
   },
