@@ -2125,6 +2125,7 @@ DEPENDENCIES:
   - FirebaseCoreExtension
   - FirebaseCoreInternal
   - FirebaseInstallations
+  - FirebaseMessaging
   - FirebaseSessions
   - GoogleDataTransport
   - GoogleUtilities
@@ -2563,6 +2564,6 @@ SPEC CHECKSUMS:
   SDWebImageWebPCoder: e38c0a70396191361d60c092933e22c20d5b1380
   Yoga: 5934998fbeaef7845dbf698f698518695ab4cd1a
 
-PODFILE CHECKSUM: 3b6bb605c89289714931f63fb5d3640d781ced98
+PODFILE CHECKSUM: dae6a8ec71f43e5dd6fbef2f9f289913927ec5b7
 
 COCOAPODS: 1.16.2
