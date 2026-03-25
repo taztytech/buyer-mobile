@@ -59,6 +59,19 @@ const toRadians = (deg: number): number => (deg * Math.PI) / 180;
 const normalizeAngle = (angle: number): number => ((angle % 360) + 360) % 360;
 const shortestAngleDelta = (from: number, to: number): number =>
   ((to - from + 540) % 360) - 180;
+const haversineMeters = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const earthRadius = 6371000;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadius * c;
+};
 const computeBearing = (
   lat1: number,
   lng1: number,
@@ -240,18 +253,17 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
 
     const lat = agentLocationUpdate.lat;
     const lng = agentLocationUpdate.lng;
-    const providedHeading = Number.isFinite(agentLocationUpdate.heading as number)
-      ? normalizeAngle(Number(agentLocationUpdate.heading))
-      : null;
-
-    let targetHeading = providedHeading;
     const previous = lastMarkerCoordRef.current;
-    if (targetHeading === null && previous) {
-      targetHeading = computeBearing(previous.lat, previous.lng, lat, lng);
-    }
     lastMarkerCoordRef.current = { lat, lng };
 
-    if (targetHeading === null) return;
+    // Always rotate based on movement direction so the bike turns with the road
+    // even when the backend heading is missing/stale.
+    if (!previous) return;
+
+    const movedMeters = haversineMeters(previous.lat, previous.lng, lat, lng);
+    if (movedMeters < 2) return;
+
+    const targetHeading = computeBearing(previous.lat, previous.lng, lat, lng);
 
     if (headingAnimTimerRef.current) {
       clearInterval(headingAnimTimerRef.current);
