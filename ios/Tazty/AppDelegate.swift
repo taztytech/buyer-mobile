@@ -1,5 +1,6 @@
 import Expo
 import FirebaseCore
+import FirebaseMessaging
 import React
 import ReactAppDependencyProvider
 import GoogleMaps
@@ -8,7 +9,7 @@ import UserNotifications
 
 @UIApplicationMain
 
-public class AppDelegate: ExpoAppDelegate, UNUserNotificationCenterDelegate {
+public class AppDelegate: ExpoAppDelegate {
   var window: UIWindow?
 
   var reactNativeDelegate: ExpoReactNativeFactoryDelegate?
@@ -33,8 +34,6 @@ public class AppDelegate: ExpoAppDelegate, UNUserNotificationCenterDelegate {
 FirebaseApp.configure()
 // @generated end @react-native-firebase/app-didFinishLaunchingWithOptions
 
-    UNUserNotificationCenter.current().delegate = self
-
     factory.startReactNative(
       withModuleName: "main",
       in: window,
@@ -44,23 +43,37 @@ FirebaseApp.configure()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  public func userNotificationCenter(
-    _ center: UNUserNotificationCenter,
-    willPresent notification: UNNotification,
-    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  // Required for the background / data-only notification event.
+  public override func application(
+    _ application: UIApplication,
+    didReceiveRemoteNotification userInfo: [AnyHashable : Any],
+    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
   ) {
-    completionHandler([[.banner, .list, .sound, .badge]])
+    // Forward the message to Firebase Messaging
+    Messaging.messaging().appDidReceiveMessage(userInfo)
+    
+    super.application(application, didReceiveRemoteNotification: userInfo, fetchCompletionHandler: completionHandler)
   }
 
-  public func userNotificationCenter(
-    _ center: UNUserNotificationCenter,
-    didReceive response: UNNotificationResponse,
-    withCompletionHandler completionHandler: @escaping () -> Void
+  // Forward APNS device token to Firebase Messaging explicitly
+  public override func application(
+    _ application: UIApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
   ) {
-    // This is called when a user taps a notification
-    // Firebase Messaging will also catch this via swizzling, 
-    // but we must call the completion handler to avoid hangs.
-    completionHandler()
+    #if DEBUG
+    Messaging.messaging().setAPNSToken(deviceToken, type: .sandbox)
+    #else
+    Messaging.messaging().setAPNSToken(deviceToken, type: .prod)
+    #endif
+    super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
+  }
+
+  public override func application(
+    _ application: UIApplication,
+    didFailToRegisterForRemoteNotificationsWithError error: Error
+  ) {
+    print("❌ FCM: Failed to register for remote notifications: \(error.localizedDescription)")
+    super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
   }
 
   // Linking API
