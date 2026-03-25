@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -41,6 +41,8 @@ interface OrderRouteMapViewProps {
   agentLocationUpdate?: LiveRiderLocationUpdate | null;
   routeCoordinates?: OrderRouteCoordinate[];
   storeToAgentRouteCoordinates?: OrderRouteCoordinate[] | null;
+  /** When true, show agent↔store (blue) using decoded path or straight fallback if needed */
+  showStoreToAgentRoute?: boolean;
   mode?: 'ready' | 'live';
   restaurantName?: string;
   customerAddress?: string;
@@ -88,6 +90,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   agentLocationUpdate,
   routeCoordinates,
   storeToAgentRouteCoordinates,
+  showStoreToAgentRoute = false,
   restaurantName,
   customerAddress,
   resizeTrigger,
@@ -111,12 +114,37 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     applyLocationUpdate,
     getCurrentCenter,
     getCurrentHeading,
-  } = useLiveRiderTracking();
+  } = useLiveRiderTracking({
+    minDurationMs: 550,
+    maxDurationMs: 2800,
+    pollIntervalMs: 2500,
+  });
 
   const hasValidAgentCoordinate =
     !!agentLocationUpdate &&
     Number.isFinite(agentLocationUpdate.lat) &&
     Number.isFinite(agentLocationUpdate.lng);
+
+  const agentPointForStoreLeg: OrderRouteCoordinate | null = hasValidAgentCoordinate
+    ? { latitude: agentLocationUpdate!.lat, longitude: agentLocationUpdate!.lng }
+    : null;
+
+  const storeToAgentPolylineCoords = useMemo((): OrderRouteCoordinate[] | null => {
+    if (storeToAgentRouteCoordinates && storeToAgentRouteCoordinates.length > 1) {
+      return storeToAgentRouteCoordinates;
+    }
+    if (showStoreToAgentRoute && agentPointForStoreLeg) {
+      return [restaurantCoordinate, agentPointForStoreLeg];
+    }
+    return null;
+  }, [
+    storeToAgentRouteCoordinates,
+    showStoreToAgentRoute,
+    restaurantCoordinate.latitude,
+    restaurantCoordinate.longitude,
+    agentPointForStoreLeg?.latitude,
+    agentPointForStoreLeg?.longitude,
+  ]);
 
   // Whether we are in PiP mode — controls marker label visibility and marker size
   const inPip = !!resizeTrigger;
@@ -349,7 +377,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
           lineCap="round"
           lineJoin="round"
         />
-        {/* Main route (deep blue, consistent with Rider map style) */}
+        {/* Main store → customer route (brand green) */}
         <Polyline
           coordinates={
             routeCoordinates && routeCoordinates.length > 1
@@ -361,18 +389,18 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
           lineCap="round"
           lineJoin="round"
         />
-        {/* Secondary route (store -> rider), with white outline */}
-        {storeToAgentRouteCoordinates && storeToAgentRouteCoordinates.length > 1 ? (
+        {/* Agent ↔ store (blue + outline); road polyline or straight fallback */}
+        {storeToAgentPolylineCoords && storeToAgentPolylineCoords.length > 1 ? (
           <>
             <Polyline
-              coordinates={storeToAgentRouteCoordinates}
+              coordinates={storeToAgentPolylineCoords}
               strokeColor={routeOutlineColor}
               strokeWidth={7}
               lineCap="round"
               lineJoin="round"
             />
             <Polyline
-              coordinates={storeToAgentRouteCoordinates}
+              coordinates={storeToAgentPolylineCoords}
               strokeColor="#1E5BE0"
               strokeWidth={4}
               lineCap="round"
