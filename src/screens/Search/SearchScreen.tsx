@@ -17,6 +17,7 @@ import { searchService, SearchSuggestion } from '@/services/search.service';
 import { SearchBar } from '@/components/SearchBar';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { GUEST_SELECTED_LOCATION_KEY } from '@/services/storage.service';
 import { useVegMode } from '@/context/VegModeContext';
 
 // Default location fallback (same as HomeScreen)
@@ -91,7 +92,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
 
     // Priority 2: Try AsyncStorage (saved location)
     try {
-      const savedLocationStr = await AsyncStorage.getItem('selectedLocation');
+      const savedLocationStr = await AsyncStorage.getItem(GUEST_SELECTED_LOCATION_KEY);
       if (savedLocationStr) {
         const savedLocation = JSON.parse(savedLocationStr);
         if (savedLocation.latitude && savedLocation.longitude) {

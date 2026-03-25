@@ -19,9 +19,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
+import { GUEST_SELECTED_LOCATION_KEY } from '@/services/storage.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
-
-const GUEST_SELECTED_LOCATION_KEY = 'selectedLocation';
 
 interface SavedAddress {
   id: string;

@@ -31,7 +31,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
-import { storageService } from '@/services/storage.service';
+import { storageService, GUEST_SELECTED_LOCATION_KEY } from '@/services/storage.service';
 import { homeService } from '@/services/home.service';
 import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
@@ -50,8 +50,6 @@ import { ForcedUpdateModal } from '@/components/ForcedUpdateModal';
 import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const GUEST_SELECTED_LOCATION_KEY = 'selectedLocation';
-
 // Let native splash auto-hide immediately - don't prevent it
 // SplashScreen.preventAutoHideAsync();
 
@@ -276,6 +274,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     latitude?: number;
     longitude?: number;
     type?: 'home' | 'work' | 'other';
+    city?: string;
+    pincode?: string;
+    address1?: string;
+    address2?: string;
+    address3?: string;
+    state?: string;
+    /** When true, location is already on the account (e.g. after logout); skip POST on next login. */
+    guestLocationSynced?: boolean;
   }) => {
     try {
       await AsyncStorage.setItem(GUEST_SELECTED_LOCATION_KEY, JSON.stringify(location));
@@ -1236,6 +1242,21 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     // Clear address cache to prevent showing previous account's addresses
     addressService.clearCache();
 
+    // Keep current delivery location (persist for guest browse + avoid duplicate address POST on re-login)
+    if (
+      typeof selectedLocation?.latitude === 'number' &&
+      typeof selectedLocation?.longitude === 'number'
+    ) {
+      await saveGuestLocation({
+        name: selectedLocation.name,
+        address: selectedLocation.address,
+        latitude: selectedLocation.latitude,
+        longitude: selectedLocation.longitude,
+        type: selectedLocation.type,
+        guestLocationSynced: true,
+      });
+    }
+
     // Reset all animated values to their initial state
     homeScreenSlide.setValue(0);
     profileScreenSlide.setValue(SCREEN_WIDTH);
@@ -1550,7 +1571,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const handleLocationConfirm = (location: any) => {
     const locationType = location.type as 'home' | 'work' | 'other' | undefined;
     const validType = locationType && ['home', 'work', 'other'].includes(locationType) ? locationType : 'other';
-    const confirmedLocation = {
+    const confirmedLocation: Record<string, unknown> = {
       name: location.name || location.locationName,
       address: location.locationAddress || location.address,
       // Do NOT silently fall back to hardcoded Madurai coordinates.
@@ -1559,11 +1580,40 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       longitude: location.longitude ?? location.lng,
       type: validType,
     };
+    if (location.city != null && String(location.city).trim() !== '') {
+      confirmedLocation.city = location.city;
+    }
+    if (location.pincode != null && String(location.pincode).trim() !== '') {
+      confirmedLocation.pincode = String(location.pincode).trim();
+    }
+    if (location.address1) confirmedLocation.address1 = location.address1;
+    if (location.address2) confirmedLocation.address2 = location.address2;
+    if (location.address3) confirmedLocation.address3 = location.address3;
+    if (location.state) confirmedLocation.state = location.state;
 
     // Update selected location
-    setSelectedLocation(confirmedLocation);
+    setSelectedLocation({
+      name: confirmedLocation.name as string,
+      address: confirmedLocation.address as string,
+      latitude: confirmedLocation.latitude as number | undefined,
+      longitude: confirmedLocation.longitude as number | undefined,
+      type: validType,
+    });
     if (!isAuthenticatedRef.current) {
-      saveGuestLocation(confirmedLocation);
+      saveGuestLocation({
+        name: confirmedLocation.name as string,
+        address: confirmedLocation.address as string,
+        latitude: confirmedLocation.latitude as number | undefined,
+        longitude: confirmedLocation.longitude as number | undefined,
+        type: validType,
+        guestLocationSynced: false,
+        ...(typeof confirmedLocation.city === 'string' ? { city: confirmedLocation.city } : {}),
+        ...(typeof confirmedLocation.pincode === 'string' ? { pincode: confirmedLocation.pincode } : {}),
+        ...(typeof confirmedLocation.address1 === 'string' ? { address1: confirmedLocation.address1 } : {}),
+        ...(typeof confirmedLocation.address2 === 'string' ? { address2: confirmedLocation.address2 } : {}),
+        ...(typeof confirmedLocation.address3 === 'string' ? { address3: confirmedLocation.address3 } : {}),
+        ...(typeof confirmedLocation.state === 'string' ? { state: confirmedLocation.state } : {}),
+      });
     }
     const resolvedCity = String(location.city || '').toLowerCase();
     const resolvedPincode = String(location.pincode || '');
@@ -2897,7 +2947,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                 setSelectedLocation(location);
                 // Persist guest selection to AsyncStorage for next app open
                 if (!isAuthenticatedRef.current) {
-                  saveGuestLocation(location).catch(() => {});
+                  saveGuestLocation({ ...location, guestLocationSynced: false }).catch(() => {});
                 }
                 handleAddressChange();
                 handleBackFromAddressSelection();
