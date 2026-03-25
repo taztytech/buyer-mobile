@@ -39,6 +39,7 @@ import {
   extractLatestAgentTrackingUpdate,
 } from './orderTrackingLocationUtils';
 import { resolveTrackingDisplayOrder, resolveAgentPhoneForExotel } from './trackingDisplayUtils';
+import { computeShowStoreToAgentRoute } from './orderTrackingRouteVisibility';
 import { CancelReasonModal } from '@/components/CancelReasonModal';
 import { appConfigService } from '@/services/app-config.service';
 
@@ -94,20 +95,6 @@ const decodeRoutePolyline = (encoded: string): Array<{ latitude: number; longitu
   return points;
 };
 
-const shouldShowStoreToAgentRoute = (status: string | null | undefined): boolean => {
-  const normalized = String(status || '').toLowerCase().trim().replace(/[_\s]+/g, '-');
-  const prePickupStatuses = new Set([
-    'assigned',
-    'agent-assigned',
-    'rider-assigned',
-    'agent-arrived-restaurant',
-    'rider-accepted',
-    'accepted',
-    'ready-for-pickup',
-  ]);
-  return prePickupStatuses.has(normalized);
-};
-
 const normalizeOrderStatus = (status: string | null | undefined): string => {
   return String(status || '')
     .toLowerCase()
@@ -128,6 +115,10 @@ const shouldFetchDeliveryTrackStatus = (status: string | null | undefined): bool
     'picked-up',
     'ready-for-pickup',
     'ready-for-delivery',
+    // Track order remains live through the “order ready” stage.
+    'order-ready',
+    // Backend uses "packed" for order-ready — keep tracking live.
+    'packed',
     'out-for-delivery',
     'on-the-way',
     'en-route',
@@ -137,7 +128,6 @@ const shouldFetchDeliveryTrackStatus = (status: string | null | undefined): bool
     'pending',
     'confirmed',
     'billed',
-    'packed',
     'delivered',
     'completed',
     'cancelled',
@@ -294,8 +284,16 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
     if (!restaurantCoordinate || !customerCoordinate) return null;
 
-    const agentCoordinate = extractAgentCoordinate(displayOrder);
+    const agentCoordinateRaw = extractAgentCoordinate(displayOrder);
     const latestAgentLocationUpdate = extractLatestAgentTrackingUpdate(displayOrder);
+    const agentCoordinate =
+      agentCoordinateRaw ??
+      (latestAgentLocationUpdate
+        ? {
+            latitude: latestAgentLocationUpdate.latitude,
+            longitude: latestAgentLocationUpdate.longitude,
+          }
+        : null);
     const normalizedStatus = String(displayOrder.status || '').toLowerCase().trim().replace(/[_\s]+/g, '-');
     const prePickupStatusSet = new Set(['assigned', 'agent-assigned', 'agent-arrived-restaurant', 'accepted']);
     const postPickupStatusSet = new Set([
@@ -328,7 +326,11 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       stageKey: normalizedStatus,
       routeCoordinates,
       mode: hasAgentAssignedSignal ? 'live' as const : 'ready' as const,
-      showStoreToAgentRoute: shouldShowStoreToAgentRoute(normalizedStatus),
+      showStoreToAgentRoute: computeShowStoreToAgentRoute(
+        normalizedStatus,
+        restaurantCoordinate,
+        agentCoordinate,
+      ),
       restaurantName,
       customerAddress,
     };
@@ -2276,6 +2278,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                     : fallbackMapCoords.routeCoordinates
                 }
                 storeToAgentRouteCoordinates={storeToAgentRouteCoordinates}
+                showStoreToAgentRoute={fallbackMapCoords.showStoreToAgentRoute}
                 mode={fallbackMapCoords.mode}
                 restaurantName={fallbackMapCoords.restaurantName}
                 customerAddress={fallbackMapCoords.customerAddress}

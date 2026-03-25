@@ -13,6 +13,8 @@ export interface LiveRiderLocationUpdate {
 type UseLiveRiderTrackingOptions = {
   minDurationMs?: number;
   maxDurationMs?: number;
+  /** When location updates arrive on a fixed poll (e.g. 2500ms), set this so motion runs until ~next tick instead of finishing early. */
+  pollIntervalMs?: number;
   maxJumpMeters?: number;
   stationarySpeedMps?: number;
   headingSmoothingFactor?: number;
@@ -71,6 +73,7 @@ export function useLiveRiderTracking(
   const {
     minDurationMs = 300,
     maxDurationMs = 1800,
+    pollIntervalMs = 0,
     maxJumpMeters = 1200,
     stationarySpeedMps = 0.8,
     headingSmoothingFactor = 0.42,
@@ -147,7 +150,11 @@ export function useLiveRiderTracking(
       const durationFromUpdateCadence = Math.round(
         Math.max(minDurationMs, Math.min(maxDurationMs, dtMs * 0.9)),
       );
-      const duration = Math.min(baseDuration, durationFromUpdateCadence);
+      let duration = Math.max(baseDuration, durationFromUpdateCadence);
+      if (pollIntervalMs > 0) {
+        duration = Math.max(duration, Math.round(pollIntervalMs * 0.92));
+      }
+      duration = Math.min(maxDurationMs, Math.max(minDurationMs, duration));
 
       animatedCoordinateRef.current.stopAnimation((currentValue: any) => {
         const fromLat = Number.isFinite(currentValue?.latitude)

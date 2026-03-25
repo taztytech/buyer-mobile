@@ -38,10 +38,10 @@ import {
   extractRestaurantCoordinate,
   extractCustomerCoordinate,
   extractAgentCoordinate,
-  extractTrackingPathCoordinates,
   extractLatestAgentTrackingUpdate,
 } from './orderTrackingLocationUtils';
 import { resolveTrackingDisplayOrder, resolveAgentPhoneForExotel } from './trackingDisplayUtils';
+import { computeShowStoreToAgentRoute } from './orderTrackingRouteVisibility';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -117,6 +117,10 @@ const shouldFetchDeliveryTrackStatus = (status: string | null | undefined): bool
     'picked-up',
     'ready-for-pickup',
     'ready-for-delivery',
+    // Track order remains live through the “order ready” stage.
+    'order-ready',
+    // Backend uses "packed" for order-ready — keep tracking live.
+    'packed',
     'out-for-delivery',
     'on-the-way',
     'en-route',
@@ -126,27 +130,12 @@ const shouldFetchDeliveryTrackStatus = (status: string | null | undefined): bool
     'pending',
     'confirmed',
     'billed',
-    'packed',
     'delivered',
     'completed',
     'cancelled',
     'canceled',
   ];
   return eligibleStatuses.includes(normalizedStatus) && !excludedStatuses.includes(normalizedStatus);
-};
-
-const shouldShowStoreToAgentRoute = (status: string | null | undefined): boolean => {
-  const normalizedStatus = normalizeOrderStatus(status);
-  const prePickupStatuses = new Set([
-    'assigned',
-    'agent-assigned',
-    'rider-assigned',
-    'agent-arrived-restaurant',
-    'rider-accepted',
-    'accepted',
-    'ready-for-pickup',
-  ]);
-  return prePickupStatuses.has(normalizedStatus);
 };
 
 const extractTrackingIdFromUrl = (trackingUrl: unknown): string | null => {
@@ -843,9 +832,16 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     const customerCoordinate = extractCustomerCoordinate(displayOrder);
     if (!restaurantCoordinate || !customerCoordinate) return null;
 
-    const agentCoordinate = extractAgentCoordinate(displayOrder);
+    const agentCoordinateRaw = extractAgentCoordinate(displayOrder);
     const latestAgentLocationUpdate = extractLatestAgentTrackingUpdate(displayOrder);
-    const trackingPath = extractTrackingPathCoordinates(displayOrder);
+    const agentCoordinate =
+      agentCoordinateRaw ??
+      (latestAgentLocationUpdate
+        ? {
+            latitude: latestAgentLocationUpdate.latitude,
+            longitude: latestAgentLocationUpdate.longitude,
+          }
+        : null);
 
     const rawStatus = (displayOrder.status || '').toString().toLowerCase().trim();
     const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
@@ -891,7 +887,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       stageKey: normalizedStatus,
       routeCoordinates,
       mode: hasAgentAssignedSignal ? 'live' as const : 'ready' as const,
-      showStoreToAgentRoute: shouldShowStoreToAgentRoute(normalizedStatus),
+      showStoreToAgentRoute: computeShowStoreToAgentRoute(
+        normalizedStatus,
+        restaurantCoordinate,
+        agentCoordinate,
+      ),
       restaurantName,
       customerAddress,
     };
@@ -2279,6 +2279,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                     : fallbackMapCoords.routeCoordinates
                 }
                 storeToAgentRouteCoordinates={storeToAgentRouteCoordinates}
+                showStoreToAgentRoute={fallbackMapCoords.showStoreToAgentRoute}
                 mode={fallbackMapCoords.mode}
                 restaurantName={fallbackMapCoords.restaurantName}
                 customerAddress={fallbackMapCoords.customerAddress}

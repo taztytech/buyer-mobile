@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -41,6 +41,8 @@ interface OrderRouteMapViewProps {
   agentLocationUpdate?: LiveRiderLocationUpdate | null;
   routeCoordinates?: OrderRouteCoordinate[];
   storeToAgentRouteCoordinates?: OrderRouteCoordinate[] | null;
+  /** When true, show agent↔store (blue) using decoded path or straight fallback if needed */
+  showStoreToAgentRoute?: boolean;
   mode?: 'ready' | 'live';
   restaurantName?: string;
   customerAddress?: string;
@@ -57,6 +59,19 @@ const toRadians = (deg: number): number => (deg * Math.PI) / 180;
 const normalizeAngle = (angle: number): number => ((angle % 360) + 360) % 360;
 const shortestAngleDelta = (from: number, to: number): number =>
   ((to - from + 540) % 360) - 180;
+const haversineMeters = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const earthRadius = 6371000;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadius * c;
+};
 const computeBearing = (
   lat1: number,
   lng1: number,
@@ -88,6 +103,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   agentLocationUpdate,
   routeCoordinates,
   storeToAgentRouteCoordinates,
+  showStoreToAgentRoute = false,
   restaurantName,
   customerAddress,
   resizeTrigger,
@@ -111,12 +127,37 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     applyLocationUpdate,
     getCurrentCenter,
     getCurrentHeading,
-  } = useLiveRiderTracking();
+  } = useLiveRiderTracking({
+    minDurationMs: 550,
+    maxDurationMs: 2800,
+    pollIntervalMs: 2500,
+  });
 
   const hasValidAgentCoordinate =
     !!agentLocationUpdate &&
     Number.isFinite(agentLocationUpdate.lat) &&
     Number.isFinite(agentLocationUpdate.lng);
+
+  const agentPointForStoreLeg: OrderRouteCoordinate | null = hasValidAgentCoordinate
+    ? { latitude: agentLocationUpdate!.lat, longitude: agentLocationUpdate!.lng }
+    : null;
+
+  const storeToAgentPolylineCoords = useMemo((): OrderRouteCoordinate[] | null => {
+    if (storeToAgentRouteCoordinates && storeToAgentRouteCoordinates.length > 1) {
+      return storeToAgentRouteCoordinates;
+    }
+    if (showStoreToAgentRoute && agentPointForStoreLeg) {
+      return [restaurantCoordinate, agentPointForStoreLeg];
+    }
+    return null;
+  }, [
+    storeToAgentRouteCoordinates,
+    showStoreToAgentRoute,
+    restaurantCoordinate.latitude,
+    restaurantCoordinate.longitude,
+    agentPointForStoreLeg?.latitude,
+    agentPointForStoreLeg?.longitude,
+  ]);
 
   // Whether we are in PiP mode — controls marker label visibility and marker size
   const inPip = !!resizeTrigger;
@@ -212,18 +253,17 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
 
     const lat = agentLocationUpdate.lat;
     const lng = agentLocationUpdate.lng;
-    const providedHeading = Number.isFinite(agentLocationUpdate.heading as number)
-      ? normalizeAngle(Number(agentLocationUpdate.heading))
-      : null;
-
-    let targetHeading = providedHeading;
     const previous = lastMarkerCoordRef.current;
-    if (targetHeading === null && previous) {
-      targetHeading = computeBearing(previous.lat, previous.lng, lat, lng);
-    }
     lastMarkerCoordRef.current = { lat, lng };
 
-    if (targetHeading === null) return;
+    // Always rotate based on movement direction so the bike turns with the road
+    // even when the backend heading is missing/stale.
+    if (!previous) return;
+
+    const movedMeters = haversineMeters(previous.lat, previous.lng, lat, lng);
+    if (movedMeters < 2) return;
+
+    const targetHeading = computeBearing(previous.lat, previous.lng, lat, lng);
 
     if (headingAnimTimerRef.current) {
       clearInterval(headingAnimTimerRef.current);
@@ -349,7 +389,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
           lineCap="round"
           lineJoin="round"
         />
-        {/* Main route (deep blue, consistent with Rider map style) */}
+        {/* Main store → customer route (brand green) */}
         <Polyline
           coordinates={
             routeCoordinates && routeCoordinates.length > 1
@@ -361,18 +401,18 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
           lineCap="round"
           lineJoin="round"
         />
-        {/* Secondary route (store -> rider), with white outline */}
-        {storeToAgentRouteCoordinates && storeToAgentRouteCoordinates.length > 1 ? (
+        {/* Agent ↔ store (blue + outline); road polyline or straight fallback */}
+        {storeToAgentPolylineCoords && storeToAgentPolylineCoords.length > 1 ? (
           <>
             <Polyline
-              coordinates={storeToAgentRouteCoordinates}
+              coordinates={storeToAgentPolylineCoords}
               strokeColor={routeOutlineColor}
               strokeWidth={7}
               lineCap="round"
               lineJoin="round"
             />
             <Polyline
-              coordinates={storeToAgentRouteCoordinates}
+              coordinates={storeToAgentPolylineCoords}
               strokeColor="#1E5BE0"
               strokeWidth={4}
               lineCap="round"
