@@ -123,19 +123,19 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
           useNativeDriver: false,
         }),
         Animated.timing(greenSectionOpacity, {
-          toValue: 0,
+          toValue: 1,
           duration: 350,
           easing: smoothEasing,
           useNativeDriver: true,
         }),
         Animated.timing(greenSectionTranslateY, {
-          toValue: -300,
+          toValue: 0, // Let ScrollView/KeyboardAvoidingView handle positioning
           duration: 350,
           easing: smoothEasing,
           useNativeDriver: true,
         }),
         Animated.timing(formContainerTranslateY, {
-          toValue: -120,
+          toValue: 0, // Let ScrollView/KeyboardAvoidingView handle positioning
           duration: 350,
           easing: smoothEasing,
           useNativeDriver: true,
@@ -172,19 +172,19 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
           useNativeDriver: false,
         }),
         Animated.timing(greenSectionOpacity, {
-          toValue: 0,
+          toValue: 1,
           duration: 350,
           easing: smoothEasing,
           useNativeDriver: true,
         }),
         Animated.timing(greenSectionTranslateY, {
-          toValue: -300,
+          toValue: 0,
           duration: 350,
           easing: smoothEasing,
           useNativeDriver: true,
         }),
         Animated.timing(formContainerTranslateY, {
-          toValue: -120,
+          toValue: 0,
           duration: 350,
           easing: smoothEasing,
           useNativeDriver: true,
@@ -397,14 +397,13 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            keyboardHeight > 0 && { paddingBottom: keyboardHeight + 20 },
-            isFormMoved && { flexGrow: 0 }
+            isFormMoved && { flexGrow: 1 }
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           bounces={false}
           keyboardDismissMode="interactive"
-          scrollEnabled={!isFormMoved}
+          scrollEnabled={true}
         >
           {/* Green Background Section with Elegant Animation */}
           <Animated.View
@@ -438,6 +437,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
               styles.bottomSheet,
               {
                 transform: [{ translateY: formContainerTranslateY }],
+                paddingBottom: keyboardHeight > 0 ? keyboardHeight + 20 : 0,
               },
             ]}
           >
@@ -594,11 +594,12 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    // Keep root background white so keyboard/layout shifts never expose green at the bottom.
-    backgroundColor: '#FFFFFF',
+    // Using matching green for top background but keeping container white for keyboard
+    backgroundColor: '#00B14F',
   },
   container: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   scrollView: {
     flex: 1,
@@ -610,7 +611,6 @@ const styles = StyleSheet.create({
   greenSection: {
     height: 258,
     backgroundColor: '#00B14F',
-    paddingHorizontal: 20,
     position: 'relative',
   },
   welcomeTitle: {

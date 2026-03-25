@@ -2448,6 +2448,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const handleBackFromRateOrder = () => {
+    resetOrdersPersistence(); // Auto refresh the orders page after rating
     setCurrentScreen('orders');
     setSelectedOrderData(null);
   };

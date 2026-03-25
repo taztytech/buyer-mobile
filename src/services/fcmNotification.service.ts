@@ -160,6 +160,9 @@ class FCMNotificationService {
 
         if (enabled) {
           console.log('✅ FCM: iOS Authorization status:', authStatus);
+          // Invalidate cached token so the next getToken() call fetches a fresh
+          // FCM token after APNS registration is fully confirmed with permission.
+          await this.clearTokenCache();
           return true;
         } else {
           console.warn('⚠️  FCM: iOS Authorization status:', authStatus);
@@ -317,6 +320,15 @@ class FCMNotificationService {
       console.error('❌ FCM: Failed to get token:', error);
       return null;
     }
+  }
+
+  /**
+   * Clear the in-memory and AsyncStorage FCM token cache.
+   * Forces the next getToken() call to fetch a fresh token from Firebase.
+   */
+  private async clearTokenCache(): Promise<void> {
+    this.fcmToken = null;
+    await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
   }
 
   /**
