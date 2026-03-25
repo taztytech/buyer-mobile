@@ -11,6 +11,7 @@ import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 import { fcmNotificationService } from './fcmNotification.service';
 import { analyticsService, AnalyticsEvents } from './analytics.service';
 import { crashlyticsService } from './crashlytics.service';
+import { addressService } from './address.service';
 
 // Types
 export interface SendOtpRequest {
@@ -28,6 +29,8 @@ export interface VerifyOtpRequest {
   phoneNumber: string;
   otp: string;
   countryCode?: string;
+  /** When set, sent as `identity_token` so the API can link guest → logged-in user */
+  identity_token?: string;
 }
 
 export interface VerifyOtpResponse {
@@ -106,15 +109,30 @@ class AuthService {
 
   /**
    * Verify OTP and login
+   * If a guest `identity_token` exists in storage, it is sent so the backend can link the guest session.
    */
   async verifyOtp(
     phoneNumber: string,
     otp: string
   ): Promise<ApiResponse<VerifyOtpResponse>> {
+    const identityToken = await storageService.getIdentityToken();
     try {
-      const requestPayload = {
+      const requestPayload: {
+        phone_number: string;
+        otp: number;
+        identity_token?: string;
+      } = {
         phone_number: phoneNumber,
         otp: parseInt(otp, 10),
+      };
+      if (identityToken) {
+        requestPayload.identity_token = identityToken;
+      }
+
+      const crashlyticsOtpRequest = {
+        phone_number: phoneNumber,
+        otp: parseInt(otp, 10),
+        has_identity_token: !!identityToken,
       };
 
       const response = await apiService.post<VerifyOtpResponse>(
@@ -129,7 +147,7 @@ class AuthService {
           {
             source: 'auth_verify_otp_failed',
             otp_verify: {
-              request: requestPayload,
+              request: crashlyticsOtpRequest,
               response: {
                 success: response.success,
                 statusCode: (response as ApiResponse<any>).statusCode ?? null,
@@ -177,6 +195,9 @@ class AuthService {
           console.warn('⚠️  Failed to register FCM token after login:', error);
           // Silent fail - push notifications are optional, but log the error
         });
+
+        // Guest-selected delivery location → saved address for the logged-in user
+        addressService.syncGuestPersistedLocationAfterLogin().catch(() => {});
       }
 
       return response;
@@ -191,6 +212,7 @@ class AuthService {
             request: {
               phone_number: phoneNumber,
               otp: parseInt(otp, 10),
+              has_identity_token: !!identityToken,
             },
             response: {
               success: false,
