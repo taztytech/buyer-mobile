@@ -3,8 +3,10 @@
  * Handles all address-related API calls
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService, ApiResponse } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
+import { GUEST_SELECTED_LOCATION_KEY } from './storage.service';
 
 export const MAX_ADDRESSES = 5;
 
@@ -167,6 +169,128 @@ class AddressService {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to update address',
       };
+    }
+  }
+
+  /**
+   * After OTP login, POST the guest's persisted delivery location as a saved address.
+   * Keeps `selectedLocation` in AsyncStorage with `guestLocationSynced: true` after success so logout/login
+   * does not duplicate the same address. Skips if invalid or at max addresses.
+   */
+  async syncGuestPersistedLocationAfterLogin(): Promise<void> {
+    let raw: string | null;
+    try {
+      raw = await AsyncStorage.getItem(GUEST_SELECTED_LOCATION_KEY);
+    } catch {
+      return;
+    }
+    if (!raw) return;
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    if (!parsed || typeof parsed !== 'object') return;
+
+    const lat = typeof parsed.latitude === 'number' ? parsed.latitude : null;
+    const lng = typeof parsed.longitude === 'number' ? parsed.longitude : null;
+    if (lat == null || lng == null || lat === 0 || lng === 0) return;
+
+    // Already synced on a previous login (or saved on logout while logged in); do not POST again.
+    if (parsed.guestLocationSynced === true) {
+      return;
+    }
+
+    const coordsNear = (a: number, b: number) => Math.abs(a - b) < 0.0002;
+
+    const addrList = await this.getAddresses();
+    if (addrList.success && addrList.data?.length) {
+      const alreadyOnServer = addrList.data.some(
+        (a) => coordsNear(a.latitude, lat) && coordsNear(a.longitude, lng)
+      );
+      if (alreadyOnServer) {
+        try {
+          await AsyncStorage.setItem(
+            GUEST_SELECTED_LOCATION_KEY,
+            JSON.stringify({ ...parsed, guestLocationSynced: true })
+          );
+        } catch {
+          // ignore
+        }
+        return;
+      }
+    }
+
+    if (addrList.success && addrList.data && addrList.data.length >= MAX_ADDRESSES) {
+      return;
+    }
+
+    const typeRaw = parsed.type;
+    const type: 'home' | 'work' | 'other' =
+      typeof typeRaw === 'string' && ['home', 'work', 'other'].includes(typeRaw)
+        ? (typeRaw as 'home' | 'work' | 'other')
+        : 'other';
+
+    const pincodeFromAddress =
+      typeof parsed.address === 'string' ? parsed.address.match(/\b(\d{6})\b/)?.[1] : undefined;
+    const pincodeDigits = (v: unknown): string | undefined => {
+      if (v == null) return undefined;
+      const d = String(v).replace(/\D/g, '').slice(0, 6);
+      return d.length === 6 ? d : undefined;
+    };
+
+    const structured =
+      typeof parsed.address1 === 'string' &&
+      String(parsed.address1).trim().length > 0 &&
+      typeof parsed.city === 'string' &&
+      String(parsed.city).trim().length > 0 &&
+      (pincodeDigits(parsed.pincode) != null || pincodeFromAddress != null);
+
+    let body: AddAddressRequest;
+
+    if (structured) {
+      const pc = pincodeDigits(parsed.pincode) ?? pincodeFromAddress ?? '625001';
+      body = {
+        address1: String(parsed.address1).trim().slice(0, 200),
+        address2: typeof parsed.address2 === 'string' ? parsed.address2.slice(0, 200) : undefined,
+        address3: typeof parsed.address3 === 'string' ? parsed.address3.slice(0, 200) : undefined,
+        city: String(parsed.city).trim().slice(0, 100),
+        state: String(parsed.state || 'Tamil Nadu').trim().slice(0, 100),
+        pincode: pc,
+        latitude: lat,
+        longitude: lng,
+        type,
+        is_default: true,
+      };
+    } else {
+      const name = typeof parsed.name === 'string' ? parsed.name.trim() : '';
+      const addrLine = typeof parsed.address === 'string' ? parsed.address.trim() : '';
+      const pc = pincodeDigits(parsed.pincode) ?? pincodeFromAddress ?? '625001';
+      body = {
+        address1: (name || 'Delivery location').slice(0, 200),
+        address3: addrLine ? addrLine.slice(0, 500) : undefined,
+        city: typeof parsed.city === 'string' && parsed.city.trim() ? parsed.city.trim().slice(0, 100) : 'Madurai',
+        state: typeof parsed.state === 'string' && parsed.state.trim() ? parsed.state.trim().slice(0, 100) : 'Tamil Nadu',
+        pincode: pc,
+        latitude: lat,
+        longitude: lng,
+        type,
+        is_default: true,
+      };
+    }
+
+    const response = await this.addAddress(body);
+    if (response.success) {
+      try {
+        await AsyncStorage.setItem(
+          GUEST_SELECTED_LOCATION_KEY,
+          JSON.stringify({ ...parsed, guestLocationSynced: true })
+        );
+      } catch {
+        // ignore
+      }
     }
   }
 

@@ -25,6 +25,9 @@ const STORAGE_KEYS = {
   APP_VERSION_CODE: '@tazty_app_version_code',
 };
 
+/** AsyncStorage key for guest-persisted delivery location (synced to user addresses after login). */
+export const GUEST_SELECTED_LOCATION_KEY = 'selectedLocation';
+
 export interface TokenData {
   accessToken: string;
   refreshToken: string;
@@ -345,8 +348,9 @@ class StorageService {
   /**
    * Clear all stored data (logout)
    * This clears all user-specific data including authentication tokens,
-   * user data, cart data, FCM tokens, device ID, background notifications, and chat history.
+   * user data, cart data, FCM tokens, guest identity token, background notifications, and chat history.
    * Note: VEG_MODE preference is preserved as it's a device-level preference.
+   * Note: DEVICE_ID is preserved for guest login and analytics identity.
    */
   async clearAll(): Promise<void> {
     try {
@@ -368,6 +372,7 @@ class StorageService {
         // FCM and notification data is cleared on logout
         STORAGE_KEYS.FCM_TOKEN,
         STORAGE_KEYS.PUSH_TOKEN,
+        STORAGE_KEYS.IDENTITY_TOKEN,
         // DEVICE_ID preserved for guest login and analytics identity
         STORAGE_KEYS.BACKGROUND_NOTIFICATIONS,
       ]);

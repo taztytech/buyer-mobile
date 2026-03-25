@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { AddressSelectionModal } from '@/components/AddressSelectionModal';
+import { CodConfirmationModal } from '@/components/CodConfirmationModal';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { ordersService } from '@/services/orders.service';
 import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
@@ -147,6 +148,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string | undefined>(undefined);
   const [showLocationSelection, setShowLocationSelection] = useState(false);
+  const [showCodConfirmModal, setShowCodConfirmModal] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [addresses, setAddresses] = useState<AddressResponse[]>([]);
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
@@ -745,18 +747,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       return;
     }
 
-    // COD: Show confirmation before placing order
+    // COD: Show confirmation modal before placing order
     if (selectedPaymentMethod === 'cod') {
-      showConfirmation({
-        title: 'Confirm Cash on Delivery',
-        message: 'You will pay in cash when your order is delivered. Do you want to place this order?',
-        confirmText: 'Confirm',
-        cancelText: 'Cancel',
-        confirmButtonColor: '#00B14F',
-        onConfirm: () => {
-          proceedWithPlaceOrder();
-        },
-      });
+      setShowCodConfirmModal(true);
       return;
     }
 
@@ -2302,6 +2295,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           </View>
         ) : null}
       </Animated.View>
+
+      <CodConfirmationModal
+        visible={showCodConfirmModal}
+        amount={totalAmount}
+        onPlaceOrder={() => {
+          setShowCodConfirmModal(false);
+          proceedWithPlaceOrder();
+        }}
+        onCancel={() => setShowCodConfirmModal(false)}
+      />
 
       {/* Address Selection Modal */}
       <AddressSelectionModal
