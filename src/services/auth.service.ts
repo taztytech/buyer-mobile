@@ -3,10 +3,15 @@
  * Handles all authentication-related API calls
  */
 
+import { Platform } from 'react-native';
 import { apiService, ApiResponse } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 import { storageService, UserData } from './storage.service';
+import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 import { fcmNotificationService } from './fcmNotification.service';
+import { analyticsService, AnalyticsEvents } from './analytics.service';
+import { crashlyticsService } from './crashlytics.service';
+import { addressService } from './address.service';
 
 // Types
 export interface SendOtpRequest {
@@ -24,6 +29,8 @@ export interface VerifyOtpRequest {
   phoneNumber: string;
   otp: string;
   countryCode?: string;
+  /** When set, sent as `identity_token` so the API can link guest → logged-in user */
+  identity_token?: string;
 }
 
 export interface VerifyOtpResponse {
@@ -83,9 +90,15 @@ class AuthService {
           phone_number: parseInt(phoneNumber, 10),
         }
       );
+      if (response.success) {
+        analyticsService.logEvent(AnalyticsEvents.OTP_SENT, { method: 'sms' });
+      } else {
+        analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: response.error || response.message || 'send_otp_failed' });
+      }
 
       return response;
     } catch (error: any) {
+      analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: error?.message || 'send_otp_exception' });
       return {
         success: false,
         error: error.message || 'Failed to send OTP',
@@ -96,30 +109,69 @@ class AuthService {
 
   /**
    * Verify OTP and login
+   * If a guest `identity_token` exists in storage, it is sent so the backend can link the guest session.
    */
   async verifyOtp(
     phoneNumber: string,
     otp: string
   ): Promise<ApiResponse<VerifyOtpResponse>> {
+    const identityToken = await storageService.getIdentityToken();
     try {
+      const requestPayload: {
+        phone_number: string;
+        otp: number;
+        identity_token?: string;
+      } = {
+        phone_number: phoneNumber,
+        otp: parseInt(otp, 10),
+      };
+      if (identityToken) {
+        requestPayload.identity_token = identityToken;
+      }
+
+      const crashlyticsOtpRequest = {
+        phone_number: phoneNumber,
+        otp: parseInt(otp, 10),
+        has_identity_token: !!identityToken,
+      };
+
       const response = await apiService.post<VerifyOtpResponse>(
         API_CONFIG.ENDPOINTS.AUTHENTICATION.LOGIN,
-        {
-          phone_number: phoneNumber,
-          otp: parseInt(otp, 10),
-        }
+        requestPayload
       );
+      if (!response.success) {
+        analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: response.error || response.message || 'otp_verify_failed' });
+        analyticsService.logEvent(AnalyticsEvents.LOGIN_FAILED, { reason: response.error || response.message || 'login_failed' });
+        crashlyticsService.recordError(
+          new Error(response.error || response.message || 'otp_verify_failed'),
+          {
+            source: 'auth_verify_otp_failed',
+            otp_verify: {
+              request: crashlyticsOtpRequest,
+              response: {
+                success: response.success,
+                statusCode: (response as ApiResponse<any>).statusCode ?? null,
+                error: response.error || null,
+                message: response.message || null,
+              },
+            },
+          }
+        );
+      }
 
       // If verification successful, store tokens and user data
       if (response.success && response.data) {
-        // 1. Save authentication tokens to storage
+        // 1. Clear guest credentials (identity_token, etc.) - guest is now logged in
+        await storageService.clearIdentityToken();
+
+        // 2. Save authentication tokens to storage
         await storageService.saveTokens({
           accessToken: response.data.access_token,
           refreshToken: response.data.refresh_token,
           expiresIn: response.data.expires_in || 3600, // Default 1 hour
         });
 
-        // 2. Save user data to storage (if provided)
+        // 3. Save user data to storage (if provided)
         if (response.data.user) {
           await storageService.saveUser(response.data.user);
         } else {
@@ -130,26 +182,139 @@ class AuthService {
           });
         }
 
-        // 3. Set tokens in API service (in-memory and persist to storage again as backup)
+        // 4. Set tokens in API service (in-memory and persist to storage again as backup)
         await apiService.setTokens(
           response.data.access_token,
           response.data.refresh_token,
           response.data.expires_in || 3600
         );
 
-        // 4. Register FCM token after successful login
+        // 5. Register FCM token after successful login
         // This ensures the token is uploaded to backend after authentication
         fcmNotificationService.registerTokenAfterLogin().catch((error) => {
           console.warn('⚠️  Failed to register FCM token after login:', error);
           // Silent fail - push notifications are optional, but log the error
         });
+
+        // Guest-selected delivery location → saved address for the logged-in user
+        addressService.syncGuestPersistedLocationAfterLogin().catch(() => {});
       }
 
       return response;
     } catch (error: any) {
+      analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: error?.message || 'otp_verify_exception' });
+      analyticsService.logEvent(AnalyticsEvents.LOGIN_FAILED, { reason: error?.message || 'login_exception' });
+      crashlyticsService.recordError(
+        error,
+        {
+          source: 'auth_verify_otp_exception',
+          otp_verify: {
+            request: {
+              phone_number: phoneNumber,
+              otp: parseInt(otp, 10),
+              has_identity_token: !!identityToken,
+            },
+            response: {
+              success: false,
+              statusCode: error?.status || error?.statusCode || null,
+              error: error?.message || 'otp_verify_exception',
+              message: error?.message || null,
+            },
+          },
+        }
+      );
       return {
         success: false,
         error: error.message || 'Failed to verify OTP',
+        message: error.message,
+      };
+    }
+  }
+
+  /**
+   * Guest login - issue restricted guest JWT for discovery APIs
+   * Call when entering guest stage (no OTP required)
+   * Saves tokens so API calls work; does NOT set user/IS_LOGGED_IN
+   * If identity_token exists in storage, passes it with the request for session linking
+   * Skips API call when identity_token and valid access_token already exist (don't call every time in guest mode)
+   * When forceRefresh is true (e.g. 401 retry), always calls the API to get fresh tokens
+   */
+  async guestLogin(options?: { forceRefresh?: boolean }): Promise<ApiResponse<{ access_token: string; refresh_token?: string; expires_in?: number; identity_token?: string }>> {
+    try {
+      const identityToken = await storageService.getIdentityToken();
+
+      // If we already have identity_token and valid access token, skip API call (unless 401 retry)
+      if (!options?.forceRefresh && identityToken) {
+        const accessToken = await storageService.getAccessToken();
+        const isExpired = await storageService.isTokenExpired();
+        if (accessToken && !isExpired) {
+          console.log('[AuthService] guestLogin skipped - identity_token and valid tokens already present');
+          // Tokens are in storage; apiService will load them on first request
+          return {
+            success: true,
+            data: { access_token: accessToken },
+          };
+        }
+      }
+
+      console.log('[AuthService] guestLogin called', identityToken ? '(with stored identity_token)' : '(first call)');
+
+      const deviceId = await storageService.getOrCreateDeviceId();
+      const payload: Record<string, string> = {
+        platform: Platform.OS,
+        device_id: deviceId,
+        app_version: APP_VERSION_NAME,
+      };
+      if (identityToken) {
+        payload.identity_token = identityToken;
+      }
+
+      console.log('[AuthService] guest_login API request:', {
+        platform: payload.platform,
+        device_id: deviceId,
+        app_version: payload.app_version,
+        has_identity_token: !!identityToken,
+      });
+
+      const response = await apiService.post<{
+        access_token: string;
+        refresh_token?: string;
+        expires_in?: number;
+        identity_token?: string;
+      }>(API_CONFIG.ENDPOINTS.AUTHENTICATION.GUEST_LOGIN, payload);
+
+      const respData = response.data as { access_token?: string; identity_token?: string } | undefined;
+      console.log('[AuthService] guest_login API response:', {
+        success: response.success,
+        has_access_token: !!respData?.access_token,
+        has_identity_token: !!respData?.identity_token,
+        error: response.success ? null : (response as { error?: string }).error ?? null,
+      });
+
+      if (response.success && response.data?.access_token) {
+        const { access_token, refresh_token, expires_in, identity_token } = response.data;
+        if (identity_token) {
+          console.log('[AuthService] guest_login: saving identity_token to storage, length:', identity_token.length);
+          await storageService.saveIdentityToken(identity_token);
+        }
+        await storageService.saveTokens({
+          accessToken: access_token,
+          refreshToken: refresh_token || access_token,
+          expiresIn: expires_in ?? 3600,
+        });
+        await apiService.setTokens(
+          access_token,
+          refresh_token || access_token,
+          expires_in ?? 3600
+        );
+      }
+
+      return response;
+    } catch (error: any) {
+      console.log('[AuthService] guest_login API error:', error?.message ?? error);
+      return {
+        success: false,
+        error: error.message || 'Failed to get guest token',
         message: error.message,
       };
     }
@@ -183,6 +348,7 @@ class AuthService {
       // Clear all tokens and user data regardless of API response
       // This ensures complete cleanup even if API call fails
       await apiService.clearTokens();
+      await crashlyticsService.setUserId(null);
 
       return response;
     } catch (error: any) {
@@ -190,6 +356,7 @@ class AuthService {
       await apiService.clearTokens().catch((clearError) => {
         console.error('⚠️  Failed to clear tokens on logout:', clearError);
       });
+      await crashlyticsService.setUserId(null);
 
       return {
         success: false,
@@ -212,6 +379,7 @@ class AuthService {
 
       // Clear all tokens and user data immediately
       await apiService.clearTokens();
+      await crashlyticsService.setUserId(null);
     } catch (error: any) {
       console.error('⚠️  Error during force logout:', error);
       // Still try to clear tokens even if FCM unregister fails
@@ -290,9 +458,19 @@ class AuthService {
 
   /**
    * Get user profile
+   * Skips API call for guest mode - profile requires a registered user (would return 403)
    */
   async getProfile(): Promise<ApiResponse<any>> {
     try {
+      const isLoggedIn = await storageService.isLoggedIn();
+      if (!isLoggedIn) {
+        return {
+          success: false,
+          error: 'Profile requires a registered user',
+          message: 'Profile requires a registered user',
+        };
+      }
+
       const response = await apiService.get<any>(
         API_CONFIG.ENDPOINTS.USER.PROFILE
       );

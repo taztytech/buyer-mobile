@@ -22,7 +22,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import TrackingWebView from '@/components/TrackingWebView';
 import { OrderRouteMapView } from '@/components/OrderRouteMapView';
 import OrderDeliveredOverlay from '@/components/OrderDeliveredOverlay';
 import { ordersService, OrderListItem } from '@/services/orders.service';
@@ -32,12 +31,155 @@ import { useOrders } from '@/context/OrdersContext';
 import { mapOrderStatusToUI, getFallbackTimelineForStatus } from '@/utils/orderStatusMapping';
 import { authService } from '@/services/auth.service';
 import { exotelService } from '@/services/exotel.service';
+import { deliveryTrackingService } from '@/services/deliveryTracking.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { useAndroidPip } from '@/hooks/useAndroidPip';
 import { APP_VERSION_NAME, APP_VERSION_CODE } from '@/config/appVersion.generated';
-import { extractRestaurantCoordinate, extractCustomerCoordinate } from './orderTrackingLocationUtils';
+import {
+  extractRestaurantCoordinate,
+  extractCustomerCoordinate,
+  extractAgentCoordinate,
+  extractLatestAgentTrackingUpdate,
+} from './orderTrackingLocationUtils';
+import { resolveTrackingDisplayOrder, resolveAgentPhoneForExotel } from './trackingDisplayUtils';
+import { computeShowStoreToAgentRoute } from './orderTrackingRouteVisibility';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const toRadians = (deg: number): number => (deg * Math.PI) / 180;
+const routeDistanceMeters = (
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+): number => {
+  const earthRadius = 6371000;
+  const dLat = toRadians(b.latitude - a.latitude);
+  const dLng = toRadians(b.longitude - a.longitude);
+  const q =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(a.latitude)) *
+      Math.cos(toRadians(b.latitude)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
+  return earthRadius * c;
+};
+
+const decodeRoutePolyline = (encoded: string): Array<{ latitude: number; longitude: number }> => {
+  const points: Array<{ latitude: number; longitude: number }> = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    let b: number;
+    let shift = 0;
+    let result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlat = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlng = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+    lng += dlng;
+
+    points.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
+  }
+
+  return points;
+};
+
+const normalizeOrderStatus = (status: string | null | undefined): string => {
+  return String(status || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[_\s]+/g, '-');
+};
+
+const shouldFetchDeliveryTrackStatus = (status: string | null | undefined): boolean => {
+  const normalizedStatus = normalizeOrderStatus(status);
+  const eligibleStatuses = [
+    'assigned',
+    'agent-assigned',
+    'rider-assigned',
+    'agent-arrived-restaurant',
+    'rider-accepted',
+    'accepted',
+    'picked',
+    'picked-up',
+    'ready-for-pickup',
+    'ready-for-delivery',
+    // Track order remains live through the “order ready” stage.
+    'order-ready',
+    // Backend uses "packed" for order-ready — keep tracking live.
+    'packed',
+    'out-for-delivery',
+    'on-the-way',
+    'en-route',
+    'in-transit',
+  ];
+  const excludedStatuses = [
+    'pending',
+    'confirmed',
+    'billed',
+    'delivered',
+    'completed',
+    'cancelled',
+    'canceled',
+  ];
+  return eligibleStatuses.includes(normalizedStatus) && !excludedStatuses.includes(normalizedStatus);
+};
+
+const extractTrackingIdFromUrl = (trackingUrl: unknown): string | null => {
+  if (typeof trackingUrl !== 'string') return null;
+  const trimmed = trackingUrl.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/\/track\/([^/?#]+)/i);
+  return match?.[1] ? String(match[1]).trim() : null;
+};
+
+const resolveDeliveryTrackingId = (...sources: any[]): string | null => {
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue;
+
+    const direct =
+      source.tracking_id ??
+      source.trackingId ??
+      source.track_id ??
+      source.trackId ??
+      source?.track_status?.tracking_id ??
+      source?.track_status?.trackingId;
+
+    if (direct !== undefined && direct !== null) {
+      const normalized = String(direct).trim();
+      if (normalized) return normalized;
+    }
+
+    const fromTrackingUrl =
+      extractTrackingIdFromUrl(source.tracking_url) ||
+      extractTrackingIdFromUrl(source.trackingUrl) ||
+      extractTrackingIdFromUrl(source?.track_status?.tracking_url) ||
+      extractTrackingIdFromUrl(source?.track_status?.trackingUrl);
+    if (fromTrackingUrl) return fromTrackingUrl;
+
+    const fromTrackingArray = Array.isArray(source.tracking)
+      ? source.tracking
+          .map((entry: any) => extractTrackingIdFromUrl(entry?.tracking_url || entry?.trackingUrl))
+          .find((value: string | null) => !!value)
+      : null;
+    if (fromTrackingArray) return fromTrackingArray;
+  }
+  return null;
+};
 
 // Module-level state to persist across component remounts (for scroll position and pagination)
 let persistedOrders: OrderListItem[] = [];
@@ -576,17 +718,23 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   };
 
   const [showTrackingWebView, setShowTrackingWebView] = useState(false);
-  const [selectedTrackingUrl, setSelectedTrackingUrl] = useState<string | null>(null);
   const [selectedOrderIdForTracking, setSelectedOrderIdForTracking] = useState<string | null>(null);
   const [trackingOrderData, setTrackingOrderData] = useState<any>(null);
+  const [roadRouteCoordinates, setRoadRouteCoordinates] = useState<Array<{ latitude: number; longitude: number }> | null>(null);
+  const [storeToAgentRouteCoordinates, setStoreToAgentRouteCoordinates] = useState<Array<{ latitude: number; longitude: number }> | null>(null);
   const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
   const [isClosingTracking, setIsClosingTracking] = useState(false);
   const [showDeliveredOverlay, setShowDeliveredOverlay] = useState(false);
 
+  const trackingOrderDataRef = useRef<any>(null);
+  const ordersByIdRef = useRef<Record<string, any>>({});
+  trackingOrderDataRef.current = trackingOrderData;
+  ordersByIdRef.current = state.byId;
+
   const { canUsePip, isInPipMode: hookIsInPipMode, enterPip } = useAndroidPip();
   const webViewLoadedRef = useRef<boolean>(false);
-  const webViewRef = useRef<any>(null);
+  const [trackingMapRefreshKey, setTrackingMapRefreshKey] = useState(0);
   const appStateRef = useRef(AppState.currentState);
 
   // isEnteringPip: set to true the instant the user presses the PiP button so
@@ -614,27 +762,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   }, [isInPipMode]);
 
   const forceTrackingWebViewResize = useCallback(() => {
-    if (!webViewRef.current || typeof webViewRef.current.injectJavaScript !== 'function') {
-      return;
-    }
-
-    try {
-      webViewRef.current.injectJavaScript(`
-        (function() {
-          try {
-            if (typeof window.__taztyFixTrackingLayout === 'function') {
-              window.__taztyFixTrackingLayout();
-            } else {
-              var evt = new Event('resize');
-              window.dispatchEvent(evt);
-            }
-          } catch (e) {}
-        })();
-        true;
-      `);
-    } catch (e) {
-      console.warn('[OrdersScreen] Failed to inject resize script into tracking WebView', e);
-    }
+    // Keep function name stable: PiP/status effects call this to force map refresh.
+    setTrackingMapRefreshKey((prev) => prev + 1);
   }, []);
 
   useEffect(() => {
@@ -661,7 +790,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       forceTrackingWebViewResize();
       if (wasInPip && !isInPipMode) {
         const ctxOrder = selectedOrderIdForTracking ? state.byId[selectedOrderIdForTracking] : undefined;
-        const displayOrder = ctxOrder || trackingOrderData;
+        const displayOrder = resolveTrackingDisplayOrder(ctxOrder, trackingOrderData);
         const rawStatus = (displayOrder?.status || '').toString().toLowerCase().trim();
         const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
         if (normalizedStatus === 'delivered' || normalizedStatus === 'completed') {
@@ -695,40 +824,79 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     };
   }, [showTrackingWebView, forceTrackingWebViewResize]);
 
-  // Stable tracking URL memo — the TrackingWebView source prop must NOT change
-  // during PiP ↔ normal transitions, bottom-sheet drags, or any other parent
-  // re-render.  selectedTrackingUrl only changes when the user opens a different
-  // order, so this memo effectively freezes the URL for the lifetime of one
-  // tracking session, eliminating all lag caused by prop-reference churn.
-  const stableTrackingUrl = useMemo(
-    () => (selectedTrackingUrl && selectedTrackingUrl.length > 0 ? selectedTrackingUrl : null),
-    [selectedTrackingUrl],
-  );
-
   const fallbackMapCoords = useMemo(() => {
-    if (!trackingOrderData) return null;
+    const latestContextOrder = selectedOrderIdForTracking ? state.byId[selectedOrderIdForTracking] : undefined;
+    const displayOrder = resolveTrackingDisplayOrder(latestContextOrder, trackingOrderData);
+    if (!displayOrder) return null;
 
-    const hasTrackingUrl =
-      !!trackingOrderData.tracking_url ||
-      (Array.isArray(trackingOrderData.tracking) &&
-        trackingOrderData.tracking.some((entry: any) => !!entry?.tracking_url));
-    if (hasTrackingUrl) return null;
-
-    const restaurantCoordinate = extractRestaurantCoordinate(trackingOrderData);
-    const customerCoordinate = extractCustomerCoordinate(trackingOrderData);
-
+    const restaurantCoordinate = extractRestaurantCoordinate(displayOrder);
+    const customerCoordinate = extractCustomerCoordinate(displayOrder);
     if (!restaurantCoordinate || !customerCoordinate) return null;
 
-    const restaurantName =
-      trackingOrderData.restaurant?.name?.trim() || 'Restaurant';
-    const addr = trackingOrderData.delivery_address;
+    const agentCoordinateRaw = extractAgentCoordinate(displayOrder);
+    const latestAgentLocationUpdate = extractLatestAgentTrackingUpdate(displayOrder);
+    const agentCoordinate =
+      agentCoordinateRaw ??
+      (latestAgentLocationUpdate
+        ? {
+            latitude: latestAgentLocationUpdate.latitude,
+            longitude: latestAgentLocationUpdate.longitude,
+          }
+        : null);
+
+    const rawStatus = (displayOrder.status || '').toString().toLowerCase().trim();
+    const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
+    const prePickupStatusSet = new Set([
+      'assigned',
+      'agent-assigned',
+      'agent-arrived-restaurant',
+      'accepted',
+    ]);
+    const postPickupStatusSet = new Set([
+      'picked',
+      'picked-up',
+      'in-transit',
+      'out-for-delivery',
+      'on-the-way',
+      'delivered',
+      'completed',
+    ]);
+    const hasAgentAssignedSignal =
+      !!agentCoordinate ||
+      prePickupStatusSet.has(normalizedStatus) ||
+      postPickupStatusSet.has(normalizedStatus);
+    const hasUsableAgentCoordinate = !!agentCoordinate;
+
+    // Track-order route should always represent store -> customer path.
+    // Rider location is shown separately by bike marker.
+    const routeCoordinates = [restaurantCoordinate, customerCoordinate];
+
+    const restaurantName = displayOrder.restaurant?.name?.trim() || 'Restaurant';
+    const addr = displayOrder.delivery_address;
     const customerAddress = [addr?.address1, addr?.address2, addr?.address3, addr?.city]
       .filter(Boolean)
       .map((s: any) => String(s).trim())
       .join(', ') || 'Delivery location';
 
-    return { restaurantCoordinate, customerCoordinate, restaurantName, customerAddress };
-  }, [trackingOrderData]);
+    return {
+      restaurantCoordinate,
+      customerCoordinate,
+      agentCoordinate,
+      latestAgentLocationUpdate,
+      routeOriginCoordinate: restaurantCoordinate,
+      routeTargetCoordinate: customerCoordinate,
+      stageKey: normalizedStatus,
+      routeCoordinates,
+      mode: hasAgentAssignedSignal ? 'live' as const : 'ready' as const,
+      showStoreToAgentRoute: computeShowStoreToAgentRoute(
+        normalizedStatus,
+        restaurantCoordinate,
+        agentCoordinate,
+      ),
+      restaurantName,
+      customerAddress,
+    };
+  }, [trackingOrderData, selectedOrderIdForTracking, state.byId]);
 
   // Inform native layer when auto-PiP via home button is allowed.
   // This keeps the lifecycle fully on the Android side and avoids React-side crashes.
@@ -795,51 +963,89 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const bottomSheetHeight = useRef(new Animated.Value(OPEN_HEIGHT)).current; // Start open
   const dragStartHeight = useRef(OPEN_HEIGHT);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(true); // Start open
+  const lastRouteFetchRef = useRef<{
+    stage: string;
+    origin: { latitude: number; longitude: number };
+    destination: { latitude: number; longitude: number };
+  } | null>(null);
+  const lastStoreToAgentRouteFetchRef = useRef<{
+    origin: { latitude: number; longitude: number };
+    destination: { latitude: number; longitude: number };
+  } | null>(null);
 
-  // Safely derive tracking URL from full order data (detail API response)
-  const getTrackingUrlFromOrderData = useCallback((data: any): string | null => {
-    if (!data) return null;
-
-    // 1) Prefer top-level tracking_url when present
-    if (data.tracking_url && data.tracking_url !== null) {
-      return String(data.tracking_url);
-    }
-
-    // 2) Fallback: look into tracking history for the latest entry with tracking_url
-    const history = data.tracking;
-    if (Array.isArray(history) && history.length > 0) {
-      const lastWithUrl = [...history].reverse().find((entry: any) => entry?.tracking_url);
-      if (lastWithUrl?.tracking_url) {
-        return String(lastWithUrl.tracking_url);
-      }
-    }
-
-    return null;
-  }, []);
-
-  const handleTrackOrder = (orderId: string) => {
+  const handleTrackOrder = async (orderId: string, orderStatus?: string) => {
     if (!orderId) return;
     // Reset closing state immediately if we re-track before cleanup finished
     setIsClosingTracking(false);
+    setRoadRouteCoordinates(null);
+    setStoreToAgentRouteCoordinates(null);
+    lastRouteFetchRef.current = null;
+    lastStoreToAgentRouteFetchRef.current = null;
     setSelectedOrderIdForTracking(orderId);
 
-    // Optimistically seed tracking data and URL from the existing orders list
+    // Optimistically seed tracking data from the existing orders list
     // so the tracking overlay and map can appear immediately, without waiting
     // for the full detail API response.
     const shallowOrder = orders.find(o => o.id?.toString() === orderId.toString());
     if (shallowOrder) {
       setTrackingOrderData((prev: any) => prev ?? shallowOrder);
-      const initialUrl = getTrackingUrlFromOrderData(shallowOrder);
-      if (initialUrl) {
-        setSelectedTrackingUrl(initialUrl);
-      }
     }
+
+    const effectiveStatus =
+      orderStatus ??
+      shallowOrder?.status ??
+      trackingOrderData?.status;
 
     // Show the tracking overlay right away for a faster first-time experience.
     setShowTrackingWebView(true);
 
-    // Still fetch full order details in the background; this will refresh the
-    // bottom sheet and tracking URL when the API response arrives.
+    // For statuses from Agent Assigned until before Delivered, fetch rider live
+    // location from delivery tracking API (/api/track/:id/status) using tracking_id.
+    if (shouldFetchDeliveryTrackStatus(effectiveStatus)) {
+      try {
+        const latestOrderData = await fetchTrackingOrderData(orderId, true);
+        const trackingIdentifier = resolveDeliveryTrackingId(
+          latestOrderData,
+          shallowOrder,
+          trackingOrderData,
+          state.byId[orderId],
+        );
+
+        if (!trackingIdentifier) {
+          console.log('[DeliveryTracking] skipped: tracking_id unavailable', {
+            orderId,
+            effectiveStatus,
+          });
+        } else {
+          const trackResponse = await deliveryTrackingService.getTrackStatus(trackingIdentifier);
+          const trackData = trackResponse.data;
+          if (trackResponse.success && trackData) {
+            setTrackingOrderData((prev: any) => ({
+              ...(prev || {}),
+              rider: {
+                ...(prev?.rider || {}),
+                ...(trackData.rider || {}),
+                current_location:
+                  trackData?.rider?.current_location ||
+                  prev?.rider?.current_location ||
+                  null,
+              },
+              track_status: trackData,
+            }));
+          }
+        }
+      } catch (error) {
+        console.warn('Track status API failed:', error);
+      }
+    } else {
+      console.log('[DeliveryTracking] skipped by status gate', {
+        orderId,
+        orderStatus,
+        effectiveStatus,
+      });
+    }
+
+    // Still fetch full order details in the background; this refreshes bottom-sheet + map data.
     fetchTrackingOrderData(orderId, true);
   };
 
@@ -847,7 +1053,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // This gets the FULL order data (not just status from FCM)
   // This is called initially and also when FCM updates arrive to get latest full data
   const fetchTrackingOrderData = useCallback(async (orderId: string, silent: boolean = false) => {
-    if (!orderId) return;
+    if (!orderId) return null;
 
     try {
       if (!silent) {
@@ -869,43 +1075,51 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         // Always update trackingOrderData when API response arrives
         // This ensures bottom sheet reloads with latest data
         setTrackingOrderData((prevData: any) => {
+          const latestApiData: any = response.data;
+          const mergedData = {
+            ...latestApiData,
+            rider: {
+              ...(latestApiData?.rider || {}),
+              current_location:
+                latestApiData?.rider?.current_location ||
+                prevData?.rider?.current_location ||
+                prevData?.track_status?.rider?.current_location ||
+                null,
+            },
+            track_status: latestApiData?.track_status || prevData?.track_status,
+          };
+
           // Check if API response has newer data than what we have
           if (!prevData ||
-            response.data.updated_at !== prevData.updated_at ||
-            response.data.status !== prevData.status) {
+            latestApiData.updated_at !== prevData.updated_at ||
+            latestApiData.status !== prevData.status) {
             console.log('✅ Tracking: API response has updated data - Reloading bottom sheet', {
               orderId,
               oldStatus: prevData?.status,
-              newStatus: response.data.status,
+              newStatus: latestApiData.status,
               oldUpdatedAt: prevData?.updated_at,
-              newUpdatedAt: response.data.updated_at,
+              newUpdatedAt: latestApiData.updated_at,
               source: 'API',
               willReload: true,
             });
             // Return new data - this triggers bottom sheet reload
-            return response.data;
+            return mergedData;
           }
 
           // Even if status hasn't changed, update with latest API data to ensure we have full data
           console.log('📦 Tracking: API response received - Updating with latest full data', {
             orderId,
-            status: response.data.status,
+            status: latestApiData.status,
             source: 'API',
           });
-          return response.data;
+          return mergedData;
         });
-
-        // Always keep the tracking URL in sync with the latest full order data,
-        // regardless of whether this was a silent refresh or an initial load.
-        const trackingUrl = getTrackingUrlFromOrderData(response.data);
-        if (trackingUrl) {
-          setSelectedTrackingUrl(trackingUrl);
-        }
 
         if (!silent) {
           // For non-silent calls, ensure the overlay is visible.
           setShowTrackingWebView(true);
         }
+        return response.data as any;
       }
     } catch (err: any) {
       console.error('Failed to fetch tracking order data:', err);
@@ -914,19 +1128,23 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         setIsLoadingTrackingData(false);
       }
     }
-  }, [getTrackingUrlFromOrderData]);
+    return null;
+  }, []);
 
   // Handle closing the tracking WebView modal and refresh orders
   const handleCloseTrackingWebView = useCallback(() => {
     // 1. Guard against redundant calls
     if (isClosingTracking) return;
 
-    // 2. Mark as closing - this immediately unmounts WebView from the tree
+    // 2. Mark as closing - this immediately unmounts tracking overlay from the tree
     setIsClosingTracking(true);
     setShowTrackingWebView(false);
     setSelectedOrderIdForTracking(null);
     setTrackingOrderData(null);
-    setSelectedTrackingUrl(null);
+    setRoadRouteCoordinates(null);
+    setStoreToAgentRouteCoordinates(null);
+    lastRouteFetchRef.current = null;
+    lastStoreToAgentRouteFetchRef.current = null;
     webViewLoadedRef.current = false;
 
     // Reset bottom sheet to open state when closing modal
@@ -1047,6 +1265,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   // Get the order directly from state.byId - this will update when FCM notifications arrive
   const trackingContextOrder = selectedOrderIdForTracking ? state.byId[selectedOrderIdForTracking] : undefined;
 
+  const trackingDisplayOrder = useMemo(
+    () => resolveTrackingDisplayOrder(trackingContextOrder, trackingOrderData),
+    [trackingContextOrder, trackingOrderData],
+  );
+
   // Get status and updated_at as separate values for reliable change detection
   const contextStatus = trackingContextOrder?.status;
   const contextUpdatedAt = trackingContextOrder?.updated_at;
@@ -1061,11 +1284,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       fcmUpdatedAt: contextUpdatedAt || 'N/A',
       apiStatus: trackingOrderData?.status || 'N/A',
       apiUpdatedAt: trackingOrderData?.updated_at || 'N/A',
-      displayStatus: (trackingContextOrder || trackingOrderData)?.status || 'N/A',
+      displayStatus: trackingDisplayOrder?.status || 'N/A',
       hasFCMData: !!trackingContextOrder,
       hasAPIData: !!trackingOrderData,
     });
-  }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, trackingOrderData?.status, trackingOrderData?.updated_at]);
+  }, [selectedOrderIdForTracking, contextStatus, contextUpdatedAt, trackingOrderData?.status, trackingOrderData?.updated_at, trackingDisplayOrder?.status]);
 
   // WATCH BOTH: FCM updates AND API response data for the bottom sheet
   // 1. FCM LISTENER: Watches context order (state.byId) for real-time FCM updates
@@ -1161,8 +1384,33 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             // FCM payloads are minimal — preserve rich fields from the previous API response
             // so agent details, delivery address, and ETA aren't wiped out on status updates.
             tracking: (latestContextOrder as any).tracking?.length ? (latestContextOrder as any).tracking : prevData.tracking,
+            tracking_id:
+              (latestContextOrder as any)?.tracking_id ??
+              (latestContextOrder as any)?.trackingId ??
+              (prevData as any)?.tracking_id ??
+              (prevData as any)?.trackingId,
+            tracking_url:
+              (latestContextOrder as any)?.tracking_url ||
+              (latestContextOrder as any)?.trackingUrl ||
+              (prevData as any)?.tracking_url ||
+              (prevData as any)?.trackingUrl,
+            track_status:
+              (latestContextOrder as any)?.track_status ||
+              (latestContextOrder as any)?.trackStatus ||
+              (prevData as any)?.track_status ||
+              (prevData as any)?.trackStatus,
             delivery_address: (latestContextOrder as any).delivery_address || prevData.delivery_address,
             estimated_delivery_time: (latestContextOrder as any).estimated_delivery_time || prevData.estimated_delivery_time,
+            rider: {
+              ...(prevData?.rider || {}),
+              ...((latestContextOrder as any)?.rider || {}),
+              current_location:
+                (latestContextOrder as any)?.rider?.current_location ||
+                prevData?.rider?.current_location ||
+                (latestContextOrder as any)?.track_status?.rider?.current_location ||
+                prevData?.track_status?.rider?.current_location ||
+                null,
+            },
           };
 
           // Step 2: Fetch latest full order data from API (silent fetch - no loading indicator)
@@ -1207,15 +1455,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
     // The bottom sheet will automatically re-render when trackingOrderData changes
     // This useEffect ensures we're watching the API response data
-    // The UI uses displayOrder = trackingContextOrder || trackingOrderData
-    // So when trackingOrderData updates, the bottom sheet reloads with new data
+    // The UI uses resolveTrackingDisplayOrder(context, API) so the badge stays in sync with polling.
   }, [selectedOrderIdForTracking, trackingOrderData?.status, trackingOrderData?.updated_at  ]);
 
   // When order reaches terminal status in PiP: show "Delivered" overlay for delivered/completed, or close for cancelled
   useEffect(() => {
     if (!showTrackingWebView || !isInPipMode) return;
 
-    const displayOrder = trackingContextOrder || trackingOrderData;
+    const displayOrder = trackingDisplayOrder;
     const rawStatus = (displayOrder?.status || '').toString().toLowerCase().trim();
     const normalizedStatus = rawStatus.replace(/[_\s]+/g, '-');
 
@@ -1261,9 +1508,199 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   }, [
     showTrackingWebView,
     isInPipMode,
-    trackingContextOrder?.status,
-    trackingOrderData?.status,
+    trackingDisplayOrder?.status,
     handleCloseTrackingWebView,
+  ]);
+
+  // Periodic full-order refresh while tracking overlay is visible.
+  // Helps keep route/polyline and rider updates fresh even without FCM pushes.
+  useEffect(() => {
+    if (!showTrackingWebView || !selectedOrderIdForTracking) return;
+
+    const interval = setInterval(() => {
+      fetchTrackingOrderData(selectedOrderIdForTracking, true).catch((err) => {
+        console.warn('Tracking periodic refresh failed:', err);
+      });
+
+      const ctxSnap = ordersByIdRef.current[selectedOrderIdForTracking];
+      const mergedSnap = resolveTrackingDisplayOrder(ctxSnap, trackingOrderDataRef.current);
+      const liveStatus = mergedSnap?.status;
+      if (shouldFetchDeliveryTrackStatus(liveStatus)) {
+        const trackingIdentifier = resolveDeliveryTrackingId(
+          mergedSnap,
+          ctxSnap,
+        );
+
+        if (!trackingIdentifier) {
+          console.log('[DeliveryTracking] periodic skipped: tracking_id unavailable', {
+            orderId: selectedOrderIdForTracking,
+            liveStatus,
+          });
+          return;
+        }
+
+        deliveryTrackingService.getTrackStatus(trackingIdentifier).then((trackResponse) => {
+          const trackData = trackResponse.data;
+          if (trackResponse.success && trackData) {
+            setTrackingOrderData((prev: any) => ({
+              ...(prev || {}),
+              rider: {
+                ...(prev?.rider || {}),
+                ...(trackData.rider || {}),
+                current_location:
+                  trackData?.rider?.current_location ||
+                  prev?.rider?.current_location ||
+                  null,
+              },
+              track_status: trackData,
+            }));
+          }
+        }).catch((error) => {
+          console.warn('Tracking status refresh failed:', error);
+        });
+      }
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [
+    showTrackingWebView,
+    selectedOrderIdForTracking,
+    fetchTrackingOrderData,
+    trackingOrderData?.status,
+  ]);
+
+  // Street-level route polyline (Google Directions) so map follows actual roads.
+  // Refetch only on stage switch or meaningful origin/target deviation.
+  useEffect(() => {
+    if (!showTrackingWebView || !fallbackMapCoords) return;
+
+    const mapsApiKey = (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '').trim();
+    if (!mapsApiKey) {
+      setRoadRouteCoordinates(null);
+      return;
+    }
+
+    const origin = fallbackMapCoords.routeOriginCoordinate;
+    const destination = fallbackMapCoords.routeTargetCoordinate;
+    const stage = fallbackMapCoords.stageKey || 'unknown';
+    const prev = lastRouteFetchRef.current;
+
+    const shouldRefetch =
+      !prev ||
+      prev.stage !== stage ||
+      routeDistanceMeters(prev.origin, origin) > 80 ||
+      routeDistanceMeters(prev.destination, destination) > 60;
+
+    if (!shouldRefetch) return;
+
+    let cancelled = false;
+
+    const fetchRoadRoute = async () => {
+      try {
+        const url =
+          `https://maps.googleapis.com/maps/api/directions/json` +
+          `?origin=${encodeURIComponent(`${origin.latitude},${origin.longitude}`)}` +
+          `&destination=${encodeURIComponent(`${destination.latitude},${destination.longitude}`)}` +
+          `&mode=driving&alternatives=false&key=${encodeURIComponent(mapsApiKey)}`;
+        const response = await fetch(url);
+        const payload = await response.json();
+        const encoded = payload?.routes?.[0]?.overview_polyline?.points;
+
+        if (!cancelled && typeof encoded === 'string' && encoded.length > 0) {
+          const decoded = decodeRoutePolyline(encoded);
+          if (decoded.length > 1) {
+            setRoadRouteCoordinates(decoded);
+            lastRouteFetchRef.current = { stage, origin, destination };
+            return;
+          }
+        }
+
+        if (!cancelled) {
+          setRoadRouteCoordinates(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setRoadRouteCoordinates(null);
+        }
+      }
+    };
+
+    fetchRoadRoute();
+    return () => {
+      cancelled = true;
+    };
+  }, [showTrackingWebView, fallbackMapCoords]);
+
+  // Secondary street route: store -> rider (light grey) for user exploration.
+  useEffect(() => {
+    if (
+      !showTrackingWebView ||
+      !fallbackMapCoords?.showStoreToAgentRoute ||
+      !fallbackMapCoords?.restaurantCoordinate ||
+      !fallbackMapCoords?.agentCoordinate
+    ) {
+      setStoreToAgentRouteCoordinates(null);
+      return;
+    }
+
+    const mapsApiKey = (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '').trim();
+    if (!mapsApiKey) {
+      setStoreToAgentRouteCoordinates(null);
+      return;
+    }
+
+    const origin = fallbackMapCoords.restaurantCoordinate;
+    const destination = fallbackMapCoords.agentCoordinate;
+    const prev = lastStoreToAgentRouteFetchRef.current;
+    const shouldRefetch =
+      !prev ||
+      routeDistanceMeters(prev.origin, origin) > 40 ||
+      routeDistanceMeters(prev.destination, destination) > 25;
+
+    if (!shouldRefetch) return;
+
+    let cancelled = false;
+
+    const fetchStoreToAgentRoute = async () => {
+      try {
+        const url =
+          `https://maps.googleapis.com/maps/api/directions/json` +
+          `?origin=${encodeURIComponent(`${origin.latitude},${origin.longitude}`)}` +
+          `&destination=${encodeURIComponent(`${destination.latitude},${destination.longitude}`)}` +
+          `&mode=driving&alternatives=false&key=${encodeURIComponent(mapsApiKey)}`;
+
+        const response = await fetch(url);
+        const payload = await response.json();
+        const encoded = payload?.routes?.[0]?.overview_polyline?.points;
+
+        if (!cancelled && typeof encoded === 'string' && encoded.length > 0) {
+          const decoded = decodeRoutePolyline(encoded);
+          if (decoded.length > 1) {
+            setStoreToAgentRouteCoordinates(decoded);
+            lastStoreToAgentRouteFetchRef.current = { origin, destination };
+            return;
+          }
+        }
+
+        if (!cancelled) {
+          setStoreToAgentRouteCoordinates(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setStoreToAgentRouteCoordinates(null);
+        }
+      }
+    };
+
+    fetchStoreToAgentRoute();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    showTrackingWebView,
+    fallbackMapCoords?.showStoreToAgentRoute,
+    fallbackMapCoords?.restaurantCoordinate,
+    fallbackMapCoords?.agentCoordinate,
   ]);
 
   const handleDeliveredOverlayDone = useCallback(() => {
@@ -1332,7 +1769,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     // Clean phone numbers (remove spaces, dashes, etc.)
     const userPhone = currentUser.phoneNumber.replace(/\D/g, '');
     const agentPhoneClean = agentPhone.replace(/\D/g, '');
-    console.log('displayOrder userPhone', userPhone, 'displayOrder agentPhoneClean', agentPhoneClean);
     if (!userPhone || !agentPhoneClean) {
       showConfirmation({
         title: 'Error',
@@ -1406,10 +1842,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       statusToMap = 'payment_failed';
     } else if (
       order.payment_status?.toLowerCase() === 'pending' &&
-      (order.status?.toLowerCase() === 'pending' || order.status?.toLowerCase() === 'cancelled')
+      (order.status?.toLowerCase() === 'pending' )
     ) {
       // If payment is pending but order is cancelled/pending, it's likely a payment failure
       statusToMap = 'payment_failed';
+    }
+    else if (
+      order.status?.toLowerCase() === 'cancelled'
+    ) {
+      statusToMap = 'cancelled';
     }
 
     // Get status config from mapping utility
@@ -1537,15 +1978,15 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 // Define enabled statuses - tracking works from "packed" / "agent-assigned" status onward
                 const enabledStatuses = [
                   'packed',
+                  'assigned',
                   'agent-assigned',
-                  'agent_assigned',
+                  'accepted',
                   'agent-arrived-restaurant',
-                  'agent_arrived_restaurant',
                   'picked',
+                  'picked-up',
+                  'in-transit',
                   'out-for-delivery',
-                  'out_for_delivery',
                   'on-the-way',
-                  'on_the_way',
                   'delivered',
                   'completed'
                 ];
@@ -1563,7 +2004,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                       styles.reorderButton,
                       !isTrackingEnabled && styles.disabledButton
                     ]}
-                    onPress={() => handleTrackOrder(order.id.toString())}
+                    onPress={() => handleTrackOrder(order.id.toString(), order.status)}
                     activeOpacity={!isTrackingEnabled ? 1 : 0.8}
                     disabled={!isTrackingEnabled}
                   >
@@ -1778,7 +2219,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: '#000000',
+            backgroundColor: '#FFFFFF',
             zIndex: 1000,
             elevation: 10,
           }}
@@ -1811,26 +2252,46 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
             </SafeAreaView>
           )}
 
-          <View style={{ flex: 1, backgroundColor: '#000000' }}>
-            {stableTrackingUrl ? (
-              <TrackingWebView
-                trackingUrl={stableTrackingUrl}
-                webViewRef={webViewRef}
-                webViewLoadedRef={webViewLoadedRef}
-              />
-            ) : fallbackMapCoords ? (
+          <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+            {fallbackMapCoords ? (
               <OrderRouteMapView
                 restaurantCoordinate={fallbackMapCoords.restaurantCoordinate}
                 customerCoordinate={fallbackMapCoords.customerCoordinate}
+                agentLocationUpdate={
+                  fallbackMapCoords.latestAgentLocationUpdate
+                    ? {
+                        lat: fallbackMapCoords.latestAgentLocationUpdate.latitude,
+                        lng: fallbackMapCoords.latestAgentLocationUpdate.longitude,
+                        timestamp: fallbackMapCoords.latestAgentLocationUpdate.timestamp,
+                        heading: fallbackMapCoords.latestAgentLocationUpdate.heading,
+                        speed: fallbackMapCoords.latestAgentLocationUpdate.speed,
+                        accuracy: fallbackMapCoords.latestAgentLocationUpdate.accuracy,
+                      }
+                    : fallbackMapCoords.agentCoordinate
+                      ? {
+                          lat: fallbackMapCoords.agentCoordinate.latitude,
+                          lng: fallbackMapCoords.agentCoordinate.longitude,
+                          timestamp: Date.now(),
+                        }
+                    : null
+                }
+                routeCoordinates={
+                  roadRouteCoordinates && roadRouteCoordinates.length > 1
+                    ? roadRouteCoordinates
+                    : fallbackMapCoords.routeCoordinates
+                }
+                storeToAgentRouteCoordinates={storeToAgentRouteCoordinates}
+                showStoreToAgentRoute={fallbackMapCoords.showStoreToAgentRoute}
+                mode={fallbackMapCoords.mode}
                 restaurantName={fallbackMapCoords.restaurantName}
                 customerAddress={fallbackMapCoords.customerAddress}
-                resizeTrigger={isInPipMode}
+                resizeTrigger={(isInPipMode ? 1000000 : 0) + trackingMapRefreshKey}
                 style={styles.webView}
               />
             ) : (
               <View style={isInPipMode ? styles.webViewLoadingContainerPip : styles.webViewLoadingContainer}>
                 <ActivityIndicator size="large" color="#00B14F" />
-                <Text style={{ marginTop: 16, color: isInPipMode ? '#FFFFFF' : '#666', fontFamily: 'Poppins_400Regular' }}>
+                <Text style={{ marginTop: 16, color: '#666', fontFamily: 'Poppins_400Regular' }}>
                   Loading tracking map...
                 </Text>
               </View>
@@ -1838,7 +2299,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           </View>
 
           {isInPipMode && trackingOrderData && (() => {
-            const pipDisplayOrder = trackingContextOrder || trackingOrderData;
+            const pipDisplayOrder = trackingDisplayOrder || trackingOrderData;
             const pipStatusConfig = mapOrderStatusToUI(pipDisplayOrder?.status);
             return (
               <View key={`pip-status-${pipSyncKey}`} style={styles.navigationWidget} pointerEvents="box-none">
@@ -1889,10 +2350,26 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
             {/* Top Section: Always visible (restaurant info, status, address3) - draggable when closed */}
             {trackingOrderData && !isLoadingTrackingData && (() => {
-              const orderForFullDetails = trackingOrderData || trackingContextOrder;
-              const displayOrder = trackingContextOrder || trackingOrderData;
+              const orderForFullDetails = trackingDisplayOrder || trackingOrderData || trackingContextOrder;
+              const displayOrder = trackingDisplayOrder || trackingOrderData || trackingContextOrder;
               const displayStatus = displayOrder?.status;
               const statusConfig = mapOrderStatusToUI(displayStatus);
+              const trackingArray = orderForFullDetails?.tracking ?? [];
+              const normalizedStatus = (displayStatus || '').toLowerCase().replace(/[_\s]+/g, '-');
+              const isAgentAssignedish =
+                normalizedStatus === 'agent-assigned' ||
+                normalizedStatus === 'agent-arrived-restaurant' ||
+                normalizedStatus === 'picked' ||
+                normalizedStatus === 'out-for-delivery' ||
+                normalizedStatus === 'on-the-way';
+              const latestTrackingWithAgent = [...trackingArray].reverse().find((entry: any) => entry?.agent_name || entry?.agent_phone);
+              const topAgentName =
+                latestTrackingWithAgent?.agent_name ||
+                orderForFullDetails?.agent?.name ||
+                orderForFullDetails?.delivery_partner?.name ||
+                orderForFullDetails?.rider?.name ||
+                null;
+              const topAgentDisplayName = topAgentName || (isAgentAssignedish ? 'Delivery Partner Assigned' : null);
 
               return (
                 <View
@@ -1958,24 +2435,16 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                     bounces={false}
                   >
                     {(() => {
-                      const orderForFullDetails = trackingOrderData || trackingContextOrder;
-                      const displayOrder = trackingContextOrder || trackingOrderData;
+                      const orderForFullDetails = trackingDisplayOrder || trackingOrderData || trackingContextOrder;
+                      const displayOrder = trackingDisplayOrder || trackingOrderData || trackingContextOrder;
                       const displayStatus = displayOrder?.status;
                       const trackingArray = orderForFullDetails?.tracking ?? [];
                       let agentName: string | null = null;
-                      let agentPhone: string | null = null;
                       for (let i = trackingArray.length - 1; i >= 0; i--) {
                         const trackingEntry = trackingArray[i];
-                        if (trackingEntry) {
-                          if (trackingEntry.agent_name) {
-                            agentName = trackingEntry.agent_name;
-                            agentPhone = trackingEntry.agent_phone || null;
-                            break;
-                          }
-                          if (trackingEntry.agent_phone && !agentName) {
-                            agentName = null;
-                            agentPhone = trackingEntry.agent_phone;
-                          }
+                        if (trackingEntry?.agent_name) {
+                          agentName = trackingEntry.agent_name;
+                          break;
                         }
                       }
                       const sortedApiTracking = [...trackingArray].sort((a: any, b: any) =>
@@ -2009,25 +2478,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                         normalizedStatus === 'picked' ||
                         normalizedStatus === 'out-for-delivery' ||
                         normalizedStatus === 'on-the-way';
-
-                      // Find the latest tracking entry with agent_name or agent_phone
-                      // Iterate from the end to get the most recent agent assignment
-                      for (let i = trackingArray.length - 1; i >= 0; i--) {
-                        const trackingEntry = trackingArray[i];
-                        if (trackingEntry) {
-                          // If we find an entry with agent_name, use it
-                          if (trackingEntry.agent_name) {
-                            agentName = trackingEntry.agent_name;
-                            agentPhone = trackingEntry.agent_phone || null;
-                            break;
-                          }
-                          // If we find an entry with agent_phone but no name, still use it
-                          if (trackingEntry.agent_phone && !agentName) {
-                            agentName = null;
-                            agentPhone = trackingEntry.agent_phone;
-                          }
-                        }
-                      }
 
                       // If status says agent is involved but we don't yet have name from API,
                   // show status-appropriate label (same as timeline) instead of generic "on the way"
@@ -2074,10 +2524,36 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                             </View>
                           )}
                         </View>
-                        {agentPhone && (
+                        {(orderForFullDetails?.order_number && (isAgentAssignedish || agentDisplayName)) ? (
                           <TouchableOpacity
                             style={styles.trackingCallButtonInScroll}
-                            onPress={() => handleCallDeliveryAgent((orderForFullDetails || displayOrder)?.order_number, agentPhone)}
+                            onPress={() => {
+                              const orderNum = (orderForFullDetails || displayOrder)?.order_number;
+                              const phone = resolveAgentPhoneForExotel(orderForFullDetails);
+                              if (!orderNum) {
+                                showConfirmation({
+                                  title: 'Error',
+                                  message: 'Order number is missing. Cannot initiate call.',
+                                  confirmText: 'OK',
+                                  cancelText: '',
+                                  confirmButtonColor: '#00B14F',
+                                  onConfirm: () => {},
+                                });
+                                return;
+                              }
+                              if (!phone) {
+                                showConfirmation({
+                                  title: 'Call unavailable',
+                                  message: 'The delivery partner line is not available yet. Please try again in a moment.',
+                                  confirmText: 'OK',
+                                  cancelText: '',
+                                  confirmButtonColor: '#00B14F',
+                                  onConfirm: () => {},
+                                });
+                                return;
+                              }
+                              handleCallDeliveryAgent(String(orderNum), phone);
+                            }}
                             disabled={isInitiatingCall}
                             activeOpacity={0.7}
                           >
@@ -2087,7 +2563,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                               <MaterialIcons name="phone" size={18} color="#00B14F" />
                             )}
                           </TouchableOpacity>
-                        )}
+                        ) : null}
                       </View>
                       
                       {isDelivered ? (
@@ -2583,7 +3059,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
+    backgroundColor: '#FFFFFF',
   },
   navigationWidget: {
     position: 'absolute',
@@ -2822,6 +3298,30 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_500Medium',
     fontSize: 11,
     lineHeight: 16,
+  },
+  trackingTopAgentBadge: {
+    maxWidth: 220,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 177, 79, 0.10)',
+  },
+  trackingTopAgentText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#00B14F',
+    marginLeft: 4,
+    maxWidth: 140,
+  },
+  trackingTopAgentPhone: {
+    fontFamily: 'Poppins',
+    fontSize: 10,
+    lineHeight: 14,
+    color: 'rgba(0, 30, 31, 0.75)',
   },
   trackingItemsContainer: {
     marginBottom: 12,

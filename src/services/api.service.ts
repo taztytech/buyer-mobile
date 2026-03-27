@@ -8,6 +8,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { APP_VERSION_CODE, APP_VERSION_NAME } from '@/config/appVersion.generated';
 import { API_CONFIG, buildApiUrl } from '@/config/api.config';
 import { storageService } from './storage.service';
+import { analyticsService, AnalyticsEvents } from './analytics.service';
+import { crashlyticsService } from './crashlytics.service';
 
 // Types
 export interface ApiResponse<T = any> {
@@ -69,9 +71,28 @@ class ApiService {
   private isInitialized: boolean = false;
   private onUserDeletedCallback: (() => void) | null = null;
   private onSessionExpiredCallback: (() => void) | null = null;
+  private guestLoginRetryCallback: (() => Promise<boolean>) | null = null;
   private lastProfileCheckTime: number = 0; // Timestamp of last profile check
   private profileCheckInProgress: boolean = false; // Prevent multiple simultaneous profile checks
   private readonly PROFILE_CHECK_INTERVAL_MS = 60 * 1000; // Check profile every 60 seconds max (reduced frequency)
+  private readonly crashlyticsBlockedKeyPatterns: RegExp[] = [
+    /authorization/i,
+    /token/i,
+    /password/i,
+    /secret/i,
+    /signature/i,
+    /cookie/i,
+    /session/i,
+    /api[_-]?key/i,
+    /otp/i,
+    /phone/i,
+    /email/i,
+    /address/i,
+    /lat/i,
+    /lng/i,
+    /long/i,
+    /name/i,
+  ];
 
   /**
    * Set callback to be called when user deletion is detected
@@ -87,6 +108,14 @@ class ApiService {
    */
   setSessionExpiredCallback(callback: () => void): void {
     this.onSessionExpiredCallback = callback;
+  }
+
+  /**
+   * Set callback for guest login retry on 401. When in guest mode with identity_token,
+   * this is called to get fresh tokens before retrying the failed request.
+   */
+  setGuestLoginRetryCallback(callback: () => Promise<boolean>): void {
+    this.guestLoginRetryCallback = callback;
   }
 
   /**
@@ -149,6 +178,105 @@ class ApiService {
     };
   }
 
+  private isCrashlyticsBlockedKey(key: string): boolean {
+    return this.crashlyticsBlockedKeyPatterns.some((pattern) => pattern.test(key));
+  }
+
+  private sanitizeForCrashlytics(value: any, depth: number = 0): any {
+    if (depth > 5) {
+      return '[truncated-depth]';
+    }
+    if (value === null || value === undefined) {
+      return value;
+    }
+    if (typeof value === 'string') {
+      return value.length > 400 ? `${value.slice(0, 400)}...[truncated]` : value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      const trimmed = value.slice(0, 25).map((item) => this.sanitizeForCrashlytics(item, depth + 1));
+      if (value.length > 25) {
+        trimmed.push('[truncated-items]');
+      }
+      return trimmed;
+    }
+    if (typeof value === 'object') {
+      const output: Record<string, any> = {};
+      for (const [k, v] of Object.entries(value)) {
+        if (this.isCrashlyticsBlockedKey(k)) {
+          output[k] = '[redacted]';
+          continue;
+        }
+        output[k] = this.sanitizeForCrashlytics(v, depth + 1);
+      }
+      return output;
+    }
+    return String(value);
+  }
+
+  private toBreadcrumbString(label: string, payload: any): string {
+    const serialized = safeStringify(payload, 0);
+    const compact = serialized.replace(/\s+/g, ' ').trim();
+    const maxLen = 850;
+    const truncated = compact.length > maxLen ? `${compact.slice(0, maxLen)}...[truncated]` : compact;
+    return `${label}: ${truncated}`;
+  }
+
+  private async logApiErrorToCrashlytics(params: {
+    method: string;
+    url: string;
+    status?: number;
+    request?: any;
+    response?: any;
+    reason?: string;
+    source: string;
+  }): Promise<void> {
+    const sanitizedReq = this.sanitizeForCrashlytics(params.request);
+    const sanitizedResponse = this.sanitizeForCrashlytics(params.response);
+    const apiStatus = typeof params.status === 'number' ? params.status : 0;
+
+    await crashlyticsService.log(
+      this.toBreadcrumbString('api_error_context', {
+        api_method: params.method,
+        api_url: params.url,
+        api_status: apiStatus,
+        source: params.source,
+        reason: params.reason || 'unknown_api_error',
+        req: sanitizedReq,
+        response: sanitizedResponse,
+      }),
+    );
+
+    await crashlyticsService.recordError(new Error('API Call Error'), {
+      source: params.source,
+      api_method: params.method,
+      api_url: params.url,
+      api_status: apiStatus,
+      error_reason: params.reason || 'unknown_api_error',
+      req: sanitizedReq,
+      response: sanitizedResponse,
+    });
+  }
+
+  private async logTokenRefreshFailureToCrashlytics(params: {
+    reason: string;
+    status?: number;
+    request?: any;
+    response?: any;
+  }): Promise<void> {
+    await this.logApiErrorToCrashlytics({
+      method: 'POST',
+      url: buildApiUrl('/authentication/refresh-token'),
+      status: typeof params.status === 'number' ? params.status : 0,
+      request: params.request,
+      response: params.response,
+      reason: params.reason,
+      source: 'token_refresh_failure',
+    });
+  }
+
   /**
    * Initialize API service - load tokens from storage
    * Also checks for app version changes to clear cache
@@ -203,8 +331,15 @@ class ApiService {
    * This is called after successful authenticated API calls (except profile itself)
    * Uses throttling to avoid performance issues
    * CRITICAL: Always makes a fresh API call (no cache) to detect user deletion immediately
+   * Skip for guest mode - guests don't have profiles and would get 403
    */
   private async checkProfileInBackground(): Promise<void> {
+    // Skip for guest mode - profile API requires a registered user
+    const isLoggedIn = await storageService.isLoggedIn();
+    if (!isLoggedIn) {
+      return;
+    }
+
     // Throttle: Only check if enough time has passed since last check
     const now = Date.now();
     if (now - this.lastProfileCheckTime < this.PROFILE_CHECK_INTERVAL_MS) {
@@ -338,6 +473,15 @@ class ApiService {
 
       if (!refreshToken || refreshToken.trim() === '') {
         console.warn('[apiService] No refresh token available for refresh');
+        await this.logTokenRefreshFailureToCrashlytics({
+          reason: 'missing_refresh_token',
+          status: 0,
+          request: { refresh_token: null },
+          response: {
+            success: false,
+            message: 'No refresh token available for refresh',
+          },
+        });
         await this.clearTokens();
         return 'hard_fail';
       }
@@ -406,6 +550,16 @@ class ApiService {
 
         if (!newAccessToken || newAccessToken.trim() === '') {
           console.warn('[apiService] Refresh token response missing access token');
+          await this.logTokenRefreshFailureToCrashlytics({
+            reason: 'missing_access_token_in_refresh_response',
+            status: response.status,
+            request: sanitizedBody,
+            response: {
+              success: false,
+              status: response.status,
+              data,
+            },
+          });
           // Keep existing tokens - don't clear them (might be temporary backend issue)
           return 'soft_fail';
         }
@@ -448,22 +602,61 @@ class ApiService {
 
         if (isInvalidToken) {
           console.warn('[apiService] Refresh token is invalid/expired, clearing session');
+          await this.logTokenRefreshFailureToCrashlytics({
+            reason: 'invalid_or_expired_refresh_token',
+            status: response.status,
+            request: sanitizedBody,
+            response: {
+              success: false,
+              status: response.status,
+              data,
+            },
+          });
           await this.clearTokens();
           return 'hard_fail';
         }
 
         // Server returned a non-auth error (e.g. 500, 502) — keep tokens, try again later
         console.warn('[apiService] Refresh token failed (non-auth error), keeping tokens');
+        await this.logTokenRefreshFailureToCrashlytics({
+          reason: 'refresh_non_auth_http_error',
+          status: response.status,
+          request: sanitizedBody,
+          response: {
+            success: false,
+            status: response.status,
+            data,
+          },
+        });
         return 'soft_fail';
       }
     } catch (error: any) {
       if (error.name === 'AbortError') {
         console.warn('[apiService] Refresh token request timed out');
+        await this.logTokenRefreshFailureToCrashlytics({
+          reason: 'refresh_request_timeout',
+          status: 0,
+          request: { endpoint: '/authentication/refresh-token' },
+          response: {
+            success: false,
+            message: error?.message || 'refresh_request_timeout',
+          },
+        });
         return 'soft_fail';
       }
 
       // Network error — keep tokens, user might just have temporary connectivity issues
       console.error('[apiService] Refresh token error:', error);
+      await this.logTokenRefreshFailureToCrashlytics({
+        reason: 'refresh_request_exception',
+        status: error?.status || error?.statusCode || 0,
+        request: { endpoint: '/authentication/refresh-token' },
+        response: {
+          success: false,
+          name: error?.name || null,
+          message: error?.message || 'refresh_request_exception',
+        },
+      });
       return 'soft_fail';
     }
   }
@@ -553,6 +746,10 @@ class ApiService {
     customHeaders?: Record<string, string>,
     retryCount: number = 0
   ): Promise<ApiResponse<T>> {
+    const shouldHaveBody =
+      method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+    const sanitizedRequestPayload = data && shouldHaveBody ? this.sanitizePayload(data) : undefined;
+
     try {
       // Ensure tokens are loaded from storage
       await this.ensureTokensLoaded();
@@ -566,12 +763,8 @@ class ApiService {
       };
       
       // Sanitize payload to avoid sending null/undefined values to the API
-      const shouldHaveBody =
-        method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
-
-      if (data && shouldHaveBody) {
-        const sanitizedData = this.sanitizePayload(data);
-        config.body = JSON.stringify(sanitizedData);
+      if (sanitizedRequestPayload !== undefined) {
+        config.body = JSON.stringify(sanitizedRequestPayload);
       }
 
       // Centralized request logging for debugging purposes
@@ -629,6 +822,22 @@ class ApiService {
             return this.request<T>(method, endpoint, data, customHeaders, retryCount + 1);
           }
 
+          // Refresh failed. In guest mode with identity_token, try guest_login to get fresh tokens
+          const isGuest = !(await storageService.isLoggedIn());
+          const hasIdentityToken = !!(await storageService.getIdentityToken());
+          if (isGuest && hasIdentityToken && this.guestLoginRetryCallback) {
+            console.log('[apiService] Guest mode + identity_token: attempting guest_login retry...');
+            try {
+              const guestLoginOk = await this.guestLoginRetryCallback();
+              if (guestLoginOk) {
+                console.log('[apiService] ✅ Guest login retry successful, retrying original request...');
+                return this.request<T>(method, endpoint, data, customHeaders, retryCount + 1);
+              }
+            } catch (guestErr: any) {
+              console.warn('[apiService] Guest login retry failed:', guestErr?.message ?? guestErr);
+            }
+          }
+
           if (refreshResult === 'soft_fail') {
             // Temporary error (network/server) — do NOT logout.
             // Return a generic error so the feature layer can retry or show an error.
@@ -668,6 +877,14 @@ class ApiService {
 
       const responseData = await response.json();
 
+      // Dedicated logging for home API responses to debug home screen issues
+      if (isHomeEndpoint) {
+        console.log(
+          '[apiService][home][response]--------========',
+          responseData?.data?.data?.cod_settings
+        );
+      }
+
       console.log('[apiService][response]', safeStringify({
         method,
         endpoint: url,
@@ -692,17 +909,39 @@ class ApiService {
       // be treated as user deletion or forced logout.
       if (!response.ok) {
         const statusCode = response.status;
+        analyticsService.logEvent(AnalyticsEvents.API_ERROR, {
+          endpoint,
+          http_code: statusCode,
+        });
+        if (statusCode !== 401) {
+          await this.logApiErrorToCrashlytics({
+            method,
+            url,
+            status: statusCode,
+            request: {
+              endpoint,
+              payload: requestBody,
+            },
+            response: {
+              success: false,
+              status: response.status,
+              statusText: response.statusText,
+              data: responseData,
+            },
+            reason: responseData?.error || responseData?.message || `http_${statusCode}`,
+            source: 'api_http_error',
+          });
+        }
 
         const isProfileEndpoint = endpoint.includes('/user/profile');
-        // Only treat `/user/profile` returning status 400 with the exact deletion
-        // message as a hard deletion signal. Both conditions must match — status 400
-        // alone is not enough (could be a malformed request), and the message alone
+        // Only treat `/user/profile` returning status 401 with the exact deletion
+        // message as a hard deletion signal. Both conditions must match — status 401
+        // alone is not enough (could be auth failure), and the message alone
         // is not checked on other endpoints to avoid false logouts.
         const profileErrorMessage = (responseData.message || responseData.error || '').toLowerCase();
         const isUserDeleted =
           isProfileEndpoint &&
-          statusCode === 400 &&
-          profileErrorMessage.includes('failed to retrieve user profile');
+          statusCode === 401 
 
         // If user deletion is detected, clear tokens and notify callback
         if (isUserDeleted) {
@@ -745,16 +984,24 @@ class ApiService {
         this.accessToken !== null &&
         !endpoint.includes('/authentication/generate-otp') &&
         !endpoint.includes('/authentication/login') &&
+        !endpoint.includes('/authentication/guest-login') &&
         !endpoint.includes('/authentication/refresh-token');
       
-      // Only check profile for important endpoints to reduce API calls
+      // Only check profile for important endpoints - exclude cart to keep checkout fast
       const isImportantEndpoint = 
         endpoint.includes('/api/buyer/home') ||
-        endpoint.includes('/api/buyer/cart') ||
         endpoint.includes('/api/buyer/orders') ||
         endpoint.includes('/api/buyer/favorites');
       
-      if (response.ok && isAuthenticatedEndpoint && !endpoint.includes('/user/profile') && isImportantEndpoint) {
+      // Skip profile check for guests - they don't have profiles (would get 403)
+      const isLoggedIn = await storageService.isLoggedIn();
+      if (
+        response.ok &&
+        isLoggedIn &&
+        isAuthenticatedEndpoint &&
+        !endpoint.includes('/user/profile') &&
+        isImportantEndpoint
+      ) {
         this.checkProfileInBackground().catch((error) => {
           // Silent fail - profile check is fire-and-forget
           console.warn('[apiService] Background profile check failed:', error);
@@ -777,6 +1024,30 @@ class ApiService {
         timestamp: new Date().toISOString(),
       }));
       const apiError = this.handleError(error);
+      analyticsService.logEvent(AnalyticsEvents.API_ERROR, {
+        endpoint,
+        http_code: apiError.status || 0,
+      });
+      const errorStatus = apiError.status || 0;
+      if (errorStatus !== 401) {
+        await this.logApiErrorToCrashlytics({
+          method,
+          url: buildApiUrl(endpoint),
+          status: errorStatus,
+          request: {
+            endpoint,
+            payload: sanitizedRequestPayload,
+          },
+          response: {
+            success: false,
+            name: error?.name || null,
+            message: error?.message || apiError.message,
+            status: errorStatus,
+          },
+          reason: apiError.message || error?.message || 'network_or_runtime_error',
+          source: 'api_network_or_runtime_error',
+        });
+      }
       return {
         success: false,
         error: apiError.message,

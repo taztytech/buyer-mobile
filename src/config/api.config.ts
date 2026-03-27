@@ -26,6 +26,7 @@ export const API_CONFIG = {
       LOGIN: '/authentication/login',
       REFRESH_TOKEN: '/authentication/refresh-token',
       LOGOUT: '/authentication/logout',
+      GUEST_LOGIN: '/authentication/guest-login',
     },
     // User endpoints
     USER: {
@@ -73,7 +74,7 @@ export const APP_CONFIG = {
 
   // App Info
   APP_NAME: 'Tazty',
-  APP_VERSION: '1.0.3',
+  APP_VERSION: '1.0.4',
 };
 
 // Helper to build full API URL

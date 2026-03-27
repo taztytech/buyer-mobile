@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useRe
 import { cartService, AddToCartRequest, CartSummary } from '@/services/cart.service';
 import { storageService } from '@/services/storage.service';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
+import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
 import { trackAddToCart } from '@/analytics/metaEvents';
 
 export interface CartVariant {
@@ -32,6 +33,7 @@ export interface CartItem {
 
 interface CartContextType {
   cart: { [key: string]: CartItem };
+  cartSummary: CartSummary | null;
   addToCart: (item: CartItem, overrideRestaurantId?: number) => Promise<void>;
   removeFromCart: (itemId: string) => Promise<CartSummary | null>;
   updateQuantity: (itemId: string, quantity: number) => Promise<CartSummary | null>;
@@ -103,6 +105,7 @@ const isCartOnlyPreorder = (currentCart: { [key: string]: CartItem }): boolean =
 
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [cart, setCart] = useState<{ [key: string]: CartItem }>({});
+  const [cartSummary, setCartSummary] = useState<CartSummary | null>(null);
   const [restaurantId, setRestaurantId] = useState<number | null>(null);
   const [restaurantName, setRestaurantName] = useState<string>('');
   const [restaurantLogo, setRestaurantLogo] = useState<any>(null);
@@ -223,6 +226,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
 
+      // Guests: cart API requires registered user. Use storage only.
+      const loggedIn = await storageService.isLoggedIn();
+      if (!loggedIn) {
+        setIsCartLoaded(true);
+        return;
+      }
+
       const backendCart = await cartService.getCart();
 
       // Log for debugging
@@ -236,6 +246,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // Check if we have a valid cart with items
       if (backendCart && backendCart.items && Array.isArray(backendCart.items)) {
+        setCartSummary(backendCart.summary || null);
         // Set restaurant info even if cart is empty
         if (backendCart.restaurant_id) {
           setRestaurantId(backendCart.restaurant_id);
@@ -311,6 +322,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.log('[CartContext] Cart is empty');
         }
       } else {
+        setCartSummary(null);
         // No valid cart response - try loading from storage as fallback
         const storedCart = await loadCartFromStorage();
         if (storedCart) {
@@ -379,6 +391,18 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const addToCart = async (item: CartItem, overrideRestaurantId?: number) => {
     const normalizedItem = normalizeCartItemQuantities(item);
+    const effectiveRestaurantIdForEvent = overrideRestaurantId || restaurantId;
+    const eventQuantity = Math.max(
+      1,
+      getCartItemTotalQuantity(normalizedItem) || normalizedItem.quantity || 1,
+    );
+    analyticsService.logEvent(AnalyticsEvents.ADD_TO_CART, {
+      restaurant_id: effectiveRestaurantIdForEvent || undefined,
+      item_id: normalizedItem.itemId || parseInt(normalizedItem.id, 10),
+      price: normalizedItem.price,
+      qty: eventQuantity,
+      quantity: eventQuantity,
+    });
     const itemIdForEvent = normalizedItem.itemId || parseInt(normalizedItem.id, 10);
     const itemPriceForEvent = normalizedItem.price;
     if (Number.isFinite(itemIdForEvent) && Number.isFinite(itemPriceForEvent)) {
@@ -443,6 +467,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const response = await cartService.addToCart(backendRequest);
 
       if (response.success) {
+        setCartSummary(response.cart_summary || null);
         // Update local cart with backend cart_item_id
         setCart(prev => {
           const updatedCart = {
@@ -511,6 +536,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const removeFromCart = async (itemId: string): Promise<CartSummary | null> => {
     const item = cart[itemId];
+    if (item) {
+      analyticsService.logEvent(AnalyticsEvents.REMOVE_FROM_CART, {
+        item_id: item.itemId || parseInt(item.id, 10),
+      });
+    }
 
     // Update local cart immediately for responsive UI
     setCart(prev => {
@@ -529,7 +559,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setSyncWithBackend(true);
 
       const removeResponse = await cartService.removeCartItem(item.cartItemId);
-      
+      setCartSummary(removeResponse.cart_summary || null);
       // Return cart_summary from remove response
       return removeResponse.cart_summary || null;
     } catch (error) {
@@ -666,6 +696,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           const addResponse = await cartService.addToCart(backendRequest);
           if (addResponse.success && addResponse.cart_item_id) {
+            setCartSummary(addResponse.cart_summary || null);
             setCart(prev => {
               const updated = {
                 ...prev,
@@ -698,6 +729,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           err.isCartUpdateError = true;
           throw err;
         }
+        setCartSummary(updateResponse.cart_summary || null);
         return updateResponse.cart_summary || null;
       } catch (error: any) {
         setCart(prev => ({
@@ -765,6 +797,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         const addResponse = await cartService.addToCart(backendRequest);
         if (addResponse.success && addResponse.cart_item_id) {
+          setCartSummary(addResponse.cart_summary || null);
           setCart(prev => {
             const updated = {
               ...prev,
@@ -793,6 +826,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           ...prev,
           [pending.itemId]: { ...prev[pending.itemId], quantity: pending.previousQuantity },
         }));
+      } else {
+        setCartSummary(updateResponse.cart_summary || null);
       }
     } catch {
       setCart(prev => ({
@@ -812,8 +847,28 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    *                          Set to false for payment success/failure (backend handles it).
    */
   const clearCart = async (syncWithBackend: boolean = true) => {
+    const preClearValue = Object.values(cart).reduce((sum, item) => {
+      if (item.isCustomizable && item.variants) {
+        return sum + item.variants.reduce((variantSum, variant) => variantSum + (variant.price * variant.quantity), 0);
+      }
+      return sum + (item.price * (item.quantity || 0));
+    }, 0);
+    const preClearItems = Object.values(cart).reduce((sum, item) => {
+      if (item.isCustomizable && item.variants) {
+        return sum + item.variants.reduce((variantSum, variant) => variantSum + variant.quantity, 0);
+      }
+      return sum + (item.quantity || 0);
+    }, 0);
+    if (preClearItems > 0) {
+      analyticsService.logEvent(AnalyticsEvents.CART_ABANDONED, {
+        cart_value: preClearValue,
+        last_action: syncWithBackend ? 'manual_clear' : 'flow_clear',
+      });
+    }
+
     // Update local cart immediately
     setCart({});
+    setCartSummary(null);
     setRestaurantId(null);
     setRestaurantName('');
     setRestaurantLogo(null);
@@ -830,6 +885,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         setSyncWithBackend(true);
         await cartService.clearCart();
+        setCartSummary(null);
       } catch (error) {
         // Cart already cleared locally
         console.error('[CartContext] Error clearing cart on backend:', error);
@@ -882,6 +938,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     <CartContext.Provider
       value={{
         cart,
+        cartSummary,
         addToCart,
         removeFromCart,
         updateQuantity,

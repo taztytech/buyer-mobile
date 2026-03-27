@@ -153,7 +153,8 @@ module.exports = {
   expo: {
     name: "Tazty",
     slug: "Tazty",
-    version: "1.0.3",
+    scheme: "in.tazty.buyer",
+    version: "1.0.4",
     orientation: "portrait",
     icon: "./src/assets/icon.png",
     userInterfaceStyle: "light",
@@ -173,6 +174,9 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "in.tazty.buyer",
+      associatedDomains: [
+        "applinks:in.tazty.buyer"
+      ],
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
           "Tazty needs your location to show nearby restaurants and deliver food to your address.",
@@ -220,7 +224,30 @@ module.exports = {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
         }
-      }
+      },
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: [
+            {
+              scheme: "https",
+              host: "in.tazty.buyer"
+            }
+          ],
+          category: ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          action: "VIEW",
+          data: [
+            {
+              scheme: "https",
+              host: "pg-router.dev.razorpay.in"
+            }
+          ],
+          category: ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     web: {
       favicon: "./src/assets/favicon.png"
@@ -231,6 +258,8 @@ module.exports = {
       EXPO_PUBLIC_API_BASE_URL: apiConfig.apiBaseUrl,
       EXPO_PUBLIC_GOOGLE_MAPS_API_KEY:
         process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+      EXPO_PUBLIC_DELIVERY_TRACK_BASE_URL:
+        process.env.EXPO_PUBLIC_DELIVERY_TRACK_BASE_URL,
       EXPO_PUBLIC_META_APP_ID: process.env.EXPO_PUBLIC_META_APP_ID,
       EXPO_PUBLIC_META_CLIENT_TOKEN: process.env.EXPO_PUBLIC_META_CLIENT_TOKEN,
       EXPO_PUBLIC_META_DISPLAY_NAME: process.env.EXPO_PUBLIC_META_DISPLAY_NAME,

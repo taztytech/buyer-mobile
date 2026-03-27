@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, Image, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, Image, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '@/theme';
@@ -7,6 +7,7 @@ import { authService } from '@/services/auth.service';
 
 interface LoginScreenProps {
   onLoginSuccess?: (phoneNumber: string) => void;
+  onBack?: () => void;
   onOpenTerms?: () => void;
   onOpenPrivacy?: () => void;
   initialPhoneNumber?: string;
@@ -14,6 +15,7 @@ interface LoginScreenProps {
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
   onLoginSuccess,
+  onBack,
   onOpenTerms,
   onOpenPrivacy,
   initialPhoneNumber,
@@ -21,6 +23,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [phoneNumber, setPhoneNumber] = useState(initialPhoneNumber || '');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Intercept Android back here so it never hits App's handler with a stale pre-login screen (e.g. locationSelection).
+  // BackHandler invokes listeners LIFO; this mounts after App's listener and runs first.
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      return undefined;
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      BackHandler.exitApp();
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
 
   const validatePhoneNumber = (number: string): boolean => {
     // Indian phone numbers: 10 digits, starting with 6-9
@@ -97,11 +112,30 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <View style={styles.mainContainer}>
               {/* Green Background Section */}
               <View style={styles.greenSection}>
-                {/* Log In Title */}
-                <Text style={styles.title}>Log In</Text>
-
-                {/* Subtitle */}
-                <Text style={styles.subtitle}>Login with Your Mobile Number</Text>
+                {/* Skip at top-right */}
+                {onBack ? (
+                  <View style={styles.skipTopRow}>
+                    <View style={styles.skipSpacer} />
+                    <TouchableOpacity
+                      style={styles.skipButton}
+                      onPress={onBack}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+                      accessible
+                      accessibilityRole="button"
+                      accessibilityLabel="Skip login"
+                    >
+                      <Text style={styles.skipButtonText}>Skip</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+                {/* Header: Title + Subtitle */}
+                <View style={styles.headerRow}>
+                  <View>
+                    <Text style={styles.title}>Log In</Text>
+                    <Text style={styles.subtitle}>Login with Your Mobile Number</Text>
+                  </View>
+                </View>
 
                 {/* Delivery Illustration */}
                 <Image
@@ -163,25 +197,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </ScrollView>
         </KeyboardAvoidingView>
 
-        {/* Terms & Privacy - Fixed to bottom */}
-        <View style={styles.bottomTermsContainer}>
-          <Text style={styles.termsText}>
-            By Clicking, You agree our{' '}
-            <Text
-              style={styles.termsLink}
-              onPress={onOpenTerms}
-            >
-              T&C
+        {/* Terms & Privacy anchored above system nav area */}
+        <SafeAreaView style={styles.bottomSafeArea} edges={['bottom']}>
+          <View style={styles.bottomTermsContainer}>
+            <Text style={styles.termsText}>
+              By Clicking, You agree our{' '}
+              <Text
+                style={styles.termsLink}
+                onPress={onOpenTerms}
+              >
+                T&C
+              </Text>
+              {' and '}
+              <Text
+                style={styles.termsLink}
+                onPress={onOpenPrivacy}
+              >
+                Privacy Policy
+              </Text>
             </Text>
-            {' and '}
-            <Text
-              style={styles.termsLink}
-              onPress={onOpenPrivacy}
-            >
-              Privacy Policy
-            </Text>
-          </Text>
-        </View>
+          </View>
+        </SafeAreaView>
       </View>
     </SafeAreaView>
   );
@@ -199,8 +235,12 @@ const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
   },
+  bottomSafeArea: {
+    backgroundColor: '#FFFFFF',
+  },
   bottomTermsContainer: {
-    paddingBottom: 20,
+    paddingTop: 8,
+    paddingBottom: 12,
     paddingHorizontal: 20,
     backgroundColor: '#FFFFFF',
   },
@@ -208,24 +248,44 @@ const styles = StyleSheet.create({
     height: 258,
     backgroundColor: '#00B14F',
     paddingHorizontal: 20,
+    paddingTop: 24,
+  },
+  skipTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 8,
+    zIndex: 10,
+    elevation: 10,
+  },
+  skipSpacer: {
+    flex: 1,
+  },
+  headerRow: {
+    paddingBottom: 8,
   },
   title: {
-    position: 'absolute',
-    left: 20,
-    top: 64,
-    width: 90,
-    height: 45,
     fontFamily: 'Poppins_700Bold',
     fontSize: 30,
     lineHeight: 45,
     color: '#FFFFFF',
   },
+  skipButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderRadius: 20,
+  },
+  skipButtonText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
   subtitle: {
-    position: 'absolute',
-    left: 20,
-    top: 113,
+    marginTop: 4,
+    marginBottom: 4,
     width: 180,
-    height: 52,
     fontFamily: 'Poppins',
     fontWeight: '400',
     fontSize: 16,

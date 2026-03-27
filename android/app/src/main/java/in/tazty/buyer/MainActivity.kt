@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.app.PictureInPictureParams
+import android.content.Intent
 import android.content.res.Configuration
 import android.util.Rational
 
@@ -33,6 +34,8 @@ class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     SplashScreenManager.registerOnActivity(this)
     super.onCreate(null)
+    // Handle cold-start notification intents.
+    FCMEventEmitterModule.handleNotificationIntent(intent)
   }
 
   override fun getMainComponentName(): String = "main"
@@ -46,6 +49,15 @@ class MainActivity : ReactActivity() {
               mainComponentName,
               fabricEnabled
           ){})
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    // Keep the latest notification intent on the activity so JS-side
+    // notification handlers can read the newest extras consistently.
+    setIntent(intent)
+    // Handle notification taps while app is already running/backgrounded.
+    FCMEventEmitterModule.handleNotificationIntent(intent)
   }
 
   /**

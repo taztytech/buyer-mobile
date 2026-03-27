@@ -19,10 +19,14 @@ const STORAGE_KEYS = {
   FCM_TOKEN: '@tazty_fcm_token',
   PUSH_TOKEN: '@tazty_push_token',
   DEVICE_ID: '@tazty_device_id',
+  IDENTITY_TOKEN: '@tazty_identity_token',
   BACKGROUND_NOTIFICATIONS: '@tazty_background_notifications',
   // App version tracking for cache clearing
   APP_VERSION_CODE: '@tazty_app_version_code',
 };
+
+/** AsyncStorage key for guest-persisted delivery location (synced to user addresses after login). */
+export const GUEST_SELECTED_LOCATION_KEY = 'selectedLocation';
 
 export interface TokenData {
   accessToken: string;
@@ -37,6 +41,7 @@ export interface UserData {
   email?: string;
   support_email?: string;
   support_number?: string;
+  user_type?: 'new' | 'returning' | 'guest';
   // Add other user fields as needed
 }
 
@@ -46,16 +51,16 @@ class StorageService {
    */
   async saveTokens(tokenData: TokenData): Promise<void> {
     try {
-      // Validate tokens are not undefined or null
-      if (!tokenData.accessToken || !tokenData.refreshToken) {
-        throw new Error('Access token and refresh token are required');
+      if (!tokenData.accessToken) {
+        throw new Error('Access token is required');
       }
+      const refreshToken = tokenData.refreshToken || tokenData.accessToken;
 
       const expiryTime = Date.now() + tokenData.expiresIn * 1000;
 
       await AsyncStorage.multiSet([
         [STORAGE_KEYS.ACCESS_TOKEN, tokenData.accessToken],
-        [STORAGE_KEYS.REFRESH_TOKEN, tokenData.refreshToken],
+        [STORAGE_KEYS.REFRESH_TOKEN, refreshToken],
         [STORAGE_KEYS.TOKEN_EXPIRY, expiryTime.toString()],
       ]);
     } catch (error) {
@@ -83,6 +88,60 @@ class StorageService {
       return await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
     } catch (error) {
       return null;
+    }
+  }
+
+  /**
+   * Save identity token for guest session linking (persisted across app restarts)
+   */
+  async saveIdentityToken(token: string): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.IDENTITY_TOKEN, token);
+    } catch (error) {
+      console.warn('[Storage] Failed to save identity token:', error);
+    }
+  }
+
+  /**
+   * Get stored identity token for guest login
+   */
+  async getIdentityToken(): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem(STORAGE_KEYS.IDENTITY_TOKEN);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Clear identity token (called when guest logs in via OTP)
+   */
+  async clearIdentityToken(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.IDENTITY_TOKEN);
+    } catch (error) {
+      console.warn('[Storage] Failed to clear identity token:', error);
+    }
+  }
+
+  /**
+   * Get or create device ID for guest login and analytics
+   * Preserved across logout so the same device keeps its identity
+   */
+  async getOrCreateDeviceId(): Promise<string> {
+    try {
+      let deviceId = await AsyncStorage.getItem(STORAGE_KEYS.DEVICE_ID);
+      if (!deviceId) {
+        deviceId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === 'x' ? r : (r & 0x3) | 0x8;
+          return v.toString(16).toUpperCase();
+        });
+        await AsyncStorage.setItem(STORAGE_KEYS.DEVICE_ID, deviceId);
+      }
+      return deviceId;
+    } catch (error) {
+      return `TEMP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     }
   }
 
@@ -289,8 +348,9 @@ class StorageService {
   /**
    * Clear all stored data (logout)
    * This clears all user-specific data including authentication tokens,
-   * user data, cart data, FCM tokens, device ID, background notifications, and chat history.
+   * user data, cart data, FCM tokens, guest identity token, background notifications, and chat history.
    * Note: VEG_MODE preference is preserved as it's a device-level preference.
+   * Note: DEVICE_ID is preserved for guest login and analytics identity.
    */
   async clearAll(): Promise<void> {
     try {
@@ -312,7 +372,8 @@ class StorageService {
         // FCM and notification data is cleared on logout
         STORAGE_KEYS.FCM_TOKEN,
         STORAGE_KEYS.PUSH_TOKEN,
-        STORAGE_KEYS.DEVICE_ID,
+        STORAGE_KEYS.IDENTITY_TOKEN,
+        // DEVICE_ID preserved for guest login and analytics identity
         STORAGE_KEYS.BACKGROUND_NOTIFICATIONS,
       ]);
       // Note: VEG_MODE is not cleared on logout - it persists as a device preference

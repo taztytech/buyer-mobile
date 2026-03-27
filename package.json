@@ -1,12 +1,13 @@
 {
   "name": "tazty",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
     "start:dev": "cross-env ENV_FILE=.env.dev expo start",
     "start:prod": "cross-env ENV_FILE=.env.prod expo start",
     "android": "expo run:android",
+    "android:clean": "cd android && rm -rf app/.cxx app/build build && cd ..",
     "android:dev": "cross-env ENV_FILE=.env.dev npx expo run:android --variant devDebug",
     "android:prod": "cross-env ENV_FILE=.env.prod expo run:android --variant prodDebug",
     "ios": "expo run:ios",
@@ -51,7 +52,7 @@
     "dotenv": "^17.2.3",
     "eas-cli": "^16.23.1",
     "expo": "~54.0.25",
-    "expo-av": "^16.0.8",
+    "expo-av": "~16.0.8",
     "expo-blur": "~15.0.7",
     "expo-constants": "~18.0.10",
     "expo-device": "~8.0.9",

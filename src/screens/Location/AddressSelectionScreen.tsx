@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -18,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
+import { GUEST_SELECTED_LOCATION_KEY } from '@/services/storage.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 
 interface SavedAddress {
@@ -45,6 +47,7 @@ interface AddressSelectionScreenProps {
   onSelectAddress?: (address: SavedAddress) => void;
   onSearch?: (searchQuery: string) => void;
   visible?: boolean; // To track when screen becomes visible
+  isGuest?: boolean; // When true, also show persisted guest location from AsyncStorage
 }
 
 export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
@@ -54,27 +57,65 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
   onSelectAddress,
   onSearch,
   visible = true,
+  isGuest = false,
 }) => {
   const { showConfirmation } = useConfirmation();
   const [searchText, setSearchText] = useState('');
   const [currentLocationName, setCurrentLocationName] = useState('Getting location...');
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [guestAddress, setGuestAddress] = useState<SavedAddress | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [updatingAddressId, setUpdatingAddressId] = useState<string | null>(null);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
 
+  // Load persisted guest location from AsyncStorage (for guest mode)
+  const loadGuestAddress = React.useCallback(async () => {
+    try {
+      const saved = await AsyncStorage.getItem(GUEST_SELECTED_LOCATION_KEY);
+      if (!saved) {
+        setGuestAddress(null);
+        return;
+      }
+      const parsed = JSON.parse(saved);
+      if (!parsed?.name || !parsed?.address) {
+        setGuestAddress(null);
+        return;
+      }
+      const savedType = parsed.type as string | undefined;
+      const validType = savedType && ['home', 'work', 'other'].includes(savedType) ? savedType as 'home' | 'work' | 'other' : 'other';
+      setGuestAddress({
+        id: 'guest',
+        type: validType,
+        address: parsed.address,
+        city: parsed.name || '',
+        latitude: typeof parsed.latitude === 'number' ? parsed.latitude : 0,
+        longitude: typeof parsed.longitude === 'number' ? parsed.longitude : 0,
+        isDefault: true,
+      });
+    } catch {
+      setGuestAddress(null);
+    }
+  }, []);
+
   // Fetch addresses on initial mount
   useEffect(() => {
     getCurrentLocationName();
-    fetchAddresses();
-  }, []);
-
-  // Refetch addresses whenever the screen becomes visible
-  useEffect(() => {
-    if (visible) {
+    if (isGuest) {
+      loadGuestAddress();
+      setSavedAddresses([]); // Guests don't have saved addresses from API
+    } else {
       fetchAddresses();
     }
-  }, [visible]);
+  }, [isGuest, loadGuestAddress]);
+
+  // Refetch addresses whenever the screen becomes visible (logged-in users only)
+  useEffect(() => {
+    if (visible && !isGuest) {
+      fetchAddresses();
+    } else if (visible && isGuest) {
+      loadGuestAddress();
+    }
+  }, [visible, isGuest, loadGuestAddress]);
 
   const fetchAddresses = async () => {
     setIsLoading(true);
@@ -101,8 +142,11 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
         }));
 
         setSavedAddresses(addresses);
+      } else {
+        setSavedAddresses([]);
       }
     } catch (error) {
+      setSavedAddresses([]);
     } finally {
       setIsLoading(false);
     }
@@ -159,6 +203,14 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
   };
 
   const handleAddressSelect = async (address: SavedAddress) => {
+    // Guest address: just select, no API call
+    if (address.id === 'guest') {
+      if (onSelectAddress) {
+        onSelectAddress(address);
+      }
+      return;
+    }
+
     // If address is already default, just proceed with selection
     if (address.isDefault) {
       if (onSelectAddress) {
@@ -511,6 +563,18 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
                 returnKeyType="search"
                 onSubmitEditing={handleSearchSubmit}
               />
+              <TouchableOpacity
+                onPress={handleSearchSubmit}
+                style={styles.searchButton}
+                disabled={!searchText.trim()}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <MaterialIcons
+                  name="search"
+                  size={24}
+                  color={searchText.trim() ? '#00B14F' : '#999'}
+                />
+              </TouchableOpacity>
             </View>
 
             {/* Main Options Group */}
@@ -546,19 +610,21 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
               </TouchableOpacity>
             </View>
 
-            {/* Saved Addresses */}
-            {isLoading ? (
+            {/* Saved Addresses / Guest Location */}
+            {isLoading && !isGuest ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#00B14F" />
                 <Text style={styles.loadingText}>Loading addresses...</Text>
               </View>
-            ) : savedAddresses.length > 0 ? (
+            ) : savedAddresses.length > 0 || (isGuest && guestAddress) ? (
               <View style={styles.recentSection}>
-                <Text style={styles.recentTitle}>SAVED ADDRESSES</Text>
+                <Text style={styles.recentTitle}>
+                  {isGuest && guestAddress ? 'SAVED LOCATION' : 'SAVED ADDRESSES'}
+                </Text>
 
                 <View style={styles.recentList}>
                   <FlatList
-                    data={savedAddresses}
+                    data={isGuest && guestAddress ? [guestAddress] : savedAddresses}
                     keyExtractor={(item, index) => `${item.id}-${index}`}
                     renderItem={renderAddressItem}
                     scrollEnabled={false}
@@ -643,6 +709,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#001E1F',
     padding: 0,
+  },
+  searchButton: {
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   optionsGroup: {
     backgroundColor: '#FFFFFF',

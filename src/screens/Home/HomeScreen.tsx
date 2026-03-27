@@ -5,6 +5,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
 import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/home.service';
+import { paymentConfigService } from '@/services/payment-config.service';
+import { appConfigService } from '@/services/app-config.service';
 import { addressService } from '@/services/address.service';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { Shimmer } from '@/components/Shimmer';
@@ -18,6 +20,7 @@ import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { restaurantService } from '@/services/restaurant.service';
+import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BANNER_WIDTH = SCREEN_WIDTH - 40; // Fixed banner width with 20px padding on each side
@@ -27,7 +30,11 @@ interface HomeScreenProps {
   onNavigateToProfile?: () => void;
   onNavigateToAddressSelection?: () => void;
   onNavigateToCategory?: (categoryName: string) => void;
-  onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
+  onNavigateToRestaurant?: (
+    restaurantId: number,
+    restaurantName: string,
+    meta?: { distanceKm?: number; isOpen?: boolean; itemCount?: number }
+  ) => void;
   onNavigateToCheckout?: (restaurantId: number, restaurantName: string, restaurantAddress?: string, from?: 'home' | 'restaurant') => void;
   onNavigateToSearch?: () => void;
   onNavigateToLocationSelection?: () => void;
@@ -36,6 +43,8 @@ interface HomeScreenProps {
   isFocused?: boolean;
   addressRefreshTrigger?: number; // Trigger to refresh addresses when changed
   onForcedUpdateRequired?: (message?: string) => void; // Callback when API indicates forced update is required
+  isGuest?: boolean;
+  onNavigateToLogin?: () => void;
 }
 
 interface CarouselItem {
@@ -92,6 +101,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToSearch,
   onNavigateToLocationSelection,
   selectedLocation: externalSelectedLocation,
+  isGuest = false,
+  onNavigateToLogin,
   onCategoriesLoaded,
   addressRefreshTrigger,
   isFocused = true,
@@ -146,6 +157,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showCategoryModal, setShowCategoryModal] = React.useState(false);
   const flatListRef = React.useRef<FlatList>(null);
   const scrollViewRef = React.useRef<ScrollView>(null);
+  const maxScrollCountTrackedRef = React.useRef(0);
   const scrollPositionRef = React.useRef(0);
   const autoSlideTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const [defaultAddressCoords, setDefaultAddressCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
@@ -268,6 +280,31 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       try {
         // Set flag immediately to prevent any other calls
         isFetchingAddressRef.current = true;
+
+        // Guests: skip getAddresses (API requires registered user). Use externalSelectedLocation or default.
+        if (isGuest) {
+          setHasDefaultAddress(false);
+          if (externalSelectedLocation?.name && externalSelectedLocation?.address) {
+            setSelectedLocation(externalSelectedLocation);
+            const lat = externalSelectedLocation.latitude ?? DEFAULT_LOCATION.latitude;
+            const lng = externalSelectedLocation.longitude ?? DEFAULT_LOCATION.longitude;
+            setRestaurantData([]);
+            setCarouselData([]);
+            setCategoryData([]);
+            await fetchHomeData(lat, lng);
+          } else {
+            setSelectedLocation({
+              name: DEFAULT_LOCATION.name,
+              address: DEFAULT_LOCATION.address,
+            });
+            setRestaurantData([]);
+            setCarouselData([]);
+            setCategoryData([]);
+            await fetchHomeData(undefined, undefined);
+          }
+          return;
+        }
+
         // Clear cache to ensure we get fresh data
         addressService.clearCache();
         const response = await addressService.getAddresses();
@@ -337,38 +374,54 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             await fetchHomeData(undefined, undefined);
           }
         } else {
-          // API failed, use fallback location
+          // API failed - preserve guest/external selection if we have one
           setHasDefaultAddress(false);
+          if (externalSelectedLocation?.name && externalSelectedLocation?.address) {
+            setSelectedLocation(externalSelectedLocation);
+            const lat = externalSelectedLocation.latitude ?? DEFAULT_LOCATION.latitude;
+            const lng = externalSelectedLocation.longitude ?? DEFAULT_LOCATION.longitude;
+            setRestaurantData([]);
+            setCarouselData([]);
+            setCategoryData([]);
+            await fetchHomeData(lat, lng);
+          } else {
+            setSelectedLocation({
+              name: DEFAULT_LOCATION.name,
+              address: DEFAULT_LOCATION.address,
+            });
+            setRestaurantData([]);
+            setCarouselData([]);
+            setCategoryData([]);
+            await fetchHomeData(undefined, undefined);
+          }
+        }
+      } catch (error) {
+        // Error fetching addresses (e.g. guest mode) - preserve external selection if we have one
+        setHasDefaultAddress(false);
+        if (externalSelectedLocation?.name && externalSelectedLocation?.address) {
+          setSelectedLocation(externalSelectedLocation);
+          const lat = externalSelectedLocation.latitude ?? DEFAULT_LOCATION.latitude;
+          const lng = externalSelectedLocation.longitude ?? DEFAULT_LOCATION.longitude;
+          setRestaurantData([]);
+          setCarouselData([]);
+          setCategoryData([]);
+          await fetchHomeData(lat, lng);
+        } else {
           setSelectedLocation({
             name: DEFAULT_LOCATION.name,
             address: DEFAULT_LOCATION.address,
           });
-
-          // Fetch home data with default Madurai coordinates
           setRestaurantData([]);
           setCarouselData([]);
           setCategoryData([]);
           await fetchHomeData(undefined, undefined);
         }
-      } catch (error) {
-        // Error fetching addresses, use fallback location
-        setHasDefaultAddress(false);
-        setSelectedLocation({
-          name: DEFAULT_LOCATION.name,
-          address: DEFAULT_LOCATION.address,
-        });
-
-        // Fetch home data with default Madurai coordinates
-        setRestaurantData([]);
-        setCarouselData([]);
-        setCategoryData([]);
-        await fetchHomeData(undefined, undefined);
       } finally {
         setIsLoadingLocation(false);
         isFetchingAddressRef.current = false;
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [externalSelectedLocation, isFocused, onNavigateToLocationSelection]);
+    }, [externalSelectedLocation, isFocused, isGuest, onNavigateToLocationSelection]);
 
   // Fetch default address on component mount (ONLY ONCE)
   React.useEffect(() => {
@@ -508,6 +561,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       finalStatus = status;
 
       if (finalStatus === 'granted') {
+        analyticsService.logEvent(AnalyticsEvents.LOCATION_PERMISSION_GRANTED, { method: 'foreground' });
         const location = await Location.getCurrentPositionAsync({});
 
         const userLatitude = location.coords.latitude;
@@ -523,6 +577,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setCategoryData([]);
         await fetchHomeData(userLatitude, userLongitude);
       } else {
+        analyticsService.logEvent(AnalyticsEvents.LOCATION_PERMISSION_DENIED, { method: 'foreground' });
         setHasShownLocationModal(true); // Mark as shown to prevent repeated popups
         showConfirmation({
           title: 'Permission Denied',
@@ -735,6 +790,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         const pagination = actualData.pagination;
         const appOperationStatusData = actualData.app_operation_status;
         const homeScreenRestaurantCardStyle = actualData.home_screen_restaurant_card_style;
+        const codSettings = actualData.cod_settings;
+
+        // Store COD settings globally for checkout/payment screens
+        paymentConfigService.setCodSettings(codSettings);
+
+        // Store cancel timer for order cancellation countdown (Order Detail screen)
+        if (actualData.cancel_timer != null) {
+          appConfigService.setCancelTimer(actualData.cancel_timer);
+        }
 
         // Store app operation status
         if (appOperationStatusData) {
@@ -929,6 +993,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           );
 
           setRestaurantData(uniqueRestaurants);
+          analyticsService.logEvent(AnalyticsEvents.RESTAURANT_LIST_VIEWED, {
+            restaurant_scroll_count: 0,
+            item_count: uniqueRestaurants.length,
+          });
 
           // Handle pagination metadata
           if (pagination) {
@@ -1345,6 +1413,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
     // Check if user has scrolled near the bottom (within 500px)
     const distanceFromBottom = contentHeight - (scrollY + layoutHeight);
+    const scrollCount = Math.max(0, Math.floor(scrollY / 500));
+    if (scrollCount > maxScrollCountTrackedRef.current) {
+      maxScrollCountTrackedRef.current = scrollCount;
+      analyticsService.logEvent(AnalyticsEvents.RESTAURANT_LIST_VIEWED, {
+        restaurant_scroll_count: scrollCount,
+      });
+    }
     if (distanceFromBottom < 500) {
       if (hasMoreRestaurants && !isLoadingMore && !isLoadingRestaurants) {
         loadMoreRestaurants();
@@ -1907,12 +1982,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                               onPress={() => {
                                 if (onNavigateToRestaurant) {
                                   const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
-                                  onNavigateToRestaurant(restaurantId, restaurant.name);
+                                  const parsedDistance = parseFloat(String(restaurant.distance || '').replace(/[^0-9.]/g, ''));
+                                  const parsedItemCount = Number(
+                                    (restaurant as any)?.item_count ??
+                                    (restaurant as any)?.items_count ??
+                                    (restaurant as any)?.total_items ??
+                                    (restaurant as any)?.menu_item_count ??
+                                    0
+                                  );
+                                  onNavigateToRestaurant(restaurantId, restaurant.name, {
+                                    distanceKm: Number.isFinite(parsedDistance) ? parsedDistance : undefined,
+                                    isOpen: typeof restaurant.isOpen === 'boolean' ? restaurant.isOpen : undefined,
+                                    itemCount: Number.isFinite(parsedItemCount) ? parsedItemCount : undefined,
+                                  });
                                 }
                               }}
                               onImageLoad={() => {
                                 setLoadedRestaurantImages(prev => new Set(prev).add(restaurant.id.toString()));
                               }}
+                              isGuest={isGuest}
+                              onNavigateToLogin={onNavigateToLogin}
                             />
                           </View>
                         )}
