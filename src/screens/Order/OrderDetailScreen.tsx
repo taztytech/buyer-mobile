@@ -26,6 +26,7 @@ import TrackingWebView from '@/components/TrackingWebView';
 import { OrderRouteMapView } from '@/components/OrderRouteMapView';
 import OrderDeliveredOverlay from '@/components/OrderDeliveredOverlay';
 import { ordersService } from '@/services/orders.service';
+import { trackPurchaseIfEligible } from '@/analytics/purchaseTracker';
 import { authService } from '@/services/auth.service';
 import { useOrders } from '@/context/OrdersContext';
 import { mapOrderStatusToUI, getFallbackTimelineForStatus } from '@/utils/orderStatusMapping';
@@ -448,6 +449,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       const response = await ordersService.getOrderById(Number(orderId));
 
       if (response.success && response.data) {
+        await trackPurchaseIfEligible(response.data, 'order_detail_tracking_fetch');
         console.log('📦 Tracking: API response received with updated status data', {
           orderId,
           status: response.data.status,
