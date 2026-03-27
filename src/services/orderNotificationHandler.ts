@@ -223,7 +223,7 @@ export async function handleOrderNotification(
     });
     const normalizedStatus = status.toLowerCase();
     if (normalizedStatus === 'confirmed') {
-      analyticsService.logEvent(AnalyticsEvents.ORDER_CONFIRMED, { order_id: orderIdNum });
+      analyticsService.trackEvent(AnalyticsEvents.ORDER_CONFIRMED, { order_id: orderIdNum });
     } else if (
       normalizedStatus === 'picked_up' ||
       normalizedStatus === 'pickedup' ||
@@ -233,9 +233,9 @@ export async function handleOrderNotification(
       normalizedStatus === 'ready_for_pickup' ||
       normalizedStatus === 'ready-for-pickup'
     ) {
-      analyticsService.logEvent(AnalyticsEvents.ORDER_PICKED_UP, { order_id: orderIdNum });
+      analyticsService.trackEvent(AnalyticsEvents.ORDER_PICKED_UP, { order_id: orderIdNum });
     } else if (normalizedStatus === 'delivered') {
-      analyticsService.logEvent(AnalyticsEvents.ORDER_DELIVERED, { order_id: orderIdNum });
+      analyticsService.trackEvent(AnalyticsEvents.ORDER_DELIVERED, { order_id: orderIdNum });
       analyticsService.setUserProperties({
         [AnalyticsUserProperties.USER_TYPE]: 'returning',
       });

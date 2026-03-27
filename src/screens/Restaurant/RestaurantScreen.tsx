@@ -1013,7 +1013,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     setSelectedDetailItem(item);
     setSelectedDetailItemAvailable(itemAvailable);
     setShowDetailModal(true);
-    analyticsService.logEvent(AnalyticsEvents.PRODUCT_VIEWED, {
+    analyticsService.trackEvent(AnalyticsEvents.PRODUCT_VIEWED, {
       product_id: item.id,
       restaurant_id: restaurantId,
     });
@@ -1537,7 +1537,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           });
 
           const itemCount = sections.reduce((count, section) => count + section.items.length, 0);
-          analyticsService.logEvent(AnalyticsEvents.MENU_VIEWED, {
+          analyticsService.trackEvent(AnalyticsEvents.MENU_VIEWED, {
             restaurant_id: restaurantId,
             restaurant_name: restaurantName || restaurant?.name || undefined,
             item_count: itemCount,

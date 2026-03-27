@@ -222,10 +222,22 @@ class OrdersService {
       }
       if (response.success) {
         const orderData = (response.data as any)?.order || response.data;
-        const orderId = (orderData as any)?.id || (orderData as any)?.order_id;
-        analyticsService.logEvent(AnalyticsEvents.ORDER_PLACED, {
+        const orderAny = orderData as any;
+        const orderId = orderAny?.id || orderAny?.order_id;
+        const orderTotal = Number(
+          orderAny?.summary?.final_amount ??
+            orderAny?.summary?.total ??
+            orderAny?.total_amount ??
+            NaN,
+        );
+        const orderPlacedParams: Record<string, string | number | undefined> = {
           order_id: orderId || undefined,
-        });
+          currency: 'INR',
+        };
+        if (Number.isFinite(orderTotal) && orderTotal > 0) {
+          orderPlacedParams.value = orderTotal;
+        }
+        analyticsService.trackEvent(AnalyticsEvents.ORDER_PLACED, orderPlacedParams);
       }
       return response;
     } catch (error: any) {
@@ -318,7 +330,7 @@ class OrdersService {
         });
       }
       if (response.success) {
-        analyticsService.logEvent(AnalyticsEvents.ORDER_CANCELLED, {
+        analyticsService.trackEvent(AnalyticsEvents.ORDER_CANCELLED, {
           order_id: orderNumber,
         });
       }
