@@ -31,7 +31,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
-import { storageService, GUEST_SELECTED_LOCATION_KEY } from '@/services/storage.service';
+import { storageService, GUEST_SELECTED_LOCATION_KEY, UserData } from '@/services/storage.service';
 import { homeService } from '@/services/home.service';
 import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
@@ -152,17 +152,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     return [];
   }, []);
 
-  const toFixedStringOrNull = React.useCallback((value: unknown): string | null => {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value.toFixed(6);
-    }
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) {
-      return parsed.toFixed(6);
-    }
-    return null;
-  }, []);
-
   const buildProfileUserProperties = React.useCallback((profile: any) => {
     const city = String(
       profile?.city ||
@@ -187,32 +176,12 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       '',
     ).toLowerCase();
 
-    const latitude = toFixedStringOrNull(
-      profile?.latitude ??
-      profile?.lat ??
-      profile?.address?.latitude ??
-      profile?.address?.lat ??
-      profile?.default_address?.latitude ??
-      profile?.default_address?.lat,
-    );
-    const longitude = toFixedStringOrNull(
-      profile?.longitude ??
-      profile?.lng ??
-      profile?.long ??
-      profile?.address?.longitude ??
-      profile?.address?.lng ??
-      profile?.default_address?.longitude ??
-      profile?.default_address?.lng,
-    );
-
     return {
       city: city || null,
       pincode: pincode || null,
       areaName: areaName || null,
-      latitude,
-      longitude,
     };
-  }, [toFixedStringOrNull]);
+  }, []);
 
   const resolveUserTypeWithOrderHistory = React.useCallback(async (currentUser: any): Promise<'new' | 'returning'> => {
     const persistedUserType = currentUser?.user_type === 'returning' ? 'returning' : 'new';
@@ -472,10 +441,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
     const screenName = screenNameMap[currentScreen];
     if (screenName) {
-      analyticsService.logScreenView(screenName);
+      analyticsService.trackScreen(screenName);
     }
     if (currentScreen === 'login') {
-      analyticsService.logEvent(AnalyticsEvents.LOGIN_VIEW, { method: 'otp' });
+      analyticsService.trackEvent(AnalyticsEvents.LOGIN_VIEW, { method: 'otp' });
     }
   }, [currentScreen, isCheckingAuth]);
 
@@ -563,15 +532,15 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         }
 
         // Track app foreground
-        analyticsService.logEvent(AnalyticsEvents.APP_STATE, { state: 'foreground' });
+        analyticsService.trackEvent(AnalyticsEvents.APP_STATE, { state: 'foreground' });
       } else if (nextAppState === 'background') {
         // Track app background
-        analyticsService.logEvent(AnalyticsEvents.APP_STATE, { state: 'background' });
+        analyticsService.trackEvent(AnalyticsEvents.APP_STATE, { state: 'background' });
         if (isAuthenticatedRef.current) {
           const durationSec = sessionStartTimeRef.current
             ? Math.max(0, Math.round((Date.now() - sessionStartTimeRef.current) / 1000))
             : 0;
-          analyticsService.logEvent(AnalyticsEvents.SESSION_END, {
+          analyticsService.trackEvent(AnalyticsEvents.SESSION_END, {
             reason: 'background',
             duration_sec: durationSec,
           });
@@ -636,7 +605,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     const interactionTask = InteractionManager.runAfterInteractions(() => {
       const loadTimeMs = Date.now() - startedAt;
       if (loadTimeMs > 2500) {
-        analyticsService.logEvent(AnalyticsEvents.SCREEN_LOAD_SLOW, {
+        analyticsService.trackEvent(AnalyticsEvents.SCREEN_LOAD_SLOW, {
           screen_name: currentScreen,
           load_time_ms: loadTimeMs,
         });
@@ -824,7 +793,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
         // Initialize Analytics
         await analyticsService.initialize();
-        await analyticsService.logEvent(AnalyticsEvents.APP_OPEN);
+        await analyticsService.trackEvent(AnalyticsEvents.APP_OPEN);
 
         // Initialize FCM notifications
         fcmNotificationService.initialize().catch((error) => {
@@ -866,8 +835,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               [AnalyticsUserProperties.CITY]: profileProps.city,
               [AnalyticsUserProperties.PINCODE]: profileProps.pincode,
               [AnalyticsUserProperties.AREA_NAME]: profileProps.areaName,
-              [AnalyticsUserProperties.LATITUDE]: profileProps.latitude,
-              [AnalyticsUserProperties.LONGITUDE]: profileProps.longitude,
             });
           }
           await crashlyticsService.setGlobalContext({
@@ -882,8 +849,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             [AnalyticsUserProperties.CITY]: profileProps.city,
             [AnalyticsUserProperties.PINCODE]: profileProps.pincode,
             [AnalyticsUserProperties.AREA_NAME]: profileProps.areaName,
-            [AnalyticsUserProperties.LATITUDE]: profileProps.latitude,
-            [AnalyticsUserProperties.LONGITUDE]: profileProps.longitude,
           });
           isAuthenticatedRef.current = true;
           if (!sessionStartTimeRef.current) {
@@ -896,6 +861,16 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           }
         } else {
           // Not logged in: show login screen. Guest procedure starts only when user taps Skip.
+          await crashlyticsService.setUserId(null);
+          await crashlyticsService.setGlobalContext({
+            app_version: APP_VERSION_NAME,
+            login_state: 'guest',
+          });
+          await analyticsService.setUserProperties({
+            [AnalyticsUserProperties.LOGIN_STATE]: 'guest',
+            [AnalyticsUserProperties.USER_ID]: null,
+            [AnalyticsUserProperties.USER_TYPE]: null,
+          });
           isAuthenticatedRef.current = false;
           sessionStartTimeRef.current = null;
           setAddressSelectionCameFrom('home');
@@ -1095,9 +1070,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         await crashlyticsService.setUserId(currentUser.id.toString());
       }
 
-      await analyticsService.logEvent(AnalyticsEvents.OTP_VERIFIED, { method: 'sms' });
-      await analyticsService.logEvent(AnalyticsEvents.LOGIN_SUCCESS, { method: 'otp' });
-      await analyticsService.logEvent(AnalyticsEvents.USER_SESSION_START, { trigger: 'login' });
+      await analyticsService.trackEvent(AnalyticsEvents.OTP_VERIFIED);
+      await analyticsService.trackEvent(AnalyticsEvents.LOGIN_SUCCESS, { method: 'otp' });
+      await analyticsService.trackEvent(AnalyticsEvents.USER_SESSION_START, { trigger: 'login' });
       sessionStartTimeRef.current = Date.now();
       isAuthenticatedRef.current = true;
       await analyticsService.setUserProperties({
@@ -1107,8 +1082,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         [AnalyticsUserProperties.CITY]: profileProps.city,
         [AnalyticsUserProperties.PINCODE]: profileProps.pincode,
         [AnalyticsUserProperties.AREA_NAME]: profileProps.areaName,
-        [AnalyticsUserProperties.LATITUDE]: profileProps.latitude,
-        [AnalyticsUserProperties.LONGITUDE]: profileProps.longitude,
       });
       await crashlyticsService.setGlobalContext({
         app_version: APP_VERSION_NAME,
@@ -1138,7 +1111,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       ensureNotificationPermission();
     } else {
       // New user - show welcome screen for profile completion
-      await analyticsService.logEvent(AnalyticsEvents.OTP_VERIFIED, { method: 'sms' });
+      await analyticsService.trackEvent(AnalyticsEvents.OTP_VERIFIED);
       setCurrentScreen('welcome');
       setIsRegistrationFlow(true);
       ensureNotificationPermission();
@@ -1152,7 +1125,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       const currentUser = await authService.getCurrentUser();
       if (currentUser) {
         // Update user data with name and email
-        const updatedUser = {
+        const updatedUser : UserData = {
           ...currentUser,
           name,
           email,
@@ -1179,8 +1152,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     }
 
     // Log signup success
-    await analyticsService.logEvent(AnalyticsEvents.LOGIN_SUCCESS, { method: 'otp' });
-    await analyticsService.logEvent(AnalyticsEvents.USER_SESSION_START, { trigger: 'login' });
+    await analyticsService.trackEvent(AnalyticsEvents.LOGIN_SUCCESS, { method: 'otp' });
+    await analyticsService.trackEvent(AnalyticsEvents.USER_SESSION_START, { trigger: 'login' });
     sessionStartTimeRef.current = Date.now();
     isAuthenticatedRef.current = true;
 
@@ -1218,18 +1191,18 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       : 0;
 
     // Log logout event
-    await analyticsService.logEvent(AnalyticsEvents.LOGOUT);
-    await analyticsService.logEvent(AnalyticsEvents.SESSION_END, {
+    await analyticsService.trackEvent(AnalyticsEvents.LOGOUT);
+    await analyticsService.trackEvent(AnalyticsEvents.SESSION_END, {
       reason: 'logout',
       duration_sec: durationSec,
     });
-    await analyticsService.logEvent(AnalyticsEvents.USER_SESSION_END, { trigger: 'logout' });
+    await analyticsService.trackEvent(AnalyticsEvents.USER_SESSION_END, { trigger: 'logout' });
 
     // Reset analytics user data
     await analyticsService.reset();
     await analyticsService.setUserProperties({
       [AnalyticsUserProperties.USER_ID]: null,
-      [AnalyticsUserProperties.USER_TYPE]: 'guest',
+      [AnalyticsUserProperties.USER_TYPE]: null,
     });
     await crashlyticsService.setUserId(null);
     await crashlyticsService.setGlobalContext({
@@ -1305,7 +1278,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     await analyticsService.setUserProperties({
       [AnalyticsUserProperties.LOGIN_STATE]: 'guest',
       [AnalyticsUserProperties.USER_ID]: null,
-      [AnalyticsUserProperties.USER_TYPE]: 'guest',
+      [AnalyticsUserProperties.USER_TYPE]: null,
     });
 
     // Reset all overlays so home (hotel list) is visible
@@ -1618,22 +1591,16 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     const resolvedCity = String(location.city || '').toLowerCase();
     const resolvedPincode = String(location.pincode || '');
     const resolvedAreaName = String(location.name || location.locationName || '').toLowerCase();
-    const resolvedLatitudeRaw = location.latitude ?? location.lat;
-    const resolvedLongitudeRaw = location.longitude ?? location.lng;
-    const resolvedLatitude = typeof resolvedLatitudeRaw === 'number' ? resolvedLatitudeRaw.toFixed(6) : null;
-    const resolvedLongitude = typeof resolvedLongitudeRaw === 'number' ? resolvedLongitudeRaw.toFixed(6) : null;
     analyticsService.setUserProperties({
       [AnalyticsUserProperties.CITY]: resolvedCity || null,
       [AnalyticsUserProperties.PINCODE]: resolvedPincode || null,
       [AnalyticsUserProperties.AREA_NAME]: resolvedAreaName || null,
-      [AnalyticsUserProperties.LATITUDE]: resolvedLatitude,
-      [AnalyticsUserProperties.LONGITUDE]: resolvedLongitude,
     });
     crashlyticsService.setGlobalContext({
       city: resolvedCity || undefined,
       pincode: resolvedPincode || undefined,
     });
-    analyticsService.logEvent(AnalyticsEvents.LOCATION_SELECTED_MANUAL, {
+    analyticsService.trackEvent(AnalyticsEvents.LOCATION_SELECTED_MANUAL, {
       city: resolvedCity || undefined,
       pincode: resolvedPincode || undefined,
       area_name: resolvedAreaName || undefined,
@@ -1741,13 +1708,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setSelectedRestaurantName(restaurantName);
     setRestaurantCameFrom('category');
     setCurrentScreen('restaurant');
-    analyticsService.logEvent(AnalyticsEvents.RESTAURANT_VIEWED, {
+    analyticsService.trackEvent(AnalyticsEvents.RESTAURANT_VIEWED, {
       restaurant_id: restaurantId,
-      restaurant_name: restaurantName || undefined,
-      source: 'category',
       distance_km: Number.isFinite(meta?.distanceKm as number) ? meta?.distanceKm : 0,
       is_open: typeof meta?.isOpen === 'boolean' ? meta.isOpen : true,
-      screen_name: AnalyticsScreens.RESTAURANT,
     });
 
     // Animate restaurant screen sliding in from right
@@ -1771,13 +1735,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setCurrentScreen('restaurant');
 
     // Track restaurant view
-    analyticsService.logEvent(AnalyticsEvents.RESTAURANT_VIEWED, {
+    analyticsService.trackEvent(AnalyticsEvents.RESTAURANT_VIEWED, {
       restaurant_id: restaurantId,
-      restaurant_name: restaurantName || undefined,
-      source: 'home',
       distance_km: Number.isFinite(meta?.distanceKm as number) ? meta?.distanceKm : 0,
       is_open: typeof meta?.isOpen === 'boolean' ? meta.isOpen : true,
-      screen_name: AnalyticsScreens.RESTAURANT,
     });
 
     // Animate restaurant screen sliding in from right
@@ -1803,22 +1764,18 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
     // Set screen to checkout
     setCurrentScreen('checkout');
-    analyticsService.logEvent(AnalyticsEvents.CART_VIEWED, {
+    analyticsService.trackEvent(AnalyticsEvents.CART_VIEWED, {
       cart_value: getTotalPrice(),
       item_count: getTotalItems(),
+      currency: 'INR',
       restaurant_id: restaurantId,
-      restaurant_name: restaurantName || undefined,
-      screen_name: AnalyticsScreens.CHECKOUT,
     });
-    analyticsService.logEvent(AnalyticsEvents.CHECKOUT_STARTED, {
+    analyticsService.trackEvent(AnalyticsEvents.CHECKOUT_STARTED, {
       cart_value: getTotalPrice(),
       delivery_fee: Number.isFinite(checkoutDeliveryFee) ? checkoutDeliveryFee : 0,
       item_count: getTotalItems(),
       currency: 'INR',
       restaurant_id: restaurantId,
-      restaurant_name: restaurantName || undefined,
-      source: from,
-      screen_name: AnalyticsScreens.CHECKOUT,
     });
 
     // Animate checkout screen sliding in from right (next frame)
@@ -2035,7 +1992,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setCurrentScreen('orders');
     // Reset orders screen position to show it
     ordersScreenSlide.setValue(0);
-    analyticsService.logEvent(AnalyticsEvents.RESTAURANT_LIST_VIEWED, { source: 'orders' });
+    analyticsService.trackEvent(AnalyticsEvents.RESTAURANT_LIST_VIEWED, {
+      restaurant_scroll_count: 0,
+    });
   };
 
   const handleBackFromOrders = () => {
@@ -2571,7 +2530,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setCurrentScreen('search');
 
     // Track search start
-    analyticsService.logEvent(AnalyticsEvents.SEARCH, { source: 'home_search' });
+    analyticsService.trackEvent(AnalyticsEvents.SEARCH, {
+      source: 'home_search',
+      search_stage: 'entry',
+    });
 
     // Keep home fixed and slide search over it to avoid exposing base white layer.
     Animated.timing(searchScreenSlide, {

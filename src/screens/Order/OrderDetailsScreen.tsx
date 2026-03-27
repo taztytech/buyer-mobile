@@ -25,6 +25,7 @@ import { homeService } from '@/services/home.service';
 import { cartService, CartSummary } from '@/services/cart.service';
 import { restaurantService } from '@/services/restaurant.service';
 import { paymentConfigService } from '@/services/payment-config.service';
+import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
 import { useCart } from '@/context/CartContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
@@ -401,6 +402,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
       // Automatically remove the promo code
       const autoRemovePromo = async () => {
+        const couponCodeForEvent =
+          promoCode.trim().toUpperCase() ||
+          ((cartSummary as any)?.applied_offer?.offer_code || '').toString().toUpperCase() ||
+          undefined;
+
         try {
           setIsApplyingPromo(true);
           setPromoError('');
@@ -410,6 +416,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           if (response.success && response.cart_summary) {
             // Update cart summary with new values (without discount)
             setCartSummary(response.cart_summary);
+
+            await analyticsService.trackEvent(AnalyticsEvents.REMOVE_COUPON, {
+              coupon_code: couponCodeForEvent,
+              success: true,
+              cart_value: Number(response.cart_summary.final_amount ?? 0),
+              currency: 'INR',
+              source: 'auto_validation',
+            });
 
             // Clear promo code input
             setPromoCode('');
@@ -425,10 +439,24 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               onConfirm: () => { },
             });
           } else {
+            await analyticsService.trackEvent(AnalyticsEvents.REMOVE_COUPON, {
+              coupon_code: couponCodeForEvent,
+              success: false,
+              reason: response.message || 'remove_coupon_failed',
+              source: 'auto_validation',
+            });
+
             // If removal fails, show error
             setPromoError(response.message || 'Failed to remove promo code.');
           }
         } catch (error: any) {
+          await analyticsService.trackEvent(AnalyticsEvents.REMOVE_COUPON, {
+            coupon_code: couponCodeForEvent,
+            success: false,
+            reason: error?.message || 'remove_coupon_exception',
+            source: 'auto_validation',
+          });
+
           setPromoError(error?.message || 'Failed to remove promo code.');
         } finally {
           setIsApplyingPromo(false);
@@ -1369,10 +1397,30 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           const finalTip = tipFromResponse > 0 ? tipFromResponse : null;
           setSelectedTip(finalTip);
 
+          await analyticsService.trackEvent(
+            finalTip && finalTip > 0 ? AnalyticsEvents.ADD_TIP : AnalyticsEvents.REMOVE_TIP,
+            {
+              amount: finalTip ?? 0,
+              cart_value: Number(response.cart_summary.final_amount ?? 0),
+              currency: 'INR',
+              source: 'checkout',
+            }
+          );
+
           // If it's a custom tip (not 10, 20, 30), update customTipAmount to match
           if (finalTip !== null && finalTip !== 10 && finalTip !== 20 && finalTip !== 30) {
             setCustomTipAmount(finalTip.toString());
           }
+        } else {
+          await analyticsService.trackEvent(
+            tipToSend > 0 ? AnalyticsEvents.ADD_TIP : AnalyticsEvents.REMOVE_TIP,
+            {
+              amount: tipToSend,
+              cart_value: Number(response.cart_summary.final_amount ?? 0),
+              currency: 'INR',
+              source: 'checkout',
+            }
+          );
         }
       } else {
         // Revert optimistic update on error
@@ -1467,13 +1515,36 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         // Use updated cart summary from backend
         setCartSummary(response.cart_summary);
 
+        await analyticsService.trackEvent(AnalyticsEvents.APPLY_COUPON, {
+          coupon_code: normalizedCode,
+          success: true,
+          discount_amount: Number(response.cart_summary.discount_amount ?? 0),
+          cart_value: Number(response.cart_summary.final_amount ?? 0),
+          currency: 'INR',
+          source: 'checkout',
+        });
+
         // Clear any existing error on success
         setPromoError('');
       } else {
+        await analyticsService.trackEvent(AnalyticsEvents.APPLY_COUPON, {
+          coupon_code: normalizedCode,
+          success: false,
+          reason: response.message || 'apply_coupon_failed',
+          source: 'checkout',
+        });
+
         // Show error message from API at the bottom of the screen
         setPromoError(response.message || 'Failed to apply promo code.');
       }
     } catch (error: any) {
+      await analyticsService.trackEvent(AnalyticsEvents.APPLY_COUPON, {
+        coupon_code: normalizedCode,
+        success: false,
+        reason: error?.message || 'apply_coupon_exception',
+        source: 'checkout',
+      });
+
       setPromoError(error?.message || 'Failed to apply promo code.');
     } finally {
       setIsApplyingPromo(false);
@@ -1494,14 +1565,36 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         // Use updated cart summary from backend (without discount)
         setCartSummary(response.cart_summary);
 
+        await analyticsService.trackEvent(AnalyticsEvents.REMOVE_COUPON, {
+          coupon_code: promoCode.trim().toUpperCase() || undefined,
+          success: true,
+          cart_value: Number(response.cart_summary.final_amount ?? 0),
+          currency: 'INR',
+          source: 'checkout',
+        });
+
         // Clear promo code input and any errors on success
         setPromoCode('');
         setPromoError('');
       } else {
+        await analyticsService.trackEvent(AnalyticsEvents.REMOVE_COUPON, {
+          coupon_code: promoCode.trim().toUpperCase() || undefined,
+          success: false,
+          reason: response.message || 'remove_coupon_failed',
+          source: 'checkout',
+        });
+
         // Show error message from API at the bottom of the screen
         setPromoError(response.message || 'Failed to remove promo code.');
       }
     } catch (error: any) {
+      await analyticsService.trackEvent(AnalyticsEvents.REMOVE_COUPON, {
+        coupon_code: promoCode.trim().toUpperCase() || undefined,
+        success: false,
+        reason: error?.message || 'remove_coupon_exception',
+        source: 'checkout',
+      });
+
       setPromoError(error?.message || 'Failed to remove promo code.');
     } finally {
       setIsApplyingPromo(false);

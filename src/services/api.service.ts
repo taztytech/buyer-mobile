@@ -909,7 +909,7 @@ class ApiService {
       // be treated as user deletion or forced logout.
       if (!response.ok) {
         const statusCode = response.status;
-        analyticsService.logEvent(AnalyticsEvents.API_ERROR, {
+        analyticsService.trackEvent(AnalyticsEvents.API_ERROR, {
           endpoint,
           http_code: statusCode,
         });
@@ -1024,7 +1024,7 @@ class ApiService {
         timestamp: new Date().toISOString(),
       }));
       const apiError = this.handleError(error);
-      analyticsService.logEvent(AnalyticsEvents.API_ERROR, {
+      analyticsService.trackEvent(AnalyticsEvents.API_ERROR, {
         endpoint,
         http_code: apiError.status || 0,
       });
