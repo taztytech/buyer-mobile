@@ -9,7 +9,7 @@ import { API_CONFIG } from '@/config/api.config';
 import { storageService, UserData } from './storage.service';
 import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 import { fcmNotificationService } from './fcmNotification.service';
-import { analyticsService, AnalyticsEvents } from './analytics.service';
+import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from './analytics.service';
 import { crashlyticsService } from './crashlytics.service';
 import { addressService } from './address.service';
 
@@ -173,7 +173,39 @@ class AuthService {
 
         // 3. Save user data to storage (if provided)
         if (response.data.user) {
-          await storageService.saveUser(response.data.user);
+          // Determine New vs Returning per device/user_id
+          const uid = String(response.data.user.id || '').trim();
+          let userTypeValue: 'new' | 'returning' = 'new';
+          if (uid) {
+            const seen = await storageService.hasSeenUserId(uid);
+            userTypeValue = seen ? 'returning' : 'new';
+            await storageService.markUserIdSeen(uid);
+          }
+
+          const userToSave: UserData = {
+            ...response.data.user,
+            user_type: userTypeValue,
+          };
+          await storageService.saveUser(userToSave);
+
+          // Analytics + Crashlytics identity
+          if (uid) {
+            await analyticsService.setUserId(uid);
+            await crashlyticsService.setUserId(uid);
+          }
+
+          // Set user properties (visible in Analytics user properties)
+          await analyticsService.setUserProperties({
+            [AnalyticsUserProperties.USER_ID]: uid || null,
+            [AnalyticsUserProperties.USER_TYPE]: userTypeValue === 'returning' ? 'Returning' : 'New',
+            [AnalyticsUserProperties.LOGIN_STATE]: 'logged_in',
+          });
+
+          crashlyticsService.setGlobalContext({
+            user_id: uid || 'unknown',
+            user_type: userTypeValue,
+            login_state: 'logged_in',
+          });
         } else {
           // If no user data, create minimal user object from phone number
           await storageService.saveUser({
@@ -188,6 +220,30 @@ class AuthService {
           response.data.refresh_token,
           response.data.expires_in || 3600
         );
+
+        // 4b. Immediately set location user properties (city/area/pincode) post-login
+        // so they appear in Analytics event detail view for subsequent events.
+        // Do not block login if this fails.
+        try {
+          const addrResp = await addressService.getAddresses();
+          const defaultAddr = addrResp.success && addrResp.data
+            ? addrResp.data.find(a => a.is_default) ?? addrResp.data[0]
+            : null;
+          if (defaultAddr) {
+            await analyticsService.setUserProperties({
+              [AnalyticsUserProperties.CITY]: defaultAddr.city ? String(defaultAddr.city) : null,
+              [AnalyticsUserProperties.AREA_NAME]: defaultAddr.address3 ? String(defaultAddr.address3) : null,
+              [AnalyticsUserProperties.PINCODE]: defaultAddr.pincode ? String(defaultAddr.pincode) : null,
+            });
+            crashlyticsService.setGlobalContext({
+              city: defaultAddr.city || 'unknown',
+              area_name: defaultAddr.address3 || 'unknown',
+              pincode: defaultAddr.pincode || 'unknown',
+            });
+          }
+        } catch (e) {
+          // Ignore: address fetch can fail briefly right after login
+        }
 
         // 5. Register FCM token after successful login
         // This ensures the token is uploaded to backend after authentication
@@ -349,6 +405,11 @@ class AuthService {
       // This ensures complete cleanup even if API call fails
       await apiService.clearTokens();
       await crashlyticsService.setUserId(null);
+      await analyticsService.reset();
+      await analyticsService.setUserProperties({
+        [AnalyticsUserProperties.USER_TYPE]: 'Guest',
+        [AnalyticsUserProperties.LOGIN_STATE]: 'guest',
+      });
 
       return response;
     } catch (error: any) {
@@ -357,6 +418,11 @@ class AuthService {
         console.error('⚠️  Failed to clear tokens on logout:', clearError);
       });
       await crashlyticsService.setUserId(null);
+      await analyticsService.reset();
+      await analyticsService.setUserProperties({
+        [AnalyticsUserProperties.USER_TYPE]: 'Guest',
+        [AnalyticsUserProperties.LOGIN_STATE]: 'guest',
+      });
 
       return {
         success: false,
@@ -380,6 +446,11 @@ class AuthService {
       // Clear all tokens and user data immediately
       await apiService.clearTokens();
       await crashlyticsService.setUserId(null);
+      await analyticsService.reset();
+      await analyticsService.setUserProperties({
+        [AnalyticsUserProperties.USER_TYPE]: 'Guest',
+        [AnalyticsUserProperties.LOGIN_STATE]: 'guest',
+      });
     } catch (error: any) {
       console.error('⚠️  Error during force logout:', error);
       // Still try to clear tokens even if FCM unregister fails

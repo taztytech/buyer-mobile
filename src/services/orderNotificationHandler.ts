@@ -237,7 +237,7 @@ export async function handleOrderNotification(
     } else if (normalizedStatus === 'delivered') {
       analyticsService.logEvent(AnalyticsEvents.ORDER_DELIVERED, { order_id: orderIdNum });
       analyticsService.setUserProperties({
-        [AnalyticsUserProperties.USER_TYPE]: 'returning',
+        [AnalyticsUserProperties.USER_TYPE]: 'Returning',
       });
       const currentUser = await storageService.getUser();
       if (currentUser) {

@@ -23,6 +23,8 @@ const STORAGE_KEYS = {
   BACKGROUND_NOTIFICATIONS: '@tazty_background_notifications',
   // App version tracking for cache clearing
   APP_VERSION_CODE: '@tazty_app_version_code',
+  /** Persisted set of user IDs seen on this device (for New/Returning). */
+  SEEN_USER_IDS: '@tazty_seen_user_ids',
 };
 
 /** AsyncStorage key for guest-persisted delivery location (synced to user addresses after login). */
@@ -46,6 +48,43 @@ export interface UserData {
 }
 
 class StorageService {
+  /**
+   * Get set of user IDs that have logged in on this device.
+   * NOTE: This is preserved across logout to support New/Returning logic per account.
+   */
+  async getSeenUserIds(): Promise<Set<string>> {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.SEEN_USER_IDS);
+      if (!raw) return new Set();
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return new Set();
+      return new Set(parsed.map(String).filter(Boolean));
+    } catch {
+      return new Set();
+    }
+  }
+
+  /** Mark a userId as seen on this device. */
+  async markUserIdSeen(userId: string): Promise<void> {
+    try {
+      const trimmed = String(userId || '').trim();
+      if (!trimmed) return;
+      const seen = await this.getSeenUserIds();
+      if (seen.has(trimmed)) return;
+      seen.add(trimmed);
+      await AsyncStorage.setItem(STORAGE_KEYS.SEEN_USER_IDS, JSON.stringify(Array.from(seen)));
+    } catch {
+      // ignore
+    }
+  }
+
+  /** Returns true if this userId has been seen before on this device. */
+  async hasSeenUserId(userId: string): Promise<boolean> {
+    const trimmed = String(userId || '').trim();
+    if (!trimmed) return false;
+    const seen = await this.getSeenUserIds();
+    return seen.has(trimmed);
+  }
   /**
    * Save authentication tokens
    */

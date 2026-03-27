@@ -20,7 +20,7 @@ import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { restaurantService } from '@/services/restaurant.service';
-import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
+import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from '@/services/analytics.service';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BANNER_WIDTH = SCREEN_WIDTH - 40; // Fixed banner width with 20px padding on each side
@@ -352,6 +352,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               };
               setSelectedLocation(newLocation);
             }
+
+            // Set analytics user properties for location context (non-PII)
+            analyticsService.setUserProperties({
+              [AnalyticsUserProperties.CITY]: defaultAddress.city ? String(defaultAddress.city) : null,
+              [AnalyticsUserProperties.AREA_NAME]: defaultAddress.address3 ? String(defaultAddress.address3) : null,
+              [AnalyticsUserProperties.PINCODE]: defaultAddress.pincode ? String(defaultAddress.pincode) : null,
+            });
 
             // Fetch home data with default address coordinates
             // Clear data first to prevent showing stale cached data
