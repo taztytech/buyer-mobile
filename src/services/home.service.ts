@@ -82,6 +82,12 @@ export interface HomeData {
   whats_on_your_mind?: CategoryItem[];
   pagination?: PaginationMetadata;
   home_screen_restaurant_card_style?: string;
+  /** Home header background image URL (remote). Also accepts alternate API keys at parse time. */
+  home_background_image_url?: string;
+  home_background_image?: string;
+  header_background_image?: string;
+  background_image_url?: string;
+  home_screen_background_image?: string;
 }
 
 class HomeService {
