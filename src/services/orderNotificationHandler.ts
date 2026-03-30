@@ -9,6 +9,7 @@ import { OrderListItem } from './orders.service';
 import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from './analytics.service';
 import { crashlyticsService } from './crashlytics.service';
 import { storageService } from './storage.service';
+import { trackPurchaseIfEligible } from '@/analytics/purchaseTracker';
 
 // Action type for dispatching to orders store
 export type OrdersDispatch = (action: {
@@ -250,6 +251,27 @@ export async function handleOrderNotification(
         user_type: 'returning',
       });
     }
+    await trackPurchaseIfEligible(
+      {
+        id: orderIdNum,
+        status,
+        payment_status:
+          typeof data.payment_status === 'string'
+            ? data.payment_status
+            : typeof data.paymentStatus === 'string'
+              ? data.paymentStatus
+              : null,
+        total_amount:
+          typeof data.total_amount === 'string'
+            ? Number(data.total_amount)
+            : typeof data.final_amount === 'string'
+              ? Number(data.final_amount)
+              : null,
+        num_items:
+          typeof data.num_items === 'string' ? Number(data.num_items) : undefined,
+      },
+      'fcm_quick_payload',
+    );
     console.log('✅ Order Handler: Status update dispatched to OrdersContext - Will update ALL screens automatically', {
       status,
       willUpdate: ['My Orders Screen', 'Order Details Screen', 'Track Order Bottom Sheet'],
@@ -263,6 +285,7 @@ export async function handleOrderNotification(
 
         if (response.success && response.data) {
           const fullOrder = response.data as any;
+          await trackPurchaseIfEligible(fullOrder, 'fcm_full_order_fetch');
           // Update with full order data
           dispatch({
             type: 'UPSERT_ORDER_FROM_FCM',

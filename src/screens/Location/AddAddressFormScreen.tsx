@@ -420,7 +420,17 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
 
         analyticsService.logEvent(AnalyticsEvents.NEW_ADDRESS_ADDED, {
           area_name: locality.trim().toLowerCase(),
-          city: 'madurai',
+          city:
+            (
+              geocodingData?.city ||
+              geocodingData?.district ||
+              initialData?.city ||
+              selectedLocation?.city ||
+              'unknown'
+            )
+              .toString()
+              .trim()
+              .toLowerCase(),
           pincode: pincode.trim(),
         });
 

@@ -19,6 +19,7 @@ import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GUEST_SELECTED_LOCATION_KEY } from '@/services/storage.service';
 import { useVegMode } from '@/context/VegModeContext';
+import { trackSearch } from '@/analytics/metaEvents';
 
 // Default location fallback (same as HomeScreen)
 const DEFAULT_LOCATION = {
@@ -73,6 +74,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const lastTrackedSearchQueryRef = useRef('');
   const { vegMode } = useVegMode();
 
   // Get user location on mount or when selectedLocation changes
@@ -141,6 +143,12 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     // Debounce the search
     debounceTimer.current = setTimeout(async () => {
       try {
+        const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+        if (normalizedSearchQuery && normalizedSearchQuery !== lastTrackedSearchQueryRef.current) {
+          trackSearch(searchQuery.trim());
+          lastTrackedSearchQueryRef.current = normalizedSearchQuery;
+        }
+
         // Pass location if available, otherwise search without location filter
         const response = await searchService.getSearchSuggestions(
           searchQuery,
