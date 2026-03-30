@@ -48,6 +48,8 @@ import { inAppUpdateService } from '@/services/inAppUpdate.service';
 import { crashlyticsService } from '@/services/crashlytics.service';
 import { ForcedUpdateModal } from '@/components/ForcedUpdateModal';
 import { APP_VERSION_NAME } from '@/config/appVersion.generated';
+// import { initMeta } from '@/analytics/metaInit';
+// import { trackCheckout, trackViewRestaurant } from '@/analytics/metaEvents';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Let native splash auto-hide immediately - don't prevent it
@@ -213,6 +215,55 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       longitude,
     };
   }, [toFixedStringOrNull]);
+
+  const mergeProfileWithSelectedLocation = React.useCallback((
+    profileProps: {
+      city: string | null;
+      pincode: string | null;
+      areaName: string | null;
+      latitude: string | null;
+      longitude: string | null;
+    },
+    location: any,
+  ) => {
+    const fallbackCity = String(location?.city || '').toLowerCase() || null;
+    const fallbackPincode = String(location?.pincode || '') || null;
+    const fallbackAreaName = String(
+      location?.address3 ||
+      location?.area_name ||
+      location?.locality ||
+      location?.name ||
+      '',
+    ).toLowerCase() || null;
+    const fallbackLatitude = toFixedStringOrNull(location?.latitude ?? location?.lat);
+    const fallbackLongitude = toFixedStringOrNull(location?.longitude ?? location?.lng);
+
+    return {
+      city: profileProps.city || fallbackCity,
+      pincode: profileProps.pincode || fallbackPincode,
+      areaName: profileProps.areaName || fallbackAreaName,
+      latitude: profileProps.latitude || fallbackLatitude,
+      longitude: profileProps.longitude || fallbackLongitude,
+    };
+  }, [toFixedStringOrNull]);
+
+  const hydrateCurrentUserForAnalytics = React.useCallback(async () => {
+    let user = await authService.getCurrentUser();
+    if (user?.id) {
+      return user;
+    }
+
+    try {
+      const profileResponse = await authService.getProfile();
+      if (profileResponse.success) {
+        user = await authService.getCurrentUser();
+      }
+    } catch (error) {
+      console.warn('[Analytics] Failed to hydrate current user before setting properties:', error);
+    }
+
+    return user;
+  }, []);
 
   const resolveUserTypeWithOrderHistory = React.useCallback(async (currentUser: any): Promise<'new' | 'returning'> => {
     const persistedUserType = currentUser?.user_type === 'returning' ? 'returning' : 'new';
@@ -847,9 +898,12 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
         if (isLoggedIn) {
           // Get current user and set analytics / crashlytics user ID
-          const currentUser = await authService.getCurrentUser();
+          const currentUser = await hydrateCurrentUserForAnalytics();
           const resolvedUserType = await resolveUserTypeWithOrderHistory(currentUser);
-          const profileProps = buildProfileUserProperties(currentUser);
+          const profileProps = mergeProfileWithSelectedLocation(
+            buildProfileUserProperties(currentUser),
+            selectedLocation,
+          );
           if (resolvedUserType === 'returning' && currentUser && currentUser.user_type !== 'returning') {
             await storageService.saveUser({
               ...(currentUser as any),
@@ -1081,9 +1135,12 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     if (isExistingUser !== false) {
       // Existing user - go directly to home (skip address selection)
       // Set analytics user ID
-      const currentUser = await authService.getCurrentUser();
-      const resolvedUserType = await resolveUserTypeWithOrderHistory(currentUser);
-      const profileProps = buildProfileUserProperties(currentUser);
+      const currentUser = await hydrateCurrentUserForAnalytics();
+      const resolvedUserType: 'new' | 'returning' = 'returning';
+      const profileProps = mergeProfileWithSelectedLocation(
+        buildProfileUserProperties(currentUser),
+        selectedLocation,
+      );
       if (resolvedUserType === 'returning' && currentUser && currentUser.user_type !== 'returning') {
         await storageService.saveUser({
           ...(currentUser as any),
@@ -1149,14 +1206,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const handleWelcomeComplete = async (name: string, email: string) => {
     // Save user profile data to storage
     try {
-      const currentUser = await authService.getCurrentUser();
+      const currentUser = await hydrateCurrentUserForAnalytics();
       if (currentUser) {
         // Update user data with name and email
         const updatedUser = {
           ...currentUser,
           name,
           email,
-          user_type: 'new',
+          user_type: 'new' as const,
         };
         await storageService.saveUser(updatedUser);
 
@@ -2966,8 +3023,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             pointerEvents={currentScreen === 'locationSelection' ? 'auto' : 'none'}
           >
             <LocationSelectionScreen
-              mapActive={currentScreen === 'locationSelection'}
-              deferMapMount
               initialSearchQuery={locationSearchQuery}
               editingAddress={editingAddress}
               initialLatitude={editingAddress?.latitude || initialLocationCoords?.latitude}
