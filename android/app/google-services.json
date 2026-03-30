@@ -1,77 +1,34 @@
 {
   "project_info": {
-    "project_number": "486365337198",
-    "project_id": "ondc-buyer-app-63cee",
-    "storage_bucket": "ondc-buyer-app-63cee.firebasestorage.app"
+    "project_number": "299963819024",
+    "project_id": "tazty-buyer",
+    "storage_bucket": "tazty-buyer.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:486365337198:android:68747151ad80f7f065787f",
+        "mobilesdk_app_id": "1:299963819024:android:69cd7ac1ac015388cf1695",
         "android_client_info": {
-          "package_name": "in.tazty.buyer.dev"
+          "package_name": "in.tazty.buyer"
         }
       },
       "oauth_client": [
         {
-          "client_id": "486365337198-7c5o7n762mkiouo5mg6j4e5oqm39dfdm.apps.googleusercontent.com",
+          "client_id": "299963819024-6jrks8rl03fnk6gj6gs4gsrcovgfj06r.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyC9q2jy9m6wYMkhNMrPO0XEX_kHVyV3B80"
+          "current_key": "AIzaSyDvFX-ifkuE0BUmoqcNQ0pO_W2IQsVHdhQ"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "486365337198-7c5o7n762mkiouo5mg6j4e5oqm39dfdm.apps.googleusercontent.com",
+              "client_id": "299963819024-6jrks8rl03fnk6gj6gs4gsrcovgfj06r.apps.googleusercontent.com",
               "client_type": 3
-            },
-            {
-              "client_id": "486365337198-ngt5gn21hefh2griofeisft2dlp2k35h.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "org.ondc.buyer"
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:486365337198:android:b4fea317120e234865787f",
-        "android_client_info": {
-          "package_name": "org.ondc.buyer.dev"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "486365337198-7c5o7n762mkiouo5mg6j4e5oqm39dfdm.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyC9q2jy9m6wYMkhNMrPO0XEX_kHVyV3B80"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "486365337198-7c5o7n762mkiouo5mg6j4e5oqm39dfdm.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "486365337198-ngt5gn21hefh2griofeisft2dlp2k35h.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "org.ondc.buyer"
-              }
             }
           ]
         }
