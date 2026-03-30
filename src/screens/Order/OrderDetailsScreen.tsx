@@ -161,7 +161,6 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [promoError, setPromoError] = useState('');
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
   const [showTaxTooltip, setShowTaxTooltip] = useState(false);
-  const lastAutoRemovedTotalRef = useRef<number | null>(null);
 
   // Track latest update sequence to ensure we only apply cart_summary from the most recent update
   const updateSequenceRef = useRef<number>(0);
@@ -370,80 +369,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, Object.keys(cart).length, localCartItems.length]);
 
-  // Automatically remove promo code if total amount goes below ₹100
-  useEffect(() => {
-    // Only check if cart summary is loaded and we have a valid total amount
-    if (!cartSummary || totalAmount === 0) {
-      return;
-    }
-
-    // Check if cart has preorder items - if so, skip coupon removal logic
-    const hasPreorderItems = cartData?.items?.some((item: any) =>
-      item.is_preorder === true &&
-      item.preorder_campaign &&
-      item.preorder_campaign.id
-    );
-
-    // If cart has preorder items, don't remove coupon automatically
-    if (hasPreorderItems) {
-      return;
-    }
-
-    // Check if coupon is applied and total is below ₹100
-    const MINIMUM_ORDER_AMOUNT = 100;
-    const shouldRemovePromo = isCouponApplied && totalAmount < MINIMUM_ORDER_AMOUNT;
-
-    // Prevent duplicate removals for the same total amount
-    // Only remove if this is a new low total (different from last auto-removed total)
-    if (shouldRemovePromo && lastAutoRemovedTotalRef.current !== totalAmount) {
-      // Mark this total as handled
-      lastAutoRemovedTotalRef.current = totalAmount;
-
-      // Automatically remove the promo code
-      const autoRemovePromo = async () => {
-        try {
-          setIsApplyingPromo(true);
-          setPromoError('');
-
-          const response = await cartService.removeCoupon();
-
-          if (response.success && response.cart_summary) {
-            // Update cart summary with new values (without discount)
-            setCartSummary(response.cart_summary);
-
-            // Clear promo code input
-            setPromoCode('');
-            setPromoError('');
-
-            // Show user-friendly message explaining why promo was removed
-            showConfirmation({
-              title: 'Promo Code Removed',
-              message: `Your order total is below ₹${MINIMUM_ORDER_AMOUNT}. Promo codes require a minimum order value of ₹${MINIMUM_ORDER_AMOUNT}.`,
-              confirmText: 'OK',
-              cancelText: '',
-              confirmButtonColor: '#00B14F',
-              onConfirm: () => { },
-            });
-          } else {
-            // If removal fails, show error
-            setPromoError(response.message || 'Failed to remove promo code.');
-          }
-        } catch (error: any) {
-          setPromoError(error?.message || 'Failed to remove promo code.');
-        } finally {
-          setIsApplyingPromo(false);
-        }
-      };
-
-      autoRemovePromo();
-    }
-
-    // Reset the ref when total goes back above minimum (allows future auto-removal if needed)
-    if (totalAmount >= MINIMUM_ORDER_AMOUNT && lastAutoRemovedTotalRef.current !== null) {
-      lastAutoRemovedTotalRef.current = null;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalAmount, isCouponApplied, cartSummary, cartData]);
+  // Promo removal is button-only (handleRemovePromoCode). No automatic remove-coupon API calls.
 
   const fetchCartSummary = async () => {
     try {
@@ -1423,6 +1349,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
   // Handle promo code apply
   const handleApplyPromoCode = async () => {
+    if (isApplyingPromo) {
+      return;
+    }
+
     // Clear previous error
     setPromoError('');
 
@@ -1482,6 +1412,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
   // Handle promo code removal
   const handleRemovePromoCode = async () => {
+    if (isApplyingPromo) {
+      return;
+    }
+
     // Clear previous error
     setPromoError('');
 
@@ -1989,6 +1923,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                           placeholder="Enter promo code"
                           placeholderTextColor="rgba(0, 0, 0, 0.4)"
                           value={promoCode}
+                          editable={!isCouponApplied}
                           onChangeText={(text) => {
                             // Normalize to uppercase and hard-limit to 15 characters
                             const uppercased = text.toUpperCase();
