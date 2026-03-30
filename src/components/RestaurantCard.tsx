@@ -201,6 +201,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
 
   // Layout mode 3 => Outlined card: full-width image, heart top-right, stacked details (home)
   if (layoutMode === 3) {
+    const showImageMeta = restaurant.rating > 0 || !!restaurant.deliveryTime;
     return (
       <TouchableOpacity
         key="home-outlined"
@@ -245,6 +246,23 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             style={styles.gradientOverlayBottomHomeOutlined}
           />
 
+          {showImageMeta && (
+            <View style={styles.imageMetaPillHomeOutlined}>
+              {restaurant.rating > 0 && (
+                <View style={styles.imageMetaGroupHomeOutlined}>
+                  <MaterialIcons name="star" size={14} color="#FFB800" />
+                  <Text style={styles.imageMetaTextHomeOutlined}>{restaurant.rating.toFixed(1)}</Text>
+                </View>
+              )}
+              {restaurant.rating > 0 && restaurant.deliveryTime ? (
+                <Text style={styles.imageMetaDotHomeOutlined}>•</Text>
+              ) : null}
+              {!!restaurant.deliveryTime && (
+                <Text style={styles.imageMetaTextHomeOutlined}>{restaurant.deliveryTime}</Text>
+              )}
+            </View>
+          )}
+
           {!isRestaurantOpen && <View style={styles.grayOverlayHomeOutlined} />}
           {!isRestaurantOpen && (
             <View style={styles.closedOverlayHomeOutlined}>
@@ -288,26 +306,18 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             </View>
           )}
 
-          <Text
-            style={[styles.restaurantNameHomeOutlined, isRestaurantOpen && styles.restaurantNameHomeOutlinedOpen]}
-            numberOfLines={2}
-            ellipsizeMode="tail"
-          >
-            {restaurant.name}
-          </Text>
-
-          <View style={styles.ratingDeliveryRowHomeOutlined}>
-            {restaurant.rating > 0 && (
-              <View style={styles.ratingContainerHomeOutlined}>
-                <MaterialIcons name="star" size={16} color="#FFB800" />
-                <Text style={styles.ratingTextHomeOutlined}>{restaurant.rating.toFixed(1)}</Text>
-              </View>
-            )}
-            {restaurant.rating > 0 && restaurant.deliveryTime ? (
-              <Text style={styles.metaDotHomeOutlined}>•</Text>
-            ) : null}
-            {!!restaurant.deliveryTime && (
-              <Text style={styles.deliveryTextHomeOutlined}>{restaurant.deliveryTime}</Text>
+          <View style={styles.nameRowHomeOutlined}>
+            <Text
+              style={[styles.restaurantNameHomeOutlined, isRestaurantOpen && styles.restaurantNameHomeOutlinedOpen]}
+              numberOfLines={2}
+              ellipsizeMode="tail"
+            >
+              {restaurant.name}
+            </Text>
+            {!!restaurant.distance && (
+              <Text style={styles.distanceInlineHomeOutlined} numberOfLines={1}>
+                {restaurant.distance}
+              </Text>
             )}
           </View>
 
@@ -321,10 +331,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             </Text>
           </View>
 
-          <View style={styles.distanceRowHomeOutlined}>
-            <MaterialIcons name="location-on" size={16} color="#00B14F" />
-            <Text style={styles.distanceTextHomeOutlined}>{restaurant.distance}</Text>
-          </View>
+          {/* Distance shown inline with store name */}
 
           {!isRestaurantOpen && nextOpeningInfo && (
             <>
@@ -1124,8 +1131,8 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderWidth: 0,
+    borderColor: 'transparent',
     overflow: 'hidden',
     marginBottom: 12,
   },
@@ -1180,6 +1187,35 @@ const styles = StyleSheet.create({
     padding: 4,
     zIndex: 10,
   },
+  imageMetaPillHomeOutlined: {
+    position: 'absolute',
+    left: 10,
+    bottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+    zIndex: 6,
+  },
+  imageMetaGroupHomeOutlined: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  imageMetaTextHomeOutlined: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#FFFFFF',
+  },
+  imageMetaDotHomeOutlined: {
+    marginHorizontal: 6,
+    fontSize: 12,
+    lineHeight: 16,
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
   detailsContainerHomeOutlined: {
     position: 'relative',
     paddingHorizontal: 14,
@@ -1207,6 +1243,19 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 22,
     color: '#111827',
+  },
+  nameRowHomeOutlined: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  distanceInlineHomeOutlined: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#6B7280',
+    paddingTop: 2,
   },
   restaurantNameHomeOutlinedOpen: {
     marginBottom: 0,

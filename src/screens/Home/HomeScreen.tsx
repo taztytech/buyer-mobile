@@ -26,6 +26,9 @@ import { analyticsService, AnalyticsEvents } from '@/services/analytics.service'
 const HEADER_BACKGROUND_HEIGHT = 660;
 /** Promotional carousel banner card height */
 const STORE_BANNER_HEIGHT = 220;
+const HOME_TOP_BG_FALLBACK = '#8B1D2C';
+const AFTER_SEARCH_SPACER = 12;
+const HOME_HEADER_IMAGE_HEIGHT = 320;
 
 interface HomeScreenProps {
   onLogout?: () => void;
@@ -116,6 +119,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const bannerWidth = Math.max(0, windowWidth - 40);
+  const [homeTopBackgroundColor] = React.useState(HOME_TOP_BG_FALLBACK);
+  const [searchSectionBottomY, setSearchSectionBottomY] = React.useState<number>(0);
   const totalCartItems = getTotalItems();
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
   const [hasShownLocationModal, setHasShownLocationModal] = React.useState(false);
@@ -1464,53 +1469,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* Top background filler for pull-to-refresh overscroll - Layer 1 (Back) */}
       <View
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_BACKGROUND_HEIGHT, backgroundColor: '#00B14F' }}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_BACKGROUND_HEIGHT, backgroundColor: homeTopBackgroundColor }}
         pointerEvents="none"
       />
-
-      {/* Header background image (fixed height) — API URL or bundled default */}
-      <View
-        pointerEvents="none"
-        style={[
-          styles.headerBackgroundImage,
-          {
-            position: 'absolute',
-            top: -10,
-            left: 0,
-            right: 0,
-            width: '100%',
-            height: HEADER_BACKGROUND_HEIGHT,
-            overflow: 'hidden',
-          },
-        ]}
-      >
-        {homeBackgroundImageUrl && !headerBackgroundLoadFailed ? (
-          <OptimizedImage
-            source={homeBackgroundImageUrl}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            showShimmer={false}
-            transition={200}
-            priority="high"
-            cachePolicy="memory-disk"
-            onError={() => setHeaderBackgroundLoadFailed(true)}
-            testID="home-header-background-remote"
-          />
-        ) : (
-          <OptimizedImage
-            source={require('@/assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg')}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            showShimmer={false}
-            transition={200}
-            priority="high"
-            cachePolicy="memory-disk"
-            testID="home-header-background-default"
-          />
-        )}
-        {/* Darken hero image (RN opacity is 0–1; ~12% black ≈ rgba alpha 0.12) */}
-        <View style={styles.headerBackgroundImageOverlay} pointerEvents="none" />
-      </View>
 
       {/* SafeAreaView and Content - Layer 3 (Front) */}
       <SafeAreaView style={styles.safeArea} edges={[]}>
@@ -1544,10 +1505,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         >
 
           {/* Header Content Wrapper */}
-          <View
-            style={[styles.headerBackground, { paddingTop: insets.top + 10, backgroundColor: 'transparent' }]}
-            testID="header-background"
-          >
+          <View style={styles.headerStack} testID="header-stack">
+            <View
+              style={[styles.headerBackground, { paddingTop: insets.top + 10, backgroundColor: homeTopBackgroundColor }]}
+              testID="header-background"
+            >
             {/* Location Section */}
             <View style={styles.locationSection} testID="location-section">
               <TouchableOpacity
@@ -1660,7 +1622,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </View>
 
             {/* Search Bar and VEG Mode Toggle */}
-            <View style={styles.searchSection}>
+            <View
+              style={styles.searchSection}
+              onLayout={(e) => {
+                const { y, height } = e.nativeEvent.layout;
+                setSearchSectionBottomY(y + height);
+              }}
+            >
               {isLoadingLocation ? (
                 <>
                   {/* Search Bar Shimmer */}
@@ -1721,7 +1689,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         !isLocationServiceable && styles.vegModeLabelDisabled
                       ]}
                     >
-                      VEG{'\n'}MODE
+                      VEG
                     </Text>
                     <View style={[
                       styles.vegToggle,
@@ -1739,21 +1707,77 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               )}
             </View>
 
-            {!isLoadingLocation && (
-              <View
-                style={[styles.homePromoBlock, !isLocationServiceable && styles.homePromoBlockDisabled]}
-                pointerEvents="none"
-              >
-                <Text style={styles.homePromoHeadline}>50% OFF</Text>
-                <Text style={styles.homePromoSubline}>
-                  Fresh flavours, delivered fast — order now and save big on every bite.
-                </Text>
-              </View>
-            )}
+            </View>
 
-            {/* Reserved vertical space for future homepage content below search */}
-            <View style={styles.homeFutureContentSpacer} />
+            {/* Background image section (overlay, outside header) */}
+            <View
+              style={[
+                styles.headerImageOverlay,
+                { top: searchSectionBottomY + AFTER_SEARCH_SPACER },
+              ]}
+              pointerEvents="none"
+              testID="home-header-image-overlay"
+            >
+              {homeBackgroundImageUrl && !headerBackgroundLoadFailed ? (
+                <OptimizedImage
+                  source={homeBackgroundImageUrl}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  showShimmer={false}
+                  transition={200}
+                  priority="high"
+                  cachePolicy="memory-disk"
+                  onError={() => setHeaderBackgroundLoadFailed(true)}
+                  testID="home-header-image-section-remote"
+                />
+              ) : (
+                <OptimizedImage
+                  source={require('@/assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg')}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  showShimmer={false}
+                  transition={200}
+                  priority="high"
+                  cachePolicy="memory-disk"
+                  testID="home-header-image-section-default"
+                />
+              )}
+
+              <LinearGradient
+                colors={[homeTopBackgroundColor, homeTopBackgroundColor, 'rgba(0,0,0,0)']}
+                locations={[0, 0.6, 1]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.headerImageSectionTopFade}
+              />
+
+              {/* Lighter at top, darker downwards */}
+              <LinearGradient
+                colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.10)', 'rgba(0,0,0,0.18)']}
+                locations={[0, 0.55, 1]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.headerImageDarkenGradient}
+              />
+
+              {!isLoadingLocation && (
+                <View style={styles.headerImageInnerContent}>
+                  <View
+                    style={[styles.homePromoBlockInImageSection, !isLocationServiceable && styles.homePromoBlockDisabled]}
+                    pointerEvents="none"
+                  >
+                    <Text style={styles.homePromoHeadline}>50% OFF</Text>
+                    <Text style={styles.homePromoSubline}>
+                      Fresh flavours, delivered fast — order now and save big on every bite.
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
           </View>
+
+          {/* Reserve space for overlay image section */}
+          <View style={styles.headerImageOverlaySpacer} />
 
           {/* Solid background for everything after the header */}
           <View style={{ backgroundColor: colors.background, flex: 1 }}>
@@ -1777,6 +1801,41 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {/* Ad Banner Carousel or Closed Banner */}
             {isLocationServiceable && (
               <>
+                {/* Categories: horizontal badges on home; View All opens CategoryModal (grid unchanged) */}
+                {appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0) && (
+                  <>
+                    <View style={[
+                      styles.categoryListContainer,
+                      isCategorySectionSticky && styles.categoryListContainerSticky
+                    ]}>
+                      {showCategoryShimmer ? (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.categoryListContent}
+                        >
+                          {[1, 2, 3, 4, 5, 6].map((item) => (
+                            <View key={item} style={styles.categoryBadgeShimmer}>
+                              <Shimmer width={32} height={32} borderRadius={16} backgroundColor="#E8E8E8" />
+                              <Shimmer width={58} height={12} borderRadius={6} backgroundColor="#E8E8E8" style={styles.categoryBadgeShimmerText} />
+                            </View>
+                          ))}
+                        </ScrollView>
+                      ) : (
+                        <FlatList
+                          data={categoryData}
+                          renderItem={renderCategoryItem}
+                          keyExtractor={(item) => item.id.toString()}
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.categoryListContent}
+                          testID="category-list"
+                        />
+                      )}
+                    </View>
+                  </>
+                )}
+
                 <View style={styles.carouselContainer}>
                   {appOperationStatus && !appOperationStatus.is_open ? (
                     // Show closed banner when app is not open
@@ -1796,7 +1855,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     </View>
                   ) : showBannerShimmer ? (
                     <View style={styles.loadingContainer}>
-
                       <Shimmer width="100%" height={STORE_BANNER_HEIGHT} borderRadius={20} />
                     </View>
                   ) : (
@@ -1839,41 +1897,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     </>
                   )}
                 </View>
-
-                {/* Categories: horizontal badges on home; View All opens CategoryModal (grid unchanged) */}
-                {appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0) && (
-                  <>
-                    <View style={[
-                      styles.categoryListContainer,
-                      isCategorySectionSticky && styles.categoryListContainerSticky
-                    ]}>
-                      {showCategoryShimmer ? (
-                        <ScrollView
-                          horizontal
-                          showsHorizontalScrollIndicator={false}
-                          contentContainerStyle={styles.categoryListContent}
-                        >
-                          {[1, 2, 3, 4, 5, 6].map((item) => (
-                            <View key={item} style={styles.categoryBadgeShimmer}>
-                              <Shimmer width={32} height={32} borderRadius={16} backgroundColor="#E8E8E8" />
-                              <Shimmer width={58} height={12} borderRadius={6} backgroundColor="#E8E8E8" style={styles.categoryBadgeShimmerText} />
-                            </View>
-                          ))}
-                        </ScrollView>
-                      ) : (
-                        <FlatList
-                          data={categoryData}
-                          renderItem={renderCategoryItem}
-                          keyExtractor={(item) => item.id.toString()}
-                          horizontal
-                          showsHorizontalScrollIndicator={false}
-                          contentContainerStyle={styles.categoryListContent}
-                          testID="category-list"
-                        />
-                      )}
-                    </View>
-                  </>
-                )}
 
                 {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
                 {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
@@ -2233,9 +2256,13 @@ const styles = StyleSheet.create({
   headerBackground: {
     width: '100%',
     paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingBottom: 12,
     gap: 12,
-    minHeight: 460,
+    minHeight: 180,
+  },
+  headerStack: {
+    position: 'relative',
+    width: '100%',
   },
   homeFutureContentSpacer: {
     width: '100%',
@@ -2257,11 +2284,15 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingRight: 8,
   },
+  homePromoBlockInImageSection: {
+    width: '100%',
+  },
   homePromoHeadline: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 36,
     lineHeight: 42,
     color: '#FFFFFF',
+    top: -160,
     letterSpacing: 0.5,
     textShadowColor: 'rgba(0, 0, 0, 0.45)',
     textShadowOffset: { width: 0, height: 2 },
@@ -2272,6 +2303,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_500Medium',
     fontSize: 24,
     lineHeight: 30,
+    top: -160,
     color: '#FFFFFF',
     letterSpacing: 0.2,
     textShadowColor: 'rgba(0, 0, 0, 0.35)',
@@ -2474,9 +2506,41 @@ const styles = StyleSheet.create({
   },
   // Carousel Container
   carouselContainer: {
-    marginTop: -50,
+    marginTop: 0,
     marginBottom: 16,
     height: 220
+  },
+  afterSearchSpacer: {
+    height: AFTER_SEARCH_SPACER,
+  },
+  headerImageOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: HOME_HEADER_IMAGE_HEIGHT,
+    zIndex: 50,
+    elevation: 6,
+  },
+  headerImageOverlaySpacer: {
+    height: HOME_HEADER_IMAGE_HEIGHT,
+  },
+  headerImageInnerContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    justifyContent: 'flex-end',
+  },
+  headerImageSectionTopFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 160,
+    zIndex: 1,
+  },
+  headerImageDarkenGradient: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
   },
   closedBannerContainer: {
     width: '100%',
@@ -2827,8 +2891,8 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderWidth: 0,
+    borderColor: 'transparent',
     overflow: 'hidden',
   },
   restaurantDetailsShimmer: {
