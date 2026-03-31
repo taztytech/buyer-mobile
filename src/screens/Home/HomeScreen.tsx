@@ -20,7 +20,7 @@ import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { restaurantService } from '@/services/restaurant.service';
-import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
+import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from '@/services/analytics.service';
 
 /** Fixed header / hero block height (independent of screen size and background image) */
 const HEADER_BACKGROUND_HEIGHT = 660;
@@ -366,6 +366,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               };
               setSelectedLocation(newLocation);
             }
+
+            // Set analytics user properties for location context (non-PII)
+            analyticsService.setUserProperties({
+              [AnalyticsUserProperties.CITY]: defaultAddress.city ? String(defaultAddress.city) : null,
+              [AnalyticsUserProperties.AREA_NAME]: defaultAddress.address3 ? String(defaultAddress.address3) : null,
+              [AnalyticsUserProperties.PINCODE]: defaultAddress.pincode ? String(defaultAddress.pincode) : null,
+            });
 
             // Fetch home data with default address coordinates
             // Clear data first to prevent showing stale cached data
