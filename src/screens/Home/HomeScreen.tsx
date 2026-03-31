@@ -2529,6 +2529,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
     justifyContent: 'flex-end',
+    position: 'relative',
+    zIndex: 10,
+    elevation: 10,
   },
   headerImageSectionTopFade: {
     position: 'absolute',
