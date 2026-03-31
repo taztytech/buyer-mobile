@@ -103,13 +103,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     });
   };
 
-  // Initialize localCartItems from CartContext if cartItems prop is empty
-  const [localCartItems, setLocalCartItems] = useState<CartItem[]>(() => {
-    if (cartItems && cartItems.length > 0) {
-      return cartItems;
-    }
-    // Convert cart from context to CartItem[] format
-    return Object.values(cart).flatMap(item => {
+  // Build local view model from CartContext
+  const buildItemsFromContextCart = (): CartItem[] =>
+    Object.values(cart).flatMap(item => {
       if (item.isCustomizable && item.variants) {
         return item.variants.map(variant => ({
           id: item.id,
@@ -129,6 +125,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         isVeg: item.isVeg,
       }];
     });
+
+  // Prefer CartContext as source of truth for quantity/price updates.
+  // Fall back to cartItems prop only when context cart is empty.
+  const [localCartItems, setLocalCartItems] = useState<CartItem[]>(() => {
+    if (Object.keys(cart).length > 0) {
+      return buildItemsFromContextCart();
+    }
+    if (cartItems && cartItems.length > 0) {
+      return cartItems;
+    }
+    return buildItemsFromContextCart();
   });
   const getLocalItemTotalQuantity = (itemId: string) => {
     return localCartItems.reduce((sum, cartItem) => {
@@ -544,33 +551,18 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   };
 
-  // Sync local cart items with parent cart items or cart context
+  // Sync local cart items with CartContext (source of truth) and
+  // only use cartItems prop when context cart is empty.
   useEffect(() => {
-    if (cartItems && cartItems.length > 0) {
-      // Use prop if provided
-      setLocalCartItems(cartItems);
-    } else {
-      // Otherwise sync from cart context
-      const items = Object.values(cart).flatMap(item => {
-        if (item.isCustomizable && item.variants) {
-          return item.variants.map(variant => ({
-            id: item.id,
-            name: item.name,
-            price: variant.price,
-            quantity: variant.quantity,
-            isVeg: item.isVeg,
-            variantId: variant.variantId,
-            addOnIds: variant.addOns,
-          }));
-        }
-        return [{
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity || 0,
-          isVeg: item.isVeg,
-        }];
+    if (Object.keys(cart).length === 0 && cartItems && cartItems.length > 0) {
+      // Fallback for legacy prop-only flows
+      setLocalCartItems(prevItems => {
+        const prevJson = JSON.stringify(prevItems);
+        const nextJson = JSON.stringify(cartItems);
+        return prevJson === nextJson ? prevItems : cartItems;
       });
+    } else {
+      const items = buildItemsFromContextCart();
       // Only update if items actually changed
       setLocalCartItems(prevItems => {
         const prevJson = JSON.stringify(prevItems);
@@ -578,8 +570,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         return prevJson === newJson ? prevItems : items;
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(cart), cartItems?.length]);
+  }, [cart, cartItems]);
 
   const visibleOrderItems = localCartItems.filter((item) => {
     const hasName = typeof item?.name === 'string' && item.name.trim().length > 0;
