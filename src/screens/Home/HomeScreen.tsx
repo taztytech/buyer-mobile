@@ -2205,7 +2205,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </View>
             </Modal>
 
-            <AppFooter />
+            {/* <AppFooter /> */}
           </View>
         </ScrollView>
       </SafeAreaView>
