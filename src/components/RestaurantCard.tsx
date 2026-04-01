@@ -41,8 +41,9 @@ interface RestaurantCardProps {
    * 1 = horizontal (style 1)
    * 2 = vertical (style 2)
    * 3 = outlined card: full-width image, heart top-right, details below (e.g. home list)
+   * 4 = home horizontal: image left, details right; overlays on image (home list)
    */
-  layoutMode?: 1 | 2 | 3;
+  layoutMode?: 1 | 2 | 3 | 4;
   isGuest?: boolean;
   onNavigateToLogin?: () => void;
 }
@@ -338,6 +339,103 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
               <View style={styles.separatorHomeOutlined} />
               <Text style={styles.openingTimeTextHomeOutlined}>{nextOpeningInfo.message}</Text>
             </>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  // Layout mode 4 => Home horizontal card: image left, details right; overlays on image (home)
+  if (layoutMode === 4) {
+    const showImageMeta = restaurant.rating > 0 || !!restaurant.deliveryTime;
+    return (
+      <TouchableOpacity
+        key="home-horizontal"
+        style={styles.cardHomeHorizontal}
+        onPress={onPress}
+        activeOpacity={0.7}
+        testID={`restaurant-card-${restaurant.id}`}
+      >
+        <View style={styles.imageContainerHomeHorizontal}>
+          <OptimizedImage
+            source={restaurant.image}
+            style={[styles.imageHomeHorizontal, !isRestaurantOpen && styles.imageClosed]}
+            contentFit="cover"
+            animatedOpacity={imageOpacity}
+            onLoad={() => {
+              setImageLoaded(true);
+              if (onImageLoad) onImageLoad();
+            }}
+            onError={() => {
+              setImageLoaded(true);
+              if (onImageLoad) onImageLoad();
+            }}
+            shimmerWidth={120}
+            shimmerHeight={120}
+            shimmerBorderRadius={16}
+            transition={300}
+            priority="high"
+            cachePolicy="memory-disk"
+            testID={`restaurant-image-${restaurant.id}`}
+          />
+
+          {/* Heart on top-right */}
+          <TouchableOpacity
+            style={styles.heartButtonHomeHorizontal}
+            onPress={handleFavoriteToggle}
+            disabled={isTogglingFavorite}
+            testID={`favorite-button-${restaurant.id}`}
+          >
+            {isTogglingFavorite ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <MaterialIcons
+                name={isFavorite ? 'favorite' : 'favorite-border'}
+                size={22}
+                color={isFavorite ? '#FF0000' : '#FFFFFF'}
+              />
+            )}
+          </TouchableOpacity>
+
+        </View>
+
+        <View style={styles.detailsContainerHomeHorizontal}>
+          <View style={styles.nameRowHomeHorizontal}>
+            <Text style={styles.restaurantNameHomeHorizontal} numberOfLines={1} ellipsizeMode="tail">
+              {restaurant.name}
+            </Text>
+          </View>
+
+          {showImageMeta && (
+            <View style={styles.ratingDurationRowHomeHorizontal}>
+              {restaurant.rating > 0 && (
+                <>
+                  <MaterialIcons name="star" size={14} color="#00B14F" />
+                  <Text style={styles.ratingDurationTextHomeHorizontal}>{restaurant.rating.toFixed(1)}</Text>
+                  {restaurant.deliveryTime ? <Text style={styles.ratingDurationDotHomeHorizontal}>•</Text> : null}
+                </>
+              )}
+              {!!restaurant.deliveryTime && (
+                <Text style={styles.ratingDurationTextHomeHorizontal}>{restaurant.deliveryTime}</Text>
+              )}
+            </View>
+          )}
+
+          <Text style={styles.cuisineTextHomeHorizontal} numberOfLines={1} ellipsizeMode="tail">
+            {restaurant.cuisine}
+          </Text>
+
+          <Text style={styles.locationTextHomeHorizontal} numberOfLines={1} ellipsizeMode="tail">
+            {locationText}
+          </Text>
+
+          {!!restaurant.distance && (
+            <View style={styles.distanceRowHomeHorizontal}>
+              <MaterialIcons name="location-on" size={14} color="#00B14F" />
+              <Text style={styles.distanceRowTextHomeHorizontal} numberOfLines={1}>
+                {restaurant.distance}
+              </Text>
+            </View>
           )}
         </View>
       </TouchableOpacity>
@@ -1135,6 +1233,99 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     overflow: 'hidden',
     marginBottom: 12,
+  },
+  // Layout mode 4 — Home horizontal card (image left, details right)
+  cardHomeHorizontal: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    overflow: 'hidden',
+    // marginBottom: 12,
+  },
+  imageContainerHomeHorizontal: {
+    width: 140,
+    height: 160,
+    marginVertical: 10,
+    marginRight: 10,
+    marginLeft: 0,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+  },
+  imageHomeHorizontal: {
+    width: '100%',
+    height: '100%',
+  },
+  heartButtonHomeHorizontal: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 4,
+    zIndex: 10,
+  },
+  detailsContainerHomeHorizontal: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingRight: 16,
+    paddingLeft: 0,
+    gap: 6,
+    justifyContent: 'center',
+  },
+  nameRowHomeHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  restaurantNameHomeHorizontal: {
+    flex: 1,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    lineHeight: 20,
+    color: '#111827',
+  },
+  ratingDurationRowHomeHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  ratingDurationTextHomeHorizontal: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#111827',
+  },
+  ratingDurationDotHomeHorizontal: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#9CA3AF',
+  },
+  cuisineTextHomeHorizontal: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#6B7280',
+  },
+  locationTextHomeHorizontal: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#9CA3AF',
+  },
+  distanceRowHomeHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  distanceRowTextHomeHorizontal: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#6B7280',
   },
   imageContainerHomeOutlined: {
     width: '100%',

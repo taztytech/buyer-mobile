@@ -2028,7 +2028,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                           <View style={styles.restaurantCardWrapper}>
                             <RestaurantCard
                               restaurant={restaurant}
-                              layoutMode={3}
+                              layoutMode={4}
                               onPress={() => {
                                 if (onNavigateToRestaurant) {
                                   const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
@@ -2804,9 +2804,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 8,
+    paddingHorizontal: 10,
+    paddingTop: 18,
+    paddingBottom: 4,
     gap: 15,
   },
   restaurantsTitleLine: {
