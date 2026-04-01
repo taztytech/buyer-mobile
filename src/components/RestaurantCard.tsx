@@ -370,9 +370,9 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
               setImageLoaded(true);
               if (onImageLoad) onImageLoad();
             }}
-            shimmerWidth={120}
-            shimmerHeight={120}
-            shimmerBorderRadius={16}
+            shimmerWidth={140}
+            shimmerHeight={160}
+            shimmerBorderRadius={18}
             transition={300}
             priority="high"
             cachePolicy="memory-disk"
