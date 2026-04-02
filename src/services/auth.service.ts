@@ -91,14 +91,14 @@ class AuthService {
         }
       );
       if (response.success) {
-        analyticsService.logEvent(AnalyticsEvents.OTP_SENT, { method: 'sms' });
+        analyticsService.trackEvent(AnalyticsEvents.OTP_SENT, { method: 'sms' });
       } else {
-        analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: response.error || response.message || 'send_otp_failed' });
+        analyticsService.trackEvent(AnalyticsEvents.OTP_FAILED, { reason: response.error || response.message || 'send_otp_failed' });
       }
 
       return response;
     } catch (error: any) {
-      analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: error?.message || 'send_otp_exception' });
+      analyticsService.trackEvent(AnalyticsEvents.OTP_FAILED, { reason: error?.message || 'send_otp_exception' });
       return {
         success: false,
         error: error.message || 'Failed to send OTP',
@@ -140,8 +140,8 @@ class AuthService {
         requestPayload
       );
       if (!response.success) {
-        analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: response.error || response.message || 'otp_verify_failed' });
-        analyticsService.logEvent(AnalyticsEvents.LOGIN_FAILED, { reason: response.error || response.message || 'login_failed' });
+        analyticsService.trackEvent(AnalyticsEvents.OTP_FAILED, { reason: response.error || response.message || 'otp_verify_failed' });
+        analyticsService.trackEvent(AnalyticsEvents.LOGIN_FAILED, { reason: response.error || response.message || 'login_failed' });
         crashlyticsService.recordError(
           new Error(response.error || response.message || 'otp_verify_failed'),
           {
@@ -258,8 +258,8 @@ class AuthService {
 
       return response;
     } catch (error: any) {
-      analyticsService.logEvent(AnalyticsEvents.OTP_FAILED, { reason: error?.message || 'otp_verify_exception' });
-      analyticsService.logEvent(AnalyticsEvents.LOGIN_FAILED, { reason: error?.message || 'login_exception' });
+      analyticsService.trackEvent(AnalyticsEvents.OTP_FAILED, { reason: error?.message || 'otp_verify_exception' });
+      analyticsService.trackEvent(AnalyticsEvents.LOGIN_FAILED, { reason: error?.message || 'login_exception' });
       crashlyticsService.recordError(
         error,
         {
@@ -485,7 +485,7 @@ class AuthService {
    * Get current user data
    */
   async getCurrentUser(): Promise<UserData | null> {
-    return await storageService.getUser();
+    return await storageService.getUser() as UserData | null;
   }
 
   /**

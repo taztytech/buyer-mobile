@@ -43,3 +43,9 @@ yarn-error.*
 
 # Android local properties (contains sensitive keystore passwords)
 android/local.properties
+
+# cursor rules
+.cursor/*
+
+# Github Agents
+.github/agents/*

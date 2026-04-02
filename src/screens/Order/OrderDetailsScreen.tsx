@@ -25,6 +25,7 @@ import { homeService } from '@/services/home.service';
 import { cartService, CartSummary } from '@/services/cart.service';
 import { restaurantService } from '@/services/restaurant.service';
 import { paymentConfigService } from '@/services/payment-config.service';
+import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
 import { useCart } from '@/context/CartContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
@@ -369,7 +370,107 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, Object.keys(cart).length, localCartItems.length]);
 
-  // Promo removal is button-only (handleRemovePromoCode). No automatic remove-coupon API calls.
+  // Automatically remove promo code if total amount goes below ₹100
+  useEffect(() => {
+    // Only check if cart summary is loaded and we have a valid total amount
+    if (!cartSummary || totalAmount === 0) {
+      return;
+    }
+
+    // Check if cart has preorder items - if so, skip coupon removal logic
+    const hasPreorderItems = cartData?.items?.some((item: any) =>
+      item.is_preorder === true &&
+      item.preorder_campaign &&
+      item.preorder_campaign.id
+    );
+
+    // If cart has preorder items, don't remove coupon automatically
+    if (hasPreorderItems) {
+      return;
+    }
+
+    // Check if coupon is applied and total is below ₹100
+    const MINIMUM_ORDER_AMOUNT = 100;
+    const shouldRemovePromo = isCouponApplied && totalAmount < MINIMUM_ORDER_AMOUNT;
+
+    // Prevent duplicate removals for the same total amount
+    // Only remove if this is a new low total (different from last auto-removed total)
+    if (shouldRemovePromo && lastAutoRemovedTotalRef.current !== totalAmount) {
+      // Mark this total as handled
+      lastAutoRemovedTotalRef.current = totalAmount;
+
+      // Automatically remove the promo code
+      const autoRemovePromo = async () => {
+        const couponCodeForEvent =
+          promoCode.trim().toUpperCase() ||
+          ((cartSummary as any)?.applied_offer?.offer_code || '').toString().toUpperCase() ||
+          undefined;
+
+        try {
+          setIsApplyingPromo(true);
+          setPromoError('');
+
+          const response = await cartService.removeCoupon();
+
+          if (response.success && response.cart_summary) {
+            // Update cart summary with new values (without discount)
+            setCartSummary(response.cart_summary);
+
+            await analyticsService.trackEvent(AnalyticsEvents.REMOVE_COUPON, {
+              coupon_code: couponCodeForEvent,
+              success: true,
+              cart_value: Number(response.cart_summary.final_amount ?? 0),
+              currency: 'INR',
+              source: 'auto_validation',
+            });
+
+            // Clear promo code input
+            setPromoCode('');
+            setPromoError('');
+
+            // Show user-friendly message explaining why promo was removed
+            showConfirmation({
+              title: 'Promo Code Removed',
+              message: `Your order total is below ₹${MINIMUM_ORDER_AMOUNT}. Promo codes require a minimum order value of ₹${MINIMUM_ORDER_AMOUNT}.`,
+              confirmText: 'OK',
+              cancelText: '',
+              confirmButtonColor: '#00B14F',
+              onConfirm: () => { },
+            });
+          } else {
+            await analyticsService.trackEvent(AnalyticsEvents.REMOVE_COUPON, {
+              coupon_code: couponCodeForEvent,
+              success: false,
+              reason: response.message || 'remove_coupon_failed',
+              source: 'auto_validation',
+            });
+
+            // If removal fails, show error
+            setPromoError(response.message || 'Failed to remove promo code.');
+          }
+        } catch (error: any) {
+          await analyticsService.trackEvent(AnalyticsEvents.REMOVE_COUPON, {
+            coupon_code: couponCodeForEvent,
+            success: false,
+            reason: error?.message || 'remove_coupon_exception',
+            source: 'auto_validation',
+          });
+
+          setPromoError(error?.message || 'Failed to remove promo code.');
+        } finally {
+          setIsApplyingPromo(false);
+        }
+      };
+
+      autoRemovePromo();
+    }
+
+    // Reset the ref when total goes back above minimum (allows future auto-removal if needed)
+    if (totalAmount >= MINIMUM_ORDER_AMOUNT && lastAutoRemovedTotalRef.current !== null) {
+      lastAutoRemovedTotalRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalAmount, isCouponApplied, cartSummary, cartData]);
 
   const fetchCartSummary = async () => {
     try {
@@ -1295,10 +1396,30 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           const finalTip = tipFromResponse > 0 ? tipFromResponse : null;
           setSelectedTip(finalTip);
 
+          await analyticsService.trackEvent(
+            finalTip && finalTip > 0 ? AnalyticsEvents.ADD_TIP : AnalyticsEvents.REMOVE_TIP,
+            {
+              amount: finalTip ?? 0,
+              cart_value: Number(response.cart_summary.final_amount ?? 0),
+              currency: 'INR',
+              source: 'checkout',
+            }
+          );
+
           // If it's a custom tip (not 10, 20, 30), update customTipAmount to match
           if (finalTip !== null && finalTip !== 10 && finalTip !== 20 && finalTip !== 30) {
             setCustomTipAmount(finalTip.toString());
           }
+        } else {
+          await analyticsService.trackEvent(
+            tipToSend > 0 ? AnalyticsEvents.ADD_TIP : AnalyticsEvents.REMOVE_TIP,
+            {
+              amount: tipToSend,
+              cart_value: Number(response.cart_summary.final_amount ?? 0),
+              currency: 'INR',
+              source: 'checkout',
+            }
+          );
         }
       } else {
         // Revert optimistic update on error
@@ -1397,13 +1518,36 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         // Use updated cart summary from backend
         setCartSummary(response.cart_summary);
 
+        await analyticsService.trackEvent(AnalyticsEvents.APPLY_COUPON, {
+          coupon_code: normalizedCode,
+          success: true,
+          discount_amount: Number(response.cart_summary.discount_amount ?? 0),
+          cart_value: Number(response.cart_summary.final_amount ?? 0),
+          currency: 'INR',
+          source: 'checkout',
+        });
+
         // Clear any existing error on success
         setPromoError('');
       } else {
+        await analyticsService.trackEvent(AnalyticsEvents.APPLY_COUPON, {
+          coupon_code: normalizedCode,
+          success: false,
+          reason: response.message || 'apply_coupon_failed',
+          source: 'checkout',
+        });
+
         // Show error message from API at the bottom of the screen
         setPromoError(response.message || 'Failed to apply promo code.');
       }
     } catch (error: any) {
+      await analyticsService.trackEvent(AnalyticsEvents.APPLY_COUPON, {
+        coupon_code: normalizedCode,
+        success: false,
+        reason: error?.message || 'apply_coupon_exception',
+        source: 'checkout',
+      });
+
       setPromoError(error?.message || 'Failed to apply promo code.');
     } finally {
       setIsApplyingPromo(false);
@@ -1428,14 +1572,36 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         // Use updated cart summary from backend (without discount)
         setCartSummary(response.cart_summary);
 
+        await analyticsService.trackEvent(AnalyticsEvents.REMOVE_COUPON, {
+          coupon_code: promoCode.trim().toUpperCase() || undefined,
+          success: true,
+          cart_value: Number(response.cart_summary.final_amount ?? 0),
+          currency: 'INR',
+          source: 'checkout',
+        });
+
         // Clear promo code input and any errors on success
         setPromoCode('');
         setPromoError('');
       } else {
+        await analyticsService.trackEvent(AnalyticsEvents.REMOVE_COUPON, {
+          coupon_code: promoCode.trim().toUpperCase() || undefined,
+          success: false,
+          reason: response.message || 'remove_coupon_failed',
+          source: 'checkout',
+        });
+
         // Show error message from API at the bottom of the screen
         setPromoError(response.message || 'Failed to remove promo code.');
       }
     } catch (error: any) {
+      await analyticsService.trackEvent(AnalyticsEvents.REMOVE_COUPON, {
+        coupon_code: promoCode.trim().toUpperCase() || undefined,
+        success: false,
+        reason: error?.message || 'remove_coupon_exception',
+        source: 'checkout',
+      });
+
       setPromoError(error?.message || 'Failed to remove promo code.');
     } finally {
       setIsApplyingPromo(false);

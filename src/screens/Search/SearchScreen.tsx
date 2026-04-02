@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { OptimizedImage } from '@/components/OptimizedImage';
 import { searchService, SearchSuggestion } from '@/services/search.service';
+import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
 import { SearchBar } from '@/components/SearchBar';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -73,7 +74,16 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const lastTrackedQueryRef = useRef<string>('');
   const { vegMode } = useVegMode();
+
+  const hashSearchTerm = (value: string): string => {
+    let hash = 5381;
+    for (let i = 0; i < value.length; i += 1) {
+      hash = (hash * 33) ^ value.charCodeAt(i);
+    }
+    return (hash >>> 0).toString(16);
+  };
 
   // Get user location on mount or when selectedLocation changes
   useEffect(() => {
@@ -123,6 +133,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
 
     // Don't search for empty queries or queries less than 2 characters
     if (!searchQuery.trim() || searchQuery.trim().length < 2) {
+      lastTrackedQueryRef.current = '';
       setSearchResults([]);
       setIsLoading(false);
       return;
@@ -141,6 +152,18 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     // Debounce the search
     debounceTimer.current = setTimeout(async () => {
       try {
+        const normalizedQuery = searchQuery.trim().toLowerCase();
+        if (normalizedQuery !== lastTrackedQueryRef.current) {
+          lastTrackedQueryRef.current = normalizedQuery;
+          analyticsService.trackEvent(AnalyticsEvents.SEARCH_QUERY_SUBMITTED, {
+            query_length: searchQuery.trim().length,
+            search_term_hash: hashSearchTerm(normalizedQuery),
+            source: 'search_screen',
+            search_stage: 'query',
+            veg_mode: !!vegMode,
+          });
+        }
+
         // Pass location if available, otherwise search without location filter
         const response = await searchService.getSearchSuggestions(
           searchQuery,
@@ -190,6 +213,19 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
 
     // Handle item click
     const handlePress = () => {
+      analyticsService.trackEvent(AnalyticsEvents.SEARCH_RESULT_CLICKED, {
+        result_type: item.type,
+        result_id: item.id,
+        result_name: item.name,
+        position: typeof index === 'number' ? index + 1 : undefined,
+        query_length: searchQuery.trim().length || undefined,
+        search_term_hash: searchQuery.trim()
+          ? hashSearchTerm(searchQuery.trim().toLowerCase())
+          : undefined,
+        source: 'search_screen',
+        search_stage: 'result_click',
+      });
+
       if (item.type === 'restaurant' && onSelectRestaurant) {
         onSelectRestaurant(item.id, item.name);
       } else if (item.type === 'item' && onSelectItem) {
