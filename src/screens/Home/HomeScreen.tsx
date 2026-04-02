@@ -190,6 +190,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [homeBackgroundImageUrl, setHomeBackgroundImageUrl] = React.useState<string | null>(null);
   const [headerBackgroundLoadFailed, setHeaderBackgroundLoadFailed] = React.useState(false);
 
+  const shouldShowBadgesRow =
+    appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0);
+
   React.useEffect(() => {
     setHeaderBackgroundLoadFailed(false);
   }, [homeBackgroundImageUrl]);
@@ -1809,7 +1812,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {isLocationServiceable && (
               <>
                 {/* Categories: horizontal badges on home; View All opens CategoryModal (grid unchanged) */}
-                {appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0) && (
+                {shouldShowBadgesRow && (
                   <>
                     <View style={[
                       styles.categoryListContainer,
@@ -1843,7 +1846,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   </>
                 )}
 
-                <View style={styles.carouselContainer}>
+                <View
+                  style={[
+                    styles.carouselContainer,
+                    { marginTop: shouldShowBadgesRow ? 8 : 12 },
+                  ]}
+                >
                   {appOperationStatus && !appOperationStatus.is_open ? (
                     // Show closed banner when app is not open
                     <View style={styles.closedBannerContainer}>
