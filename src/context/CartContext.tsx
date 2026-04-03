@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
-import { cartService, AddToCartRequest, CartSummary } from '@/services/cart.service';
+import { AppState } from 'react-native';
+import { cartService, AddToCartRequest, CartSummary, CartFetchError } from '@/services/cart.service';
 import { storageService } from '@/services/storage.service';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
@@ -321,32 +322,30 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.log('[CartContext] Cart is empty');
         }
       } else {
+        // Logged-in users: never resurrect AsyncStorage when the server response is unexpected;
+        // that caused cleared carts on device A to reappear on device B.
         setCartSummary(null);
-        // No valid cart response - try loading from storage as fallback
-        const storedCart = await loadCartFromStorage();
-        if (storedCart) {
-          // Cart is already normalized in loadCartFromStorage
-          setCart(storedCart.cart);
-          setRestaurantId(storedCart.restaurantId);
-          setRestaurantName(storedCart.restaurantName);
-          setRestaurantLogo(storedCart.restaurantLogo);
-          console.log('[CartContext] Loaded cart from storage as fallback');
-        } else {
-          // No cart data anywhere
-          setCart({});
-          setRestaurantId(null);
-          setRestaurantName('');
-          setRestaurantLogo(null);
-          console.log('[CartContext] No cart data received');
-        }
+        setCart({});
+        setRestaurantId(null);
+        setRestaurantName('');
+        setRestaurantLogo(null);
+        await storageService.clearCartData();
+        console.log('[CartContext] Backend cart payload invalid — cleared local cart (logged-in)');
       }
     } catch (error) {
-      console.error('[CartContext] Error loading cart from backend:', error);
+      if (error instanceof CartFetchError) {
+        console.warn('[CartContext] Cart fetch failed; keeping local cart:', error.message);
+      } else {
+        console.error('[CartContext] Error loading cart from backend:', error);
+      }
       // Don't clear cart on error - keep existing state
     } finally {
       setIsCartLoaded(true);
     }
   };
+
+  const loadCartFromBackendRef = useRef(loadCartFromBackend);
+  loadCartFromBackendRef.current = loadCartFromBackend;
 
   const reloadCart = async () => {
     await loadCartFromBackend();
@@ -374,6 +373,33 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     initializeCart();
   }, []); // Only run once on mount
+
+  /**
+   * When the app returns to foreground, refresh cart for logged-in users so another device
+   * clearing or changing the cart is reflected without requiring a full restart.
+   */
+  useEffect(() => {
+    let previous = AppState.currentState;
+    const sub = AppState.addEventListener('change', (next) => {
+      const cameToForeground =
+        previous.match(/inactive|background/) !== null && next === 'active';
+      previous = next;
+      if (!cameToForeground) {
+        return;
+      }
+      void (async () => {
+        const token = await storageService.getAccessToken();
+        if (!token) {
+          return;
+        }
+        if (!(await storageService.isLoggedIn())) {
+          return;
+        }
+        await loadCartFromBackendRef.current();
+      })();
+    });
+    return () => sub.remove();
+  }, []);
 
   /**
    * Save cart to storage whenever it changes (after initial load)

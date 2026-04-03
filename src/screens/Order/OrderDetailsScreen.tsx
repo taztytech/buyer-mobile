@@ -82,7 +82,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   onUpdateCart,
   onAddressChange,
 }) => {
-  const { cart, clearCart, updateQuantity, removeFromCart, setRestaurantInfo, restaurantId: contextRestaurantId, restaurantName: contextRestaurantName } = useCart();
+  const {
+    cart,
+    clearCart,
+    updateQuantity,
+    removeFromCart,
+    reloadCart,
+    setRestaurantInfo,
+    restaurantId: contextRestaurantId,
+    restaurantName: contextRestaurantName
+  } = useCart();
   const { showConfirmation } = useConfirmation();
   const [orderExpanded, setOrderExpanded] = useState(true);
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
@@ -359,15 +368,13 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   }, [visible]);
 
-  // Fetch cart summary only when visible AND cart changes (debounced to avoid too many API calls)
-  useEffect(() => {
-    if (!visible) return;
-    const timeoutId = setTimeout(() => {
-      fetchCartSummary();
-    }, 150); // Shorter debounce for faster cart load
-    return () => clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, Object.keys(cart).length, localCartItems.length]);
+  // IMPORTANT:
+  // We intentionally do NOT auto-refetch cart summary on every cart/localCartItems change.
+  // The cart summary is refreshed on:
+  // - checkout becoming visible (below)
+  // - explicit user actions that already call `fetchCartSummary()`
+
+  // NOTE: we refresh cart on visible after fetchCartSummary is defined below.
 
   // Promo removal is button-only (handleRemovePromoCode). No automatic remove-coupon API calls.
 
@@ -376,7 +383,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       setIsLoadingCartSummary(true);
       const cartResponse = await cartService.getCart();
 
-      if (cartResponse) {
+      if (cartResponse.items.length > 0) {
         setCartData(cartResponse);
         if (cartResponse.summary) {
           setCartSummary(cartResponse.summary);
@@ -404,6 +411,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         }
       } else {
         setCartData(null);
+        // Backend cart is empty. Ensure UI item list doesn't keep showing stale local/cartContext items.
+        setLocalCartItems([]);
+        setCartSummary(null);
+        setSelectedTip(null);
       }
     } catch (error: any) {
       setCartData(null);
@@ -411,6 +422,20 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       setIsLoadingCartSummary(false);
     }
   };
+
+  // Refresh cart once when checkout screen mounts for the first time.
+  // We intentionally do NOT depend on `visible` here, so this runs only once per app session.
+  useEffect(() => {
+    void (async () => {
+      try {
+        await reloadCart();
+      } catch {
+        // Ignore reload errors here; we'll still attempt to fetch cart summary below.
+      }
+      await fetchCartSummary();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Get restaurant name and address from cart API data
   const displayRestaurantName = cartData?.restaurant_name || contextRestaurantName || restaurantName || '';
