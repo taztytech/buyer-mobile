@@ -145,6 +145,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [selfPickup, setSelfPickup] = useState(false);
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
+  const [appliedCouponCode, setAppliedCouponCode] = useState<string>('');
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string | undefined>(undefined);
   const [showLocationSelection, setShowLocationSelection] = useState(false);
@@ -247,8 +248,20 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   }, [isCodAllowed, selectedPaymentMethod]);
 
-  // Determine if a coupon is currently applied based on discount amount
-  const isCouponApplied = !!cartSummary && (cartSummary.discount_amount ?? 0) > 0;
+  const backendAppliedOfferCode =
+    (cartSummary as any)?.applied_offer?.offer_code ||
+    (cartData as any)?.summary?.applied_offer?.offer_code ||
+    '';
+
+  // Determine if a coupon is currently applied.
+  // IMPORTANT: free_delivery coupons may set delivery_fee=0 without setting discount_amount,
+  // so discount_amount alone is not a reliable signal.
+  const isCouponApplied =
+    !!cartSummary &&
+    (
+      (cartSummary.discount_amount ?? 0) > 0 ||
+      !!(appliedCouponCode || backendAppliedOfferCode)
+    );
 
   // Check if cart has any preorder items (used to hide promo code section and skip coupon removal)
   const hasPreorderItems = cartData?.items?.some((item: any) =>
@@ -394,10 +407,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
           // Only restore promo code from backend if field is empty (preserve user input)
           // This prevents overwriting what the user has typed
-          if (promoCode.trim() === '') {
-            if (cartResponse.summary.applied_offer?.offer_code) {
-              setPromoCode(cartResponse.summary.applied_offer.offer_code);
-            }
+          const offerCodeFromBackend = cartResponse.summary.applied_offer?.offer_code || '';
+          setAppliedCouponCode(offerCodeFromBackend);
+          if (promoCode.trim() === '' && offerCodeFromBackend) {
+            setPromoCode(offerCodeFromBackend);
           }
           // Note: We don't clear promo code if user has entered something, even if backend has no offer
           // This allows user to keep typing/editing without interruption
@@ -1396,6 +1409,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       if (response.success && response.cart_summary) {
         // Use updated cart summary from backend
         setCartSummary(response.cart_summary);
+        // Ensure UI switches to "Remove" even for free_delivery coupons where discount_amount stays 0
+        setAppliedCouponCode(normalizedCode);
 
         // Clear any existing error on success
         setPromoError('');
@@ -1430,6 +1445,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
         // Clear promo code input and any errors on success
         setPromoCode('');
+        setAppliedCouponCode('');
         setPromoError('');
       } else {
         // Show error message from API at the bottom of the screen
