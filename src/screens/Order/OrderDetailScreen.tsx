@@ -95,6 +95,27 @@ const decodeRoutePolyline = (encoded: string): Array<{ latitude: number; longitu
   return points;
 };
 
+const resolveDeliveryCode = (order: any): string | null => {
+  if (!order) return null;
+
+  const trackingArray = Array.isArray(order?.tracking) ? order.tracking : [];
+  const latestTrackingCode = [...trackingArray].reverse().find((entry: any) => {
+    if (entry?.delivery_code === null || entry?.delivery_code === undefined) return false;
+    return String(entry.delivery_code).trim().length > 0;
+  })?.delivery_code;
+
+  if (latestTrackingCode !== null && latestTrackingCode !== undefined && String(latestTrackingCode).trim().length > 0) {
+    return String(latestTrackingCode).trim();
+  }
+
+  const orderLevelCode = order?.delivery_code;
+  if (orderLevelCode !== null && orderLevelCode !== undefined && String(orderLevelCode).trim().length > 0) {
+    return String(orderLevelCode).trim();
+  }
+
+  return null;
+};
+
 const normalizeOrderStatus = (status: string | null | undefined): string => {
   return String(status || '')
     .toLowerCase()
@@ -2439,6 +2460,8 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                     new Date(a.timestamp || a.created_at || 0).getTime() - new Date(b.timestamp || b.created_at || 0).getTime()
                   );
                   const timelineEntries = sortedApiTracking.length > 0 ? sortedApiTracking : getFallbackTimelineForStatus(displayStatus);
+                  // Prefer fresh API payload for delivery code; merged context can be stale.
+                  const deliveryCode = resolveDeliveryCode(trackingOrderData || orderForFullDetails);
                   
                   const formatDeliveryTime = (dateString: string | null | undefined): string => {
                     if (!dateString) return '';
@@ -2508,11 +2531,11 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                           <Text style={styles.trackingAgentNameInScroll}>
                             {agentDisplayName || 'No Delivery Agent Assigned'}
                           </Text>
-                          {agentDisplayName && agentName && (
-                            <View style={styles.trackingAgentTag}>
-                              <Text style={styles.trackingAgentTagText}>Delivery Partner</Text>
+                          {deliveryCode ? (
+                            <View style={styles.trackingDeliveryCodeBadge}>
+                              <Text style={styles.trackingDeliveryCodeText}>DELIVERY CODE: {deliveryCode}</Text>
                             </View>
-                          )}
+                          ) : null}
                         </View>
                         {(orderForFullDetails?.order_number && (isAgentAssignedish || agentDisplayName)) ? (
                           <TouchableOpacity
@@ -3584,19 +3607,20 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#000000',
   },
-  trackingAgentTag: {
+  trackingDeliveryCodeBadge: {
     alignSelf: 'flex-start',
-    marginTop: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0, 177, 79, 0.08)',
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#00B14F',
   },
-  trackingAgentTagText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 11,
+  trackingDeliveryCodeText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 12,
     lineHeight: 16,
-    color: '#00B14F',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
   trackingCallButtonInScroll: {
     width: 32,

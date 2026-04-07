@@ -22,7 +22,7 @@ import { ordersService } from '@/services/orders.service';
 import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
 import { paymentService, PaymentErrorType } from '@/services/payment.service';
 import { homeService } from '@/services/home.service';
-import { cartService, CartSummary } from '@/services/cart.service';
+import { cartService, CartSummary, CartResponse } from '@/services/cart.service';
 import { restaurantService } from '@/services/restaurant.service';
 import { paymentConfigService } from '@/services/payment-config.service';
 import { useCart } from '@/context/CartContext';
@@ -370,18 +370,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
   // IMPORTANT:
   // We intentionally do NOT auto-refetch cart summary on every cart/localCartItems change.
-  // The cart summary is refreshed on:
-  // - checkout becoming visible (below)
-  // - explicit user actions that already call `fetchCartSummary()`
-
-  // NOTE: we refresh cart on visible after fetchCartSummary is defined below.
+  // The cart summary is refreshed when checkout becomes visible and on explicit user actions
+  // that already call `fetchCartSummary()`.
 
   // Promo removal is button-only (handleRemovePromoCode). No automatic remove-coupon API calls.
 
-  const fetchCartSummary = async () => {
+  /** Pass `preloadedCart` after `reloadCart()` to avoid a duplicate GET /cart. */
+  const fetchCartSummary = async (preloadedCart?: CartResponse) => {
     try {
       setIsLoadingCartSummary(true);
-      const cartResponse = await cartService.getCart();
+      const cartResponse = preloadedCart ?? (await cartService.getCart());
 
       if (cartResponse.items.length > 0) {
         setCartData(cartResponse);
@@ -423,19 +421,21 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   };
 
-  // Refresh cart once when checkout screen mounts for the first time.
-  // We intentionally do NOT depend on `visible` here, so this runs only once per app session.
+  // Refresh cart whenever checkout becomes visible so billing matches the server after rapid menu adds.
+  // Single GET /cart: reloadCart returns the payload; fetchCartSummary reuses it (no duplicate call).
   useEffect(() => {
+    if (!visible) return;
     void (async () => {
+      let preloaded: CartResponse | null = null;
       try {
-        await reloadCart();
+        preloaded = await reloadCart();
       } catch {
-        // Ignore reload errors here; we'll still attempt to fetch cart summary below.
+        // Ignore reload errors; fetchCartSummary may still call getCart.
       }
-      await fetchCartSummary();
+      await fetchCartSummary(preloaded ?? undefined);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [visible]);
 
   // Get restaurant name and address from cart API data
   const displayRestaurantName = cartData?.restaurant_name || contextRestaurantName || restaurantName || '';

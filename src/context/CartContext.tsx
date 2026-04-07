@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { AppState } from 'react-native';
-import { cartService, AddToCartRequest, CartSummary, CartFetchError } from '@/services/cart.service';
+import { cartService, AddToCartRequest, CartSummary, CartFetchError, CartResponse } from '@/services/cart.service';
 import { storageService } from '@/services/storage.service';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
@@ -38,7 +38,8 @@ interface CartContextType {
   removeFromCart: (itemId: string) => Promise<CartSummary | null>;
   updateQuantity: (itemId: string, quantity: number) => Promise<CartSummary | null>;
   clearCart: (syncWithBackend?: boolean) => Promise<void>;
-  reloadCart: () => Promise<void>; // Reload cart from backend
+  /** Reload cart from backend. Resolves to the cart payload when GET /cart ran; `null` if skipped (guest) or on failure. */
+  reloadCart: () => Promise<CartResponse | null>;
   /** Run any pending debounced quantity update immediately (e.g. before navigating to checkout). */
   flushPendingQuantityUpdate: () => Promise<void>;
   getTotalItems: () => number;
@@ -90,6 +91,27 @@ const getCartItemTotalQuantity = (item: CartItem | undefined): number => {
 };
 
 /**
+ * Merge a new add into existing cart state. Rapid "+ Add" taps must accumulate quantity
+ * instead of replacing the line with quantity 1 each time.
+ */
+const mergeAddIntoCart = (prev: { [key: string]: CartItem }, incoming: CartItem): CartItem => {
+  const existing = prev[incoming.id];
+  if (!existing || existing.isCustomizable || incoming.isCustomizable) {
+    return incoming;
+  }
+  const addQty = incoming.quantity || getCartItemTotalQuantity(incoming) || 1;
+  let mergedQty = clampQuantity((existing.quantity || 0) + addQty);
+  if (incoming.isPreorder === true || existing.isPreorder === true) {
+    mergedQty = Math.min(mergedQty, 1);
+  }
+  return {
+    ...existing,
+    ...incoming,
+    quantity: mergedQty,
+  };
+};
+
+/**
  * Check if cart contains only preorder items (or is empty)
  * Returns true if cart is empty OR all items in cart are preorder items
  * Returns false if cart has any non-preorder items
@@ -116,6 +138,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateQuantityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pendingUpdateRef = useRef<{ itemId: string; quantity: number; previousQuantity: number } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  /** Serialize add-to-cart API calls so cart_summary and server state stay ordered (avoids stale totals). */
+  const addToCartBackendChainRef = useRef<Promise<void>>(Promise.resolve());
 
   /**
    * Save cart to local storage
@@ -218,19 +242,19 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const loadCartFromBackend = async () => {
+  const loadCartFromBackend = async (): Promise<CartResponse | null> => {
     try {
       const token = await storageService.getAccessToken();
       if (!token) {
         setIsCartLoaded(true);
-        return;
+        return null;
       }
 
       // Guests: cart API requires registered user. Use storage only.
       const loggedIn = await storageService.isLoggedIn();
       if (!loggedIn) {
         setIsCartLoaded(true);
-        return;
+        return null;
       }
 
       const backendCart = await cartService.getCart();
@@ -321,17 +345,18 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           await saveCartToStorage({}, null, '', null);
           console.log('[CartContext] Cart is empty');
         }
-      } else {
-        // Logged-in users: never resurrect AsyncStorage when the server response is unexpected;
-        // that caused cleared carts on device A to reappear on device B.
-        setCartSummary(null);
-        setCart({});
-        setRestaurantId(null);
-        setRestaurantName('');
-        setRestaurantLogo(null);
-        await storageService.clearCartData();
-        console.log('[CartContext] Backend cart payload invalid — cleared local cart (logged-in)');
+        return backendCart;
       }
+      // Logged-in users: never resurrect AsyncStorage when the server response is unexpected;
+      // that caused cleared carts on device A to reappear on device B.
+      setCartSummary(null);
+      setCart({});
+      setRestaurantId(null);
+      setRestaurantName('');
+      setRestaurantLogo(null);
+      await storageService.clearCartData();
+      console.log('[CartContext] Backend cart payload invalid — cleared local cart (logged-in)');
+      return null;
     } catch (error) {
       if (error instanceof CartFetchError) {
         console.warn('[CartContext] Cart fetch failed; keeping local cart:', error.message);
@@ -339,6 +364,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('[CartContext] Error loading cart from backend:', error);
       }
       // Don't clear cart on error - keep existing state
+      return null;
     } finally {
       setIsCartLoaded(true);
     }
@@ -347,9 +373,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const loadCartFromBackendRef = useRef(loadCartFromBackend);
   loadCartFromBackendRef.current = loadCartFromBackend;
 
-  const reloadCart = async () => {
-    await loadCartFromBackend();
-  };
+  const reloadCart = () => loadCartFromBackend();
 
   /**
    * Load cart on app startup
@@ -411,6 +435,21 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart, restaurantId, restaurantName, restaurantLogo, isCartLoaded]);
 
+  const revertCartToSnapshot = (
+    snapshot: { [key: string]: CartItem },
+    itemId: string,
+  ) => {
+    setCart(prev => {
+      const next = { ...prev };
+      if (snapshot[itemId]) {
+        next[itemId] = snapshot[itemId];
+      } else {
+        delete next[itemId];
+      }
+      return next;
+    });
+  };
+
   /**
    * Add item to cart (local + backend sync)
    */
@@ -429,125 +468,104 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       quantity: eventQuantity,
     });
 
-      // Update local cart immediately for responsive UI
-    setCart(prev => ({
-      ...prev,
-      [normalizedItem.id]: normalizedItem,
-    }));
+    let prevCartSnapshot: { [key: string]: CartItem } = {};
+    setCart(prev => {
+      prevCartSnapshot = { ...prev };
+      const merged = mergeAddIntoCart(prev, normalizedItem);
+      return { ...prev, [merged.id]: merged };
+    });
 
-    // Sync with backend
-    try {
-      const token = await storageService.getAccessToken();
+    // Quantity for this single add action (each API call adds this many units)
+    const deltaQty = normalizedItem.quantity || getCartItemTotalQuantity(normalizedItem) || 1;
 
-      // Use overrideRestaurantId if provided, otherwise use context restaurantId
-      const effectiveRestaurantId = overrideRestaurantId || restaurantId;
+    const token = await storageService.getAccessToken();
+    const effectiveRestaurantId = overrideRestaurantId || restaurantId;
 
-      // Only sync with backend if user is authenticated
-      if (!token || !effectiveRestaurantId) {
-        return;
-      }
+    if (!token || !effectiveRestaurantId) {
+      return;
+    }
 
+    const prevChain = addToCartBackendChainRef.current;
+    const backendWork = (async () => {
+      await prevChain;
       setSyncWithBackend(true);
+      try {
+        const backendRequest: AddToCartRequest = {
+          restaurant_id: effectiveRestaurantId,
+          item_id: normalizedItem.itemId || parseInt(normalizedItem.id, 10),
+          quantity: deltaQty,
+          special_instructions: normalizedItem.specialInstructions,
+        };
 
-      // Prepare backend request
-      const backendRequest: AddToCartRequest = {
-        restaurant_id: effectiveRestaurantId,
-        item_id: normalizedItem.itemId || parseInt(normalizedItem.id, 10), // Use itemId if available, fallback to id
-        quantity: normalizedItem.quantity || getCartItemTotalQuantity(normalizedItem) || 1,
-        special_instructions: normalizedItem.specialInstructions,
-      };
+        const currentCartWithoutNewItem = { ...prevCartSnapshot };
+        delete currentCartWithoutNewItem[normalizedItem.id];
+        const cartHasOnlyPreorder = isCartOnlyPreorder(currentCartWithoutNewItem);
 
-      // Check current cart state (excluding the item being added)
-      const currentCartWithoutNewItem = { ...cart };
-      delete currentCartWithoutNewItem[normalizedItem.id];
-      const cartHasOnlyPreorder = isCartOnlyPreorder(currentCartWithoutNewItem);
-
-      // Only include preorder fields if:
-      // 1. Item is actually a preorder item
-      // 2. Cart contains ONLY preorder items (no normal items mixed in)
-      if (normalizedItem.isPreorder === true && cartHasOnlyPreorder) {
-        backendRequest.is_preorder = true;
-        if (normalizedItem.campaignId) {
-          backendRequest.campaign_id = normalizedItem.campaignId;
+        if (normalizedItem.isPreorder === true && cartHasOnlyPreorder) {
+          backendRequest.is_preorder = true;
+          if (normalizedItem.campaignId) {
+            backendRequest.campaign_id = normalizedItem.campaignId;
+          }
         }
-      }
 
-      // Add customizations if item has variants (customizable items)
-      if (normalizedItem.isCustomizable && normalizedItem.variants && normalizedItem.variants.length > 0) {
-        // Map frontend variants to backend customizations structure
-        backendRequest.customizations = normalizedItem.variants.map((variant) => ({
-          customization_group_id: parseInt(variant.variantId || '0', 10),
-          selected_options: (variant.addOns || []).map(addOnId => ({
-            id: parseInt(addOnId, 10),
-          })),
-        })).filter(c => c.customization_group_id > 0);
-      }
-
-      // Call backend API
-      const response = await cartService.addToCart(backendRequest);
-
-      if (response.success) {
-        setCartSummary(response.cart_summary || null);
-        // Update local cart with backend cart_item_id
-        setCart(prev => {
-          const updatedCart = {
-            ...prev,
-            [normalizedItem.id]: {
-              ...prev[normalizedItem.id],
-              cartItemId: response.cart_item_id,
-            },
-          };
-          // Save to storage after backend sync
-          saveCartToStorage(updatedCart, overrideRestaurantId || restaurantId, restaurantName, restaurantLogo);
-          return updatedCart;
-        });
-      } else {
-        // Backend returned an error - remove item from local cart and throw error with status code
-        setCart(prev => {
-          const newCart = { ...prev };
-          delete newCart[normalizedItem.id];
-          return newCart;
-        });
-        const error: any = new Error(response.message || 'Failed to add item to cart');
-        // Preserve status code if available in response
-        if ((response as any).statusCode) {
-          error.statusCode = (response as any).statusCode;
-        } else if ((response as any).status) {
-          error.statusCode = (response as any).status;
+        if (normalizedItem.isCustomizable && normalizedItem.variants && normalizedItem.variants.length > 0) {
+          backendRequest.customizations = normalizedItem.variants.map((variant) => ({
+            customization_group_id: parseInt(variant.variantId || '0', 10),
+            selected_options: (variant.addOns || []).map(addOnId => ({
+              id: parseInt(addOnId, 10),
+            })),
+          })).filter(c => c.customization_group_id > 0);
         }
-        throw error;
-      }
-    } catch (error: any) {
-      // If error is already thrown from above, re-throw it (it should have statusCode preserved)
-      if (error instanceof Error) {
-        // Preserve statusCode if it exists
-        const errorAny = error as any;
-        if (errorAny.statusCode !== undefined) {
+
+        const response = await cartService.addToCart(backendRequest);
+
+        if (response.success) {
+          setCartSummary(response.cart_summary || null);
+          setCart(prev => {
+            const updatedCart = {
+              ...prev,
+              [normalizedItem.id]: {
+                ...prev[normalizedItem.id],
+                cartItemId: response.cart_item_id,
+              },
+            };
+            saveCartToStorage(updatedCart, overrideRestaurantId || restaurantId, restaurantName, restaurantLogo);
+            return updatedCart;
+          });
+        } else {
+          const error: any = new Error(response.message || 'Failed to add item to cart');
+          if ((response as any).statusCode) {
+            error.statusCode = (response as any).statusCode;
+          } else if ((response as any).status) {
+            error.statusCode = (response as any).status;
+          }
           throw error;
         }
-        // If error doesn't have statusCode, try to extract it
-        const statusCode = errorAny?.statusCode || errorAny?.status || errorAny?.response?.status;
-        if (statusCode !== undefined) {
-          errorAny.statusCode = statusCode;
+      } catch (error: any) {
+        revertCartToSnapshot(prevCartSnapshot, normalizedItem.id);
+        if (error instanceof Error) {
+          const errorAny = error as any;
+          if (errorAny.statusCode === undefined) {
+            const statusCode = errorAny?.status || errorAny?.response?.status;
+            if (statusCode !== undefined) {
+              errorAny.statusCode = statusCode;
+            }
+          }
+          throw error;
         }
-        throw error;
+        const newError: any = new Error(error?.message || 'Failed to add item to cart');
+        const statusCode = error?.statusCode || error?.status || error?.response?.status;
+        if (statusCode !== undefined) {
+          newError.statusCode = statusCode;
+        }
+        throw newError;
+      } finally {
+        setSyncWithBackend(false);
       }
-      // For other errors, remove item from local cart and throw
-      setCart(prev => {
-        const newCart = { ...prev };
-        delete newCart[normalizedItem.id];
-        return newCart;
-      });
-      const newError: any = new Error(error?.message || 'Failed to add item to cart');
-      // Preserve statusCode if available
-      const statusCode = error?.statusCode || error?.status || error?.response?.status;
-      if (statusCode !== undefined) {
-        newError.statusCode = statusCode;
-      }
-      throw newError;
-    } finally {
-      setSyncWithBackend(false);
-    }
+    })();
+
+    addToCartBackendChainRef.current = backendWork.catch(() => {});
+    await backendWork;
   };
 
   /**
@@ -776,8 +794,10 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   /**
    * Run any pending debounced quantity update immediately.
    * Call before navigating to checkout so the backend cart is in sync.
+   * Also waits for queued add-to-cart API calls so totals match the server.
    */
   const flushPendingQuantityUpdate = async (): Promise<void> => {
+    await addToCartBackendChainRef.current;
     if (updateQuantityTimeoutRef.current) {
       clearTimeout(updateQuantityTimeoutRef.current);
       updateQuantityTimeoutRef.current = null;
