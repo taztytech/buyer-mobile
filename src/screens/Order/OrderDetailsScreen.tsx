@@ -2071,7 +2071,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                                 </View>
                                 <View style={styles.taxTooltipRow}>
                                   <Text style={styles.taxTooltipLabel}>Platform Fee Tax</Text>
-                                  <Text style={styles.taxTooltipValue}>
+                                  <Text
+                                    style={[
+                                      styles.taxTooltipValue,
+                                      !(includePlatformFee || platformFee === 0) && styles.taxTooltipValueStrikethrough,
+                                    ]}
+                                  >
                                     ₹{platformFeeTax.toFixed(2)}
                                   </Text>
                                 </View>
@@ -3176,6 +3181,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: '#000000',
+  },
+  taxTooltipValueStrikethrough: {
+    textDecorationLine: 'line-through',
+    color: 'rgba(0, 0, 0, 0.45)',
   },
   taxTooltipDivider: {
     height: 1,
