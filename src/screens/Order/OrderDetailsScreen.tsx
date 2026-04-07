@@ -2071,7 +2071,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                                 </View>
                                 <View style={styles.taxTooltipRow}>
                                   <Text style={styles.taxTooltipLabel}>Platform Fee Tax</Text>
-                                  <Text style={styles.taxTooltipValue}>
+                                  <Text
+                                    style={[
+                                      styles.taxTooltipValue,
+                                      !(includePlatformFee || platformFee === 0) && styles.billValueStrikethrough,
+                                    ]}
+                                  >
                                     ₹{platformFeeTax.toFixed(2)}
                                   </Text>
                                 </View>
