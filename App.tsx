@@ -994,117 +994,147 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
   // const [animationComplete, setAnimationComplete] = React.useState(false);
 
+  const handleBackNavigation = React.useCallback((screen: typeof currentScreenRef.current) => {
+    // Block navigation when forced update is required, but ONLY on non-auth screens
+    // Allow back button to work normally on login, welcome, and OTP screens
+    const authScreens: Array<typeof currentScreen> = ['login', 'welcome', 'otp'];
+    const isOnAuthScreen = authScreens.includes(screen);
+
+    if (forcedUpdateRequired && !isOnAuthScreen) {
+      return true;
+    }
+
+    switch (screen) {
+      case 'home':
+        // Keep Android hardware back behavior unchanged on home.
+        if (Platform.OS === 'android') {
+          BackHandler.exitApp();
+          return true;
+        }
+        return false;
+      case 'profile':
+        handleBackToHome();
+        return true;
+      case 'editProfile':
+        handleBackFromEditProfile();
+        return true;
+      case 'orders':
+        handleBackFromOrders();
+        return true;
+      case 'orderDetail':
+        handleBackFromOrderDetail();
+        return true;
+      case 'chat':
+        handleBackFromChat();
+        return true;
+      case 'orderHelp':
+        handleBackFromChat();
+        return true;
+      case 'rateOrder':
+        handleBackFromRateOrder();
+        return true;
+      case 'orderTracking':
+        handleBackFromOrderTracking();
+        return true;
+      case 'search':
+        handleBackFromSearch();
+        return true;
+      case 'myAddresses':
+        handleBackFromMyAddresses();
+        return true;
+      case 'addressSelection':
+        handleBackFromAddressSelection();
+        return true;
+      case 'locationSelection':
+        handleBackFromLocationSelection();
+        return true;
+      case 'categoryResults':
+        handleBackFromCategoryResults();
+        return true;
+      case 'restaurant':
+        handleBackFromRestaurant();
+        return true;
+      case 'restaurantDetails':
+        handleBackFromRestaurantDetails();
+        return true;
+      case 'checkout':
+        handleBackFromCheckout();
+        return true;
+      case 'exploreDishes':
+        handleBackFromExploreDishes();
+        return true;
+      case 'privacyPolicy':
+        handleBackFromPrivacyPolicy();
+        return true;
+      case 'termsConditions':
+        handleBackFromTermsConditions();
+        return true;
+      case 'faq':
+        handleBackFromFaq();
+        return true;
+      case 'contactUs':
+        handleBackFromContactUs();
+        return true;
+      case 'help':
+        handleBackFromHelp();
+        return true;
+      case 'login':
+        // Do not treat hardware back as Skip — only the Skip control starts guest flow.
+        if (Platform.OS === 'android') {
+          BackHandler.exitApp();
+        }
+        return true;
+      case 'otp':
+        handleBackToLogin();
+        return true;
+      case 'welcome':
+        setCurrentScreen('otp');
+        return true;
+      default:
+        return false;
+    }
+  }, [
+    forcedUpdateRequired,
+    handleBackToHome,
+    handleBackFromEditProfile,
+    handleBackFromOrders,
+    handleBackFromOrderDetail,
+    handleBackFromChat,
+    handleBackFromRateOrder,
+    handleBackFromOrderTracking,
+    handleBackFromSearch,
+    handleBackFromMyAddresses,
+    handleBackFromAddressSelection,
+    handleBackFromLocationSelection,
+    handleBackFromCategoryResults,
+    handleBackFromRestaurant,
+    handleBackFromRestaurantDetails,
+    handleBackFromCheckout,
+    handleBackFromExploreDishes,
+    handleBackFromPrivacyPolicy,
+    handleBackFromTermsConditions,
+    handleBackFromFaq,
+    handleBackFromContactUs,
+    handleBackFromHelp,
+    handleBackToLogin,
+  ]);
+
   // Handle Android back button
   React.useEffect(() => {
     const backAction = () => {
       // Always read latest route — avoids handling back with a stale screen before this effect re-runs
       // (e.g. user on Login UI but listener still thinks previous screen was locationSelection).
       const screen = currentScreenRef.current;
-
-      // Block navigation when forced update is required, but ONLY on non-auth screens
-      // Allow back button to work normally on login, welcome, and OTP screens
-      const authScreens: Array<typeof currentScreen> = ['login', 'welcome', 'otp'];
-      const isOnAuthScreen = authScreens.includes(screen);
-
-      if (forcedUpdateRequired && !isOnAuthScreen) {
-        return true; // Prevent back button from doing anything on non-auth screens
-      }
-
-      // Handle back button based on current screen
-      switch (screen) {
-        case 'home':
-          // On home screen, exit app
-          BackHandler.exitApp();
-          return true;
-        case 'profile':
-          handleBackToHome();
-          return true;
-        case 'editProfile':
-          handleBackFromEditProfile();
-          return true;
-        case 'orders':
-          handleBackFromOrders();
-          return true;
-        case 'orderDetail':
-          handleBackFromOrderDetail();
-          return true;
-        case 'chat':
-          handleBackFromChat();
-          return true;
-        case 'orderHelp':
-          // OrderHelp is no longer used, redirect to chat back handler
-          handleBackFromChat();
-          return true;
-        case 'rateOrder':
-          handleBackFromRateOrder();
-          return true;
-        case 'orderTracking':
-          handleBackFromOrderTracking();
-          return true;
-        case 'search':
-          handleBackFromSearch();
-          return true;
-        case 'myAddresses':
-          handleBackFromMyAddresses();
-          return true;
-        case 'addressSelection':
-          handleBackFromAddressSelection();
-          return true;
-        case 'locationSelection':
-          handleBackFromLocationSelection();
-          return true;
-        case 'categoryResults':
-          handleBackFromCategoryResults();
-          return true;
-        case 'restaurant':
-          handleBackFromRestaurant();
-          return true;
-        case 'restaurantDetails':
-          handleBackFromRestaurantDetails();
-          return true;
-        case 'checkout':
-          handleBackFromCheckout();
-          return true;
-        case 'exploreDishes':
-          handleBackFromExploreDishes();
-          return true;
-        case 'privacyPolicy':
-          handleBackFromPrivacyPolicy();
-          return true;
-        case 'termsConditions':
-          handleBackFromTermsConditions();
-          return true;
-        case 'faq':
-          handleBackFromFaq();
-          return true;
-        case 'contactUs':
-          handleBackFromContactUs();
-          return true;
-        case 'help':
-          handleBackFromHelp();
-          return true;
-        case 'login':
-          // Do not treat hardware back as Skip — only the Skip control starts guest flow.
-          if (Platform.OS === 'android') {
-            BackHandler.exitApp();
-          }
-          return true;
-        case 'otp':
-          handleBackToLogin();
-          return true;
-        case 'welcome':
-          // On welcome screen, go back to OTP
-          setCurrentScreen('otp');
-          return true;
-        default:
-          return false;
-      }
+      return handleBackNavigation(screen);
     };
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
 
     return () => backHandler.remove();
-  }, [currentScreen]);
+  }, [handleBackNavigation]);
+
+  const swipeStartXRef = React.useRef<number | null>(null);
+  const isIosSwipeBackEnabled = Platform.OS === 'ios' && !isCheckingAuth && currentScreen !== 'home';
 
   const handleLoginSuccess = (phone: string) => {
     setPhoneNumber(phone);
@@ -3463,6 +3493,26 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           message={forcedUpdateMessage || "A new version of the app is available. Please update to continue using the app."}
           updateButtonText="Update Now"
         />
+        {isIosSwipeBackEnabled && (
+          <View
+            style={styles.iosEdgeSwipeArea}
+            onStartShouldSetResponder={() => true}
+            onResponderGrant={(evt) => {
+              swipeStartXRef.current = evt.nativeEvent.pageX;
+            }}
+            onResponderRelease={(evt) => {
+              const startX = swipeStartXRef.current;
+              swipeStartXRef.current = null;
+              if (startX == null) {
+                return;
+              }
+              const dx = evt.nativeEvent.pageX - startX;
+              if (dx > 56) {
+                handleBackNavigation(currentScreenRef.current);
+              }
+            }}
+          />
+        )}
       </>
     </>
   );
@@ -3718,5 +3768,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 8,
     backgroundColor: '#F5F5F5',
+  },
+  iosEdgeSwipeArea: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 20,
+    zIndex: 999,
+    backgroundColor: 'transparent',
   },
 });

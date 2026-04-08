@@ -15,6 +15,7 @@ export interface BannerItem {
   description?: string;
   cta_button?: string;
   button_text?: string;
+  button_color?: string;
   image_url?: string;
   background_color?: string;
   action_url?: string;
@@ -76,12 +77,28 @@ export interface PaginationMetadata {
   has_more: boolean;
 }
 
+export interface OrganizationBanner {
+  title?: string;
+  subtitle?: string;
+  image_url?: string;
+  background_color?: string;
+  promotion_type?: string;
+  sequence?: number;
+}
+
 export interface HomeData {
   promotional_banner?: BannerItem | BannerItem[];
   nearby_restaurants?: Restaurant[];
   whats_on_your_mind?: CategoryItem[];
   pagination?: PaginationMetadata;
   home_screen_restaurant_card_style?: string;
+  /** Legacy: Home header background string keys */
+  home_background_image_url?: string;
+  home_background_image?: string;
+  header_background_image?: string;
+  background_image_url?: string;
+  home_screen_background_image?: string;
+  organization_banner?: OrganizationBanner[];
 }
 
 class HomeService {

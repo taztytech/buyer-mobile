@@ -40,8 +40,10 @@ interface RestaurantCardProps {
    * Layout mode for the restaurant card.
    * 1 = horizontal (style 1)
    * 2 = vertical (style 2)
+   * 3 = outlined card: full-width image, heart top-right, details below (e.g. home list)
+   * 4 = home horizontal: image left, details right; overlays on image (home list)
    */
-  layoutMode?: 1 | 2;
+  layoutMode?: 1 | 2 | 3 | 4;
   isGuest?: boolean;
   onNavigateToLogin?: () => void;
 }
@@ -197,6 +199,248 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
     setImageLoaded(false);
     imageOpacity.setValue(0);
   }, [layoutMode, imageOpacity]);
+
+  // Layout mode 3 => Outlined card: full-width image, heart top-right, stacked details (home)
+  if (layoutMode === 3) {
+    const showImageMeta = restaurant.rating > 0 || !!restaurant.deliveryTime;
+    return (
+      <TouchableOpacity
+        key="home-outlined"
+        style={styles.cardHomeOutlined}
+        onPress={onPress}
+        activeOpacity={0.7}
+        testID={`restaurant-card-${restaurant.id}`}
+      >
+        <View style={styles.imageContainerHomeOutlined}>
+          <OptimizedImage
+            source={restaurant.image}
+            style={[styles.imageHomeOutlined, !isRestaurantOpen && styles.imageClosed]}
+            contentFit="cover"
+            animatedOpacity={imageOpacity}
+            onLoad={() => {
+              setImageLoaded(true);
+              if (onImageLoad) onImageLoad();
+            }}
+            onError={() => {
+              setImageLoaded(true);
+              if (onImageLoad) onImageLoad();
+            }}
+            shimmerWidth="100%"
+            shimmerHeight={180}
+            shimmerBorderRadius={0}
+            transition={300}
+            priority="high"
+            cachePolicy="memory-disk"
+            testID={`restaurant-image-${restaurant.id}`}
+          />
+
+          <LinearGradient
+            colors={['rgba(0, 0, 0, 0.35)', 'rgba(0, 0, 0, 0.08)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.gradientOverlayTopHomeOutlined}
+          />
+          <LinearGradient
+            colors={['transparent', 'rgba(0, 0, 0, 0.15)', 'rgba(0, 0, 0, 0.45)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.gradientOverlayBottomHomeOutlined}
+          />
+
+          {showImageMeta && (
+            <View style={styles.imageMetaPillHomeOutlined}>
+              {restaurant.rating > 0 && (
+                <View style={styles.imageMetaGroupHomeOutlined}>
+                  <MaterialIcons name="star" size={14} color="#FFB800" />
+                  <Text style={styles.imageMetaTextHomeOutlined}>{restaurant.rating.toFixed(1)}</Text>
+                </View>
+              )}
+              {restaurant.rating > 0 && restaurant.deliveryTime ? (
+                <Text style={styles.imageMetaDotHomeOutlined}>•</Text>
+              ) : null}
+              {!!restaurant.deliveryTime && (
+                <Text style={styles.imageMetaTextHomeOutlined}>{restaurant.deliveryTime}</Text>
+              )}
+            </View>
+          )}
+
+          {!isRestaurantOpen && <View style={styles.grayOverlayHomeOutlined} />}
+          {!isRestaurantOpen && (
+            <View style={styles.closedOverlayHomeOutlined}>
+              <Text style={styles.closedTextCurrently}>CURRENTLY</Text>
+              <Text style={styles.closedTextClosed}>CLOSED</Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={styles.heartButtonHomeOutlined}
+            onPress={handleFavoriteToggle}
+            disabled={isTogglingFavorite}
+            testID={`favorite-button-${restaurant.id}`}
+          >
+            {isTogglingFavorite ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <MaterialIcons
+                name={isFavorite ? 'favorite' : 'favorite-border'}
+                size={24}
+                color={isFavorite ? '#FF0000' : '#FFFFFF'}
+              />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.detailsContainerHomeOutlined}>
+          {/* Subtle corner wash (top-right → inward), matches soft UI card reference */}
+          <LinearGradient
+            pointerEvents="none"
+            colors={['#EEF2FF', '#F6F8FD', '#FFFFFF']}
+            locations={[0, 0.42, 1]}
+            start={{ x: 1, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.detailsBackgroundGradientHomeOutlined}
+          />
+          {restaurant.isVeg && (
+            <View style={styles.pureVegBadgeHomeOutlined}>
+              <MaterialIcons name="eco" size={14} color="#00B14F" />
+              <Text style={styles.pureVegTextHomeOutlined}>Pure Veg</Text>
+            </View>
+          )}
+
+          <View style={styles.nameRowHomeOutlined}>
+            <Text
+              style={[styles.restaurantNameHomeOutlined, isRestaurantOpen && styles.restaurantNameHomeOutlinedOpen]}
+              numberOfLines={2}
+              ellipsizeMode="tail"
+            >
+              {restaurant.name}
+            </Text>
+            {!!restaurant.distance && (
+              <Text style={styles.distanceInlineHomeOutlined} numberOfLines={1}>
+                {restaurant.distance}
+              </Text>
+            )}
+          </View>
+
+          <Text style={styles.cuisineTextHomeOutlined} numberOfLines={2} ellipsizeMode="tail">
+            {restaurant.cuisine}
+          </Text>
+
+          <View style={styles.locationRowHomeOutlined}>
+            <Text style={styles.locationTextHomeOutlined} numberOfLines={2} ellipsizeMode="tail">
+              {locationText}
+            </Text>
+          </View>
+
+          {/* Distance shown inline with store name */}
+
+          {!isRestaurantOpen && nextOpeningInfo && (
+            <>
+              <View style={styles.separatorHomeOutlined} />
+              <Text style={styles.openingTimeTextHomeOutlined}>{nextOpeningInfo.message}</Text>
+            </>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  // Layout mode 4 => Home horizontal card: image left, details right; overlays on image (home)
+  if (layoutMode === 4) {
+    const showImageMeta = restaurant.rating > 0 || !!restaurant.deliveryTime;
+    return (
+      <TouchableOpacity
+        key="home-horizontal"
+        style={styles.cardHomeHorizontal}
+        onPress={onPress}
+        activeOpacity={0.7}
+        testID={`restaurant-card-${restaurant.id}`}
+      >
+        <View style={styles.imageContainerHomeHorizontal}>
+          <OptimizedImage
+            source={restaurant.image}
+            style={[styles.imageHomeHorizontal, !isRestaurantOpen && styles.imageClosed]}
+            contentFit="cover"
+            animatedOpacity={imageOpacity}
+            onLoad={() => {
+              setImageLoaded(true);
+              if (onImageLoad) onImageLoad();
+            }}
+            onError={() => {
+              setImageLoaded(true);
+              if (onImageLoad) onImageLoad();
+            }}
+            shimmerWidth={140}
+            shimmerHeight={160}
+            shimmerBorderRadius={18}
+            transition={300}
+            priority="high"
+            cachePolicy="memory-disk"
+            testID={`restaurant-image-${restaurant.id}`}
+          />
+
+          {/* Heart on top-right */}
+          <TouchableOpacity
+            style={styles.heartButtonHomeHorizontal}
+            onPress={handleFavoriteToggle}
+            disabled={isTogglingFavorite}
+            testID={`favorite-button-${restaurant.id}`}
+          >
+            {isTogglingFavorite ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <MaterialIcons
+                name={isFavorite ? 'favorite' : 'favorite-border'}
+                size={22}
+                color={isFavorite ? '#FF0000' : '#FFFFFF'}
+              />
+            )}
+          </TouchableOpacity>
+
+        </View>
+
+        <View style={styles.detailsContainerHomeHorizontal}>
+          <View style={styles.nameRowHomeHorizontal}>
+            <Text style={styles.restaurantNameHomeHorizontal} numberOfLines={1} ellipsizeMode="tail">
+              {restaurant.name}
+            </Text>
+          </View>
+
+          {showImageMeta && (
+            <View style={styles.ratingDurationRowHomeHorizontal}>
+              {restaurant.rating > 0 && (
+                <>
+                  <MaterialIcons name="star" size={14} color="#00B14F" />
+                  <Text style={styles.ratingDurationTextHomeHorizontal}>{restaurant.rating.toFixed(1)}</Text>
+                  {restaurant.deliveryTime ? <Text style={styles.ratingDurationDotHomeHorizontal}>•</Text> : null}
+                </>
+              )}
+              {!!restaurant.deliveryTime && (
+                <Text style={styles.ratingDurationTextHomeHorizontal}>{restaurant.deliveryTime}</Text>
+              )}
+            </View>
+          )}
+
+          <Text style={styles.cuisineTextHomeHorizontal} numberOfLines={1} ellipsizeMode="tail">
+            {restaurant.cuisine}
+          </Text>
+
+          <Text style={styles.locationTextHomeHorizontal} numberOfLines={1} ellipsizeMode="tail">
+            {locationText}
+          </Text>
+
+          {!!restaurant.distance && (
+            <View style={styles.distanceRowHomeHorizontal}>
+              <MaterialIcons name="location-on" size={14} color="#00B14F" />
+              <Text style={styles.distanceRowTextHomeHorizontal} numberOfLines={1}>
+                {restaurant.distance}
+              </Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  }
 
   // Layout mode 1 => Horizontal layout (style 1)
   if (layoutMode === 1) {
@@ -978,5 +1222,302 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#000000',
     letterSpacing: 0.1,
+  },
+
+  // Layout mode 3 — Home outlined card (full-width image + stacked details)
+  cardHomeOutlined: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  // Layout mode 4 — Home horizontal card (image left, details right)
+  cardHomeHorizontal: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    overflow: 'hidden',
+    // marginBottom: 12,
+  },
+  imageContainerHomeHorizontal: {
+    width: 140,
+    height: 160,
+    marginVertical: 10,
+    marginRight: 10,
+    marginLeft: 0,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+  },
+  imageHomeHorizontal: {
+    width: '100%',
+    height: '100%',
+  },
+  heartButtonHomeHorizontal: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 4,
+    zIndex: 10,
+  },
+  detailsContainerHomeHorizontal: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingRight: 16,
+    paddingLeft: 0,
+    gap: 6,
+    justifyContent: 'center',
+  },
+  nameRowHomeHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  restaurantNameHomeHorizontal: {
+    flex: 1,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    lineHeight: 20,
+    color: '#111827',
+  },
+  ratingDurationRowHomeHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  ratingDurationTextHomeHorizontal: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#111827',
+  },
+  ratingDurationDotHomeHorizontal: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#9CA3AF',
+  },
+  cuisineTextHomeHorizontal: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#6B7280',
+  },
+  locationTextHomeHorizontal: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#9CA3AF',
+  },
+  distanceRowHomeHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  distanceRowTextHomeHorizontal: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#6B7280',
+  },
+  imageContainerHomeOutlined: {
+    width: '100%',
+    height: 180,
+    position: 'relative',
+    backgroundColor: '#F3F4F6',
+  },
+  imageHomeOutlined: {
+    width: '100%',
+    height: 180,
+  },
+  grayOverlayHomeOutlined: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(100, 100, 100, 0.72)',
+    zIndex: 2,
+  },
+  closedOverlayHomeOutlined: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    zIndex: 3,
+  },
+  gradientOverlayTopHomeOutlined: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 72,
+    zIndex: 1,
+  },
+  gradientOverlayBottomHomeOutlined: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 72,
+    zIndex: 1,
+  },
+  heartButtonHomeOutlined: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    padding: 4,
+    zIndex: 10,
+  },
+  imageMetaPillHomeOutlined: {
+    position: 'absolute',
+    left: 10,
+    bottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+    zIndex: 6,
+  },
+  imageMetaGroupHomeOutlined: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  imageMetaTextHomeOutlined: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#FFFFFF',
+  },
+  imageMetaDotHomeOutlined: {
+    marginHorizontal: 6,
+    fontSize: 12,
+    lineHeight: 16,
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
+  detailsContainerHomeOutlined: {
+    position: 'relative',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 6,
+    overflow: 'hidden',
+  },
+  detailsBackgroundGradientHomeOutlined: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  pureVegBadgeHomeOutlined: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  pureVegTextHomeOutlined: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#00B14F',
+  },
+  restaurantNameHomeOutlined: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 17,
+    lineHeight: 22,
+    color: '#111827',
+  },
+  nameRowHomeOutlined: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  distanceInlineHomeOutlined: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#6B7280',
+    paddingTop: 2,
+  },
+  restaurantNameHomeOutlinedOpen: {
+    marginBottom: 0,
+  },
+  ratingDeliveryRowHomeOutlined: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  ratingContainerHomeOutlined: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  ratingTextHomeOutlined: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    lineHeight: 18,
+    color: '#111827',
+  },
+  metaDotHomeOutlined: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
+  deliveryTextHomeOutlined: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 18,
+    color: '#374151',
+  },
+  cuisineTextHomeOutlined: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  locationRowHomeOutlined: {
+    marginTop: 2,
+  },
+  locationTextHomeOutlined: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#6B7280',
+  },
+  distanceRowHomeOutlined: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  distanceTextHomeOutlined: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#00B14F',
+  },
+  separatorHomeOutlined: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginTop: 8,
+    marginBottom: 4,
+    width: '100%',
+  },
+  openingTimeTextHomeOutlined: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#6B7280',
   },
 });

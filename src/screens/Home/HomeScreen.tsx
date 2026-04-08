@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ScrollView, FlatList, Dimensions, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ScrollView, FlatList, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
-import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/home.service';
+import { homeService, BannerItem, CategoryItem, Restaurant, OrganizationBanner } from '@/services/home.service';
 import { paymentConfigService } from '@/services/payment-config.service';
 import { appConfigService } from '@/services/app-config.service';
 import { addressService } from '@/services/address.service';
@@ -22,8 +22,13 @@ import { useConfirmation } from '@/context/ConfirmationContext';
 import { restaurantService } from '@/services/restaurant.service';
 import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from '@/services/analytics.service';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const BANNER_WIDTH = SCREEN_WIDTH - 40; // Fixed banner width with 20px padding on each side
+/** Fixed header / hero block height (independent of screen size and background image) */
+const HEADER_BACKGROUND_HEIGHT = 660;
+/** Promotional carousel banner card height */
+const STORE_BANNER_HEIGHT = 220;
+const HOME_TOP_BG_FALLBACK = '#8B1D2C';
+const AFTER_SEARCH_SPACER = 12;
+const HOME_HEADER_IMAGE_HEIGHT = 320;
 
 interface HomeScreenProps {
   onLogout?: () => void;
@@ -52,6 +57,7 @@ interface CarouselItem {
   title: string;
   description: string;
   buttonText: string;
+  buttonColor?: string;
   imageUrl?: string;
   sequence?: number;
   promotionType?: 'restaurant_id' | 'category_id' | 'url';
@@ -112,6 +118,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const { vegMode, setVegMode, isVegModeEnabled } = useVegMode();
   const { showConfirmation } = useConfirmation();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const bannerWidth = Math.max(0, windowWidth - 40);
+  const [searchSectionBottomY, setSearchSectionBottomY] = React.useState<number>(0);
+
+  const [organizationBanners, setOrganizationBanners] = React.useState<OrganizationBanner[]>([]);
+  const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
+
+  // Auto-slide for organization banner
+  React.useEffect(() => {
+    if (!organizationBanners || organizationBanners.length <= 1) return;
+    const interval = setInterval(() => {
+      setActiveBannerIndex(prev => (prev + 1) % organizationBanners.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [organizationBanners]);
   const totalCartItems = getTotalItems();
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
   const [hasShownLocationModal, setHasShownLocationModal] = React.useState(false);
@@ -177,8 +198,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // App operation status from API
   const [appOperationStatus, setAppOperationStatus] = React.useState<AppOperationStatus | null>(null);
 
-  // Restaurant card layout style from API (1 = horizontal, 2 = vertical)
-  const [restaurantCardStyle, setRestaurantCardStyle] = React.useState<1 | 2>(1);
+  /** Remote URL for home header background from API; null = use bundled default */
+  const [homeBackgroundImageUrl, setHomeBackgroundImageUrl] = React.useState<string | null>(null);
+  const [headerBackgroundLoadFailed, setHeaderBackgroundLoadFailed] = React.useState(false);
+
+  // Derived state for the header display
+  const activeOrganizationBanner = organizationBanners.length > 0 ? organizationBanners[activeBannerIndex] : null;
+  const homeTopBackgroundColor = isLoadingBanners ? '#FFFFFF' : (activeOrganizationBanner?.background_color || '');
+  const displayBackgroundImageUrl = activeOrganizationBanner?.image_url || '';
+  const promoTitle = activeOrganizationBanner?.title || (isLoadingBanners ? '' : '');
+  const promoSubtitle = activeOrganizationBanner?.subtitle || (isLoadingBanners ? '' : '');
+
+  const shouldShowBadgesRow =
+    appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0);
+
+  React.useEffect(() => {
+    setHeaderBackgroundLoadFailed(false);
+  }, [homeBackgroundImageUrl]);
 
   // Refresh trigger - increments to force data reload
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -796,7 +832,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         const nearbyRestaurants = actualData.nearby_restaurants;
         const pagination = actualData.pagination;
         const appOperationStatusData = actualData.app_operation_status;
-        const homeScreenRestaurantCardStyle = actualData.home_screen_restaurant_card_style;
         const codSettings = actualData.cod_settings;
 
         // Store COD settings globally for checkout/payment screens
@@ -812,16 +847,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           setAppOperationStatus(appOperationStatusData);
         }
 
-        // Store restaurant card style from API (convert string to number, default to 1)
-        if (homeScreenRestaurantCardStyle) {
-          const styleNumber = parseInt(homeScreenRestaurantCardStyle, 10);
-          if (styleNumber === 1 || styleNumber === 2) {
-            setRestaurantCardStyle(styleNumber as 1 | 2);
-          } else {
-            setRestaurantCardStyle(1); // Default to 1 if invalid value
-          }
+        // Home header background image (URL string from API — any supported key)
+        const rawHeaderBg =
+          (actualData as any).home_background_image_url ??
+          (actualData as any).home_background_image ??
+          (actualData as any).header_background_image ??
+          (actualData as any).background_image_url ??
+          (actualData as any).home_screen_background_image;
+        const headerBgStr = typeof rawHeaderBg === 'string' ? rawHeaderBg.trim() : '';
+        setHomeBackgroundImageUrl(headerBgStr.length > 0 ? headerBgStr : null);
+
+        // Handle organization banners for dynamic header
+        const orgBannerRaw = (actualData as any).organization_banner;
+        if (orgBannerRaw && Array.isArray(orgBannerRaw)) {
+          setOrganizationBanners(orgBannerRaw);
         } else {
-          setRestaurantCardStyle(1); // Default to 1 if not provided
+          setOrganizationBanners([]);
         }
 
         // Handle promotional banners
@@ -831,9 +872,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           // Transform API data to carousel format
           const transformedBanners: CarouselItem[] = bannerArray.map((banner: BannerItem, index: number) => ({
             id: banner.id || `banner-${index}`,
-            title: banner.title || 'Special Offer',
-            description: banner.subtitle || banner.description || 'Check out our latest deals!',
-            buttonText: banner.cta_button || banner.button_text || 'Order Now!',
+            title: banner.title || '',
+            description: banner.subtitle || banner.description || '',
+            buttonText: banner.cta_button || banner.button_text || '',
+            buttonColor: banner.button_color,
             imageUrl: banner.image_url || banner.banner_url,
             sequence: banner.sequence !== undefined ? banner.sequence : index,
             promotionType: banner.promotion_type,
@@ -1295,16 +1337,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const renderCarouselItem = React.useCallback(({ item }: { item: CarouselItem }) => {
     return (
-      <View style={styles.carouselSlide} testID={`carousel-slide-${item.id}`}>
-        <View style={[styles.adBanner, { width: BANNER_WIDTH, backgroundColor: item.backgroundColor || '#00BEC8' }]} testID={`banner-${item.id}`}>
+      <View style={[styles.carouselSlide, { width: windowWidth }]} testID={`carousel-slide-${item.id}`}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => handleBannerCTAClick(item)}
+          style={[styles.adBanner, { width: bannerWidth, backgroundColor: item.backgroundColor || '#00BEC8' }]}
+          testID={`banner-${item.id}`}
+        >
           {/* Background Image - fills entire rectangle */}
           {item.imageUrl && (
             <OptimizedImage
               source={item.imageUrl}
-              style={styles.adBannerImage}
+              style={[styles.adBannerImage, { width: bannerWidth }]}
               contentFit="cover"
-              shimmerWidth={BANNER_WIDTH}
-              shimmerHeight={200}
+              shimmerWidth={bannerWidth}
+              shimmerHeight={STORE_BANNER_HEIGHT}
               transition={300}
               priority="high"
               cachePolicy="memory-disk"
@@ -1316,29 +1363,41 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           {/* Content with background color visible behind buttons */}
           <View style={styles.adContent} testID={`banner-content-${item.id}`}>
-            <Text style={styles.adTitle} numberOfLines={1} ellipsizeMode="tail" testID={`banner-title-${item.id}`}>{item.title}</Text>
-            <Text style={styles.adDescription} testID={`banner-description-${item.id}`}>{item.description}</Text>
-            <TouchableOpacity
-              style={[
-                styles.adButton,
-                { backgroundColor: item.backgroundColor || '#FFFFFF' }
-              ]}
-              testID={`banner-button-${item.id}`}
-              onPress={() => handleBannerCTAClick(item)}
-              activeOpacity={0.8}
+            <Text
+              style={styles.adTitle}
+              numberOfLines={3}
+              testID={`banner-title-${item.id}`}
             >
-              <Text style={[
-                styles.adButtonText,
-                { color: item.backgroundColor ? '#FFFFFF' : '#000000' }
-              ]}>
-                {item.buttonText}
-              </Text>
-            </TouchableOpacity>
+              {item.title}
+            </Text>
+            <Text
+              style={[styles.adDescription, { maxWidth: bannerWidth - 32 }]}
+              numberOfLines={5}
+              testID={`banner-description-${item.id}`}
+            >
+              {item.description}
+            </Text>
+            {item.buttonText ? (
+              <View
+                style={[
+                  styles.adButton,
+                  { backgroundColor: item.buttonColor || item.backgroundColor || '#FFFFFF' }
+                ]}
+                testID={`banner-button-${item.id}`}
+              >
+                <Text style={[
+                  styles.adButtonText,
+                  { color: item.buttonColor ? '#FFFFFF' : (item.backgroundColor ? '#FFFFFF' : '#000000') }
+                ]}>
+                  {item.buttonText}
+                </Text>
+              </View>
+            ) : null}
           </View>
-        </View>
+        </TouchableOpacity>
       </View>
     );
-  }, [handleBannerCTAClick]);
+  }, [handleBannerCTAClick, windowWidth, bannerWidth]);
 
   const renderCategoryItem = React.useCallback(({ item }: { item: CategoryItem }) => {
     const imageSource = typeof item.icon === 'string' ? { uri: item.icon } : item.icon;
@@ -1346,7 +1405,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
     return (
       <TouchableOpacity
-        style={styles.categoryItem}
+        style={styles.categoryBadge}
         testID={`category-${item.id}`}
         onPress={() => {
           if (isViewAll) {
@@ -1357,27 +1416,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         }}
         activeOpacity={0.7}
       >
-        <View style={[
-          styles.categoryImageContainer,
-          isViewAll && styles.viewAllImageContainer
-        ]}>
-          <Image
-            source={imageSource}
-            style={isViewAll ? styles.viewAllImage : styles.categoryImage}
-            resizeMode="contain"
-            testID={`category-image-${item.id}`}
-            onLoad={() => {
-              setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
-            }}
-            onError={() => {
-              // Mark as loaded anyway
-              setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
-            }}
-            fadeDuration={300}
-            progressiveRenderingEnabled={true}
-          />
+        <View style={[styles.categoryBadgeImageWrap, isViewAll && styles.categoryBadgeImageWrapViewAll]}>
+          {isViewAll ? (
+            <MaterialIcons name="apps" size={20} color="#111827" testID={`category-image-${item.id}`} />
+          ) : (
+            <Image
+              source={imageSource}
+              style={styles.categoryBadgeImage}
+              resizeMode="cover"
+              testID={`category-image-${item.id}`}
+              onLoad={() => {
+                setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
+              }}
+              onError={() => {
+                setLoadedCategoryImages(prev => new Set(prev).add(item.id.toString()));
+              }}
+              fadeDuration={300}
+              progressiveRenderingEnabled={true}
+            />
+          )}
         </View>
-        <Text style={styles.categoryName} testID={`category-name-${item.id}`}>
+        <Text style={styles.categoryBadgeLabel} numberOfLines={1} testID={`category-name-${item.id}`}>
           {item.name}
         </Text>
       </TouchableOpacity>
@@ -1413,9 +1472,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     // Save scroll position for restoration after refresh
     scrollPositionRef.current = scrollY;
 
-    // Category section becomes sticky after header (212px) + carousel (~165px) + section title (~40px)
-    // Total: approximately 400px
-    const threshold = 400;
+    // Category section becomes sticky after header + taller banner + reserved spacer + section title
+    const threshold = 520;
     setIsCategorySectionSticky(scrollY > threshold);
 
     // Check if user has scrolled near the bottom (within 500px)
@@ -1453,29 +1511,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Top background filler for pull-to-refresh overscroll - Layer 1 (Back) */}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: SCREEN_HEIGHT * 0.6, backgroundColor: '#00B14F' }} pointerEvents="none" />
-
-      {/* Animated Header Image - Layer 2 (Middle) */}
       <View
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_BACKGROUND_HEIGHT, backgroundColor: homeTopBackgroundColor }}
         pointerEvents="none"
-        style={[
-          styles.headerBackgroundImage,
-          {
-            position: 'absolute',
-            top: -10,
-            left: 0,
-            right: 0,
-            width: '100%',
-            height: SCREEN_HEIGHT * 0.28,
-          },
-        ]}
-      >
-        <Animated.Image
-          source={require('@/assets/home_app_bar.png')}
-          style={[StyleSheet.absoluteFill]}
-          resizeMode="cover"
-        />
-      </View>
+      />
 
       {/* SafeAreaView and Content - Layer 3 (Front) */}
       <SafeAreaView style={styles.safeArea} edges={[]}>
@@ -1509,61 +1548,62 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         >
 
           {/* Header Content Wrapper */}
-          <View
-            style={[styles.headerBackground, { paddingTop: insets.top + 10, backgroundColor: 'transparent' }]}
-            testID="header-background"
-          >
-            {/* Location Section */}
-            <View style={styles.locationSection} testID="location-section">
-              <TouchableOpacity
-                style={styles.locationInfo}
-                onPress={handleLocationClick}
-                activeOpacity={0.7}
-              >
-                {isLoadingLocation ? (
-                  <>
-                    {/* City Name with Icon - Shimmer */}
-                    <View style={styles.cityRow}>
-                      <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
-                      <Shimmer width={120} height={18} borderRadius={8} />
-                      <View style={styles.arrowIconWrapper}>
-                        <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+          <View style={styles.headerStack} testID="header-stack">
+            <View
+              style={[styles.headerBackground, { paddingTop: insets.top + 10, backgroundColor: homeTopBackgroundColor }]}
+              testID="header-background"
+            >
+              {/* Location Section */}
+              <View style={styles.locationSection} testID="location-section">
+                <TouchableOpacity
+                  style={styles.locationInfo}
+                  onPress={handleLocationClick}
+                  activeOpacity={0.7}
+                >
+                  {isLoadingLocation ? (
+                    <>
+                      {/* City Name with Icon - Shimmer */}
+                      <View style={styles.cityRow}>
+                        <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
+                        <Shimmer width={120} height={18} borderRadius={8} />
+                        <View style={styles.arrowIconWrapper}>
+                          <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                        </View>
                       </View>
-                    </View>
-                    {/* Address - Shimmer */}
-                    <Shimmer width={220} height={14} borderRadius={6} style={{ marginTop: 4 }} />
-                  </>
-                ) : (
-                  <>
-                    {/* City Name with Icon */}
-                    <View style={styles.cityRow}>
-                      <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
-                      <Text style={styles.cityName}>{selectedLocation.name}</Text>
-                      <View style={styles.arrowIconWrapper}>
-                        <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                      {/* Address - Shimmer */}
+                      <Shimmer width={220} height={14} borderRadius={6} style={{ marginTop: 4 }} />
+                    </>
+                  ) : (
+                    <>
+                      {/* City Name with Icon */}
+                      <View style={styles.cityRow}>
+                        <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
+                        <Text style={styles.cityName}>{selectedLocation.name}</Text>
+                        <View style={styles.arrowIconWrapper}>
+                          <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                        </View>
                       </View>
-                    </View>
-                    {/* Address */}
-                    <Text
-                      style={styles.addressText}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {selectedLocation.address}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+                      {/* Address */}
+                      <Text
+                        style={styles.addressText}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {selectedLocation.address}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
 
-              {/* Profile & Cart Actions */}
-              {isLoadingLocation ? (
-                <View style={styles.profileButton}>
-                  <Shimmer width={50} height={50} borderRadius={25} />
-                </View>
-              ) : (
-                <View style={styles.headerActionsRow}>
-                  {/* Cart Icon - hidden */}
-                  {/* {hasCartItems && (
+                {/* Profile & Cart Actions */}
+                {isLoadingLocation ? (
+                  <View style={styles.profileButton}>
+                    <Shimmer width={50} height={50} borderRadius={25} />
+                  </View>
+                ) : (
+                  <View style={styles.headerActionsRow}>
+                    {/* Cart Icon - hidden */}
+                    {/* {hasCartItems && (
                 <TouchableOpacity
                   style={styles.cartButton}
                   onPress={handleCartPress}
@@ -1595,115 +1635,197 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 </TouchableOpacity>
               )} */}
 
-                  {/* Profile Avatar */}
-                  <TouchableOpacity
-                    style={styles.profileButton}
-                    onPress={onNavigateToProfile}
-                    activeOpacity={0.7}
-                    disabled={!isLocationServiceable}
-                    testID="profile-button"
-                  >
-                    <View
-                      style={[
-                        styles.profileAvatar,
-                        !isLocationServiceable && styles.profileAvatarDisabled,
-                      ]}
+                    {/* Profile Avatar */}
+                    <TouchableOpacity
+                      style={styles.profileButton}
+                      onPress={onNavigateToProfile}
+                      activeOpacity={0.7}
+                      disabled={!isLocationServiceable}
+                      testID="profile-button"
                     >
-                      <MaterialIcons
-                        name="person"
-                        size={22}
-                        color={
-                          isLocationServiceable
-                            ? '#00B14F'
-                            : 'rgba(0, 177, 79, 0.4)'
-                        }
-                      />
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-
-            {/* Search Bar and VEG Mode Toggle */}
-            <View style={styles.searchSection}>
-              {isLoadingLocation ? (
-                <>
-                  {/* Search Bar Shimmer */}
-                  <View style={{ flex: 1 }}>
-                    <Shimmer width="100%" height={60} borderRadius={10} />
+                      <View
+                        style={[
+                          styles.profileAvatar,
+                          !isLocationServiceable && styles.profileAvatarDisabled,
+                        ]}
+                      >
+                        <MaterialIcons
+                          name="person"
+                          size={22}
+                          color={
+                            isLocationServiceable
+                              ? '#00B14F'
+                              : 'rgba(0, 177, 79, 0.4)'
+                          }
+                        />
+                      </View>
+                    </TouchableOpacity>
                   </View>
+                )}
+              </View>
 
-                  {/* VEG Mode Shimmer */}
-                  <Shimmer width={46} height={60} borderRadius={10} />
-                </>
-              ) : (
-                <>
-                  <TouchableOpacity
-                    style={{ flex: 1, }}
-                    onPress={onNavigateToSearch}
-                    activeOpacity={0.7}
-                    disabled={!isLocationServiceable}
-                  >
-                    <LinearGradient
-                      colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={[
-                        styles.searchBar,
-                        !isLocationServiceable && styles.searchBarDisabled
-                      ]}
+              {/* Search Bar and VEG Mode Toggle */}
+              <View
+                style={styles.searchSection}
+                onLayout={(e) => {
+                  const { y, height } = e.nativeEvent.layout;
+                  setSearchSectionBottomY(y + height);
+                }}
+              >
+                {isLoadingLocation ? (
+                  <>
+                    {/* Search Bar Shimmer */}
+                    <View style={{ flex: 1 }}>
+                      <Shimmer width="100%" height={60} borderRadius={10} />
+                    </View>
+
+                    {/* VEG Mode Shimmer */}
+                    <Shimmer width={46} height={60} borderRadius={10} />
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={{ flex: 1, }}
+                      onPress={onNavigateToSearch}
+                      activeOpacity={0.7}
+                      disabled={!isLocationServiceable}
                     >
-                      <MaterialIcons
-                        name="search"
-                        size={24}
-                        color={isLocationServiceable ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)"}
-                      />
+                      <LinearGradient
+                        colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={[
+                          styles.searchBar,
+                          !isLocationServiceable && styles.searchBarDisabled
+                        ]}
+                      >
+                        <MaterialIcons
+                          name="search"
+                          size={24}
+                          color={isLocationServiceable ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)"}
+                        />
+                        <Text
+                          style={[
+                            styles.searchInput,
+                            !isLocationServiceable && styles.searchInputDisabled
+                          ]}
+                          numberOfLines={1}
+                        >
+                          Search Restaurants & foods..
+                        </Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+
+                    {/* VEG Mode Toggle */}
+                    <TouchableOpacity
+                      style={[
+                        styles.vegModeContainer,
+                        !isLocationServiceable && styles.vegModeContainerDisabled
+                      ]}
+                      onPress={handleVegModeToggle}
+                      disabled={!isLocationServiceable}
+                      testID="veg-mode-toggle"
+                    >
                       <Text
                         style={[
-                          styles.searchInput,
-                          !isLocationServiceable && styles.searchInputDisabled
+                          styles.vegModeLabel,
+                          !isLocationServiceable && styles.vegModeLabelDisabled
                         ]}
-                        numberOfLines={1}
                       >
-                        Search Restaurants & foods..
+                        VEG
                       </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-
-                  {/* VEG Mode Toggle */}
-                  <TouchableOpacity
-                    style={[
-                      styles.vegModeContainer,
-                      !isLocationServiceable && styles.vegModeContainerDisabled
-                    ]}
-                    onPress={handleVegModeToggle}
-                    disabled={!isLocationServiceable}
-                    testID="veg-mode-toggle"
-                  >
-                    <Text
-                      style={[
-                        styles.vegModeLabel,
-                        !isLocationServiceable && styles.vegModeLabelDisabled
-                      ]}
-                    >
-                      VEG{'\n'}MODE
-                    </Text>
-                    <View style={[
-                      styles.vegToggle,
-                      isVegModeEnabled && styles.vegToggleActive,
-                      !isLocationServiceable && styles.vegToggleDisabled
-                    ]}>
                       <View style={[
-                        styles.vegToggleThumb,
-                        isVegModeEnabled && styles.vegToggleThumbActive,
-                        !isLocationServiceable && styles.vegToggleThumbDisabled
-                      ]} />
-                    </View>
-                  </TouchableOpacity>
-                </>
-              )}
+                        styles.vegToggle,
+                        isVegModeEnabled && styles.vegToggleActive,
+                        !isLocationServiceable && styles.vegToggleDisabled
+                      ]}>
+                        <View style={[
+                          styles.vegToggleThumb,
+                          isVegModeEnabled && styles.vegToggleThumbActive,
+                          !isLocationServiceable && styles.vegToggleThumbDisabled
+                        ]} />
+                      </View>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+
             </View>
           </View>
+
+          {/* Organization Banner Section (Overlay + Spacer) */}
+          {(isLoadingBanners || organizationBanners.length > 0 || (displayBackgroundImageUrl && displayBackgroundImageUrl.length > 0)) && (
+            <>
+              {/* Background image section (overlay, outside header) */}
+              <View
+                style={[
+                  styles.headerImageOverlay,
+                  {
+                    top: searchSectionBottomY + AFTER_SEARCH_SPACER,
+                    opacity: searchSectionBottomY > 0 ? 1 : 0
+                  },
+                ]}
+                pointerEvents="none"
+                testID="home-header-image-overlay"
+              >
+                {isLoadingBanners ? (
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }]}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                  </View>
+                ) : displayBackgroundImageUrl && !headerBackgroundLoadFailed ? (
+                  <OptimizedImage
+                    source={displayBackgroundImageUrl}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                    showShimmer={false}
+                    transition={200}
+                    priority="high"
+                    cachePolicy="memory-disk"
+                    onError={() => setHeaderBackgroundLoadFailed(true)}
+                    testID="home-header-image-section-remote"
+                  />
+                ) : null}
+
+                {!isLoadingBanners && (
+                  <>
+                    <LinearGradient
+                      colors={[homeTopBackgroundColor, homeTopBackgroundColor, 'rgba(0,0,0,0)']}
+                      locations={[0, 0.6, 1]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={styles.headerImageSectionTopFade}
+                    />
+
+                    {/* Lighter at top, darker downwards */}
+                    <LinearGradient
+                      colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.10)', 'rgba(0,0,0,0.18)']}
+                      locations={[0, 0.55, 1]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={styles.headerImageDarkenGradient}
+                    />
+                  </>
+                )}
+
+                {!isLoadingLocation && (
+                  <View style={styles.headerImageInnerContent}>
+                    <View
+                      style={[styles.homePromoBlockInImageSection, !isLocationServiceable && styles.homePromoBlockDisabled]}
+                      pointerEvents="none"
+                    >
+                      <Text style={styles.homePromoHeadline}>{promoTitle}</Text>
+                      <Text style={styles.homePromoSubline}>
+                        {promoSubtitle}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* Reserve space for overlay image section */}
+              <View style={styles.headerImageOverlaySpacer} />
+            </>
+          )}
 
           {/* Solid background for everything after the header */}
           <View style={{ backgroundColor: colors.background, flex: 1 }}>
@@ -1727,92 +1849,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {/* Ad Banner Carousel or Closed Banner */}
             {isLocationServiceable && (
               <>
-                <View style={styles.carouselContainer}>
-                  {appOperationStatus && !appOperationStatus.is_open ? (
-                    // Show closed banner when app is not open
-                    <View style={styles.closedBannerContainer}>
-                      <Image
-                        source={require('@../../../assets/Closed Banner.webp')}
-                        style={styles.closedBannerImage}
-                        resizeMode="contain"
-                      />
-                      {appOperationStatus.message && (
-                        <View style={styles.closedBannerMessageContainer}>
-                          <Text style={styles.closedBannerMessage}>
-                            {appOperationStatus.message}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  ) : showBannerShimmer ? (
-                    <View style={styles.loadingContainer}>
-
-                      <Shimmer width="100%" height={149} borderRadius={20} />
-                    </View>
-                  ) : (
-                    <>
-                      <View style={styles.carouselWrapper}>
-                        <FlatList
-                          ref={flatListRef}
-                          data={carouselData}
-                          renderItem={renderCarouselItem}
-                          keyExtractor={(item) => item.id}
-                          horizontal
-                          pagingEnabled
-                          showsHorizontalScrollIndicator={false}
-                          onViewableItemsChanged={onViewRef.current}
-                          viewabilityConfig={viewConfigRef.current}
-                          decelerationRate="fast"
-                          snapToAlignment="start"
-                          snapToInterval={SCREEN_WIDTH}
-                          disableIntervalMomentum={true}
-                          removeClippedSubviews={false}
-                          bounces={false}
-                          overScrollMode="never"
-                          scrollEventThrottle={16}
-                          getItemLayout={(_data, index) => ({
-                            length: SCREEN_WIDTH,
-                            offset: SCREEN_WIDTH * index,
-                            index,
-                          })}
-                          onScrollToIndexFailed={(info) => {
-                            // Handle scroll to index failure
-                            const wait = new Promise(resolve => setTimeout(resolve, 500));
-                            wait.then(() => {
-                              flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
-                            });
-                          }}
-                        />
-
-                        {/* Navigation Buttons - removed but functionality preserved (manual sliding and auto-slide still work) */}
-                      </View>
-                    </>
-                  )}
-                </View>
-
-                {/* What's On Your Mind Section - Only show if there's data or still loading, and when app is open */}
-                {appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0) && (
+                {/* Categories: horizontal badges on home; View All opens CategoryModal (grid unchanged) */}
+                {shouldShowBadgesRow && (
                   <>
-                    <View style={[
-                      styles.sectionTitleContainer,
-                      carouselData.length <= 1 && styles.sectionTitleContainerCompact
-                    ]}>
-                      <LinearGradient
-                        colors={['rgba(0, 0, 0, 0)', '#000000']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.sectionTitleLine}
-                      />
-                      <Text style={styles.sectionTitle}>What's On Your Mind?</Text>
-                      <LinearGradient
-                        colors={['#000000', 'rgba(0, 0, 0, 0)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.sectionTitleLine}
-                      />
-                    </View>
-
-                    {/* Category List */}
                     <View style={[
                       styles.categoryListContainer,
                       isCategorySectionSticky && styles.categoryListContainerSticky
@@ -1823,15 +1862,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                           showsHorizontalScrollIndicator={false}
                           contentContainerStyle={styles.categoryListContent}
                         >
-                          {/* Render 6 shimmer category items */}
                           {[1, 2, 3, 4, 5, 6].map((item) => (
-                            <View key={item} style={styles.categoryItem}>
-                              {/* Image Shimmer */}
-                              <View style={styles.categoryImageContainer}>
-                                <Shimmer width={50} height={50} borderRadius={25} backgroundColor="#E8E8E8" />
-                              </View>
-                              {/* Text Shimmer */}
-                              <Shimmer width={50} height={10} borderRadius={5} backgroundColor="#E8E8E8" />
+                            <View key={item} style={styles.categoryBadgeShimmer}>
+                              <Shimmer width={32} height={32} borderRadius={16} backgroundColor="#E8E8E8" />
+                              <Shimmer width={58} height={12} borderRadius={6} backgroundColor="#E8E8E8" style={styles.categoryBadgeShimmerText} />
                             </View>
                           ))}
                         </ScrollView>
@@ -1848,6 +1882,59 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       )}
                     </View>
                   </>
+                )}
+
+                {(showBannerShimmer || carouselData.length > 0) && appOperationStatus?.is_open !== false && (
+                  <View
+                    style={[
+                      styles.carouselContainer,
+                      { marginTop: shouldShowBadgesRow ? 8 : 12 },
+                    ]}
+                  >
+                    {showBannerShimmer ? (
+                      <View style={styles.loadingContainer}>
+                        <Shimmer width="100%" height={STORE_BANNER_HEIGHT} borderRadius={20} />
+                      </View>
+                    ) : (
+                      <>
+                        <View style={styles.carouselWrapper}>
+                          <FlatList
+                            ref={flatListRef}
+                            data={carouselData}
+                            renderItem={renderCarouselItem}
+                            keyExtractor={(item) => item.id}
+                            horizontal
+                            pagingEnabled
+                            showsHorizontalScrollIndicator={false}
+                            onViewableItemsChanged={onViewRef.current}
+                            viewabilityConfig={viewConfigRef.current}
+                            decelerationRate="fast"
+                            snapToAlignment="start"
+                            snapToInterval={windowWidth}
+                            disableIntervalMomentum={true}
+                            removeClippedSubviews={false}
+                            bounces={false}
+                            overScrollMode="never"
+                            scrollEventThrottle={16}
+                            getItemLayout={(_data, index) => ({
+                              length: windowWidth,
+                              offset: windowWidth * index,
+                              index,
+                            })}
+                            onScrollToIndexFailed={(info) => {
+                              // Handle scroll to index failure
+                              const wait = new Promise(resolve => setTimeout(resolve, 500));
+                              wait.then(() => {
+                                flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
+                              });
+                            }}
+                          />
+
+                          {/* Navigation Buttons - removed but functionality preserved (manual sliding and auto-slide still work) */}
+                        </View>
+                      </>
+                    )}
+                  </View>
                 )}
 
                 {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
@@ -1922,25 +2009,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         {[1, 2].map((item) => (
                           <View key={item} style={styles.restaurantCardWrapper}>
                             <View style={styles.restaurantCardShimmer}>
-                              {/* Left Side - Image Shimmer */}
-                              <Shimmer width={130} height={160} borderRadius={16} backgroundColor="#E8E8E8" style={styles.restaurantImageShimmer} />
-
-                              {/* Right Side - Details Shimmer */}
+                              <Shimmer width="100%" height={180} borderRadius={0} backgroundColor="#E8E8E8" />
                               <View style={styles.restaurantDetailsShimmer}>
-                                {/* Pure Veg Badge */}
-                                <Shimmer width={80} height={18} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
-
-                                {/* Restaurant Name */}
-                                <Shimmer width="90%" height={20} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
-
-                                {/* Rating and Delivery Time */}
-                                <Shimmer width="70%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
-
-                                {/* Cuisine */}
-                                <Shimmer width="85%" height={16} borderRadius={4} backgroundColor="#E8E8E8" style={{ marginBottom: 4 }} />
-
-                                {/* Location and Distance */}
-                                <Shimmer width="60%" height={14} borderRadius={4} backgroundColor="#E8E8E8" />
+                                <Shimmer width="75%" height={20} borderRadius={6} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
+                                <Shimmer width="55%" height={16} borderRadius={6} backgroundColor="#E8E8E8" style={{ marginBottom: 8 }} />
+                                <Shimmer width="90%" height={14} borderRadius={6} backgroundColor="#E8E8E8" style={{ marginBottom: 6 }} />
+                                <Shimmer width="85%" height={14} borderRadius={6} backgroundColor="#E8E8E8" style={{ marginBottom: 6 }} />
+                                <Shimmer width={40} height={16} borderRadius={6} backgroundColor="#E8E8E8" />
                               </View>
                             </View>
                           </View>
@@ -1985,7 +2060,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                           <View style={styles.restaurantCardWrapper}>
                             <RestaurantCard
                               restaurant={restaurant}
-                              layoutMode={restaurantCardStyle}
+                              layoutMode={4}
                               onPress={() => {
                                 if (onNavigateToRestaurant) {
                                   const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
@@ -2020,8 +2095,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         initialNumToRender={2}
                         updateCellsBatchingPeriod={100}
                         getItemLayout={(data, index) => ({
-                          length: 166, // Approximate card height with margin
-                          offset: 166 * index,
+                          length: 380,
+                          offset: 380 * index,
                           index,
                         })}
                       />
@@ -2162,7 +2237,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </View>
             </Modal>
 
-            <AppFooter />
+            {/* <AppFooter /> */}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -2220,17 +2295,62 @@ const styles = StyleSheet.create({
   headerBackground: {
     width: '100%',
     paddingHorizontal: 20,
-    paddingBottom: Dimensions.get('window').height * 0.06, // Responsive bottom padding based on screen height
+    paddingBottom: 12,
     gap: 12,
-    minHeight: Dimensions.get('window').height * 0.22, // Responsive minimum height
+    minHeight: 180,
+  },
+  headerStack: {
+    position: 'relative',
+    width: '100%',
+  },
+  homeFutureContentSpacer: {
+    width: '100%',
+    minHeight: 36,
   },
   headerBackgroundImage: {
     width: '120%',
-    height: Dimensions.get('window').height * 0.28, // Adjusted for 25% overlap with carousel
     resizeMode: 'cover',
     backgroundColor: '#00B14F',
     left: 0,
     top: 0,
+  },
+  headerBackgroundImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.12)',
+  },
+  homePromoBlock: {
+    width: '100%',
+    marginTop: 20,
+    paddingRight: 8,
+  },
+  homePromoBlockInImageSection: {
+    width: '100%',
+  },
+  homePromoHeadline: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 36,
+    lineHeight: 42,
+    color: '#FFFFFF',
+    top: -185,
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0, 0, 0, 0.45)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  homePromoSubline: {
+    marginTop: 8,
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 24,
+    lineHeight: 34,
+    top: -185,
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+    textShadowColor: 'rgba(0, 0, 0, 0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  homePromoBlockDisabled: {
+    opacity: 0.45,
   },
   // Location section
   locationSection: {
@@ -2347,6 +2467,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 50,
     gap: 11,
+    marginTop: 16,
   },
   searchBar: {
     flex: 1,
@@ -2424,8 +2545,44 @@ const styles = StyleSheet.create({
   },
   // Carousel Container
   carouselContainer: {
-    marginTop: -28, 
+    marginTop: 0,
     marginBottom: 16,
+    height: 220
+  },
+  afterSearchSpacer: {
+    height: AFTER_SEARCH_SPACER,
+  },
+  headerImageOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: HOME_HEADER_IMAGE_HEIGHT,
+    zIndex: 50,
+    elevation: 6,
+  },
+  headerImageOverlaySpacer: {
+    height: HOME_HEADER_IMAGE_HEIGHT,
+  },
+  headerImageInnerContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    justifyContent: 'flex-end',
+    position: 'relative',
+    zIndex: 10,
+    elevation: 10,
+  },
+  headerImageSectionTopFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 160,
+    zIndex: 1,
+  },
+  headerImageDarkenGradient: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
   },
   closedBannerContainer: {
     width: '100%',
@@ -2435,7 +2592,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   closedBannerImage: {
-    width: BANNER_WIDTH,
     height: 340,
     borderRadius: 20,
   },
@@ -2444,7 +2600,6 @@ const styles = StyleSheet.create({
     bottom: 45,
     left: 20,
     right: 20,
-    width: BANNER_WIDTH,
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2460,14 +2615,13 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     width: '100%',
-    height: 149,
+    height: STORE_BANNER_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
   },
   carouselSlide: {
-    width: SCREEN_WIDTH,
-    height: 149,
+    height: STORE_BANNER_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -2482,20 +2636,18 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'flex-start',
     padding: 0,
-    height: 149,
+    height: STORE_BANNER_HEIGHT,
     backgroundColor: '#00BEC8',
     borderRadius: 20,
     overflow: 'hidden',
     position: 'relative',
-    width: BANNER_WIDTH,
-    minHeight: 149,
+    minHeight: STORE_BANNER_HEIGHT,
   },
   adBannerImage: {
     position: 'absolute',
     top: 0,
     left: 0,
-    width: BANNER_WIDTH,
-    height: 149,
+    height: STORE_BANNER_HEIGHT,
     borderRadius: 20,
   },
   adOverlay: {
@@ -2510,31 +2662,34 @@ const styles = StyleSheet.create({
   adContent: {
     flexDirection: 'column',
     alignItems: 'flex-start',
-    justifyContent: 'center',
-    gap: 11,
+    // justifyContent: 'space-between',
+    gap: 10,
     position: 'relative',
     zIndex: 2,
     flex: 1,
     width: '100%',
-    padding: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
   },
   adTitle: {
-    maxWidth: '90%',
-    fontFamily: 'Poppins',
-    fontWeight: '700',
-    fontSize: 16,
-    lineHeight: 24,
+    width: '82%',
+    maxWidth: 280,
+    // minHeight: 56,
+    fontFamily: 'Poppins_600SemiBold',
+    // fontWeight: '700',
+    fontSize: 36,
+    lineHeight: 36,
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 1,
   },
   adDescription: {
-    maxWidth: '80%',
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    fontSize: 12,
-    lineHeight: 18,
+    width: '88%',
+    fontFamily: 'Poppins_500Medium',
+    // fontWeight: '500',
+    fontSize: 14,
+    lineHeight: 21,
     color: '#FFFFFF',
-    flexWrap: 'wrap',
+    opacity: 0.98,
   },
   adButton: {
     flexDirection: 'row',
@@ -2544,6 +2699,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     minWidth: 103,
     height: 28,
+    // marginBottom: 3,
     backgroundColor: '#FFFFFF',
     borderRadius: 13,
     opacity: 0.95, // Slight transparency to show background color through
@@ -2597,44 +2753,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  // Section Title
-  sectionTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 20,
-    gap: 15,
-  },
-  sectionTitleContainerCompact: {
-    paddingTop: 8,
-    paddingBottom: 16,
-  },
-  sectionTitleLine: {
-    width: 35,
-    height: 1,
-  },
-  sectionTitle: {
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    fontSize: 14,
-    lineHeight: 18,
-    letterSpacing: 0,
-    textAlign: 'center',
-    color: '#000000',
-    paddingTop: 4,
-    marginTop: 2,
-  },
-  // Category List
+  // Category List (home row: horizontal badges)
   categoryListContainer: {
     width: '100%',
-    minHeight: 100,
+    minHeight: 48,
     paddingLeft: 20,
     marginBottom: 0,
     backgroundColor: '#FFFFFF',
-    paddingTop: 4,
-    paddingBottom: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   categoryListContainerSticky: {
     borderBottomWidth: 1,
@@ -2647,53 +2774,72 @@ const styles = StyleSheet.create({
   },
   categoryListContent: {
     paddingRight: 20,
-    alignItems: 'flex-start',
-  },
-  categoryItem: {
-    width: 74,
-    marginRight: 4,
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    gap: 0,
   },
-  categoryImageContainer: {
-    width: 74,
-    height: 59,
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+    paddingVertical: 4,
+    paddingLeft: 4,
+    paddingRight: 10,
+    marginRight: 8,
+    maxWidth: 200,
+  },
+  categoryBadgeImageWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
   },
-  viewAllImageContainer: {
-    justifyContent: 'flex-end',
-    paddingBottom: 5,
+  categoryBadgeImageWrapViewAll: {
+    backgroundColor: '#FFFFFF',
   },
-  categoryImage: {
+  categoryBadgeImage: {
     width: '100%',
     height: '100%',
   },
-  viewAllImage: {
-    width: 45,
-    height: 45,
-  },
-  categoryName: {
-    width: 74,
+  categoryBadgeLabel: {
+    marginLeft: 8,
+    flexShrink: 1,
     fontFamily: 'Poppins',
-    fontWeight: '500',
-    fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: 0,
-    textAlign: 'center',
-    color: '#000000',
-    opacity: 0.85,
-    flexWrap: 'wrap',
+    fontWeight: '600',
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#111827',
+    maxWidth: 120,
+  },
+  categoryBadgeShimmer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
+  },
+  categoryBadgeShimmerText: {
+    marginLeft: 8,
   },
   // Restaurants Near You Section
   restaurantsSectionTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 8,
+    paddingHorizontal: 10,
+    marginTop: 20,
+    paddingTop: 4,
+    // paddingBottom: 2,
     gap: 15,
   },
   restaurantsTitleLine: {
@@ -2784,21 +2930,17 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   restaurantCardShimmer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     width: '100%',
-    height: 160,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
+    borderWidth: 0,
+    borderColor: 'transparent',
     overflow: 'hidden',
   },
-  restaurantImageShimmer: {
-    borderRadius: 16,
-  },
   restaurantDetailsShimmer: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
   },
   loadingMoreContainer: {
     flexDirection: 'row',
