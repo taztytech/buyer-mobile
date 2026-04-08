@@ -15,6 +15,7 @@ export interface BannerItem {
   description?: string;
   cta_button?: string;
   button_text?: string;
+  button_color?: string;
   image_url?: string;
   background_color?: string;
   action_url?: string;

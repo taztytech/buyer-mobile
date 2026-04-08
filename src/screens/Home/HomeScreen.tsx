@@ -57,6 +57,7 @@ interface CarouselItem {
   title: string;
   description: string;
   buttonText: string;
+  buttonColor?: string;
   imageUrl?: string;
   sequence?: number;
   promotionType?: 'restaurant_id' | 'category_id' | 'url';
@@ -874,6 +875,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             title: banner.title || 'Special Offer',
             description: banner.subtitle || banner.description || 'Check out our latest deals!',
             buttonText: banner.cta_button || banner.button_text || 'Order Now!',
+            buttonColor: banner.button_color,
             imageUrl: banner.image_url || banner.banner_url,
             sequence: banner.sequence !== undefined ? banner.sequence : index,
             promotionType: banner.promotion_type,
@@ -1336,7 +1338,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const renderCarouselItem = React.useCallback(({ item }: { item: CarouselItem }) => {
     return (
       <View style={[styles.carouselSlide, { width: windowWidth }]} testID={`carousel-slide-${item.id}`}>
-        <View style={[styles.adBanner, { width: bannerWidth, backgroundColor: item.backgroundColor || '#00BEC8' }]} testID={`banner-${item.id}`}>
+        <TouchableOpacity 
+          activeOpacity={0.9} 
+          onPress={() => handleBannerCTAClick(item)}
+          style={[styles.adBanner, { width: bannerWidth, backgroundColor: item.backgroundColor || '#00BEC8' }]} 
+          testID={`banner-${item.id}`}
+        >
           {/* Background Image - fills entire rectangle */}
           {item.imageUrl && (
             <OptimizedImage
@@ -1370,24 +1377,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             >
               {item.description}
             </Text>
-            <TouchableOpacity
+            <View
               style={[
                 styles.adButton,
-                { backgroundColor: item.backgroundColor || '#FFFFFF' }
+                { backgroundColor: item.buttonColor || item.backgroundColor || '#FFFFFF' }
               ]}
               testID={`banner-button-${item.id}`}
-              onPress={() => handleBannerCTAClick(item)}
-              activeOpacity={0.8}
             >
               <Text style={[
                 styles.adButtonText,
-                { color: item.backgroundColor ? '#FFFFFF' : '#000000' }
+                { color: item.buttonColor ? '#FFFFFF' : (item.backgroundColor ? '#FFFFFF' : '#000000') }
               ]}>
                 {item.buttonText}
               </Text>
-            </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </TouchableOpacity>
       </View>
     );
   }, [handleBannerCTAClick, windowWidth, bannerWidth]);
