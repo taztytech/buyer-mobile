@@ -2222,7 +2222,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             )}
           </View>
 
-          <AppFooter />
+          {/* <AppFooter /> */}
         </ScrollView>
 
         {/* Bottom Cart Bar */}

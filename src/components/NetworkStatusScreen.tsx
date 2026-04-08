@@ -16,7 +16,7 @@ const DEFAULT_LOCATION = {
 } as const;
 
 // Memoize header background image to prevent reloading
-const HEADER_BACKGROUND_IMAGE = require('@/assets/home_app_bar.png');
+const HEADER_BACKGROUND_IMAGE = require('@/assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg');
 
 const NetworkStatusScreenComponent: React.FC<NetworkStatusScreenProps> = ({
   selectedLocation,
