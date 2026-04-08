@@ -204,10 +204,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Derived state for the header display
   const activeOrganizationBanner = organizationBanners.length > 0 ? organizationBanners[activeBannerIndex] : null;
-  const homeTopBackgroundColor = activeOrganizationBanner?.background_color || HOME_TOP_BG_FALLBACK;
-  const displayBackgroundImageUrl = activeOrganizationBanner?.image_url || homeBackgroundImageUrl;
-  const promoTitle = activeOrganizationBanner?.title || '50% OFF';
-  const promoSubtitle = activeOrganizationBanner?.subtitle || 'Fresh flavours, delivered fast — order now and save big on every bite.';
+  const homeTopBackgroundColor = isLoadingBanners ? '#FFFFFF' : (activeOrganizationBanner?.background_color || '');
+  const displayBackgroundImageUrl = activeOrganizationBanner?.image_url || '';
+  const promoTitle = activeOrganizationBanner?.title || (isLoadingBanners ? '' : '');
+  const promoSubtitle = activeOrganizationBanner?.subtitle || (isLoadingBanners ? '' : '');
 
   const shouldShowBadgesRow =
     appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0);
@@ -872,9 +872,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           // Transform API data to carousel format
           const transformedBanners: CarouselItem[] = bannerArray.map((banner: BannerItem, index: number) => ({
             id: banner.id || `banner-${index}`,
-            title: banner.title || 'Special Offer',
-            description: banner.subtitle || banner.description || 'Check out our latest deals!',
-            buttonText: banner.cta_button || banner.button_text || 'Order Now!',
+            title: banner.title || '',
+            description: banner.subtitle || banner.description || '',
+            buttonText: banner.cta_button || banner.button_text || '',
             buttonColor: banner.button_color,
             imageUrl: banner.image_url || banner.banner_url,
             sequence: banner.sequence !== undefined ? banner.sequence : index,
@@ -1338,10 +1338,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const renderCarouselItem = React.useCallback(({ item }: { item: CarouselItem }) => {
     return (
       <View style={[styles.carouselSlide, { width: windowWidth }]} testID={`carousel-slide-${item.id}`}>
-        <TouchableOpacity 
-          activeOpacity={0.9} 
+        <TouchableOpacity
+          activeOpacity={0.9}
           onPress={() => handleBannerCTAClick(item)}
-          style={[styles.adBanner, { width: bannerWidth, backgroundColor: item.backgroundColor || '#00BEC8' }]} 
+          style={[styles.adBanner, { width: bannerWidth, backgroundColor: item.backgroundColor || '#00BEC8' }]}
           testID={`banner-${item.id}`}
         >
           {/* Background Image - fills entire rectangle */}
@@ -1377,20 +1377,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             >
               {item.description}
             </Text>
-            <View
-              style={[
-                styles.adButton,
-                { backgroundColor: item.buttonColor || item.backgroundColor || '#FFFFFF' }
-              ]}
-              testID={`banner-button-${item.id}`}
-            >
-              <Text style={[
-                styles.adButtonText,
-                { color: item.buttonColor ? '#FFFFFF' : (item.backgroundColor ? '#FFFFFF' : '#000000') }
-              ]}>
-                {item.buttonText}
-              </Text>
-            </View>
+            {item.buttonText ? (
+              <View
+                style={[
+                  styles.adButton,
+                  { backgroundColor: item.buttonColor || item.backgroundColor || '#FFFFFF' }
+                ]}
+                testID={`banner-button-${item.id}`}
+              >
+                <Text style={[
+                  styles.adButtonText,
+                  { color: item.buttonColor ? '#FFFFFF' : (item.backgroundColor ? '#FFFFFF' : '#000000') }
+                ]}>
+                  {item.buttonText}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </TouchableOpacity>
       </View>
@@ -1551,57 +1553,57 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               style={[styles.headerBackground, { paddingTop: insets.top + 10, backgroundColor: homeTopBackgroundColor }]}
               testID="header-background"
             >
-            {/* Location Section */}
-            <View style={styles.locationSection} testID="location-section">
-              <TouchableOpacity
-                style={styles.locationInfo}
-                onPress={handleLocationClick}
-                activeOpacity={0.7}
-              >
-                {isLoadingLocation ? (
-                  <>
-                    {/* City Name with Icon - Shimmer */}
-                    <View style={styles.cityRow}>
-                      <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
-                      <Shimmer width={120} height={18} borderRadius={8} />
-                      <View style={styles.arrowIconWrapper}>
-                        <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+              {/* Location Section */}
+              <View style={styles.locationSection} testID="location-section">
+                <TouchableOpacity
+                  style={styles.locationInfo}
+                  onPress={handleLocationClick}
+                  activeOpacity={0.7}
+                >
+                  {isLoadingLocation ? (
+                    <>
+                      {/* City Name with Icon - Shimmer */}
+                      <View style={styles.cityRow}>
+                        <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
+                        <Shimmer width={120} height={18} borderRadius={8} />
+                        <View style={styles.arrowIconWrapper}>
+                          <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                        </View>
                       </View>
-                    </View>
-                    {/* Address - Shimmer */}
-                    <Shimmer width={220} height={14} borderRadius={6} style={{ marginTop: 4 }} />
-                  </>
-                ) : (
-                  <>
-                    {/* City Name with Icon */}
-                    <View style={styles.cityRow}>
-                      <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
-                      <Text style={styles.cityName}>{selectedLocation.name}</Text>
-                      <View style={styles.arrowIconWrapper}>
-                        <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                      {/* Address - Shimmer */}
+                      <Shimmer width={220} height={14} borderRadius={6} style={{ marginTop: 4 }} />
+                    </>
+                  ) : (
+                    <>
+                      {/* City Name with Icon */}
+                      <View style={styles.cityRow}>
+                        <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
+                        <Text style={styles.cityName}>{selectedLocation.name}</Text>
+                        <View style={styles.arrowIconWrapper}>
+                          <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                        </View>
                       </View>
-                    </View>
-                    {/* Address */}
-                    <Text
-                      style={styles.addressText}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {selectedLocation.address}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+                      {/* Address */}
+                      <Text
+                        style={styles.addressText}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {selectedLocation.address}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
 
-              {/* Profile & Cart Actions */}
-              {isLoadingLocation ? (
-                <View style={styles.profileButton}>
-                  <Shimmer width={50} height={50} borderRadius={25} />
-                </View>
-              ) : (
-                <View style={styles.headerActionsRow}>
-                  {/* Cart Icon - hidden */}
-                  {/* {hasCartItems && (
+                {/* Profile & Cart Actions */}
+                {isLoadingLocation ? (
+                  <View style={styles.profileButton}>
+                    <Shimmer width={50} height={50} borderRadius={25} />
+                  </View>
+                ) : (
+                  <View style={styles.headerActionsRow}>
+                    {/* Cart Icon - hidden */}
+                    {/* {hasCartItems && (
                 <TouchableOpacity
                   style={styles.cartButton}
                   onPress={handleCartPress}
@@ -1633,192 +1635,197 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 </TouchableOpacity>
               )} */}
 
-                  {/* Profile Avatar */}
-                  <TouchableOpacity
-                    style={styles.profileButton}
-                    onPress={onNavigateToProfile}
-                    activeOpacity={0.7}
-                    disabled={!isLocationServiceable}
-                    testID="profile-button"
-                  >
-                    <View
-                      style={[
-                        styles.profileAvatar,
-                        !isLocationServiceable && styles.profileAvatarDisabled,
-                      ]}
+                    {/* Profile Avatar */}
+                    <TouchableOpacity
+                      style={styles.profileButton}
+                      onPress={onNavigateToProfile}
+                      activeOpacity={0.7}
+                      disabled={!isLocationServiceable}
+                      testID="profile-button"
                     >
-                      <MaterialIcons
-                        name="person"
-                        size={22}
-                        color={
-                          isLocationServiceable
-                            ? '#00B14F'
-                            : 'rgba(0, 177, 79, 0.4)'
-                        }
-                      />
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-
-            {/* Search Bar and VEG Mode Toggle */}
-            <View
-              style={styles.searchSection}
-              onLayout={(e) => {
-                const { y, height } = e.nativeEvent.layout;
-                setSearchSectionBottomY(y + height);
-              }}
-            >
-              {isLoadingLocation ? (
-                <>
-                  {/* Search Bar Shimmer */}
-                  <View style={{ flex: 1 }}>
-                    <Shimmer width="100%" height={60} borderRadius={10} />
+                      <View
+                        style={[
+                          styles.profileAvatar,
+                          !isLocationServiceable && styles.profileAvatarDisabled,
+                        ]}
+                      >
+                        <MaterialIcons
+                          name="person"
+                          size={22}
+                          color={
+                            isLocationServiceable
+                              ? '#00B14F'
+                              : 'rgba(0, 177, 79, 0.4)'
+                          }
+                        />
+                      </View>
+                    </TouchableOpacity>
                   </View>
+                )}
+              </View>
 
-                  {/* VEG Mode Shimmer */}
-                  <Shimmer width={46} height={60} borderRadius={10} />
-                </>
-              ) : (
-                <>
-                  <TouchableOpacity
-                    style={{ flex: 1, }}
-                    onPress={onNavigateToSearch}
-                    activeOpacity={0.7}
-                    disabled={!isLocationServiceable}
-                  >
-                    <LinearGradient
-                      colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={[
-                        styles.searchBar,
-                        !isLocationServiceable && styles.searchBarDisabled
-                      ]}
+              {/* Search Bar and VEG Mode Toggle */}
+              <View
+                style={styles.searchSection}
+                onLayout={(e) => {
+                  const { y, height } = e.nativeEvent.layout;
+                  setSearchSectionBottomY(y + height);
+                }}
+              >
+                {isLoadingLocation ? (
+                  <>
+                    {/* Search Bar Shimmer */}
+                    <View style={{ flex: 1 }}>
+                      <Shimmer width="100%" height={60} borderRadius={10} />
+                    </View>
+
+                    {/* VEG Mode Shimmer */}
+                    <Shimmer width={46} height={60} borderRadius={10} />
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={{ flex: 1, }}
+                      onPress={onNavigateToSearch}
+                      activeOpacity={0.7}
+                      disabled={!isLocationServiceable}
                     >
-                      <MaterialIcons
-                        name="search"
-                        size={24}
-                        color={isLocationServiceable ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)"}
-                      />
+                      <LinearGradient
+                        colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={[
+                          styles.searchBar,
+                          !isLocationServiceable && styles.searchBarDisabled
+                        ]}
+                      >
+                        <MaterialIcons
+                          name="search"
+                          size={24}
+                          color={isLocationServiceable ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)"}
+                        />
+                        <Text
+                          style={[
+                            styles.searchInput,
+                            !isLocationServiceable && styles.searchInputDisabled
+                          ]}
+                          numberOfLines={1}
+                        >
+                          Search Restaurants & foods..
+                        </Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+
+                    {/* VEG Mode Toggle */}
+                    <TouchableOpacity
+                      style={[
+                        styles.vegModeContainer,
+                        !isLocationServiceable && styles.vegModeContainerDisabled
+                      ]}
+                      onPress={handleVegModeToggle}
+                      disabled={!isLocationServiceable}
+                      testID="veg-mode-toggle"
+                    >
                       <Text
                         style={[
-                          styles.searchInput,
-                          !isLocationServiceable && styles.searchInputDisabled
+                          styles.vegModeLabel,
+                          !isLocationServiceable && styles.vegModeLabelDisabled
                         ]}
-                        numberOfLines={1}
                       >
-                        Search Restaurants & foods..
+                        VEG
                       </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-
-                  {/* VEG Mode Toggle */}
-                  <TouchableOpacity
-                    style={[
-                      styles.vegModeContainer,
-                      !isLocationServiceable && styles.vegModeContainerDisabled
-                    ]}
-                    onPress={handleVegModeToggle}
-                    disabled={!isLocationServiceable}
-                    testID="veg-mode-toggle"
-                  >
-                    <Text
-                      style={[
-                        styles.vegModeLabel,
-                        !isLocationServiceable && styles.vegModeLabelDisabled
-                      ]}
-                    >
-                      VEG
-                    </Text>
-                    <View style={[
-                      styles.vegToggle,
-                      isVegModeEnabled && styles.vegToggleActive,
-                      !isLocationServiceable && styles.vegToggleDisabled
-                    ]}>
                       <View style={[
-                        styles.vegToggleThumb,
-                        isVegModeEnabled && styles.vegToggleThumbActive,
-                        !isLocationServiceable && styles.vegToggleThumbDisabled
-                      ]} />
-                    </View>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
+                        styles.vegToggle,
+                        isVegModeEnabled && styles.vegToggleActive,
+                        !isLocationServiceable && styles.vegToggleDisabled
+                      ]}>
+                        <View style={[
+                          styles.vegToggleThumb,
+                          isVegModeEnabled && styles.vegToggleThumbActive,
+                          !isLocationServiceable && styles.vegToggleThumbDisabled
+                        ]} />
+                      </View>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
 
-            </View>
-
-            {/* Background image section (overlay, outside header) */}
-            <View
-              style={[
-                styles.headerImageOverlay,
-                { top: searchSectionBottomY + AFTER_SEARCH_SPACER },
-              ]}
-              pointerEvents="none"
-              testID="home-header-image-overlay"
-            >
-              {displayBackgroundImageUrl && !headerBackgroundLoadFailed ? (
-                <OptimizedImage
-                  source={displayBackgroundImageUrl}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="cover"
-                  showShimmer={false}
-                  transition={200}
-                  priority="high"
-                  cachePolicy="memory-disk"
-                  onError={() => setHeaderBackgroundLoadFailed(true)}
-                  testID="home-header-image-section-remote"
-                />
-              ) : (
-                <OptimizedImage
-                  source={require('@/assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg')}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="cover"
-                  showShimmer={false}
-                  transition={200}
-                  priority="high"
-                  cachePolicy="memory-disk"
-                  testID="home-header-image-section-default"
-                />
-              )}
-
-              <LinearGradient
-                colors={[homeTopBackgroundColor, homeTopBackgroundColor, 'rgba(0,0,0,0)']}
-                locations={[0, 0.6, 1]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.headerImageSectionTopFade}
-              />
-
-              {/* Lighter at top, darker downwards */}
-              <LinearGradient
-                colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.10)', 'rgba(0,0,0,0.18)']}
-                locations={[0, 0.55, 1]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.headerImageDarkenGradient}
-              />
-
-              {!isLoadingLocation && (
-                <View style={styles.headerImageInnerContent}>
-                  <View
-                    style={[styles.homePromoBlockInImageSection, !isLocationServiceable && styles.homePromoBlockDisabled]}
-                    pointerEvents="none"
-                  >
-                    <Text style={styles.homePromoHeadline}>{promoTitle}</Text>
-                    <Text style={styles.homePromoSubline}>
-                      {promoSubtitle}
-                    </Text>
-                  </View>
-                </View>
-              )}
             </View>
           </View>
 
-          {/* Reserve space for overlay image section */}
-          <View style={styles.headerImageOverlaySpacer} />
+          {/* Organization Banner Section (Overlay + Spacer) */}
+          {(isLoadingBanners || organizationBanners.length > 0 || (displayBackgroundImageUrl && displayBackgroundImageUrl.length > 0)) && (
+            <>
+              {/* Background image section (overlay, outside header) */}
+              <View
+                style={[
+                  styles.headerImageOverlay,
+                  {
+                    top: searchSectionBottomY + AFTER_SEARCH_SPACER,
+                    opacity: searchSectionBottomY > 0 ? 1 : 0
+                  },
+                ]}
+                pointerEvents="none"
+                testID="home-header-image-overlay"
+              >
+                {isLoadingBanners ? (
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }]}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                  </View>
+                ) : displayBackgroundImageUrl && !headerBackgroundLoadFailed ? (
+                  <OptimizedImage
+                    source={displayBackgroundImageUrl}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                    showShimmer={false}
+                    transition={200}
+                    priority="high"
+                    cachePolicy="memory-disk"
+                    onError={() => setHeaderBackgroundLoadFailed(true)}
+                    testID="home-header-image-section-remote"
+                  />
+                ) : null}
+
+                {!isLoadingBanners && (
+                  <>
+                    <LinearGradient
+                      colors={[homeTopBackgroundColor, homeTopBackgroundColor, 'rgba(0,0,0,0)']}
+                      locations={[0, 0.6, 1]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={styles.headerImageSectionTopFade}
+                    />
+
+                    {/* Lighter at top, darker downwards */}
+                    <LinearGradient
+                      colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.10)', 'rgba(0,0,0,0.18)']}
+                      locations={[0, 0.55, 1]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={styles.headerImageDarkenGradient}
+                    />
+                  </>
+                )}
+
+                {!isLoadingLocation && (
+                  <View style={styles.headerImageInnerContent}>
+                    <View
+                      style={[styles.homePromoBlockInImageSection, !isLocationServiceable && styles.homePromoBlockDisabled]}
+                      pointerEvents="none"
+                    >
+                      <Text style={styles.homePromoHeadline}>{promoTitle}</Text>
+                      <Text style={styles.homePromoSubline}>
+                        {promoSubtitle}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* Reserve space for overlay image section */}
+              <View style={styles.headerImageOverlaySpacer} />
+            </>
+          )}
 
           {/* Solid background for everything after the header */}
           <View style={{ backgroundColor: colors.background, flex: 1 }}>
@@ -1877,72 +1884,58 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   </>
                 )}
 
-                <View
-                  style={[
-                    styles.carouselContainer,
-                    { marginTop: shouldShowBadgesRow ? 8 : 12 },
-                  ]}
-                >
-                  {appOperationStatus && !appOperationStatus.is_open ? (
-                    // Show closed banner when app is not open
-                    <View style={styles.closedBannerContainer}>
-                      <Image
-                        source={require('@../../../assets/Closed Banner.webp')}
-                        style={styles.closedBannerImage}
-                        resizeMode="contain"
-                      />
-                      {appOperationStatus.message && (
-                        <View style={styles.closedBannerMessageContainer}>
-                          <Text style={styles.closedBannerMessage}>
-                            {appOperationStatus.message}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  ) : showBannerShimmer ? (
-                    <View style={styles.loadingContainer}>
-                      <Shimmer width="100%" height={STORE_BANNER_HEIGHT} borderRadius={20} />
-                    </View>
-                  ) : (
-                    <>
-                      <View style={styles.carouselWrapper}>
-                        <FlatList
-                          ref={flatListRef}
-                          data={carouselData}
-                          renderItem={renderCarouselItem}
-                          keyExtractor={(item) => item.id}
-                          horizontal
-                          pagingEnabled
-                          showsHorizontalScrollIndicator={false}
-                          onViewableItemsChanged={onViewRef.current}
-                          viewabilityConfig={viewConfigRef.current}
-                          decelerationRate="fast"
-                          snapToAlignment="start"
-                          snapToInterval={windowWidth}
-                          disableIntervalMomentum={true}
-                          removeClippedSubviews={false}
-                          bounces={false}
-                          overScrollMode="never"
-                          scrollEventThrottle={16}
-                          getItemLayout={(_data, index) => ({
-                            length: windowWidth,
-                            offset: windowWidth * index,
-                            index,
-                          })}
-                          onScrollToIndexFailed={(info) => {
-                            // Handle scroll to index failure
-                            const wait = new Promise(resolve => setTimeout(resolve, 500));
-                            wait.then(() => {
-                              flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
-                            });
-                          }}
-                        />
-
-                        {/* Navigation Buttons - removed but functionality preserved (manual sliding and auto-slide still work) */}
+                {(showBannerShimmer || carouselData.length > 0) && appOperationStatus?.is_open !== false && (
+                  <View
+                    style={[
+                      styles.carouselContainer,
+                      { marginTop: shouldShowBadgesRow ? 8 : 12 },
+                    ]}
+                  >
+                    {showBannerShimmer ? (
+                      <View style={styles.loadingContainer}>
+                        <Shimmer width="100%" height={STORE_BANNER_HEIGHT} borderRadius={20} />
                       </View>
-                    </>
-                  )}
-                </View>
+                    ) : (
+                      <>
+                        <View style={styles.carouselWrapper}>
+                          <FlatList
+                            ref={flatListRef}
+                            data={carouselData}
+                            renderItem={renderCarouselItem}
+                            keyExtractor={(item) => item.id}
+                            horizontal
+                            pagingEnabled
+                            showsHorizontalScrollIndicator={false}
+                            onViewableItemsChanged={onViewRef.current}
+                            viewabilityConfig={viewConfigRef.current}
+                            decelerationRate="fast"
+                            snapToAlignment="start"
+                            snapToInterval={windowWidth}
+                            disableIntervalMomentum={true}
+                            removeClippedSubviews={false}
+                            bounces={false}
+                            overScrollMode="never"
+                            scrollEventThrottle={16}
+                            getItemLayout={(_data, index) => ({
+                              length: windowWidth,
+                              offset: windowWidth * index,
+                              index,
+                            })}
+                            onScrollToIndexFailed={(info) => {
+                              // Handle scroll to index failure
+                              const wait = new Promise(resolve => setTimeout(resolve, 500));
+                              wait.then(() => {
+                                flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
+                              });
+                            }}
+                          />
+
+                          {/* Navigation Buttons - removed but functionality preserved (manual sliding and auto-slide still work) */}
+                        </View>
+                      </>
+                    )}
+                  </View>
+                )}
 
                 {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
                 {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
@@ -2844,8 +2837,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 10,
-    paddingTop: 18,
-    paddingBottom: 4,
+    marginTop: 20,
+    paddingTop: 4,
+    // paddingBottom: 2,
     gap: 15,
   },
   restaurantsTitleLine: {
