@@ -76,18 +76,28 @@ export interface PaginationMetadata {
   has_more: boolean;
 }
 
+export interface OrganizationBanner {
+  title?: string;
+  subtitle?: string;
+  image_url?: string;
+  background_color?: string;
+  promotion_type?: string;
+  sequence?: number;
+}
+
 export interface HomeData {
   promotional_banner?: BannerItem | BannerItem[];
   nearby_restaurants?: Restaurant[];
   whats_on_your_mind?: CategoryItem[];
   pagination?: PaginationMetadata;
   home_screen_restaurant_card_style?: string;
-  /** Home header background image URL (remote). Also accepts alternate API keys at parse time. */
+  /** Legacy: Home header background string keys */
   home_background_image_url?: string;
   home_background_image?: string;
   header_background_image?: string;
   background_image_url?: string;
   home_screen_background_image?: string;
+  organization_banner?: OrganizationBanner[];
 }
 
 class HomeService {

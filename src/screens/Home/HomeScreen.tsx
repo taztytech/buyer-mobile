@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
-import { homeService, BannerItem, CategoryItem, Restaurant } from '@/services/home.service';
+import { homeService, BannerItem, CategoryItem, Restaurant, OrganizationBanner } from '@/services/home.service';
 import { paymentConfigService } from '@/services/payment-config.service';
 import { appConfigService } from '@/services/app-config.service';
 import { addressService } from '@/services/address.service';
@@ -119,8 +119,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const bannerWidth = Math.max(0, windowWidth - 40);
-  const [homeTopBackgroundColor] = React.useState(HOME_TOP_BG_FALLBACK);
   const [searchSectionBottomY, setSearchSectionBottomY] = React.useState<number>(0);
+
+  const [organizationBanners, setOrganizationBanners] = React.useState<OrganizationBanner[]>([]);
+  const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
+
+  // Auto-slide for organization banner
+  React.useEffect(() => {
+    if (!organizationBanners || organizationBanners.length <= 1) return;
+    const interval = setInterval(() => {
+      setActiveBannerIndex(prev => (prev + 1) % organizationBanners.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [organizationBanners]);
   const totalCartItems = getTotalItems();
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
   const [hasShownLocationModal, setHasShownLocationModal] = React.useState(false);
@@ -189,6 +200,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   /** Remote URL for home header background from API; null = use bundled default */
   const [homeBackgroundImageUrl, setHomeBackgroundImageUrl] = React.useState<string | null>(null);
   const [headerBackgroundLoadFailed, setHeaderBackgroundLoadFailed] = React.useState(false);
+
+  // Derived state for the header display
+  const activeOrganizationBanner = organizationBanners.length > 0 ? organizationBanners[activeBannerIndex] : null;
+  const homeTopBackgroundColor = activeOrganizationBanner?.background_color || HOME_TOP_BG_FALLBACK;
+  const displayBackgroundImageUrl = activeOrganizationBanner?.image_url || homeBackgroundImageUrl;
+  const promoTitle = activeOrganizationBanner?.title || '50% OFF';
+  const promoSubtitle = activeOrganizationBanner?.subtitle || 'Fresh flavours, delivered fast — order now and save big on every bite.';
 
   const shouldShowBadgesRow =
     appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0);
@@ -837,6 +855,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           (actualData as any).home_screen_background_image;
         const headerBgStr = typeof rawHeaderBg === 'string' ? rawHeaderBg.trim() : '';
         setHomeBackgroundImageUrl(headerBgStr.length > 0 ? headerBgStr : null);
+
+        // Handle organization banners for dynamic header
+        const orgBannerRaw = (actualData as any).organization_banner;
+        if (orgBannerRaw && Array.isArray(orgBannerRaw)) {
+          setOrganizationBanners(orgBannerRaw);
+        } else {
+          setOrganizationBanners([]);
+        }
 
         // Handle promotional banners
         if (promotionalBanner) {
@@ -1728,9 +1754,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               pointerEvents="none"
               testID="home-header-image-overlay"
             >
-              {homeBackgroundImageUrl && !headerBackgroundLoadFailed ? (
+              {displayBackgroundImageUrl && !headerBackgroundLoadFailed ? (
                 <OptimizedImage
-                  source={homeBackgroundImageUrl}
+                  source={displayBackgroundImageUrl}
                   style={StyleSheet.absoluteFill}
                   contentFit="cover"
                   showShimmer={false}
@@ -1776,9 +1802,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     style={[styles.homePromoBlockInImageSection, !isLocationServiceable && styles.homePromoBlockDisabled]}
                     pointerEvents="none"
                   >
-                    <Text style={styles.homePromoHeadline}>50% OFF</Text>
+                    <Text style={styles.homePromoHeadline}>{promoTitle}</Text>
                     <Text style={styles.homePromoSubline}>
-                      Fresh flavours, delivered fast — order now and save big on every bite.
+                      {promoSubtitle}
                     </Text>
                   </View>
                 </View>
@@ -2307,7 +2333,7 @@ const styles = StyleSheet.create({
     fontSize: 36,
     lineHeight: 42,
     color: '#FFFFFF',
-    top: -160,
+    top: -185,
     letterSpacing: 0.5,
     textShadowColor: 'rgba(0, 0, 0, 0.45)',
     textShadowOffset: { width: 0, height: 2 },
@@ -2317,8 +2343,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontFamily: 'Poppins_500Medium',
     fontSize: 24,
-    lineHeight: 30,
-    top: -160,
+    lineHeight: 34,
+    top: -185,
     color: '#FFFFFF',
     letterSpacing: 0.2,
     textShadowColor: 'rgba(0, 0, 0, 0.35)',
