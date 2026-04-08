@@ -22,7 +22,7 @@ import { ordersService } from '@/services/orders.service';
 import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
 import { paymentService, PaymentErrorType } from '@/services/payment.service';
 import { homeService } from '@/services/home.service';
-import { cartService, CartSummary } from '@/services/cart.service';
+import { cartService, CartSummary, CartResponse } from '@/services/cart.service';
 import { restaurantService } from '@/services/restaurant.service';
 import { paymentConfigService } from '@/services/payment-config.service';
 import { useCart } from '@/context/CartContext';
@@ -82,7 +82,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   onUpdateCart,
   onAddressChange,
 }) => {
-  const { cart, clearCart, updateQuantity, removeFromCart, setRestaurantInfo, restaurantId: contextRestaurantId, restaurantName: contextRestaurantName } = useCart();
+  const {
+    cart,
+    clearCart,
+    updateQuantity,
+    removeFromCart,
+    reloadCart,
+    setRestaurantInfo,
+    restaurantId: contextRestaurantId,
+    restaurantName: contextRestaurantName
+  } = useCart();
   const { showConfirmation } = useConfirmation();
   const [orderExpanded, setOrderExpanded] = useState(true);
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
@@ -145,6 +154,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [selfPickup, setSelfPickup] = useState(false);
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
+  const [appliedCouponCode, setAppliedCouponCode] = useState<string>('');
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string | undefined>(undefined);
   const [showLocationSelection, setShowLocationSelection] = useState(false);
@@ -247,8 +257,20 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   }, [isCodAllowed, selectedPaymentMethod]);
 
-  // Determine if a coupon is currently applied based on discount amount
-  const isCouponApplied = !!cartSummary && (cartSummary.discount_amount ?? 0) > 0;
+  const backendAppliedOfferCode =
+    (cartSummary as any)?.applied_offer?.offer_code ||
+    (cartData as any)?.summary?.applied_offer?.offer_code ||
+    '';
+
+  // Determine if a coupon is currently applied.
+  // IMPORTANT: free_delivery coupons may set delivery_fee=0 without setting discount_amount,
+  // so discount_amount alone is not a reliable signal.
+  const isCouponApplied =
+    !!cartSummary &&
+    (
+      (cartSummary.discount_amount ?? 0) > 0 ||
+      !!(appliedCouponCode || backendAppliedOfferCode)
+    );
 
   // Check if cart has any preorder items (used to hide promo code section and skip coupon removal)
   const hasPreorderItems = cartData?.items?.some((item: any) =>
@@ -359,24 +381,20 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     }
   }, [visible]);
 
-  // Fetch cart summary only when visible AND cart changes (debounced to avoid too many API calls)
-  useEffect(() => {
-    if (!visible) return;
-    const timeoutId = setTimeout(() => {
-      fetchCartSummary();
-    }, 150); // Shorter debounce for faster cart load
-    return () => clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, Object.keys(cart).length, localCartItems.length]);
+  // IMPORTANT:
+  // We intentionally do NOT auto-refetch cart summary on every cart/localCartItems change.
+  // The cart summary is refreshed when checkout becomes visible and on explicit user actions
+  // that already call `fetchCartSummary()`.
 
   // Promo removal is button-only (handleRemovePromoCode). No automatic remove-coupon API calls.
 
-  const fetchCartSummary = async () => {
+  /** Pass `preloadedCart` after `reloadCart()` to avoid a duplicate GET /cart. */
+  const fetchCartSummary = async (preloadedCart?: CartResponse) => {
     try {
       setIsLoadingCartSummary(true);
-      const cartResponse = await cartService.getCart();
+      const cartResponse = preloadedCart ?? (await cartService.getCart());
 
-      if (cartResponse) {
+      if (cartResponse.items.length > 0) {
         setCartData(cartResponse);
         if (cartResponse.summary) {
           setCartSummary(cartResponse.summary);
@@ -394,16 +412,20 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
           // Only restore promo code from backend if field is empty (preserve user input)
           // This prevents overwriting what the user has typed
-          if (promoCode.trim() === '') {
-            if (cartResponse.summary.applied_offer?.offer_code) {
-              setPromoCode(cartResponse.summary.applied_offer.offer_code);
-            }
+          const offerCodeFromBackend = cartResponse.summary.applied_offer?.offer_code || '';
+          setAppliedCouponCode(offerCodeFromBackend);
+          if (promoCode.trim() === '' && offerCodeFromBackend) {
+            setPromoCode(offerCodeFromBackend);
           }
           // Note: We don't clear promo code if user has entered something, even if backend has no offer
           // This allows user to keep typing/editing without interruption
         }
       } else {
         setCartData(null);
+        // Backend cart is empty. Ensure UI item list doesn't keep showing stale local/cartContext items.
+        setLocalCartItems([]);
+        setCartSummary(null);
+        setSelectedTip(null);
       }
     } catch (error: any) {
       setCartData(null);
@@ -411,6 +433,22 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       setIsLoadingCartSummary(false);
     }
   };
+
+  // Refresh cart whenever checkout becomes visible so billing matches the server after rapid menu adds.
+  // Single GET /cart: reloadCart returns the payload; fetchCartSummary reuses it (no duplicate call).
+  useEffect(() => {
+    if (!visible) return;
+    void (async () => {
+      let preloaded: CartResponse | null = null;
+      try {
+        preloaded = await reloadCart();
+      } catch {
+        // Ignore reload errors; fetchCartSummary may still call getCart.
+      }
+      await fetchCartSummary(preloaded ?? undefined);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   // Get restaurant name and address from cart API data
   const displayRestaurantName = cartData?.restaurant_name || contextRestaurantName || restaurantName || '';
@@ -1396,6 +1434,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       if (response.success && response.cart_summary) {
         // Use updated cart summary from backend
         setCartSummary(response.cart_summary);
+        // Ensure UI switches to "Remove" even for free_delivery coupons where discount_amount stays 0
+        setAppliedCouponCode(normalizedCode);
 
         // Clear any existing error on success
         setPromoError('');
@@ -1430,6 +1470,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
         // Clear promo code input and any errors on success
         setPromoCode('');
+        setAppliedCouponCode('');
         setPromoError('');
       } else {
         // Show error message from API at the bottom of the screen
@@ -2030,7 +2071,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                                 </View>
                                 <View style={styles.taxTooltipRow}>
                                   <Text style={styles.taxTooltipLabel}>Platform Fee Tax</Text>
-                                  <Text style={styles.taxTooltipValue}>
+                                  <Text
+                                    style={[
+                                      styles.taxTooltipValue,
+                                      !(includePlatformFee || platformFee === 0) && styles.billValueStrikethrough,
+                                    ]}
+                                  >
                                     ₹{platformFeeTax.toFixed(2)}
                                   </Text>
                                 </View>

@@ -110,6 +110,38 @@ export interface GetCartResponse {
   data: CartResponse;
 }
 
+/** Thrown when GET /cart fails so callers can keep local state (e.g. offline). */
+export class CartFetchError extends Error {
+  constructor(
+    message?: string,
+    public readonly statusCode?: number
+  ) {
+    super(message || 'Failed to fetch cart');
+    this.name = 'CartFetchError';
+  }
+}
+
+const EMPTY_CART_RESPONSE: CartResponse = {
+  id: 0,
+  restaurant_id: 0,
+  restaurant_name: '',
+  items: [],
+  summary: {
+    subtotal: 0,
+    delivery_fee: 0,
+    delivery_fee_tax: 0,
+    platform_fee_tax: 0,
+    total_tax_amount: 0,
+    tax_amount: 0,
+    discount_amount: 0,
+    final_amount: 0,
+  },
+  total_items: 0,
+  is_active: false,
+  created_at: '',
+  updated_at: '',
+};
+
 export interface ApplyCouponResponse {
   success: boolean;
   message?: string;
@@ -172,16 +204,21 @@ class CartService {
   }
 
   /**
-   * Get current cart
+   * Get current cart from the server (source of truth when online).
+   * Returns an empty cart shape when the cart has no items.
+   * Throws {@link CartFetchError} on network / API failure so callers can preserve local state.
    */
-  async getCart(): Promise<CartResponse | null> {
+  async getCart(): Promise<CartResponse> {
     try {
       const response = await apiService.get<GetCartResponse>(
         API_CONFIG.ENDPOINTS.BUYER.CART_GET
       );
 
       if (!response.success) {
-        return null;
+        throw new CartFetchError(
+          response.message || response.error || 'Cart request failed',
+          response.statusCode
+        );
       }
 
       // Handle nested response structure
@@ -189,15 +226,15 @@ class CartService {
       // Or: { success: true, data: { actual cart } }
       let cartData = response.data;
 
-      // Type guard to check if data is a CartResponse
+      // Empty carts may omit restaurant_id; non-empty carts must have it.
       const isCartResponse = (data: any): data is CartResponse => {
-        return (
-          data &&
-          typeof data === 'object' &&
-          'items' in data &&
-          Array.isArray(data.items) &&
-          'restaurant_id' in data
-        );
+        if (!data || typeof data !== 'object' || !('items' in data) || !Array.isArray(data.items)) {
+          return false;
+        }
+        if (data.items.length === 0) {
+          return true;
+        }
+        return data.restaurant_id != null && data.restaurant_id !== '';
       };
 
       // Unwrap nested data structures
@@ -233,11 +270,19 @@ class CartService {
         return cartData;
       }
 
-      return null;
+      if (__DEV__) {
+        console.warn('[CartService] Unexpected getCart payload after unwrap; treating as empty cart');
+      }
+      return { ...EMPTY_CART_RESPONSE };
     } catch (error) {
+      if (error instanceof CartFetchError) {
+        throw error;
+      }
       console.error('[CartService] Error getting cart:', error);
-      // Return null if cart doesn't exist or error occurs
-      return null;
+      throw new CartFetchError(
+        error instanceof Error ? error.message : 'Cart request failed',
+        (error as any)?.statusCode ?? (error as any)?.response?.status
+      );
     }
   }
 
