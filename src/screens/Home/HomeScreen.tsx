@@ -204,10 +204,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Derived state for the header display
   const activeOrganizationBanner = organizationBanners.length > 0 ? organizationBanners[activeBannerIndex] : null;
-  const homeTopBackgroundColor = isLoadingBanners ? '#FFFFFF' : (activeOrganizationBanner?.background_color || '');
+  const homeTopBackgroundColor = activeOrganizationBanner?.background_color || '#FFFFFF';
   const displayBackgroundImageUrl = activeOrganizationBanner?.image_url || '';
   const promoTitle = activeOrganizationBanner?.title || (isLoadingBanners ? '' : '');
   const promoSubtitle = activeOrganizationBanner?.subtitle || (isLoadingBanners ? '' : '');
+  const hasExistingBannerVisual = Boolean(activeOrganizationBanner?.image_url || activeOrganizationBanner?.background_color);
 
   const shouldShowBadgesRow =
     appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0);
@@ -1768,7 +1769,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 pointerEvents="none"
                 testID="home-header-image-overlay"
               >
-                {isLoadingBanners ? (
+                {isLoadingBanners && !hasExistingBannerVisual ? (
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }]}>
                     <ActivityIndicator size="large" color={colors.primary} />
                   </View>
@@ -1786,7 +1787,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   />
                 ) : null}
 
-                {!isLoadingBanners && (
+                {(!isLoadingBanners || hasExistingBannerVisual) && (
                   <>
                     <LinearGradient
                       colors={[homeTopBackgroundColor, homeTopBackgroundColor, 'rgba(0,0,0,0)']}
@@ -2325,13 +2326,13 @@ const styles = StyleSheet.create({
   },
   homePromoBlockInImageSection: {
     width: '100%',
+    paddingTop: 12,
   },
   homePromoHeadline: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 36,
     lineHeight: 42,
     color: '#FFFFFF',
-    top: -185,
     letterSpacing: 0.5,
     textShadowColor: 'rgba(0, 0, 0, 0.45)',
     textShadowOffset: { width: 0, height: 2 },
@@ -2342,7 +2343,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_500Medium',
     fontSize: 24,
     lineHeight: 34,
-    top: -185,
     color: '#FFFFFF',
     letterSpacing: 0.2,
     textShadowColor: 'rgba(0, 0, 0, 0.35)',
@@ -2566,8 +2566,9 @@ const styles = StyleSheet.create({
   headerImageInnerContent: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingTop: 14,
     paddingBottom: 16,
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
     position: 'relative',
     zIndex: 10,
     elevation: 10,
@@ -2662,13 +2663,13 @@ const styles = StyleSheet.create({
   adContent: {
     flexDirection: 'column',
     alignItems: 'flex-start',
-    // justifyContent: 'space-between',
-    gap: 10,
+    gap: 8,
     position: 'relative',
     zIndex: 2,
     flex: 1,
     width: '100%',
-    paddingVertical: 16,
+    paddingTop: 18,
+    paddingBottom: 14,
     paddingHorizontal: 16,
   },
   adTitle: {
@@ -2678,9 +2679,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     // fontWeight: '700',
     fontSize: 36,
-    lineHeight: 36,
+    lineHeight: 44,
     color: '#FFFFFF',
-    marginBottom: 1,
+    marginTop: 2,
+    marginBottom: 2,
   },
   adDescription: {
     width: '88%',
