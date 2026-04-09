@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, StatusBar, ImageBackground, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, ScrollView, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,9 +14,6 @@ const DEFAULT_LOCATION = {
   name: 'Madurai',
   address: 'Madurai, Tamil Nadu, India',
 } as const;
-
-// Memoize header background image to prevent reloading
-const HEADER_BACKGROUND_IMAGE = require('@/assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg');
 
 const NetworkStatusScreenComponent: React.FC<NetworkStatusScreenProps> = ({
   selectedLocation,
@@ -44,12 +41,8 @@ const NetworkStatusScreenComponent: React.FC<NetworkStatusScreenProps> = ({
           bounces={false}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header with Background Image - Same as HomeScreen */}
-          <ImageBackground
-            source={HEADER_BACKGROUND_IMAGE}
-            style={headerStyle}
-            imageStyle={styles.headerBackgroundImage}
-          >
+          {/* Header without default background image */}
+          <View style={headerStyle}>
             {/* Location Section - Disabled */}
             <View style={styles.locationSection}>
               <View style={[styles.locationInfo, styles.disabledElement]}>
@@ -89,7 +82,7 @@ const NetworkStatusScreenComponent: React.FC<NetworkStatusScreenProps> = ({
                 </LinearGradient>
               </View>
             </View>
-          </ImageBackground>
+          </View>
 
           {/* Network Error Message - Exact Match with Restaurant Empty State */}
           <View style={styles.networkErrorContainer}>
@@ -129,13 +122,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     gap: 18,
     minHeight: 240,
-  },
-  headerBackgroundImage: {
-    width: '120%',
-    height: '150%',
-    resizeMode: 'cover',
-    left: 0,
-    top: 0,
+    backgroundColor: '#00B14F',
   },
   locationSection: {
     flexDirection: 'row',
