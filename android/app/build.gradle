@@ -144,6 +144,12 @@ android {
     def keystoreKeyAlias = localProperties.getProperty('MYAPP_RELEASE_KEY_ALIAS') ?: project.findProperty('MYAPP_RELEASE_KEY_ALIAS') ?: 'my-key-alias'
     def keystoreStorePassword = localProperties.getProperty('MYAPP_RELEASE_STORE_PASSWORD') ?: project.findProperty('MYAPP_RELEASE_STORE_PASSWORD')
     def keystoreKeyPassword = localProperties.getProperty('MYAPP_RELEASE_KEY_PASSWORD') ?: project.findProperty('MYAPP_RELEASE_KEY_PASSWORD')
+
+    // Gradle evaluates signingConfigs at configuration time.
+    // Avoid failing debug builds when the release keystore isn't configured.
+    def isReleaseTask = gradle.startParameter.taskNames.any { taskName ->
+        taskName?.toString()?.toLowerCase()?.contains('release')
+    }
     
     signingConfigs {
         debug {
@@ -160,8 +166,11 @@ android {
                 keyAlias keystoreKeyAlias
                 keyPassword keystoreKeyPassword
             } else {
-                // Allow local debug workflows to configure project even when release keystore
-                // credentials are not present. CI/release pipelines should provide MYAPP_RELEASE_*.
+                if (isReleaseTask) {
+                    throw new GradleException("Release keystore not configured! Please set MYAPP_RELEASE_* properties in android/local.properties or android/gradle.properties")
+                }
+                // For non-release builds (e.g., devDebug), fall back to debug signing
+                // so the project can be built without release keystore secrets.
                 storeFile file('debug.keystore')
                 storePassword 'android'
                 keyAlias 'androiddebugkey'

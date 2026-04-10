@@ -605,7 +605,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       finalStatus = status;
 
       if (finalStatus === 'granted') {
-        analyticsService.logEvent(AnalyticsEvents.LOCATION_PERMISSION_GRANTED, { method: 'foreground' });
+        analyticsService.trackEvent(AnalyticsEvents.LOCATION_PERMISSION_GRANTED, { method: 'foreground' });
         const location = await Location.getCurrentPositionAsync({});
 
         const userLatitude = location.coords.latitude;
@@ -621,7 +621,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setCategoryData([]);
         await fetchHomeData(userLatitude, userLongitude);
       } else {
-        analyticsService.logEvent(AnalyticsEvents.LOCATION_PERMISSION_DENIED, { method: 'foreground' });
+        analyticsService.trackEvent(AnalyticsEvents.LOCATION_PERMISSION_DENIED, { method: 'foreground' });
         setHasShownLocationModal(true); // Mark as shown to prevent repeated popups
         showConfirmation({
           title: 'Permission Denied',
@@ -1043,9 +1043,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           );
 
           setRestaurantData(uniqueRestaurants);
-          analyticsService.logEvent(AnalyticsEvents.RESTAURANT_LIST_VIEWED, {
+          analyticsService.trackEvent(AnalyticsEvents.RESTAURANT_LIST_VIEWED, {
             restaurant_scroll_count: 0,
-            item_count: uniqueRestaurants.length,
           });
 
           // Handle pagination metadata
@@ -1482,7 +1481,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const scrollCount = Math.max(0, Math.floor(scrollY / 500));
     if (scrollCount > maxScrollCountTrackedRef.current) {
       maxScrollCountTrackedRef.current = scrollCount;
-      analyticsService.logEvent(AnalyticsEvents.RESTAURANT_LIST_VIEWED, {
+      analyticsService.trackEvent(AnalyticsEvents.RESTAURANT_LIST_VIEWED, {
         restaurant_scroll_count: scrollCount,
       });
     }

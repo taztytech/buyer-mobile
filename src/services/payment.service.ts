@@ -92,6 +92,20 @@ class PaymentService {
   }
 
   /**
+   * Normalize amount for analytics to rupees so payment lifecycle events are comparable.
+   * Priority: checkout summary amount (if provided) > gateway amount.
+   */
+  private getAnalyticsAmountRupees(
+    gatewayAmount: number,
+    analyticsAmountRupees?: number,
+  ): number {
+    if (typeof analyticsAmountRupees === 'number' && Number.isFinite(analyticsAmountRupees) && analyticsAmountRupees > 0) {
+      return analyticsAmountRupees;
+    }
+    return Number.isFinite(gatewayAmount) ? gatewayAmount : 0;
+  }
+
+  /**
    * Parse Razorpay SDK error and map to user-friendly message
    * Only handles: Network Error, Payment Cancelled, Payment Failed
    * Any other error (including user backing out) is treated as Payment Cancelled
@@ -290,10 +304,23 @@ class PaymentService {
     analyticsAmountRupees?: number,
   ): Promise<PaymentResult> {
     try {
+      const analyticsCurrency = (paymentDetails.currency || 'INR').toUpperCase();
+      const normalizedAnalyticsAmount = this.getAnalyticsAmountRupees(
+        Number(paymentDetails.amount),
+        analyticsAmountRupees,
+      );
+
       await crashlyticsService.setAttribute('current_screen', 'payment');
       await crashlyticsService.setAttribute('payment_method', 'online');
       await crashlyticsService.log('User initiated online payment');
-      await analyticsService.logEvent(AnalyticsEvents.PAYMENT_METHOD_SELECTED, {
+      await analyticsService.trackEvent(AnalyticsEvents.PAYMENT_INITIATED, {
+        order_id: orderId,
+        amount: normalizedAnalyticsAmount,
+        currency: analyticsCurrency,
+        method: 'online',
+        gateway: 'razorpay',
+      });
+      await analyticsService.trackEvent(AnalyticsEvents.PAYMENT_METHOD_SELECTED, {
         method: 'online',
       });
       // Step 1: Open Razorpay checkout using payment_details from order response
@@ -327,7 +354,7 @@ class PaymentService {
             error_type: paymentResult.errorType || 'unknown',
           }
         );
-        await analyticsService.logEvent(AnalyticsEvents.PAYMENT_FAILED, {
+        await analyticsService.trackEvent(AnalyticsEvents.PAYMENT_FAILED, {
           reason: paymentResult.error || 'payment_cancelled_or_failed',
           gateway: 'razorpay',
         });
@@ -364,7 +391,7 @@ class PaymentService {
             payment_method: 'online',
           }
         );
-        await analyticsService.logEvent(AnalyticsEvents.PAYMENT_FAILED, {
+        await analyticsService.trackEvent(AnalyticsEvents.PAYMENT_FAILED, {
           reason: verifyResponse.error || 'verification_failed',
           gateway: 'razorpay',
         });
@@ -385,24 +412,15 @@ class PaymentService {
         };
       }
 
-      const fallbackAmount = Number(paymentDetails.amount);
-      const explicitAnalyticsAmount =
-        typeof analyticsAmountRupees === 'number' && Number.isFinite(analyticsAmountRupees)
-          ? analyticsAmountRupees
-          : null;
-      const normalizedAnalyticsAmount =
-        explicitAnalyticsAmount !== null && explicitAnalyticsAmount > 0
-          ? explicitAnalyticsAmount
-          : fallbackAmount;
-      await analyticsService.logEvent(AnalyticsEvents.PAYMENT_SUCCESS, {
+      await analyticsService.trackEvent(AnalyticsEvents.PAYMENT_SUCCESS, {
         order_id: orderId,
         final_amount: normalizedAnalyticsAmount,
-        currency: (paymentDetails.currency || 'INR').toUpperCase(),
+        currency: analyticsCurrency,
         payment_method: 'online',
         gateway: 'razorpay',
       });
       const purchaseValue = normalizedAnalyticsAmount;
-      const purchaseCurrency = (paymentDetails.currency || 'INR').toUpperCase();
+      const purchaseCurrency = analyticsCurrency;
       if (Number.isFinite(purchaseValue) && purchaseValue > 0) {
         await analyticsService.logPurchase(
           String(orderId),
@@ -427,7 +445,7 @@ class PaymentService {
         payment_method: 'online',
         error_code: parsedError.errorCode || 'unknown',
       });
-      await analyticsService.logEvent(AnalyticsEvents.PAYMENT_FAILED, {
+      await analyticsService.trackEvent(AnalyticsEvents.PAYMENT_FAILED, {
         reason: parsedError.errorMessage,
         gateway: 'razorpay',
       });
