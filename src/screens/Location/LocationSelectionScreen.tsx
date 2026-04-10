@@ -505,7 +505,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       }
 
       if (permission.status !== 'granted') {
-        analyticsService.logEvent(AnalyticsEvents.LOCATION_PERMISSION_DENIED, { method: 'foreground' });
+        analyticsService.trackEvent(AnalyticsEvents.LOCATION_PERMISSION_DENIED, { method: 'foreground' });
         // Still not granted – guide the user instead of silently falling back
         // Only show alert if user explicitly initiated this action
         if (isUserInitiated) {
@@ -541,7 +541,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
         return false;
       }
-      analyticsService.logEvent(AnalyticsEvents.LOCATION_PERMISSION_GRANTED, { method: 'foreground' });
+      analyticsService.trackEvent(AnalyticsEvents.LOCATION_PERMISSION_GRANTED, { method: 'foreground' });
 
       // Permission granted – fetch current location
       const location = await Location.getCurrentPositionAsync({

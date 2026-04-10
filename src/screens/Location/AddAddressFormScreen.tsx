@@ -404,6 +404,11 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
 
       // Guest mode: skip API - pass data to onSave; handleLocationConfirm will save to AsyncStorage
       if (isGuest) {
+        const analyticsCity =
+          geocodingData?.city?.toString().trim().toLowerCase() ||
+          geocodingData?.district?.toString().trim().toLowerCase() ||
+          initialData?.city?.toString().trim().toLowerCase() ||
+          'madurai';
         const guestLocation = {
           name: locationName || selectedTag,
           address: fullAddress,
@@ -418,19 +423,9 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
           type: selectedTag.toLowerCase() as 'home' | 'work' | 'other',
         };
 
-        analyticsService.logEvent(AnalyticsEvents.NEW_ADDRESS_ADDED, {
+        analyticsService.trackEvent(AnalyticsEvents.NEW_ADDRESS_ADDED, {
           area_name: locality.trim().toLowerCase(),
-          city:
-            (
-              geocodingData?.city ||
-              geocodingData?.district ||
-              initialData?.city ||
-              selectedLocation?.city ||
-              'unknown'
-            )
-              .toString()
-              .trim()
-              .toLowerCase(),
+          city: analyticsCity,
           pincode: pincode.trim(),
         });
 
@@ -473,7 +468,7 @@ export const AddAddressFormScreen: React.FC<AddAddressFormScreenProps> = ({
         if (!editMode) {
           const analyticsCity =
             addressData.city?.toString().trim().toLowerCase() || 'unknown';
-          analyticsService.logEvent(AnalyticsEvents.NEW_ADDRESS_ADDED, {
+          analyticsService.trackEvent(AnalyticsEvents.NEW_ADDRESS_ADDED, {
             area_name: locality.trim().toLowerCase(),
             city: analyticsCity,
             pincode: pincode.trim(),

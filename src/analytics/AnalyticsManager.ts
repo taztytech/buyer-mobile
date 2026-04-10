@@ -37,6 +37,11 @@ export class AnalyticsManager {
     /payment_id/i,
     /razorpay_signature/i,
   ];
+  private readonly piiValuePatterns: RegExp[] = [
+    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
+    /(^|\D)(?:\+91[-\s]?)?[6-9]\d{9}(\D|$)/,
+    /\b[a-z0-9._-]{2,}@[a-z]{2,}\b/i,
+  ];
   private readonly allowedSensitiveKeys: Set<string> = new Set([
     AnalyticsUserProperties.PLATFORM,
     AnalyticsUserProperties.LATITUDE,
@@ -104,7 +109,7 @@ export class AnalyticsManager {
     }
   }
 
-  async logScreenView(screenName: string, screenClass?: string): Promise<void> {
+  private async logScreenView(screenName: string, screenClass?: string): Promise<void> {
     try {
       if (!this.isInitialized || !analytics) return;
 
@@ -117,7 +122,7 @@ export class AnalyticsManager {
     }
   }
 
-  async logEvent(eventName: string, parameters?: Record<string, any>): Promise<void> {
+  private async logEvent(eventName: string, parameters?: Record<string, any>): Promise<void> {
     try {
       if (!this.isInitialized || !analytics || !this.analyticsEnabled) return;
       if (!this.isValidEventName(eventName)) {
@@ -290,9 +295,11 @@ export class AnalyticsManager {
       if (
         typeof value === 'boolean' ||
         typeof value === 'number' ||
-        typeof value === 'string' ||
         Array.isArray(value)
       ) {
+        cleaned[key] = value;
+      } else if (typeof value === 'string') {
+        if (this.isPIIValue(value)) continue;
         cleaned[key] = value;
       } else if (typeof value === 'object') {
         cleaned[key] = JSON.stringify(value);
@@ -307,12 +314,21 @@ export class AnalyticsManager {
     return this.piiKeyPatterns.some((pattern) => pattern.test(key));
   }
 
+  private isPIIValue(value: string): boolean {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) return false;
+    return this.piiValuePatterns.some((pattern) => pattern.test(trimmedValue));
+  }
+
   private isValidEventName(eventName: string): boolean {
     if (eventName.length > 40) return false;
     return /^[a-z]+(_[a-z0-9]+)*$/.test(eventName);
   }
 
-  async trackEvent(eventName: string, params?: Record<string, string | number | boolean>): Promise<void> {
+  /**
+   * Public API per integration spec §7.3 — all app-originated events must use this entrypoint.
+   */
+  async trackEvent(eventName: string, params?: Record<string, any>): Promise<void> {
     await this.logEvent(eventName, params);
   }
 
@@ -325,6 +341,8 @@ export class AnalyticsManager {
     await this.setUserId(null);
     await this.setUserProperties({
       [AnalyticsUserProperties.LOGIN_STATE]: 'guest',
+      [AnalyticsUserProperties.USER_TYPE]: null,
+      [AnalyticsUserProperties.USER_ID]: null,
     });
   }
 

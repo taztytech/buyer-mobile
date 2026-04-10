@@ -460,12 +460,12 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       1,
       getCartItemTotalQuantity(normalizedItem) || normalizedItem.quantity || 1,
     );
-    analyticsService.logEvent(AnalyticsEvents.ADD_TO_CART, {
+    analyticsService.trackEvent(AnalyticsEvents.ADD_TO_CART, {
       restaurant_id: effectiveRestaurantIdForEvent || undefined,
       item_id: normalizedItem.itemId || parseInt(normalizedItem.id, 10),
       price: normalizedItem.price,
       qty: eventQuantity,
-      quantity: eventQuantity,
+      currency: 'INR',
     });
 
     let prevCartSnapshot: { [key: string]: CartItem } = {};
@@ -575,7 +575,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const removeFromCart = async (itemId: string): Promise<CartSummary | null> => {
     const item = cart[itemId];
     if (item) {
-      analyticsService.logEvent(AnalyticsEvents.REMOVE_FROM_CART, {
+      analyticsService.trackEvent(AnalyticsEvents.REMOVE_FROM_CART, {
         item_id: item.itemId || parseInt(item.id, 10),
       });
     }
@@ -900,9 +900,10 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return sum + (item.quantity || 0);
     }, 0);
     if (preClearItems > 0) {
-      analyticsService.logEvent(AnalyticsEvents.CART_ABANDONED, {
+      analyticsService.trackEvent(AnalyticsEvents.CART_ABANDONED, {
         cart_value: preClearValue,
         last_action: syncWithBackend ? 'manual_clear' : 'flow_clear',
+        currency: 'INR',
       });
     }
 

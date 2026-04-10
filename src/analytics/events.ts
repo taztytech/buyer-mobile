@@ -63,6 +63,8 @@ export const AnalyticsEvents = {
   MENU_VIEWED: 'menu_viewed',
   PRODUCT_VIEWED: 'product_viewed',
   SEARCH: 'search',
+  SEARCH_QUERY_SUBMITTED: 'search_query_submitted',
+  SEARCH_RESULT_CLICKED: 'search_result_clicked',
 
   // Cart
   ADD_TO_CART: 'add_to_cart',
@@ -72,6 +74,11 @@ export const AnalyticsEvents = {
 
   // Checkout & Payment
   CHECKOUT_STARTED: 'checkout_started',
+  APPLY_COUPON: 'apply_coupon',
+  REMOVE_COUPON: 'remove_coupon',
+  ADD_TIP: 'add_tip',
+  REMOVE_TIP: 'remove_tip',
+  PAYMENT_INITIATED: 'payment_initiated',
   PAYMENT_METHOD_SELECTED: 'payment_method_selected',
   PAYMENT_SUCCESS: 'payment_success',
   PAYMENT_FAILED: 'payment_failed',
