@@ -150,10 +150,17 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
   // Update region and location info when editing address changes
   useEffect(() => {
-    if (editingAddress && editingAddress.latitude && editingAddress.longitude) {
+    const parsedEditLatitude = parseFloat(String(editingAddress?.latitude));
+    const parsedEditLongitude = parseFloat(String(editingAddress?.longitude));
+    const hasValidEditingCoords =
+      !!editingAddress &&
+      Number.isFinite(parsedEditLatitude) &&
+      Number.isFinite(parsedEditLongitude);
+
+    if (hasValidEditingCoords) {
       const newRegion = {
-        latitude: parseFloat(editingAddress.latitude),
-        longitude: parseFloat(editingAddress.longitude),
+        latitude: parsedEditLatitude,
+        longitude: parsedEditLongitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       };
@@ -176,18 +183,16 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         }, 100);
       }
 
-      // Set location name and address from editing address
-      setLocationName(editingAddress.city || 'Location');
       const fullAddress = [
         editingAddress.address1,
         editingAddress.address2,
         editingAddress.address3,
         editingAddress.city,
         editingAddress.state,
-        editingAddress.pincode
+        editingAddress.pincode,
       ].filter(Boolean).join(', ');
+      setLocationName(editingAddress.city || 'Location');
       setLocationAddress(fullAddress);
-      // Clear geocoding data when editing (use address data instead)
       setGeocodingData(null);
       // Existing address already has coordinates – treat as a confirmed location
       setHasSelectedLocation(true);
@@ -1157,12 +1162,18 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     // onLocationConfirm handles navigation back to the appropriate screen
     // Don't call onBack() here as it conflicts with the navigation animation
     if (onLocationConfirm) {
+      const responseLatitude = Number(addressData?.latitude);
+      const responseLongitude = Number(addressData?.longitude);
+      const hasValidResponseCoords =
+        Number.isFinite(responseLatitude) && Number.isFinite(responseLongitude);
+
       onLocationConfirm({
+        ...(addressData || {}),
         name: locationName,
         address: locationAddress,
-        latitude: lat,
-        longitude: lng,
-        ...addressData,
+        // Always keep the user-confirmed map position unless API returns valid coordinates.
+        latitude: hasValidResponseCoords ? responseLatitude : lat,
+        longitude: hasValidResponseCoords ? responseLongitude : lng,
       });
     }
   };
@@ -1292,6 +1303,10 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     performSearch(searchText);
   };
 
+  const isEditWithoutLocationChange = !!editingAddress && !hasUserChangedLocation;
+  const isConfirmDisabled =
+    isGeocodingInProgress || isGettingLocation || isEditWithoutLocationChange;
+
   return (
     <View style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -1348,7 +1363,6 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             provider={PROVIDER_GOOGLE}
             style={styles.map}
             initialRegion={region}
-            region={region}
             onRegionChange={handleRegionChange}
             onRegionChangeComplete={handleRegionChangeComplete}
             onMapReady={handleMapReady}
@@ -1441,10 +1455,10 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
               <TouchableOpacity
                 style={[
                   styles.confirmButton,
-                  (isGeocodingInProgress || isGettingLocation) && styles.confirmButtonDisabled
+                  isConfirmDisabled && styles.confirmButtonDisabled
                 ]}
                 onPress={handleConfirm}
-                disabled={isGeocodingInProgress || isGettingLocation}
+                disabled={isConfirmDisabled}
                 activeOpacity={0.7}
               >
                 {isGeocodingInProgress ? (
