@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ScrollView, FlatList, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
 import { homeService, BannerItem, CategoryItem, Restaurant, OrganizationBanner } from '@/services/home.service';
@@ -12,8 +12,8 @@ import { RestaurantCard } from '@/components/RestaurantCard';
 import { Shimmer } from '@/components/Shimmer';
 import { OptimizedImage } from '@/components/OptimizedImage';
 import { AppFooter } from '@/components/AppFooter';
-import * as Location from 'expo-location';
-import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from '@/shims/rn-location';
+import { LinearGradient } from '@/shims/rn-linear-gradient';
 import { ViewCartBar } from '@/components/ViewCartBar';
 import { CategoryModal } from '@/components/CategoryModal';
 import { useCart } from '@/context/CartContext';
@@ -2329,7 +2329,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   homePromoHeadline: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 36,
     lineHeight: 42,
     color: '#FFFFFF',
@@ -2340,7 +2340,7 @@ const styles = StyleSheet.create({
   },
   homePromoSubline: {
     marginTop: 8,
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 24,
     lineHeight: 34,
     color: '#FFFFFF',
@@ -2468,6 +2468,7 @@ const styles = StyleSheet.create({
     height: 50,
     gap: 11,
     marginTop: 16,
+    marginHorizontal: -12,
   },
   searchBar: {
     flex: 1,
@@ -2475,8 +2476,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    gap: 6,
+    paddingLeft: 8,
+    paddingRight: 10,
+    gap: 4,
   },
   searchBarDisabled: {
     opacity: 0.4,
@@ -2676,7 +2678,7 @@ const styles = StyleSheet.create({
     width: '82%',
     maxWidth: 280,
     // minHeight: 56,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     // fontWeight: '700',
     fontSize: 36,
     lineHeight: 44,
@@ -2686,7 +2688,7 @@ const styles = StyleSheet.create({
   },
   adDescription: {
     width: '88%',
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     // fontWeight: '500',
     fontSize: 14,
     lineHeight: 21,
@@ -3215,7 +3217,7 @@ const styles = StyleSheet.create({
     minHeight: 300,
   },
   noRestaurantsTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 27,
     color: 'rgba(0, 0, 0, 0.8)',
@@ -3242,7 +3244,7 @@ const styles = StyleSheet.create({
     minHeight: 300,
   },
   networkErrorTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 27,
     color: 'rgba(0, 0, 0, 0.8)',
@@ -3270,7 +3272,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   retryButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',

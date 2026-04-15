@@ -4,7 +4,7 @@
 
 ### Custom Assets That Must Be Preserved
 
-The following custom assets have been manually created and configured. **DO NOT RUN `npx expo prebuild` or any command that regenerates these assets**, as it will replace them with auto-generated versions.
+The following custom assets have been manually created and configured. **DO NOT RUN `npx rncli prebuild` or any command that regenerates these assets**, as it will replace them with auto-generated versions.
 
 #### Android Assets (DO NOT TOUCH)
 
@@ -100,9 +100,9 @@ eas build --platform ios --profile production
 
 ```bash
 # ❌ DON'T RUN THESE:
-npx expo prebuild
-npx expo prebuild --clean
-expo prebuild
+npx rncli prebuild
+npx rncli prebuild --clean
+rncli prebuild
 ```
 
 These commands regenerate native folders based on `app.json` and will **overwrite all custom assets**.
@@ -167,7 +167,7 @@ Update these before each build:
 ### app.json
 ```json
 {
-  "expo": {
+  "rncli": {
     "version": "1.0.0",  // Update this
     "android": {
       "versionCode": 1    // Increment this for each Android build

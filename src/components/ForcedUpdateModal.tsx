@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, BackHandler, Platform, Linking } from 'react-native';
-import { BlurView } from 'expo-blur';
-import Constants from 'expo-constants';
+import { BlurView } from '@/shims/rn-blur';
+import Constants from '@/shims/rn-constants';
 
 export interface ForcedUpdateModalProps {
   visible: boolean;
@@ -66,8 +66,8 @@ export const ForcedUpdateModal: React.FC<ForcedUpdateModalProps> = ({
    */
   const handleUpdatePress = async () => {
     try {
-      const packageName = Constants.expoConfig?.android?.package || 'in.tazty.buyer';
-      const bundleId = Constants.expoConfig?.ios?.bundleIdentifier || 'in.tazty.buyer';
+      const packageName = Constants.appConfig?.android?.package || 'in.tazty.buyer';
+      const bundleId = Constants.appConfig?.ios?.bundleIdentifier || 'in.tazty.buyer';
       
       let storeUrl: string;
       

@@ -10,11 +10,11 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { ordersService } from '@/services/orders.service';
 import { useOrders } from '@/context/OrdersContext';
 import { mapOrderStatusToUI } from '@/utils/orderStatusMapping';
-import { isExpoGo } from '@/utils/platform.util';
+import { isLimitedRuntime } from '@/utils/platform.util';
 import { config } from '@/constants/config';
 import { restaurantService } from '@/services/restaurant.service';
 import { addressService } from '@/services/address.service';
@@ -24,7 +24,7 @@ import { WebView } from 'react-native-webview';
 let MapView: any;
 let Marker: any;
 let Polyline: any;
-if (!isExpoGo()) {
+if (!isLimitedRuntime()) {
   try {
     const maps = require('react-native-maps');
     MapView = maps.default;
@@ -548,7 +548,7 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
       setPreAssignmentRouteCoordinates([restaurantCoordinate, customerCoordinate]);
 
       const mapsApiKey =
-        (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || config.apiKey || '').trim();
+        (process.env.PUBLIC_GOOGLE_MAPS_API_KEY || config.apiKey || '').trim();
       if (!mapsApiKey) {
         return;
       }
@@ -909,7 +909,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F8EE',
   },
   mapFallbackTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     color: '#001E1F',
   },
@@ -935,7 +935,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     color: '#001E1F',
   },
@@ -1018,7 +1018,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#FFFFFF',
   },
@@ -1036,7 +1036,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statusText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 24,
   },
@@ -1063,7 +1063,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   restaurantName: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#001E1F',
     lineHeight: 24,
@@ -1091,7 +1091,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   trackingTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#001E1F',
     marginBottom: 16,
@@ -1148,7 +1148,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   timelineMessageActive: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     color: '#001E1F',
   },
   timelineTime: {

@@ -88,7 +88,7 @@ class PaymentService {
 
   constructor() {
     // Get Razorpay key from environment
-    this.razorpayKeyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || '';
+    this.razorpayKeyId = process.env.PUBLIC_RAZORPAY_KEY_ID || '';
   }
 
   /**
@@ -456,7 +456,7 @@ export default paymentService;
 
 // import RazorpayCheckout from 'react-native-razorpay';
 // import { apiService, ApiResponse } from './api.service';
-// import { isExpoGo, isDevelopment } from '@/utils/platform.util';
+// import { isLimitedRuntime, isDevelopment } from '@/utils/platform.util';
 
 // // Payment Interfaces
 // export interface InitiatePaymentRequest {
@@ -527,12 +527,12 @@ export default paymentService;
 
 //   constructor() {
 //     // Get Razorpay key from environment
-//     this.razorpayKeyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || '';
+//     this.razorpayKeyId = process.env.PUBLIC_RAZORPAY_KEY_ID || '';
     
-//     // Enable mock payment in Expo Go or if explicitly set in env
-//     // Set EXPO_PUBLIC_MOCK_PAYMENT=true to force mock mode even in dev builds
-//     const forceMock = process.env.EXPO_PUBLIC_MOCK_PAYMENT === 'true';
-//     this.useMockPayment = forceMock || (isExpoGo() && isDevelopment());
+//     // Enable mock payment in RN CLI Go or if explicitly set in env
+//     // Set PUBLIC_MOCK_PAYMENT=true to force mock mode even in dev builds
+//     const forceMock = process.env.PUBLIC_MOCK_PAYMENT === 'true';
+//     this.useMockPayment = forceMock || (isLimitedRuntime() && isDevelopment());
 //   }
 
 //   /**
@@ -640,7 +640,7 @@ export default paymentService;
 //     }
 //   ): Promise<PaymentResult> {
 //     try {
-//       // Mock payment mode for testing (Expo Go or when explicitly enabled)
+//       // Mock payment mode for testing (RN CLI Go or when explicitly enabled)
 //       if (this.useMockPayment) {
 //         console.log('[PaymentService] Using mock payment mode for testing');
 //         // Simulate a small delay to mimic real payment processing

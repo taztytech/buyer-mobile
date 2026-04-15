@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { useCart } from '@/context/CartContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-// import { LinearGradient } from 'expo-linear-gradient';
+// import { LinearGradient } from '@/shims/rn-linear-gradient';
 
 interface ViewCartBarProps {
   onPress: () => void;

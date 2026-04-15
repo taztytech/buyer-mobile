@@ -7,7 +7,7 @@ import { getApiBaseUrl, envConfig } from './environment.config';
 
 // Helper to get environment variable with fallback
 const getEnvVar = (key: string, defaultValue: string = ''): string => {
-  // @ts-ignore - process.env is available in Expo
+  // @ts-ignore - process.env is available in RN CLI
   return process.env[key] || defaultValue;
 };
 
@@ -16,7 +16,7 @@ export const API_CONFIG = {
   BASE_URL: getApiBaseUrl(),
 
   // Request timeout in milliseconds
-  TIMEOUT: parseInt(getEnvVar('EXPO_PUBLIC_API_TIMEOUT', '30000'), 10),
+  TIMEOUT: parseInt(getEnvVar('PUBLIC_API_TIMEOUT', '30000'), 10),
 
   // API Endpoints
   ENDPOINTS: {

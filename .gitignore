@@ -3,11 +3,11 @@
 # dependencies
 node_modules/
 
-# Expo
-.expo/
+# Legacy runtime cache
+.runtime-cache/
 dist/
 web-build/
-expo-env.d.ts
+runtime-env.d.ts
 
 # Native
 .kotlin/

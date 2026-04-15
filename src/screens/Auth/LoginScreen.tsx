@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, Image, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { colors } from '@/theme';
 import { authService } from '@/services/auth.service';
 
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   title: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 30,
     lineHeight: 45,
     color: '#FFFFFF',
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   skipButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#FFFFFF',
   },
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   countryCodeText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     lineHeight: 21,
     color: '#001E1F',
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
   },
   termsText: {
     width: '100%',
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     lineHeight: 24,
     textAlign: 'center',
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   termsLink: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     color: colors.primary,
     textDecorationLine: 'underline',
   },

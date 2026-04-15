@@ -11,11 +11,11 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { OptimizedImage } from '@/components/OptimizedImage';
 import { searchService, SearchSuggestion } from '@/services/search.service';
 import { SearchBar } from '@/components/SearchBar';
-import * as Location from 'expo-location';
+import * as Location from '@/shims/rn-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GUEST_SELECTED_LOCATION_KEY } from '@/services/storage.service';
 import { useVegMode } from '@/context/VegModeContext';
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   resultName: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 16,
     lineHeight: 24,
     color: '#333333',
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   resultType: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 13,
     lineHeight: 20,
     color: '#666666',
@@ -402,14 +402,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: 'rgba(0, 0, 0, 0.6)',
     marginTop: 16,
     textAlign: 'center',
   },
   emptySubtext: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     color: 'rgba(0, 0, 0, 0.4)',
     marginTop: 8,

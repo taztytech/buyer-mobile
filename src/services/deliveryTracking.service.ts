@@ -1,4 +1,4 @@
-import Constants from 'expo-constants';
+import Constants from '@/shims/rn-constants';
 import { ApiResponse } from './api.service';
 
 export interface DeliveryTrackStatusResponse {
@@ -23,13 +23,14 @@ export interface DeliveryTrackStatusResponse {
 class DeliveryTrackingService {
   private getBaseUrl(): string {
     const extra =
-      (Constants.expoConfig?.extra as Record<string, any> | undefined) ||
+      (Constants.appConfig?.extra as Record<string, any> | undefined) ||
       ((Constants as any)?.manifest2?.extra as Record<string, any> | undefined) ||
       ((Constants as any)?.manifest?.extra as Record<string, any> | undefined) ||
       {};
     const baseUrl =
-      (extra.EXPO_PUBLIC_DELIVERY_TRACK_BASE_URL as string | undefined) ||
-      process.env.EXPO_PUBLIC_DELIVERY_TRACK_BASE_URL ||
+      (extra.DELIVERY_TRACK_BASE_URL as string | undefined) ||
+      process.env.DELIVERY_TRACK_BASE_URL ||
+      process.env.PUBLIC_DELIVERY_TRACK_BASE_URL ||
       'https://delivery.tazty.in';
     return String(baseUrl).trim().replace(/\/+$/, '');
   }

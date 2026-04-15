@@ -16,8 +16,8 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
+import * as Location from '@/shims/rn-location';
 import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
 import { GUEST_SELECTED_LOCATION_KEY } from '@/services/storage.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
@@ -680,7 +680,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 27,
     color: '#FFFFFF',
@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addressName: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#001E1F',
   },

@@ -12,6 +12,7 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
+    "types": ["node", "jest", "react", "react-native"],
     "paths": {
       "@/*": [
         "./src/*"
@@ -48,6 +49,9 @@
       ],
       "@assets/*": [
         "./src/assets/*"
+      ],
+      "@shims/*": [
+        "./src/shims/*"
       ]
     }
   },
@@ -58,5 +62,5 @@
   "exclude": [
     "node_modules"
   ],
-  "extends": "expo/tsconfig.base"
+  "extends": "@react-native/typescript-config/tsconfig.json"
 }

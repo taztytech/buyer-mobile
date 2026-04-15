@@ -132,16 +132,16 @@ npm run version:bump:major
 - Node.js installed
 - For iOS: Xcode and `agvtool` (included with Xcode Command Line Tools)
 - Android project must exist (`android/app/build.gradle`)
-- iOS project must exist (run `npx expo prebuild` first if needed)
+- iOS project must exist (run `npx rncli prebuild` first if needed)
 
 ## Troubleshooting
 
 ### Error: "build.gradle not found"
-- Ensure you've run `npx expo prebuild` to generate Android folder
+- Ensure you've run `npx rncli prebuild` to generate Android folder
 - Check that `android/app/build.gradle` exists
 
 ### Error: "iOS project not found"
-- Run `npx expo prebuild` to generate iOS folder
+- Run `npx rncli prebuild` to generate iOS folder
 - Ensure `ios/[AppName].xcodeproj` exists
 
 ### Error: "agvtool: command not found" (iOS)

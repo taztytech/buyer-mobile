@@ -6,7 +6,7 @@ This guide explains how to complete the FCM push notification integration for th
 
 The following has been completed:
 
-1. ✅ **Expo Notifications Installed** - `expo-notifications` and `expo-device` packages
+1. ✅ **RN CLI Notifications Installed** - `rncli-notifications` and `rncli-device` packages
 2. ✅ **API Endpoints Configured**:
    - `POST /api/buyer/push-tokens` - Register device token
    - `DELETE /api/buyer/push-tokens/{token}` - Unregister device token
@@ -63,14 +63,14 @@ The following has been completed:
 3. Download the `.p8` key file
 4. Note the **Key ID** and **Team ID**
 
-#### c. Upload to Expo
+#### c. Upload to RN CLI
 1. Run: `npx eas credentials`
 2. Select iOS → Push Notifications
 3. Upload the `.p8` file and enter Key ID and Team ID
 
 ---
 
-### 3. Expo EAS Setup
+### 3. RN CLI EAS Setup
 
 #### a. Configure EAS
 If you haven't already, create `eas.json`:
@@ -125,7 +125,7 @@ Your backend should send notifications in this format:
 
 ```javascript
 {
-  "to": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]",
+  "to": "RN CLInentPushToken[xxxxxxxxxxxxxxxxxxxxxx]",
   "sound": "default",
   "title": "Order Update",
   "body": "Your order #1234 is on the way!",
@@ -148,7 +148,7 @@ Your backend should send notifications in this format:
 3. Push notification registration starts
 4. Device token is sent to: POST /api/buyer/push-tokens
    {
-     "token": "ExponentPushToken[xxx]",
+     "token": "RN CLInentPushToken[xxx]",
      "device_type": "android" | "ios",
      "device_name": "User's Phone"
    }
@@ -190,7 +190,7 @@ Your backend API endpoints should:
 **Request:**
 ```json
 {
-  "token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]",
+  "token": "RN CLInentPushToken[xxxxxxxxxxxxxxxxxxxxxx]",
   "device_type": "android",
   "device_name": "Samsung Galaxy S21"
 }
@@ -222,7 +222,7 @@ Your backend API endpoints should:
 
 ### Push notifications not working on iOS?
 - ✅ Check if Push Notifications capability is enabled in App ID
-- ✅ Verify APNs key is uploaded to Expo
+- ✅ Verify APNs key is uploaded to RN CLI
 - ✅ Test only on physical device (not simulator)
 
 ### Push notifications not working on Android?
@@ -243,7 +243,7 @@ Your backend API endpoints should:
 
 ## 📚 Additional Resources
 
-- [Expo Push Notifications Guide](https://docs.expo.dev/push-notifications/overview/)
+- [RN CLI Push Notifications Guide](https://docs.rncli.dev/push-notifications/overview/)
 - [Firebase Cloud Messaging](https://firebase.google.com/docs/cloud-messaging)
 - [Apple Push Notifications](https://developer.apple.com/documentation/usernotifications)
 
@@ -254,7 +254,7 @@ Your backend API endpoints should:
 Before deploying to production:
 
 - [ ] `google-services.json` added to project root
-- [ ] iOS APNs key uploaded to Expo
+- [ ] iOS APNs key uploaded to RN CLI
 - [ ] Backend endpoints implemented and tested
 - [ ] App rebuilt with EAS
 - [ ] Tested on real Android device

@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   StatusBar,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '@/shims/rn-blur';
 import { RibbonAnimation } from '@/components/RibbonAnimation';
 
 interface OrderSuccessScreenProps {
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
   },
   title: {
     width: 200,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 22,
     lineHeight: 33,
     textAlign: 'center',
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   continueText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     lineHeight: 21,
     color: '#FFFFFF',

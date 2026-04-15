@@ -8,7 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { WebView } from 'react-native-webview';
 
 interface ContentPageProps {
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 27,
     textAlign: 'center',
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#000000',
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   paragraph: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     lineHeight: 22,
     color: '#000000',
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     textAlign: 'justify',
   },
   bulletPoint: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     lineHeight: 22,
     color: '#000000',

@@ -24,9 +24,9 @@ try {
 
 // Removed AsyncStorage to allow session-based resetting
 import { Platform, Alert } from 'react-native';
-import Constants from 'expo-constants';
+import Constants from '@/shims/rn-constants';
 import NetInfo from '@react-native-community/netinfo';
-import { isExpoGo } from '@/utils/platform.util';
+import { isLimitedRuntime } from '@/utils/platform.util';
 
 // Minimum time between update checks (1 hour)
 const MIN_CHECK_INTERVAL = 1 * 60 * 60 * 1000;
@@ -246,19 +246,19 @@ class InAppUpdateService {
    * In-app updates only work when app is installed from Play Store
    */
   private isInstalledFromPlayStore(): boolean {
-    // Check if running in Expo Go
-    if (isExpoGo()) {
+    // Check if running in RN CLI Go
+    if (isLimitedRuntime()) {
       return false;
     }
 
     // Check app ownership - only works when installed from Play Store
-    // appOwnership can be: 'expo', 'standalone', or undefined
+    // appOwnership can be: 'rncli', 'standalone', or undefined
     // For Play Store apps, it should be 'standalone' or undefined
-    // In Expo Go, it's 'expo'
+    // In RN CLI Go, it's 'rncli'
     const appOwnership = Constants.appOwnership;
 
-    // If appOwnership is 'expo', it's Expo Go (not from Play Store)
-    if (appOwnership === 'expo') {
+    // If appOwnership is 'rncli', it's RN CLI Go (not from Play Store)
+    if (appOwnership === 'rncli') {
       return false;
     }
 
@@ -364,7 +364,7 @@ class InAppUpdateService {
       }
     }
 
-    // Skip if not installed from Play Store (Expo Go, debug builds, etc.)
+    // Skip if not installed from Play Store (RN CLI Go, debug builds, etc.)
     if (!this.isInstalledFromPlayStore()) {
       return false;
     }
@@ -412,7 +412,7 @@ class InAppUpdateService {
         return false;
       }
     } catch (error: any) {
-      // Handle "app not owned" error gracefully (happens in debug/Expo Go)
+      // Handle "app not owned" error gracefully (happens in debug/RN CLI Go)
       if (this.isAppNotOwnedError(error)) {
         this.isChecking = false;
         return false;

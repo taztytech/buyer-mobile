@@ -1,17 +1,17 @@
 env: load .env
-env: export EXPO_PUBLIC_API_BASE_URL EXPO_PUBLIC_API_TIMEOUT EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
+env: rnclirt EXPO_PUBLIC_API_BASE_URL EXPO_PUBLIC_API_TIMEOUT EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
 › Planning build
 › Preparing Pods/React-cxxreact-React-cxxreact_privacy » ResourceBundle-React-cxxreact_privacy-React-cxxreact-Info.plist
 › Preparing Pods/React-Core-React-Core_privacy » ResourceBundle-React-Core_privacy-React-Core-Info.plist
 › Preparing Pods/RNCAsyncStorage-RNCAsyncStorage_resources » ResourceBundle-RNCAsyncStorage_resources-RNCAsyncStorage-Info.plist
 › Preparing Pods/GoogleMaps-GoogleMapsResources » ResourceBundle-GoogleMapsResources-GoogleMaps-Info.plist
-› Preparing Pods/ExpoFileSystem-ExpoFileSystem_privacy » ResourceBundle-ExpoFileSystem_privacy-ExpoFileSystem-Info.plist
-› Preparing Pods/EXConstants-ExpoConstants_privacy » ResourceBundle-ExpoConstants_privacy-EXConstants-Info.plist
+› Preparing Pods/RN CLIFileSystem-RN CLIFileSystem_privacy » ResourceBundle-RN CLIFileSystem_privacy-RN CLIFileSystem-Info.plist
+› Preparing Pods/EXConstants-RN CLIConstants_privacy » ResourceBundle-RN CLIConstants_privacy-EXConstants-Info.plist
 › Preparing Pods/react-native-maps-ReactNativeMapsPrivacy » ResourceBundle-ReactNativeMapsPrivacy-react-native-maps-Info.plist
 › Preparing Pods/react-native-google-maps-GoogleMapsPrivacy » ResourceBundle-GoogleMapsPrivacy-react-native-google-maps-Info.plist
 › Executing react-native Pods/hermes-engine » [CP-User] [Hermes] Replace Hermes for the right configuration, if needed
 › Executing react-native Pods/ReactNativeDependencies » [CP-User] [RNDeps] Replace React Native Dependencies for the right configuration, if needed
-› Preparing expo-constants Pods/EXConstants-EXConstants » ResourceBundle-EXConstants-EXConstants-Info.plist
+› Preparing rncli-constants Pods/EXConstants-EXConstants » ResourceBundle-EXConstants-EXConstants-Info.plist
 › Executing tazty Pods/GoogleMaps » [CP] Copy XCFrameworks
 › Executing react-native Pods/ReactNativeDependencies » [CP] Copy XCFrameworks
 › Executing react-native Pods/hermes-engine » [CP] Copy XCFrameworks
@@ -48,7 +48,7 @@ env: export EXPO_PUBLIC_API_BASE_URL EXPO_PUBLIC_API_TIMEOUT EXPO_PUBLIC_GOOGLE_
 › Compiling react-native-maps Pods/react-native-google-maps » AIRGMSPolyline.m
 › Compiling react-native-maps Pods/react-native-google-maps » AIRGMSPolygon.m
 › Compiling react-native-maps Pods/react-native-google-maps » AIRGMSMarker.m
-› Executing tazty Pods/ReactCodegen » [Expo Autolinking] Run Codegen with autolinking
+› Executing tazty Pods/ReactCodegen » [RN CLI Autolinking] Run Codegen with autolinking
 › Packaging tazty Pods/react-native-google-maps » libreact-native-google-maps.a
 › Compiling tazty Pods/ReactCodegen » ComponentDescriptors.cpp
 › Compiling tazty Pods/ReactAppDependencyProvider » RCTAppDependencyProvider.mm
@@ -74,10 +74,10 @@ env: export EXPO_PUBLIC_API_BASE_URL EXPO_PUBLIC_API_TIMEOUT EXPO_PUBLIC_GOOGLE_
 › Packaging react-native-safe-area-context Pods/react-native-safe-area-context » libreact-native-safe-area-context.a
 › Packaging tazty Pods/ReactAppDependencyProvider » libReactAppDependencyProvider.a
 › Packaging @react-native-async-storage/async-storage Pods/RNCAsyncStorage » libRNCAsyncStorage.a
-› Executing expo-modules-core Pods/ExpoModulesCore » Copy generated compatibility header
-› Executing expo-constants Pods/EXConstants » [CP-User] Generate app.config for prebuilt Constants.manifest
+› Executing rncli-modules-core Pods/RN CLIModulesCore » Copy generated compatibility header
+› Executing rncli-constants Pods/EXConstants » [CP-User] Generate app.config for prebuilt Constants.manifest
     Run script build phase '[CP-User] [Hermes] Replace Hermes for the right configuration, if needed' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'hermes-engine' from project 'Pods')
-    Run script build phase '[Expo Autolinking] Run Codegen with autolinking' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'ReactCodegen' from project 'Pods')
+    Run script build phase '[RN CLI Autolinking] Run Codegen with autolinking' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'ReactCodegen' from project 'Pods')
 
 › 0 error(s), and 2 warning(s)
 
@@ -103,16 +103,16 @@ note: Target dependency graph (95 targets)
     Target 'Tazty' in project 'Tazty'
         ➜ Implicit dependency on target 'Pods-Tazty' in project 'Pods' via file 'libPods-Tazty.a' in build phase 'Link Binary'
         ➜ Implicit dependency on target 'EXConstants' in project 'Pods' via options '-lEXConstants' in build setting 'OTHER_LDFLAGS'
-        ➜ Implicit dependency on target 'Expo' in project 'Pods' via options '-lExpo' in build setting 'OTHER_LDFLAGS'
-        ➜ Implicit dependency on target 'ExpoAsset' in project 'Pods' via options '-lExpoAsset' in build setting 'OTHER_LDFLAGS'
-        ➜ Implicit dependency on target 'ExpoBlur' in project 'Pods' via options '-lExpoBlur' in build setting 'OTHER_LDFLAGS'
-        ➜ Implicit dependency on target 'ExpoFileSystem' in project 'Pods' via options '-lExpoFileSystem' in build setting 'OTHER_LDFLAGS'
-        ➜ Implicit dependency on target 'ExpoFont' in project 'Pods' via options '-lExpoFont' in build setting 'OTHER_LDFLAGS'
-        ➜ Implicit dependency on target 'ExpoKeepAwake' in project 'Pods' via options '-lExpoKeepAwake' in build setting 'OTHER_LDFLAGS'
-        ➜ Implicit dependency on target 'ExpoLinearGradient' in project 'Pods' via options '-lExpoLinearGradient' in build setting 'OTHER_LDFLAGS'
-        ➜ Implicit dependency on target 'ExpoLocation' in project 'Pods' via options '-lExpoLocation' in build setting 'OTHER_LDFLAGS'
-        ➜ Implicit dependency on target 'ExpoModulesCore' in project 'Pods' via options '-lExpoModulesCore' in build setting 'OTHER_LDFLAGS'
-        ➜ Implicit dependency on target 'ExpoSplashScreen' in project 'Pods' via options '-lExpoSplashScreen' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'RN CLI' in project 'Pods' via options '-lRN CLI' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'RN CLIAsset' in project 'Pods' via options '-lRN CLIAsset' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'RN CLIBlur' in project 'Pods' via options '-lRN CLIBlur' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'RN CLIFileSystem' in project 'Pods' via options '-lRN CLIFileSystem' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'RN CLIFont' in project 'Pods' via options '-lRN CLIFont' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'RN CLIKeepAwake' in project 'Pods' via options '-lRN CLIKeepAwake' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'RN CLILinearGradient' in project 'Pods' via options '-lRN CLILinearGradient' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'RN CLILocation' in project 'Pods' via options '-lRN CLILocation' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'RN CLIModulesCore' in project 'Pods' via options '-lRN CLIModulesCore' in build setting 'OTHER_LDFLAGS'
+        ➜ Implicit dependency on target 'RN CLISplashScreen' in project 'Pods' via options '-lRN CLISplashScreen' in build setting 'OTHER_LDFLAGS'
         ➜ Implicit dependency on target 'Google-Maps-iOS-Utils' in project 'Pods' via options '-lGoogle-Maps-iOS-Utils' in build setting 'OTHER_LDFLAGS'
         ➜ Implicit dependency on target 'RNCAsyncStorage' in project 'Pods' via options '-lRNCAsyncStorage' in build setting 'OTHER_LDFLAGS'
         ➜ Implicit dependency on target 'ReactAppDependencyProvider' in project 'Pods' via options '-lReactAppDependencyProvider' in build setting 'OTHER_LDFLAGS'
@@ -122,16 +122,16 @@ note: Target dependency graph (95 targets)
         ➜ Implicit dependency on target 'react-native-safe-area-context' in project 'Pods' via options '-lreact-native-safe-area-context' in build setting 'OTHER_LDFLAGS'
     Target 'Pods-Tazty' in project 'Pods'
         ➜ Explicit dependency on target 'EXConstants' in project 'Pods'
-        ➜ Explicit dependency on target 'Expo' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoAsset' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoBlur' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoFileSystem' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoFont' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoKeepAwake' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoLinearGradient' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoLocation' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoModulesCore' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoSplashScreen' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLI' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIAsset' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIBlur' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIFileSystem' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIFont' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIKeepAwake' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLILinearGradient' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLILocation' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIModulesCore' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLISplashScreen' in project 'Pods'
         ➜ Explicit dependency on target 'FBLazyVector' in project 'Pods'
         ➜ Explicit dependency on target 'Google-Maps-iOS-Utils' in project 'Pods'
         ➜ Explicit dependency on target 'GoogleMaps' in project 'Pods'
@@ -300,26 +300,26 @@ note: Target dependency graph (95 targets)
     Target 'GoogleMaps' in project 'Pods'
         ➜ Explicit dependency on target 'GoogleMaps-GoogleMapsResources' in project 'Pods'
     Target 'GoogleMaps-GoogleMapsResources' in project 'Pods' (no dependencies)
-    Target 'ExpoSplashScreen' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoModulesCore' in project 'Pods'
-    Target 'ExpoLocation' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoModulesCore' in project 'Pods'
-    Target 'ExpoLinearGradient' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoModulesCore' in project 'Pods'
-    Target 'ExpoKeepAwake' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoModulesCore' in project 'Pods'
-    Target 'ExpoFont' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoModulesCore' in project 'Pods'
-    Target 'ExpoFileSystem' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoFileSystem-ExpoFileSystem_privacy' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoModulesCore' in project 'Pods'
-    Target 'ExpoFileSystem-ExpoFileSystem_privacy' in project 'Pods' (no dependencies)
-    Target 'ExpoBlur' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoModulesCore' in project 'Pods'
-    Target 'ExpoAsset' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoModulesCore' in project 'Pods'
-    Target 'Expo' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoModulesCore' in project 'Pods'
+    Target 'RN CLISplashScreen' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIModulesCore' in project 'Pods'
+    Target 'RN CLILocation' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIModulesCore' in project 'Pods'
+    Target 'RN CLILinearGradient' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIModulesCore' in project 'Pods'
+    Target 'RN CLIKeepAwake' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIModulesCore' in project 'Pods'
+    Target 'RN CLIFont' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIModulesCore' in project 'Pods'
+    Target 'RN CLIFileSystem' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIFileSystem-RN CLIFileSystem_privacy' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIModulesCore' in project 'Pods'
+    Target 'RN CLIFileSystem-RN CLIFileSystem_privacy' in project 'Pods' (no dependencies)
+    Target 'RN CLIBlur' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIModulesCore' in project 'Pods'
+    Target 'RN CLIAsset' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIModulesCore' in project 'Pods'
+    Target 'RN CLI' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIModulesCore' in project 'Pods'
         ➜ Explicit dependency on target 'RCTRequired' in project 'Pods'
         ➜ Explicit dependency on target 'RCTTypeSafety' in project 'Pods'
         ➜ Explicit dependency on target 'React-Core' in project 'Pods'
@@ -346,9 +346,9 @@ note: Target dependency graph (95 targets)
         ➜ Explicit dependency on target 'ReactCodegen' in project 'Pods'
     Target 'EXConstants' in project 'Pods'
         ➜ Explicit dependency on target 'EXConstants-EXConstants' in project 'Pods'
-        ➜ Explicit dependency on target 'EXConstants-ExpoConstants_privacy' in project 'Pods'
-        ➜ Explicit dependency on target 'ExpoModulesCore' in project 'Pods'
-    Target 'ExpoModulesCore' in project 'Pods'
+        ➜ Explicit dependency on target 'EXConstants-RN CLIConstants_privacy' in project 'Pods'
+        ➜ Explicit dependency on target 'RN CLIModulesCore' in project 'Pods'
+    Target 'RN CLIModulesCore' in project 'Pods'
         ➜ Explicit dependency on target 'RCTRequired' in project 'Pods'
         ➜ Explicit dependency on target 'RCTTypeSafety' in project 'Pods'
         ➜ Explicit dependency on target 'React-Core' in project 'Pods'
@@ -930,7 +930,7 @@ note: Target dependency graph (95 targets)
     Target 'hermes-engine' in project 'Pods' (no dependencies)
     Target 'FBLazyVector' in project 'Pods' (no dependencies)
     Target 'RCTRequired' in project 'Pods' (no dependencies)
-    Target 'EXConstants-ExpoConstants_privacy' in project 'Pods' (no dependencies)
+    Target 'EXConstants-RN CLIConstants_privacy' in project 'Pods' (no dependencies)
     Target 'EXConstants-EXConstants' in project 'Pods' (no dependencies)
 
 GatherProvisioningInputs
@@ -981,6 +981,6 @@ ProcessInfoPlistFile /Users/arun/Library/Developer/Xcode/DerivedData/Tazty-eeopi
     cd /Users/arun/My\ Projects/Tazty-User-App/ReactNative-Version/Tazty/ios/Pods
     builtin-infoPlistUtility /Users/arun/My\ Projects/Tazty-User-App/ReactNative-Version/Tazty/ios/Pods/Target\ Support\ Files/GoogleMaps/ResourceBundle-GoogleMapsResources-GoogleMaps-Info.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/arun/Library/Developer/Xcode/DerivedData/Tazty-eeopifgnomijmcbpmrpqgptzftnn/Build/Products/Debug-iphonesimulator/GoogleMaps/GoogleMapsResources.bundle/Info.plist
 
-ProcessInfoPlistFile /Users/arun/Library/Developer/Xcode/DerivedData/Tazty-eeopifgnomijmcbpmrpqgptzftnn/Build/Products/Debug-iphonesimulator/ExpoFileSystem/ExpoFileSystem_privacy.bundle/Info.plist /Users/arun/My\ Projects/Tazty-User-App/ReactNative-Version/Tazty/ios/Pods/Target\ Support\ Files/ExpoFileSystem/ResourceBundle-ExpoFileSystem_privacy-ExpoFileSystem-Info.plist (in target 'ExpoFileSystem-ExpoFileSystem_privacy' from project 'Pods')
+ProcessInfoPlistFile /Users/arun/Library/Developer/Xcode/DerivedData/Tazty-eeopifgnomijmcbpmrpqgptzftnn/Build/Products/Debug-iphonesimulator/RN CLIFileSystem/RN CLIFileSystem_privacy.bundle/Info.plist /Users/arun/My\ Projects/Tazty-User-App/ReactNative-Version/Tazty/ios/Pods/Target\ Support\ Files/RN CLIFileSystem/ResourceBundle-RN CLIFileSystem_privacy-RN CLIFileSystem-Info.plist (in target 'RN CLIFileSystem-RN CLIFileSystem_privacy' from project 'Pods')
     cd /Users/arun/My\ Projects/Tazty-User-App/ReactNative-Version/Tazty/ios/Pods
-    builtin-infoPlistUtility /Users/arun/My\ Projects/Tazty-User-App/ReactNative-Version/Tazty/ios/Pods/Target\ Support\ Files/ExpoFileSystem/ResourceBundle-ExpoFileSystem_privacy-ExpoFileSystem
+    builtin-infoPlistUtility /Users/arun/My\ Projects/Tazty-User-App/ReactNative-Version/Tazty/ios/Pods/Target\ Support\ Files/RN CLIFileSystem/ResourceBundle-RN CLIFileSystem_privacy-RN CLIFileSystem

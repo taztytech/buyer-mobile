@@ -3,7 +3,7 @@
  * Handles Exotel API calls for connecting users with delivery agents
  */
 
-import Constants from 'expo-constants';
+import Constants from '@/shims/rn-constants';
 import { ApiResponse } from './api.service';
 
 // Types
@@ -22,7 +22,7 @@ export interface ExotelCallResponse {
 class ExotelService {
   private getExotelApiUrl(): string {
     // Get seller base URL from environment config
-    const sellerBaseUrl = Constants.expoConfig?.extra?.TAZTY_SELLER_BASEURL as string | undefined;
+    const sellerBaseUrl = Constants.appConfig?.extra?.TAZTY_SELLER_BASEURL as string | undefined;
     
     if (!sellerBaseUrl) {
       throw new Error('TAZTY_SELLER_BASEURL is not configured in environment variables');

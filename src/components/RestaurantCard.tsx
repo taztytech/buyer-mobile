@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Animated } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
+import { LinearGradient } from '@/shims/rn-linear-gradient';
 import { favoritesService } from '@/services/favorites.service';
 import { OptimizedImage } from '@/components/OptimizedImage';
 import { homeService } from '@/services/home.service';
@@ -840,14 +840,14 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   closedTextCurrently: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 20,
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   closedTextClosed: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 12,
     lineHeight: 16,
     color: '#FFFFFF',
@@ -895,14 +895,14 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   pureVegText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 11,
     lineHeight: 16,
     color: '#00B14F',
   },
   // Restaurant Name
   restaurantName: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 15,
     lineHeight: 20,
     color: '#000000',
@@ -929,25 +929,25 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   ratingText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 13,
     lineHeight: 18,
     color: '#000000',
   },
   deliveryDot: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 13,
     color: '#000000',
   },
   deliveryText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 13,
     lineHeight: 18,
     color: '#000000',
   },
   // Cuisine
   cuisineText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 10,
     lineHeight: 14,
     color: '#666666',
@@ -993,19 +993,19 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   locationText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 10,
     lineHeight: 14,
     color: '#666666',
     flexShrink: 1,
   },
   locationSeparator: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 10,
     color: '#666666',
   },
   distanceText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 10,
     lineHeight: 14,
     color: '#666666',
@@ -1022,7 +1022,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   openingTimeText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 12,
     lineHeight: 16,
     color: '#666666',
@@ -1137,7 +1137,7 @@ const styles = StyleSheet.create({
   // Restaurant Name
   restaurantNameVertical: {
     flex: 1,
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '500',
     fontSize: 18,
     lineHeight: 24,
@@ -1217,7 +1217,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   openingTimeTextVertical: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 13,
     lineHeight: 18,
     color: '#000000',
@@ -1281,7 +1281,7 @@ const styles = StyleSheet.create({
   },
   restaurantNameHomeHorizontal: {
     flex: 1,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 20,
     color: '#111827',
@@ -1293,7 +1293,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   ratingDurationTextHomeHorizontal: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 13,
     lineHeight: 18,
     color: '#111827',
@@ -1304,13 +1304,13 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
   cuisineTextHomeHorizontal: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 12,
     lineHeight: 16,
     color: '#6B7280',
   },
   locationTextHomeHorizontal: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 12,
     lineHeight: 16,
     color: '#9CA3AF',
@@ -1322,7 +1322,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   distanceRowTextHomeHorizontal: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 12,
     lineHeight: 16,
     color: '#6B7280',
@@ -1396,7 +1396,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   imageMetaTextHomeOutlined: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 12,
     lineHeight: 16,
     color: '#FFFFFF',
@@ -1424,13 +1424,13 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   pureVegTextHomeOutlined: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 11,
     lineHeight: 16,
     color: '#00B14F',
   },
   restaurantNameHomeOutlined: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 17,
     lineHeight: 22,
     color: '#111827',
@@ -1442,7 +1442,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   distanceInlineHomeOutlined: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 12,
     lineHeight: 16,
     color: '#6B7280',
@@ -1464,7 +1464,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   ratingTextHomeOutlined: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     lineHeight: 18,
     color: '#111827',
@@ -1474,13 +1474,13 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
   deliveryTextHomeOutlined: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     lineHeight: 18,
     color: '#374151',
   },
   cuisineTextHomeOutlined: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 13,
     lineHeight: 18,
     color: '#6B7280',
@@ -1490,7 +1490,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   locationTextHomeOutlined: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 12,
     lineHeight: 17,
     color: '#6B7280',
@@ -1502,7 +1502,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   distanceTextHomeOutlined: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 13,
     lineHeight: 18,
     color: '#00B14F',
@@ -1515,7 +1515,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   openingTimeTextHomeOutlined: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 12,
     lineHeight: 16,
     color: '#6B7280',

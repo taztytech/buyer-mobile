@@ -35,7 +35,7 @@ export APP_ENV="$ENVIRONMENT"
 export BUILD_ARTIFACT="$ARTIFACT"
 export BUILD_TARGET="$TARGET"
 # Set BABEL_ENV=production for release builds to remove console.log via Babel
-# Using BABEL_ENV instead of NODE_ENV to avoid interfering with Expo bundling
+# Using BABEL_ENV instead of NODE_ENV to avoid interfering with RN CLI bundling
 export BABEL_ENV="production"
 
 GRADLE_CMD="./gradlew"

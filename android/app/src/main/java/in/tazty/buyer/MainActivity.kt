@@ -1,5 +1,4 @@
 package `in`.tazty.buyer
-import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
 import android.os.Bundle
@@ -14,8 +13,6 @@ import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
-
-import expo.modules.ReactActivityDelegateWrapper
 
 class MainActivity : ReactActivity() {
 
@@ -32,7 +29,6 @@ class MainActivity : ReactActivity() {
   private var isExecutingFakeResume = false
 
   override fun onCreate(savedInstanceState: Bundle?) {
-    SplashScreenManager.registerOnActivity(this)
     super.onCreate(null)
     // Handle cold-start notification intents.
     FCMEventEmitterModule.handleNotificationIntent(intent)
@@ -41,14 +37,11 @@ class MainActivity : ReactActivity() {
   override fun getMainComponentName(): String = "main"
 
   override fun createReactActivityDelegate(): ReactActivityDelegate {
-    return ReactActivityDelegateWrapper(
-          this,
-          BuildConfig.IS_NEW_ARCHITECTURE_ENABLED,
-          object : DefaultReactActivityDelegate(
-              this,
-              mainComponentName,
-              fabricEnabled
-          ){})
+    return object : DefaultReactActivityDelegate(
+      this,
+      mainComponentName,
+      fabricEnabled
+    ) {}
   }
 
   override fun onNewIntent(intent: Intent) {

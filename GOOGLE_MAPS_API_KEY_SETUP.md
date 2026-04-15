@@ -35,7 +35,7 @@ $env:EXPO_PUBLIC_GOOGLE_MAPS_API_KEY="your_actual_api_key_here"
 set EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_actual_api_key_here
 
 # Linux/Mac
-export EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_actual_api_key_here
+rnclirt EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_actual_api_key_here
 ```
 
 #### Option 3: Use .env file (if using dotenv)
@@ -59,7 +59,7 @@ EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_actual_api_key_here
 - ⚠️ **Never commit your API key to version control!**
 - Add `android/gradle.properties` to `.gitignore` if you store the key there
 - Use environment variables or secure secret management for CI/CD
-- The API key in `app.config.js` is for Expo's build process, but for bare workflow, you need to set it in `gradle.properties` or as an environment variable
+- The API key in `app.config.js` is for RN CLI's build process, but for bare workflow, you need to set it in `gradle.properties` or as an environment variable
 
 ## Verification
 

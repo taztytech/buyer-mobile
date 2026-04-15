@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Image, ImageSource, ImageStyle, StyleProp } from 'expo-image';
+import { Image, ImageSource, ImageStyle, StyleProp } from '@/shims/rn-image';
 import { View, StyleSheet, Animated } from 'react-native';
 import { Shimmer } from '@/components/Shimmer';
 
@@ -22,7 +22,7 @@ interface OptimizedImageProps {
 }
 
 /**
- * OptimizedImage - A wrapper around expo-image with built-in caching,
+ * OptimizedImage - A wrapper around rncli-image with built-in caching,
  * shimmer loading, and performance optimizations for smooth scrolling
  */
 export const OptimizedImage: React.FC<OptimizedImageProps> = ({
@@ -46,7 +46,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   const [hasError, setHasError] = useState(false);
   const [opacity] = useState(() => new Animated.Value(0));
 
-  // Normalize source to expo-image format
+  // Normalize source to rncli-image format
   const getImageSource = (): ImageSource => {
     if (typeof source === 'string') {
       return { uri: source };

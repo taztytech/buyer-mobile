@@ -11,7 +11,7 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { fcmNotificationService, NotificationPayload } from '@/services/fcmNotification.service';
 import { Platform } from 'react-native';
 
@@ -549,13 +549,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     color: '#FFFFFF',
     lineHeight: 27,
   },
   sectionTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#000000',
     marginBottom: 12,
@@ -585,7 +585,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statusCardValue: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#000000',
   },
@@ -647,22 +647,22 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   testButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#00B14F',
   },
   testButtonTextSecondary: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#000000',
   },
   testButtonTextDanger: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#FFFFFF',
   },
   testButtonTextDisabled: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#999999',
   },
@@ -706,7 +706,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   clearButtonText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 12,
     color: '#DC2626',
   },
@@ -716,7 +716,7 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   emptyMessagesText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     color: '#666666',
     marginTop: 12,
@@ -758,7 +758,7 @@ const styles = StyleSheet.create({
     color: '#999999',
   },
   messageTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#000000',
     marginBottom: 4,
@@ -777,7 +777,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   messageDataLabel: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 11,
     color: '#666666',
     marginBottom: 4,

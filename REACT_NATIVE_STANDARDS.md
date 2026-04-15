@@ -81,7 +81,7 @@ my-app/
 ├── .env                         # Environment variables (gitignored)
 ├── .env.example                 # Example env file
 ├── App.tsx                      # Root component
-├── app.json                     # Expo configuration
+├── app.json                     # RN CLI configuration
 └── package.json
 ```
 
@@ -156,7 +156,7 @@ interface UserProfileProps {
 }
 
 // 2. Component definition
-export const UserProfile: React.FC<UserProfileProps> = ({ 
+rnclirt const UserProfile: React.FC<UserProfileProps> = ({ 
   userId, 
   onPress,
   testID = 'user-profile' 
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
 **Container (Smart) Component:**
 ```typescript
 // UserProfileContainer.tsx
-export const UserProfileContainer = () => {
+rnclirt const UserProfileContainer = () => {
   const { data, loading, error } = useUser();
   const { updateUser } = useUserActions();
   
@@ -275,7 +275,7 @@ interface UserProfileViewProps {
   onUpdate: (updates: Partial<User>) => void;
 }
 
-export const UserProfileView: React.FC<UserProfileViewProps> = ({
+rnclirt const UserProfileView: React.FC<UserProfileViewProps> = ({
   user,
   loading,
   error,
@@ -323,7 +323,7 @@ interface UserStore {
   logout: () => void;
 }
 
-export const useUserStore = create<UserStore>()(
+rnclirt const useUserStore = create<UserStore>()(
   persist(
     (set) => ({
       user: null,
@@ -372,7 +372,7 @@ const initialState: UserState = {
   error: null,
 };
 
-export const fetchUser = createAsyncThunk(
+rnclirt const fetchUser = createAsyncThunk(
   'user/fetchUser',
   async (userId: string) => {
     const response = await userService.getUser(userId);
@@ -405,8 +405,8 @@ const userSlice = createSlice({
   },
 });
 
-export const { clearUser } = userSlice.actions;
-export default userSlice.reducer;
+rnclirt const { clearUser } = userSlice.actions;
+rnclirt default userSlice.reducer;
 ```
 
 ---
@@ -417,7 +417,7 @@ export default userSlice.reducer;
 
 ```typescript
 // theme/colors.ts
-export const colors = {
+rnclirt const colors = {
   // Primary colors
   primary: '#007AFF',
   primaryDark: '#0051D5',
@@ -455,7 +455,7 @@ export const colors = {
 } as const;
 
 // theme/spacing.ts
-export const spacing = {
+rnclirt const spacing = {
   xs: 4,
   sm: 8,
   md: 16,
@@ -465,7 +465,7 @@ export const spacing = {
 } as const;
 
 // theme/typography.ts
-export const typography = {
+rnclirt const typography = {
   h1: {
     fontSize: 32,
     fontWeight: 'bold' as const,
@@ -494,7 +494,7 @@ export const typography = {
 } as const;
 
 // theme/index.ts
-export const theme = {
+rnclirt const theme = {
   colors,
   spacing,
   typography,
@@ -563,15 +563,15 @@ import { Dimensions, PixelRatio } from 'react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export const wp = (percentage: number) => {
+rnclirt const wp = (percentage: number) => {
   return (SCREEN_WIDTH * percentage) / 100;
 };
 
-export const hp = (percentage: number) => {
+rnclirt const hp = (percentage: number) => {
   return (SCREEN_HEIGHT * percentage) / 100;
 };
 
-export const normalize = (size: number) => {
+rnclirt const normalize = (size: number) => {
   const scale = SCREEN_WIDTH / 375; // iPhone 11 base
   const newSize = size * scale;
   return Math.round(PixelRatio.roundToNearestPixel(newSize));
@@ -634,7 +634,7 @@ apiClient.interceptors.response.use(
   }
 );
 
-export default apiClient;
+rnclirt default apiClient;
 ```
 
 ### Service Layer
@@ -644,7 +644,7 @@ export default apiClient;
 import apiClient from '../client';
 import { User, UpdateUserRequest } from '@/types/user.types';
 
-export const userService = {
+rnclirt const userService = {
   getUser: async (userId: string): Promise<User> => {
     const response = await apiClient.get<User>(`/users/${userId}`);
     return response.data;
@@ -668,7 +668,7 @@ export const userService = {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userService } from '@/services/api/services/userService';
 
-export const useUser = (userId: string) => {
+rnclirt const useUser = (userId: string) => {
   return useQuery({
     queryKey: ['user', userId],
     queryFn: () => userService.getUser(userId),
@@ -676,7 +676,7 @@ export const useUser = (userId: string) => {
   });
 };
 
-export const useUpdateUser = () => {
+rnclirt const useUpdateUser = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
@@ -716,14 +716,14 @@ const UserProfile = ({ userId }: { userId: string }) => {
 
 ```typescript
 // navigation/types.ts
-export type RootStackParamList = {
+rnclirt type RootStackParamList = {
   Home: undefined;
   Profile: { userId: string };
   Settings: undefined;
   UserDetails: { userId: string; tab?: string };
 };
 
-export type AuthStackParamList = {
+rnclirt type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
   ForgotPassword: undefined;
@@ -746,7 +746,7 @@ import { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export const AppNavigator = () => {
+rnclirt const AppNavigator = () => {
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   
   return (
@@ -780,7 +780,7 @@ import { RootStackParamList } from '@/navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
-export const ProfileScreen: React.FC<Props> = ({ route, navigation }) => {
+rnclirt const ProfileScreen: React.FC<Props> = ({ route, navigation }) => {
   const { userId } = route.params; // Type-safe
   
   const navigateToDetails = () => {
@@ -801,7 +801,7 @@ export const ProfileScreen: React.FC<Props> = ({ route, navigation }) => {
 // types/user.types.ts
 
 // Use interfaces for object shapes
-export interface User {
+rnclirt interface User {
   id: string;
   email: string;
   firstName: string;
@@ -812,39 +812,39 @@ export interface User {
 }
 
 // Use types for unions, intersections
-export type UserRole = 'admin' | 'user' | 'guest';
-export type UserStatus = 'active' | 'inactive' | 'suspended';
+rnclirt type UserRole = 'admin' | 'user' | 'guest';
+rnclirt type UserStatus = 'active' | 'inactive' | 'suspended';
 
 // API request/response types
-export interface LoginRequest {
+rnclirt interface LoginRequest {
   email: string;
   password: string;
 }
 
-export interface LoginResponse {
+rnclirt interface LoginResponse {
   user: User;
   token: string;
   refreshToken: string;
 }
 
-export interface UpdateUserRequest {
+rnclirt interface UpdateUserRequest {
   firstName?: string;
   lastName?: string;
   avatar?: string;
 }
 
 // Utility types
-export type PartialUser = Partial<User>;
-export type RequiredUser = Required<User>;
-export type UserWithoutDates = Omit<User, 'createdAt' | 'updatedAt'>;
-export type UserCredentials = Pick<User, 'email'>;
+rnclirt type PartialUser = Partial<User>;
+rnclirt type RequiredUser = Required<User>;
+rnclirt type UserWithoutDates = Omit<User, 'createdAt' | 'updatedAt'>;
+rnclirt type UserCredentials = Pick<User, 'email'>;
 ```
 
 ### Type Guards
 
 ```typescript
 // utils/typeGuards.ts
-export const isUser = (value: unknown): value is User => {
+rnclirt const isUser = (value: unknown): value is User => {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -866,7 +866,7 @@ if (isUser(data)) {
 ```json
 // tsconfig.json
 {
-  "extends": "expo/tsconfig.base",
+  "extends": "rncli/tsconfig.base",
   "compilerOptions": {
     "strict": true,
     "noImplicitAny": true,
@@ -895,9 +895,9 @@ if (isUser(data)) {
 
 ```javascript
 // .eslintrc.js
-module.exports = {
+module.rnclirts = {
   extends: [
-    'expo',
+    'rncli',
     'prettier',
     'plugin:@typescript-eslint/recommended',
   ],
@@ -1064,7 +1064,7 @@ const ExpensiveComponent = ({ data }: { data: number[] }) => {
 };
 
 // ✅ Good: Memoize components
-export const UserCard = React.memo<UserCardProps>(({ user }) => {
+rnclirt const UserCard = React.memo<UserCardProps>(({ user }) => {
   return <View>...</View>;
 }, (prevProps, nextProps) => {
   return prevProps.user.id === nextProps.user.id;
@@ -1108,9 +1108,9 @@ const UserList = ({ users }: { users: User[] }) => {
 ### Image Optimization
 
 ```typescript
-import { Image } from 'expo-image';
+import { Image } from '@/shims/rn-image';
 
-// ✅ Good: Use expo-image with caching
+// ✅ Good: Use rncli-image with caching
 <Image
   source={{ uri: user.avatar }}
   placeholder={blurhash}
@@ -1138,9 +1138,9 @@ import { Image } from 'expo-image';
 
 ```typescript
 // services/storage/secureStorage.ts
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from 'rncli-secure-store';
 
-export const secureStorage = {
+rnclirt const secureStorage = {
   save: async (key: string, value: string) => {
     await SecureStore.setItemAsync(key, value);
   },
@@ -1163,7 +1163,7 @@ const token = await secureStorage.get('auth_token');
 
 ```typescript
 // constants/config.ts
-import Constants from 'expo-constants';
+import Constants from '@/shims/rn-constants';
 
 interface Config {
   apiUrl: string;
@@ -1171,15 +1171,15 @@ interface Config {
   environment: 'development' | 'staging' | 'production';
 }
 
-export const config: Config = {
-  apiUrl: Constants.expoConfig?.extra?.apiUrl || 'https://api.example.com',
-  apiKey: Constants.expoConfig?.extra?.apiKey || '',
-  environment: Constants.expoConfig?.extra?.environment || 'development',
+rnclirt const config: Config = {
+  apiUrl: Constants.appConfig?.extra?.apiUrl || 'https://api.example.com',
+  apiKey: Constants.appConfig?.extra?.apiKey || '',
+  environment: Constants.appConfig?.extra?.environment || 'development',
 };
 
 // app.json
 {
-  "expo": {
+  "rncli": {
     "extra": {
       "apiUrl": process.env.API_URL,
       "apiKey": process.env.API_KEY,
@@ -1193,7 +1193,7 @@ export const config: Config = {
 
 ```typescript
 // utils/validators.ts
-export const validators = {
+rnclirt const validators = {
   email: (email: string): boolean => {
     const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return regex.test(email);
@@ -1336,7 +1336,7 @@ interface ButtonProps {
   testID?: string;
 }
 
-export const Button: React.FC<ButtonProps> = ({ ... }) => {
+rnclirt const Button: React.FC<ButtonProps> = ({ ... }) => {
   // Implementation
 };
 ```
@@ -1356,7 +1356,7 @@ Brief description of the project
 ## Prerequisites
 - Node.js >= 18
 - npm or yarn
-- Expo CLI
+- RN CLI CLI
 - iOS Simulator or Android Emulator
 
 ## Installation
@@ -1436,7 +1436,7 @@ MIT
 
 ```bash
 # Development
-npm start                    # Start Expo dev server
+npm start                    # Start RN CLI dev server
 npm run ios                  # Run on iOS simulator
 npm run android              # Run on Android emulator
 npm run web                  # Run on web browser
@@ -1460,7 +1460,7 @@ eas build --platform all     # Build with EAS
 # Clean
 rm -rf node_modules          # Remove node_modules
 npm install                  # Reinstall dependencies
-npx expo start --clear       # Clear cache and start
+npx rncli start --clear       # Clear cache and start
 ```
 
 ---
@@ -1469,7 +1469,7 @@ npx expo start --clear       # Clear cache and start
 
 ### Official Documentation
 - [React Native Docs](https://reactnative.dev/docs/getting-started)
-- [Expo Docs](https://docs.expo.dev/)
+- [RN CLI Docs](https://docs.rncli.dev/)
 - [React Navigation](https://reactnavigation.org/)
 - [TypeScript](https://www.typescriptlang.org/docs/)
 
@@ -1478,14 +1478,14 @@ npx expo start --clear       # Clear cache and start
 - **Data Fetching:** TanStack Query (React Query)
 - **Forms:** React Hook Form
 - **UI Components:** React Native Paper, NativeBase
-- **Icons:** @expo/vector-icons
+- **Icons:** @rncli/vector-icons
 - **Animation:** React Native Reanimated
 - **Date/Time:** date-fns
 - **Validation:** Zod, Yup
 
 ### Community
 - [React Native Community](https://github.com/react-native-community)
-- [Expo Forums](https://forums.expo.dev/)
+- [RN CLI Forums](https://forums.rncli.dev/)
 - [Stack Overflow](https://stackoverflow.com/questions/tagged/react-native)
 
 ---

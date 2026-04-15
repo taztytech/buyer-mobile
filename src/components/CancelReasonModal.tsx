@@ -14,7 +14,7 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { colors } from '@/theme/colors';
 import { ordersService, CancelReason } from '@/services/orders.service';
 
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     maxWidth: 400,
   },
   title: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 20,
     color: '#000000',
     marginBottom: 8,
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   optionTextSelected: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     color: colors.primary,
   },
   manualContainer: {
@@ -413,12 +413,12 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   buttonTextPrimary: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#FFFFFF',
   },
   buttonTextSecondary: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#000000',
   },

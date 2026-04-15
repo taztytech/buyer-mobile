@@ -8,7 +8,7 @@ import {
   ScrollView,
   Animated,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 
 interface CustomizationVariant {
   id: string;
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   },
   itemName: {
     flex: 1,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 27,
     color: '#000000',
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 24,
     lineHeight: 36,
     color: '#000000',
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.7)',
   },
   variantPrice: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#000000',
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   quantityText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#00B14F',
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addNewText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#00B14F',
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   confirmText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',

@@ -11,8 +11,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
+import { LinearGradient } from '@/shims/rn-linear-gradient';
 import { favoritesService } from '@/services/favorites.service';
 import { Shimmer } from '@/components/Shimmer';
 
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 27,
     textAlign: 'center',
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   sectionTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#000000',
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   dishName: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   errorText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     color: 'rgba(0, 0, 0, 0.5)',
     marginTop: 16,
@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#FFFFFF',
   },
@@ -545,14 +545,14 @@ const styles = StyleSheet.create({
     paddingVertical: 80,
   },
   emptyTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     color: '#000000',
     marginTop: 16,
     opacity: 0.7,
   },
   emptyText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     color: 'rgba(0, 0, 0, 0.5)',
     marginTop: 8,

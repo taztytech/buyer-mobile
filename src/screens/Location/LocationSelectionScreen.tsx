@@ -17,12 +17,12 @@ import {
   InteractionManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
+import * as Location from '@/shims/rn-location';
 import { AddAddressFormScreen } from './AddAddressFormScreen';
 import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
 
-// Dynamic import for MapView to prevent crash in Expo Go
+// Dynamic import for MapView to prevent crash in RN CLI Go
 let MapView: any = null;
 let PROVIDER_GOOGLE: any = null;
 let isMapAvailable = false;
@@ -1281,8 +1281,8 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       setIsSearchInProgress(false);
       Keyboard.dismiss();
       Alert.alert(
-        'Search failed',
-        'Unable to search for the location. Please check your connection and try again.',
+        'Location not found',
+        `No results found for "${query}". Try a more specific address, street name, or landmark.`,
         [{ text: 'OK' }]
       );
     }
@@ -1367,7 +1367,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
             </Text>
             <Text style={styles.mapHintText}>
               Location features still work!{'\n'}
-              Run: npx expo run:android
+              Run: npx rncli run:android
             </Text>
           </View>
         )}

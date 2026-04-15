@@ -18,9 +18,9 @@ import {
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { Video, ResizeMode } from 'expo-av';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
+import * as ImagePicker from '@/shims/rn-image-picker';
+import { Video, ResizeMode } from '@/shims/rn-av';
 import { colors } from '@/theme/colors';
 import { useOrders } from '@/context/OrdersContext';
 import { ordersService } from '@/services/orders.service';
@@ -1783,7 +1783,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     color: '#FFFFFF',
     lineHeight: 27,
@@ -1912,7 +1912,7 @@ const styles = StyleSheet.create({
   },
   emailLink: {
     color: colors.primary,
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -2007,7 +2007,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   attachmentMenuCancelText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#FF3B30',
     textAlign: 'center',
@@ -2099,7 +2099,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   supportCallButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#FFFFFF',
   },

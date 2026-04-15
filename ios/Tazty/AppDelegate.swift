@@ -1,43 +1,25 @@
-import Expo
 import FirebaseCore
 import FirebaseMessaging
 import React
 import ReactAppDependencyProvider
+import React_RCTAppDelegate
 import GoogleMaps
 import UserNotifications
 
-
-@UIApplicationMain
-
-public class AppDelegate: ExpoAppDelegate {
-  var window: UIWindow?
-
-  var reactNativeDelegate: ExpoReactNativeFactoryDelegate?
-  var reactNativeFactory: RCTReactNativeFactory?
+@main
+class AppDelegate: RCTAppDelegate {
 
   public override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
     GMSServices.provideAPIKey("AIzaSyByxizUPOdWROrVV1IikPFPrI-F6EmACk0")
-    let delegate = ReactNativeDelegate()
-    let factory = ExpoReactNativeFactory(delegate: delegate)
-    delegate.dependencyProvider = RCTAppDependencyProvider()
-
-    reactNativeDelegate = delegate
-    reactNativeFactory = factory
-    bindReactNativeFactory(factory)
+    self.moduleName = "main"
+    self.dependencyProvider = RCTAppDependencyProvider()
+    self.initialProps = [:]
 
 #if os(iOS) || os(tvOS)
-    window = UIWindow(frame: UIScreen.main.bounds)
-// @generated begin @react-native-firebase/app-didFinishLaunchingWithOptions - expo prebuild (DO NOT MODIFY) sync-10e8520570672fd76b2403b7e1e27f5198a6349a
 FirebaseApp.configure()
-// @generated end @react-native-firebase/app-didFinishLaunchingWithOptions
-
-    factory.startReactNative(
-      withModuleName: "main",
-      in: window,
-      launchOptions: launchOptions)
 #endif
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
@@ -52,7 +34,7 @@ FirebaseApp.configure()
     // Forward the message to Firebase Messaging
     Messaging.messaging().appDidReceiveMessage(userInfo)
     
-    super.application(application, didReceiveRemoteNotification: userInfo, fetchCompletionHandler: completionHandler)
+    completionHandler(.newData)
   }
 
   // Forward APNS device token to Firebase Messaging explicitly
@@ -65,7 +47,6 @@ FirebaseApp.configure()
     #else
     Messaging.messaging().setAPNSToken(deviceToken, type: .prod)
     #endif
-    super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
   }
 
   public override func application(
@@ -73,7 +54,6 @@ FirebaseApp.configure()
     didFailToRegisterForRemoteNotificationsWithError error: Error
   ) {
     print("❌ FCM: Failed to register for remote notifications: \(error.localizedDescription)")
-    super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
   }
 
   // Linking API
@@ -94,19 +74,10 @@ FirebaseApp.configure()
     let result = RCTLinkingManager.application(application, continue: userActivity, restorationHandler: restorationHandler)
     return super.application(application, continue: userActivity, restorationHandler: restorationHandler) || result
   }
-}
-
-class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
-  // Extension point for config-plugins
-
-  override func sourceURL(for bridge: RCTBridge) -> URL? {
-    // needed to return the correct URL for expo-dev-client.
-    bridge.bundleURL ?? bundleURL()
-  }
 
   override func bundleURL() -> URL? {
 #if DEBUG
-    return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: ".expo/.virtual-metro-entry")
+    return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
 #else
     return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
 #endif

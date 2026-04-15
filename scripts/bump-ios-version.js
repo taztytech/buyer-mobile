@@ -91,7 +91,7 @@ function getCurrentIOSVersion() {
       }
     }
     
-    console.error('❌ iOS project not found. Run "npx expo prebuild" first.');
+    console.error('❌ iOS project not found. Run "npx rncli prebuild" first.');
     process.exit(1);
   }
   

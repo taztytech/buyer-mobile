@@ -1,4 +1,4 @@
-import Constants from 'expo-constants';
+import Constants from '@/shims/rn-constants';
 import { envConfig, getEnvironment, isDevelopment, isProduction, isPreview } from '@/config/environment.config';
 
 interface Config {
@@ -12,10 +12,10 @@ interface Config {
 export const config: Config = {
   // Use environment config for API URL and environment
   apiUrl: envConfig.apiBaseUrl,
-  apiKey: Constants.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+  apiKey: Constants.appConfig?.extra?.GOOGLE_MAPS_API_KEY || '',
   environment: getEnvironment(),
   appName: 'Tazty',
-  appVersion: Constants.expoConfig?.version || '1.0.0',
+  appVersion: Constants.appConfig?.version || '1.0.0',
 };
 
 // Export environment checks from environment config for consistency

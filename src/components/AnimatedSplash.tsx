@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Dimensions, StatusBar } from 'react-native';
-import * as SplashScreen from 'expo-splash-screen';
+import * as SplashScreen from '@/shims/rn-splash-screen';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('screen');
 

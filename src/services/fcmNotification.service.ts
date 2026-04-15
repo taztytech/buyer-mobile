@@ -1,15 +1,14 @@
 /**
  * FCM Notification Service
  * Native Firebase Cloud Messaging implementation for React Native
- * Replaces expo-notifications with native FCM
+ * Replaces rncli-notifications with native FCM
  */
 
 import { Platform, NativeEventEmitter, NativeModules, PermissionsAndroid } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import { apiService } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
+import DeviceInfo from 'react-native-device-info';
 import { handleOrderNotification, OrdersDispatch } from './orderNotificationHandler';
 
 // Conditionally import Firebase to avoid errors if native modules aren't linked
@@ -103,18 +102,6 @@ class FCMNotificationService {
    */
   async initialize(): Promise<boolean> {
     try {
-      // On iOS, set expo-notifications handler so foreground FCM messages can be shown as local notifications
-      if (Platform.OS === 'ios') {
-        Notifications.setNotificationHandler({
-          handleNotification: async () => ({
-            shouldShowBanner: true,
-            shouldShowList: true,
-            shouldPlaySound: true,
-            shouldSetBadge: true,
-          }),
-        });
-      }
-
       // Check if Firebase messaging is available
       if (!messaging) {
         console.warn('⚠️  FCM: Native module not available. Rebuild native app to enable FCM.');
@@ -365,7 +352,7 @@ class FCMNotificationService {
    * Get app version
    */
   private getAppVersion(): string {
-    return Constants.expoConfig?.version || '1.0.0';
+    return DeviceInfo.getVersion() || '1.0.0';
   }
 
   /**
@@ -471,23 +458,6 @@ class FCMNotificationService {
 
       // Store recent message
       this.addRecentMessage(payload);
-
-      // On iOS, FCM does not display notifications in foreground — show a local notification
-      if (Platform.OS === 'ios') {
-        try {
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: remoteMessage.notification?.title ?? 'Notification',
-              body: remoteMessage.notification?.body ?? '',
-              data: (remoteMessage.data as Record<string, unknown>) ?? {},
-              sound: true,
-            },
-            trigger: null, // show immediately
-          });
-        } catch (err) {
-          console.warn('⚠️  FCM: Failed to show foreground notification on iOS:', err);
-        }
-      }
 
       // Handle order notification updates if dispatch is available
       if (this.ordersDispatch && remoteMessage.data?.type === 'order') {

@@ -20,6 +20,7 @@ module.exports = function (api) {
           '@store': './src/store',
           '@theme': './src/theme',
           '@assets': './src/assets',
+          '@shims': './src/shims',
         },
       },
     ],
@@ -42,7 +43,7 @@ module.exports = function (api) {
   }
 
   return {
-    presets: ['babel-preset-expo'],
+    presets: ['module:@react-native/babel-preset'],
     plugins,
   };
 };

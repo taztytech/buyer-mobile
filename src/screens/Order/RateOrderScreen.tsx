@@ -16,9 +16,9 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import * as ImagePicker from 'expo-image-picker';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
+import { BlurView } from '@/shims/rn-blur';
+import * as ImagePicker from '@/shims/rn-image-picker';
 import { ordersService } from '@/services/orders.service';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     color: '#FFFFFF',
     lineHeight: 27,
@@ -648,7 +648,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   overallRatingTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#000000',
@@ -882,7 +882,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   foodModalTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 24,
     lineHeight: 36,
     textAlign: 'center',
@@ -915,7 +915,7 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   foodItemName: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 15,
     lineHeight: 22,
     color: '#001E1F',
@@ -932,7 +932,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   ratingText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 12,
     lineHeight: 18,
     color: '#00B14F',

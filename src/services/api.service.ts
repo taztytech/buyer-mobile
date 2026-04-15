@@ -3,7 +3,7 @@
  * Handles all HTTP requests with proper error handling and authentication
  */
 
-import Constants from 'expo-constants';
+import Constants from '@/shims/rn-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { APP_VERSION_CODE, APP_VERSION_NAME } from '@/config/appVersion.generated';
 import { API_CONFIG, buildApiUrl } from '@/config/api.config';
@@ -120,7 +120,7 @@ class ApiService {
 
   /**
    * Build version headers using generated app version (single source of truth)
-   * with safe fallback to native/Expo config in dev or if file missing.
+   * with safe fallback to native/RN CLI config in dev or if file missing.
    * These are sent with every API request and also logged.
    */
   private getVersionHeaders(): Record<string, string> {
@@ -139,15 +139,15 @@ class ApiService {
       versionCode = appVersionCodeAny;
     }
 
-    // 2) Fallback: native/Expo config (mainly for dev / Expo Go)
+    // 2) Fallback: native/RN CLI config (mainly for dev / RN CLI Go)
     if (!versionName || !versionCode) {
-      const expoConfig: any = (Constants as any).expoConfig ?? {};
+      const appConfig: any = (Constants as any).appConfig ?? {};
 
       if (!versionName) {
         const versionNameFallback =
           Constants.nativeAppVersion ??
-          expoConfig.version ??
-          expoConfig.runtimeVersion ??
+          appConfig.version ??
+          appConfig.runtimeVersion ??
           undefined;
 
         if (versionNameFallback !== undefined) {
@@ -158,8 +158,8 @@ class ApiService {
       if (!versionCode) {
         const versionCodeFallback =
           Constants.nativeBuildVersion ??
-          expoConfig.android?.versionCode ??
-          expoConfig.ios?.buildNumber ??
+          appConfig.android?.versionCode ??
+          appConfig.ios?.buildNumber ??
           undefined;
 
         if (versionCodeFallback !== undefined) {

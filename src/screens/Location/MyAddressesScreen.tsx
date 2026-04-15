@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     color: '#FFFFFF',
     lineHeight: 27,
@@ -335,14 +335,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     color: '#001E1F',
     marginTop: 16,
     textAlign: 'center',
   },
   emptyText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     color: 'rgba(0, 30, 31, 0.6)',
     marginTop: 8,
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   addressType: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#001E1F',
   },
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   defaultText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 10,
     color: '#FFFFFF',
     lineHeight: 12,
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   addButtonText: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',

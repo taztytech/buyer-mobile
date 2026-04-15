@@ -52,7 +52,7 @@ const result = spawnSync(command, isWindows ? args : args, {
     BUILD_ARTIFACT: artifact,
     BUILD_TARGET: target,
     // Set BABEL_ENV=production for release builds to remove console.log via Babel
-    // Using BABEL_ENV instead of NODE_ENV to avoid interfering with Expo bundling
+    // Using BABEL_ENV instead of NODE_ENV to avoid interfering with RN CLI bundling
     BABEL_ENV: 'production',
   },
 });

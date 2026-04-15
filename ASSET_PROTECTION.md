@@ -2,18 +2,18 @@
 
 ## NEVER RUN THESE COMMANDS:
 ```bash
-npx expo prebuild --clean  # DESTROYS all custom assets
-npx expo prebuild          # May regenerate assets
+npx rncli prebuild --clean  # DESTROYS all custom assets
+npx rncli prebuild          # May regenerate assets
 ```
 
 ## SAFE COMMANDS TO USE:
 ```bash
 # Build and install on device:
-npx expo run:android
-npx expo run:ios
+npx rncli run:android
+npx rncli run:ios
 
 # Start development server:
-npx expo start
+npx rncli start
 
 # Direct Gradle builds (safest):
 cd android && ./gradlew assembleDebug
@@ -33,7 +33,7 @@ cd android && ./gradlew assembleRelease
 - ✅ Removed `icon` path from app.json
 - ✅ Removed `splash.image` path from app.json
 - ✅ Removed `adaptiveIcon.foregroundImage` from app.json
-- ✅ This prevents Expo from finding source assets to regenerate
+- ✅ This prevents RN CLI from finding source assets to regenerate
 
 ## Note:
-The app.json no longer references asset paths. All graphics are now managed directly in the android/ios native folders. Expo cannot regenerate what it cannot find.
+The app.json no longer references asset paths. All graphics are now managed directly in the android/ios native folders. RN CLI cannot regenerate what it cannot find.

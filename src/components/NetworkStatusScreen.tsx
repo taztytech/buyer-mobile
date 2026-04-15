@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, StatusBar, ScrollView, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
+import { LinearGradient } from '@/shims/rn-linear-gradient';
 import { colors } from '@/theme';
 
 interface NetworkStatusScreenProps {
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   networkErrorTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 27,
     color: '#000000',

@@ -12,9 +12,9 @@ import {
   Modal,
   KeyboardAvoidingView,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { addressService, AddAddressRequest } from '@/services/address.service';
-import * as Location from 'expo-location';
+import * as Location from '@/shims/rn-location';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { Snackbar } from '@/components/Snackbar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';

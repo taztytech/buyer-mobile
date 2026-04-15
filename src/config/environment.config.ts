@@ -1,10 +1,10 @@
 /**
  * Environment Configuration
  * Centralized configuration for environment-specific settings
- * Reads from Expo Constants (app.config.js extra field)
+ * Reads from RN CLI Constants (app.config.js extra field)
  */
 
-import Constants from 'expo-constants';
+import Constants from '@/shims/rn-constants';
 
 /**
  * Environment type definitions
@@ -28,12 +28,12 @@ export interface EnvironmentConfig {
 }
 
 /**
- * Get environment configuration from Expo Constants
+ * Get environment configuration from RN CLI Constants
  * Falls back to sensible defaults if not set
  */
 const getEnvironmentConfig = (): EnvironmentConfig => {
   // Read from app.config.js extra field (set during EAS build or .env file)
-  const extra = Constants.expoConfig?.extra || {};
+  const extra = Constants.appConfig?.extra || {};
   
   // Get environment (defaults to development)
   const environment = (extra.environment as Environment) || 
@@ -41,12 +41,13 @@ const getEnvironmentConfig = (): EnvironmentConfig => {
   
   // Get API base URL - check multiple sources in priority order:
   // 1. extra.apiBaseUrl (from app.config.js)
-  // 2. extra.EXPO_PUBLIC_API_BASE_URL (exposed for runtime access)
-  // 3. process.env.EXPO_PUBLIC_API_BASE_URL (fallback)
+  // 2. extra.API_BASE_URL (runtime config)
+  // 3. process.env.API_BASE_URL (fallback)
   // 4. Default to development API
   const apiBaseUrl = extra.apiBaseUrl || 
-                    extra.EXPO_PUBLIC_API_BASE_URL ||
-                    process.env.EXPO_PUBLIC_API_BASE_URL || 
+                    extra.API_BASE_URL ||
+                    process.env.API_BASE_URL ||
+                    process.env.PUBLIC_API_BASE_URL || 
                     'https://devapi.tazty.in';
   
   // Log in development for debugging
@@ -55,8 +56,9 @@ const getEnvironmentConfig = (): EnvironmentConfig => {
       environment,
       apiBaseUrl,
       source: extra.apiBaseUrl ? 'extra.apiBaseUrl' : 
-              extra.EXPO_PUBLIC_API_BASE_URL ? 'extra.EXPO_PUBLIC_API_BASE_URL' :
-              process.env.EXPO_PUBLIC_API_BASE_URL ? 'process.env' : 'default'
+              extra.API_BASE_URL ? 'extra.API_BASE_URL' :
+              process.env.API_BASE_URL ? 'process.env.API_BASE_URL' :
+              process.env.PUBLIC_API_BASE_URL ? 'process.env.PUBLIC_API_BASE_URL' : 'default'
     });
   }
   

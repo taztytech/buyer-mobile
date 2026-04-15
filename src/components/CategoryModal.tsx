@@ -11,7 +11,7 @@ import {
   Animated,
   ActivityIndicator,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { homeService, DishItem } from '@/services/home.service';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   categoryName: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 12,
     color: '#000000',
     textAlign: 'center',
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     minHeight: 200,
   },
   loadingText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     color: '#666666',
     marginTop: 12,

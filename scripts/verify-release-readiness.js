@@ -150,7 +150,7 @@ function checkVersionSync() {
     
     if (fs.existsSync(appJson)) {
       const jsonContent = JSON.parse(fs.readFileSync(appJson, 'utf8'));
-      jsonVersion = jsonContent.expo?.version;
+      jsonVersion = jsonContent.rncli?.version;
     }
     
     const versions = {
@@ -530,7 +530,7 @@ function main() {
     }
     
     if (!infoPlistFound) {
-      log(`   ⚠ Info.plist not found - run 'npx expo prebuild' if needed`, 'yellow');
+      log(`   ⚠ Info.plist not found - run 'npx rncli prebuild' if needed`, 'yellow');
       warnings++;
     }
     
@@ -570,7 +570,7 @@ function main() {
     // Check if it has production API URL
     try {
       const envContent = fs.readFileSync(envProd, 'utf8');
-      if (envContent.includes('prodapi.tazty.in') || envContent.includes('EXPO_PUBLIC_API_BASE_URL')) {
+      if (envContent.includes('prodapi.tazty.in') || envContent.includes('PUBLIC_API_BASE_URL')) {
         log(`   ✓ Production API URL configured`, 'green');
         passed++;
       } else {

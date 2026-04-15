@@ -8,7 +8,7 @@ import {
   Animated,
   TextInput,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 
 interface PaymentModalProps {
   visible: boolean;
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   title: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 20,
     lineHeight: 30,
     color: '#000000',
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   paymentText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 13,
     lineHeight: 20,
     color: '#000000',
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   upiText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 13,
     lineHeight: 20,
     color: '#000000',

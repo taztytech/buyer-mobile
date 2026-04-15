@@ -7,7 +7,7 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 
 interface FilterModalProps {
   visible: boolean;
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     marginBottom: 21,
   },
   headerTitle: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 20,
     lineHeight: 30,
     color: '#000000',

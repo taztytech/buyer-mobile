@@ -14,7 +14,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { AddressSelectionModal } from '@/components/AddressSelectionModal';
 import { CodConfirmationModal } from '@/components/CodConfirmationModal';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
@@ -437,7 +437,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   // Refresh cart whenever checkout becomes visible so billing matches the server after rapid menu adds.
   // Single GET /cart: reloadCart returns the payload; fetchCartSummary reuses it (no duplicate call).
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      setPromoError('');
+      return;
+    }
     void (async () => {
       let preloaded: CartResponse | null = null;
       try {
@@ -2457,7 +2460,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   restaurantName: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 20,
     lineHeight: 30,
     color: '#FFFFFF',
@@ -2495,7 +2498,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   sectionTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#000000',
@@ -2544,7 +2547,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF0000',
   },
   orderItemName: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 12,
     lineHeight: 18,
     color: '#000000',
@@ -2585,7 +2588,7 @@ const styles = StyleSheet.create({
     minWidth: 75,
   },
   quantityButton: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 14,
     lineHeight: 21,
     color: '#00B14F',
@@ -2594,7 +2597,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   quantityText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 12,
     lineHeight: 18,
     color: '#000000',
@@ -2612,7 +2615,7 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
   },
   finalPrice: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
@@ -2627,7 +2630,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   addMoreButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     lineHeight: 21,
     color: '#00B14F',
@@ -2636,7 +2639,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   notesLabel: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 12,
     lineHeight: 18,
     color: 'rgba(0, 0, 0, 0.6)',
@@ -2660,7 +2663,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   subsectionTitle: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
@@ -2707,7 +2710,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   addAddressButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     lineHeight: 21,
     color: '#00B14F',
@@ -2724,7 +2727,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   deliveryOptionTitle: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
@@ -2773,7 +2776,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   deliveryTimeBold: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
   },
   tipButtons: {
     flexDirection: 'row',
@@ -2804,7 +2807,7 @@ const styles = StyleSheet.create({
   },
   tipButtonTextSelected: {
     color: '#FFFFFF',
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
   },
   tipButtonDisabled: {
     opacity: 0.5,
@@ -2863,7 +2866,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   paymentOptionText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
@@ -2874,7 +2877,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   customTipLabel: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 12,
     lineHeight: 18,
     color: 'rgba(0, 0, 0, 0.6)',
@@ -2905,7 +2908,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addTipButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     lineHeight: 21,
     color: '#FFFFFF',
@@ -2914,7 +2917,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   rupeeSymbol: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 27,
     color: '#00B14F',
@@ -2966,7 +2969,7 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   applyButtonText: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 14,
     lineHeight: 21,
     color: '#FFFFFF',
@@ -3015,13 +3018,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   billTotalLabel: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 16,
     lineHeight: 24,
     color: '#00B14F',
   },
   billTotalValue: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 16,
     lineHeight: 24,
     color: '#00B14F',
@@ -3072,13 +3075,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   paymentInfoTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 12,
     lineHeight: 18,
     color: '#000000',
   },
   paymentInfoSubtitle: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 10,
     lineHeight: 15,
     color: 'rgba(0, 0, 0, 0.6)',
@@ -3093,7 +3096,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   placeOrderButtonText: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 14,
     lineHeight: 21,
     color: '#FFFFFF',
@@ -3188,13 +3191,13 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   taxTooltipTotalLabel: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 13,
     lineHeight: 20,
     color: '#000000',
   },
   taxTooltipTotalValue: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 13,
     lineHeight: 20,
     color: '#00B14F',

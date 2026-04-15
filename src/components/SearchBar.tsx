@@ -7,7 +7,7 @@ import {
   TextInputProps,
   Keyboard,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 
 interface SearchBarProps extends TextInputProps {
   onBack?: () => void;

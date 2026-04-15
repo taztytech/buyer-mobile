@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '@/shims/rn-blur';
 import { RibbonAnimation } from './RibbonAnimation';
 
 export interface ConfirmationModalProps {
@@ -87,10 +87,12 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
       visible={visible}
       transparent={true}
       animationType="none"
+      presentationStyle="overFullScreen"
       statusBarTranslucent={true}
       onRequestClose={handleCancelPress}
     >
-      <BlurView intensity={80} tint="dark" style={styles.overlay}>
+      <View style={styles.overlay}>
+        <BlurView intensity={80} tint="dark" style={styles.blurBackground} />
         {/* Ribbon Animation */}
         {showRibbon && <RibbonAnimation active={true} />}
 
@@ -140,7 +142,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             </View>
           </Animated.View>
         </View>
-      </BlurView>
+      </View>
     </Modal>
   );
 };
@@ -151,6 +153,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+  },
+  blurBackground: {
+    ...StyleSheet.absoluteFillObject,
   },
   modalContainer: {
     width: '100%',

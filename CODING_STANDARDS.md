@@ -147,7 +147,7 @@ textBold: {
 ### .gitignore
 - Always exclude `.env` files
 - Exclude sensitive files (credentials, keys)
-- Exclude generated folders (`/ios`, `/android` for Expo)
+- Exclude generated folders (`/ios`, `/android` for RN CLI)
 
 ### Commit Messages
 - Use descriptive commit messages
@@ -203,14 +203,14 @@ interface ComponentProps {
   isLoading?: boolean;
 }
 
-export const Component: React.FC<ComponentProps> = ({ onAction, data, isLoading }) => {
+rnclirt const Component: React.FC<ComponentProps> = ({ onAction, data, isLoading }) => {
   // Component implementation
 };
 ```
 
-### Export Pattern
-- Use named exports for components
-- **Example:** `export const HomeScreen: React.FC<HomeScreenProps>`
+### RN CLIrt Pattern
+- Use named rnclirts for components
+- **Example:** `rnclirt const HomeScreen: React.FC<HomeScreenProps>`
 
 ## File Organization
 
@@ -226,7 +226,7 @@ export const Component: React.FC<ComponentProps> = ({ onAction, data, isLoading 
 ```typescript
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { colors, spacing } from '@/theme';
 import { apiService } from '@/services/api.service';
 ```

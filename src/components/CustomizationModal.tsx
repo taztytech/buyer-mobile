@@ -9,7 +9,7 @@ import {
   ScrollView,
   Animated,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { ItemTiming, formatItemTiming, isItemAvailable } from '@/utils/timing.utils';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   },
   itemName: {
     flex: 1,
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 16,
     lineHeight: 24,
     color: '#000000',
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   addOnsTitle: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 16,
     lineHeight: 24,
     color: '#000000',
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   discountText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 7,
     lineHeight: 10,
     color: '#FFFFFF',
@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   quantityText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 18,
     lineHeight: 27,
     color: '#000000',
@@ -495,7 +495,7 @@ const styles = StyleSheet.create({
     height: 40,
   },
   addItemText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     lineHeight: 21,
     color: '#FFFFFF',

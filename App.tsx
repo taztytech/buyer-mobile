@@ -26,8 +26,7 @@ import { ContentPage } from '@/screens/Legal/ContentPage';
 import { HelpScreen } from '@/screens/Help/HelpScreen';
 import { ContactUsScreen } from '@/screens/Help/ContactUsScreen';
 import { ChatScreen } from '@/screens/Help/ChatScreen';
-import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
-import * as SplashScreen from 'expo-splash-screen';
+import * as SplashScreen from '@/shims/rn-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
@@ -359,14 +358,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const [chatHelpOptionId] = React.useState<string>('');
   const [chatHelpOptionTitle] = React.useState<string>('');
 
-  const [fontsLoaded] = useFonts({
-    'Poppins': Poppins_400Regular,
-    'Poppins_400Regular': Poppins_400Regular,
-    'Poppins_500Medium': Poppins_500Medium,
-    'Poppins_600SemiBold': Poppins_600SemiBold,
-    'Poppins_700Bold': Poppins_700Bold,
-  });
-
   const handleDeepLinkNavigation = React.useCallback((incomingUrl: string): boolean => {
     try {
       const normalizedUrl = (incomingUrl || '').trim();
@@ -422,19 +413,18 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     }
   }, [currentScreen]);
 
-  // Set Poppins as default font for all Text components
+  // Keep only global text padding; do not force fontFamily here.
+  // Forcing a global fontFamily can override icon fonts (e.g. MaterialIcons)
+  // and cause missing glyphs.
   React.useEffect(() => {
-    if (fontsLoaded) {
-      if (!(Text as any).defaultProps) {
-        (Text as any).defaultProps = {};
-      }
-      (Text as any).defaultProps.style = {
-        ...(Text as any).defaultProps.style,
-        fontFamily: 'Poppins',
-        paddingRight: 2, // Prevent horizontal clipping of custom fonts on iOS
-      };
+    if (!(Text as any).defaultProps) {
+      (Text as any).defaultProps = {};
     }
-  }, [fontsLoaded]);
+    (Text as any).defaultProps.style = {
+      ...(Text as any).defaultProps.style,
+      paddingRight: 2,
+    };
+  }, []);
 
   // Network connectivity listener - runs while app is open
   // Optimized: Only updates state when connection status actually changes

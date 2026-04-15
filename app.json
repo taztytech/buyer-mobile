@@ -1,47 +1,4 @@
 {
-  "expo": {
-    "name": "Tazty",
-    "slug": "Tazty",
-    "version": "1.0.4",
-    "orientation": "portrait",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "owner": "hitasoft",
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "in.tazty.buyer",
-      "infoPlist": {
-        "NSUserNotificationsUsageDescription": "This app uses notifications to keep you updated on your orders and special offers.",
-        "NSPhotoLibraryUsageDescription": "This app requires access to your photo library to let you upload a profile picture and share images for order support.",
-        "NSCameraUsageDescription": "This app requires access to your camera to let you take a profile picture and photos for order support.",
-        "NSMicrophoneUsageDescription": "This app requires access to your microphone if you choose to record a video for order support."
-      },
-      "googleServicesFile": "./ios/GoogleService-Info.plist"
-    },
-    "android": {
-      "package": "in.tazty.buyer",
-      "adaptiveIcon": {
-        "foregroundImage": "./src/assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "permissions": [
-        "NOTIFICATIONS",
-        "RECEIVE_BOOT_COMPLETED"
-      ],
-      "googleServicesFile": "./google-services.json"
-    },
-    "web": {
-      "favicon": "./src/assets/favicon.png"
-    },
-    "updates": {
-      "enabled": false,
-      "checkAutomatically": "NEVER",
-      "fallbackToCacheTimeout": 0
-    },
-    "extra": {
-      "eas": {
-        "projectId": "7d65a380-eee0-49b0-9f39-a5cd6eaede5a"
-      }
-    }
-  }
+  "name": "main",
+  "displayName": "Tazty"
 }

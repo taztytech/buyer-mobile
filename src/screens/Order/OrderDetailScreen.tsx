@@ -21,7 +21,7 @@ import {
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { OrderRouteMapView } from '@/components/OrderRouteMapView';
 import OrderDeliveredOverlay from '@/components/OrderDeliveredOverlay';
 import { ordersService } from '@/services/orders.service';
@@ -1044,7 +1044,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   useEffect(() => {
     if (!showTrackingWebView || !fallbackMapCoords) return;
 
-    const mapsApiKey = (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '').trim();
+    const mapsApiKey = (process.env.PUBLIC_GOOGLE_MAPS_API_KEY || '').trim();
     if (!mapsApiKey) {
       setRoadRouteCoordinates(null);
       return;
@@ -1106,7 +1106,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       return;
     }
 
-    const mapsApiKey = (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '').trim();
+    const mapsApiKey = (process.env.PUBLIC_GOOGLE_MAPS_API_KEY || '').trim();
     if (!mapsApiKey) {
       setStoreToAgentRouteCoordinates(null);
       return;
@@ -2309,7 +2309,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             ) : (
               <View style={isInPipMode ? styles.webViewLoadingContainerPip : styles.webViewLoadingContainer}>
                 <ActivityIndicator size="large" color="#00B14F" />
-                <Text style={{ marginTop: 16, color: '#666', fontFamily: 'Poppins_400Regular' }}>
+                <Text style={{ marginTop: 16, color: '#666', fontFamily: 'Poppins-Regular' }}>
                   Loading tracking map...
                 </Text>
               </View>
@@ -2715,7 +2715,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     color: '#FFFFFF',
     lineHeight: 27,
@@ -2779,14 +2779,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   statusTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 20,
     color: '#001E1F',
     lineHeight: 30,
     textAlign: 'center',
   },
   orderNumberText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     color: 'rgba(0, 30, 31, 0.7)',
     lineHeight: 21,
@@ -2811,7 +2811,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   driverName: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     color: '#001E1F',
     lineHeight: 27,
@@ -2832,7 +2832,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   thankButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#FFFFFF',
     lineHeight: 24,
@@ -2858,7 +2858,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   restaurantName: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#001E1F',
     lineHeight: 27,
@@ -2891,7 +2891,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   orderAmount: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#001E1F',
     lineHeight: 27,
@@ -2934,7 +2934,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   ratingText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#001E1F',
     lineHeight: 24,
@@ -2957,7 +2957,7 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   sectionTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#001E1F',
     lineHeight: 27,
@@ -2992,14 +2992,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   estimatedDeliveryLabel: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 12,
     color: 'rgba(0, 30, 31, 0.6)',
     lineHeight: 18,
     marginBottom: 2,
   },
   estimatedDeliveryValue: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#001E1F',
     lineHeight: 21,
@@ -3023,7 +3023,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   invoiceButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#00B14F',
     lineHeight: 21,
@@ -3061,13 +3061,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   totalLabel: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 18,
     color: '#001E1F',
     lineHeight: 27,
   },
   totalValue: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 18,
     color: '#001E1F',
     lineHeight: 27,
@@ -3084,7 +3084,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   paymentText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 16,
     color: '#001E1F',
     lineHeight: 24,
@@ -3108,14 +3108,14 @@ const styles = StyleSheet.create({
     padding: 40,
   },
   errorTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     color: '#001E1F',
     marginTop: 16,
     textAlign: 'center',
   },
   errorText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     color: 'rgba(0, 0, 0, 0.6)',
     marginTop: 8,
@@ -3129,7 +3129,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#FFFFFF',
   },
@@ -3176,7 +3176,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   itemDetailName: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#001E1F',
     lineHeight: 21,
@@ -3204,7 +3204,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#DC2626',
   },
   itemDetailPrice: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#001E1F',
     lineHeight: 21,
@@ -3265,7 +3265,7 @@ const styles = StyleSheet.create({
     rowGap: 2,
   },
   statusBannerTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     textAlign: 'center',
     flexShrink: 1,
@@ -3273,7 +3273,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   statusBannerSubtitle: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 13,
     textAlign: 'center',
     color: '#111827',
@@ -3311,7 +3311,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   webViewHeaderTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     color: '#001E1F',
     flex: 1,
@@ -3383,7 +3383,7 @@ const styles = StyleSheet.create({
   },
   navigationStatusText: {
     fontSize: 10,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     color: '#FFFFFF',
     flexShrink: 1,
   },
@@ -3429,7 +3429,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   cancelButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#DC2626',
   },
@@ -3448,7 +3448,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cancellationTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#DC2626',
     lineHeight: 24,
@@ -3567,7 +3567,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   trackingRestaurantName: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 22,
     color: '#000000',
@@ -3587,7 +3587,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   trackingAgentName: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     lineHeight: 20,
     color: '#000000',
@@ -3602,7 +3602,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   trackingAgentNameInScroll: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     lineHeight: 20,
     color: '#000000',
@@ -3616,7 +3616,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#00B14F',
   },
   trackingDeliveryCodeText: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 12,
     lineHeight: 16,
     color: '#FFFFFF',
@@ -3655,7 +3655,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   trackingStatusText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 11,
     lineHeight: 16,
   },
@@ -3750,7 +3750,7 @@ const styles = StyleSheet.create({
   },
   trackingTimelineLabelCurrent: {
     color: '#3B82F6',
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
   },
   trackingTimelineTimestamp: {
     fontFamily: 'Poppins',
@@ -3781,7 +3781,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   trackingPartnerName: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 17,
     lineHeight: 24,
     textTransform: 'capitalize',
@@ -3803,7 +3803,7 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   trackingCompletedText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 24,
     textAlign: 'center',

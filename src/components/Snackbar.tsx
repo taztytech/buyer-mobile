@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { colors } from '@/theme/colors';
 
 export interface SnackbarProps {
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   },
   message: {
     flex: 1,
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     lineHeight: 20,
     color: '#FFFFFF',

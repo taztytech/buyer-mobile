@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
   },
   footerTitle: {
     // ...typography.h1,
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 32,
     lineHeight: 36,
     color: '#FFFFFF',
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   footerTitleWhite: {
     // ...typography.h1,
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 32,
     lineHeight: 36,
     color: '#FFFFFF',
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
   },
   footerSubtitle: {
     ...typography.caption,
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 10,
     marginLeft: 15,
     lineHeight: 20,
@@ -102,6 +102,6 @@ const styles = StyleSheet.create({
   heart: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
   },
 });

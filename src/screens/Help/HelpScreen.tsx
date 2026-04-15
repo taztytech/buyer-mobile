@@ -9,7 +9,7 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { apiService } from '@/services/api.service';
 import { OrderListItem } from '@/services/orders.service';
 
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 20,
     lineHeight: 30,
     color: '#FFFFFF',
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   sectionTitle: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 18,
     lineHeight: 27,
     color: '#000000',
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   orderNumber: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 16,
     lineHeight: 24,
     color: '#000000',

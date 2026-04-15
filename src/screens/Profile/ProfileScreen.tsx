@@ -9,7 +9,7 @@ import {
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { APP_VERSION_NAME, APP_VERSION_CODE } from '@/config/appVersion.generated';
 import { storageService } from '@/services/storage.service';
 import { authService } from '@/services/auth.service';
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     color: '#FFFFFF',
     lineHeight: 27,
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   logoutText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#FFFFFF',

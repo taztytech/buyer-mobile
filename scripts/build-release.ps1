@@ -40,7 +40,7 @@ $env:APP_ENV = $Environment
 $env:BUILD_ARTIFACT = $Artifact
 $env:BUILD_TARGET = $Target
 # Set BABEL_ENV=production for release builds to remove console.log via Babel
-# Using BABEL_ENV instead of NODE_ENV to avoid interfering with Expo bundling
+# Using BABEL_ENV instead of NODE_ENV to avoid interfering with RN CLI bundling
 $env:BABEL_ENV = 'production'
 
 $gradleCmd = if ($IsWindows) { '.\gradlew.bat' } else { './gradlew' }

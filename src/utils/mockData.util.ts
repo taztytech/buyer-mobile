@@ -1,6 +1,6 @@
 /**
  * Mock Data Utility
- * Provides fallback/mock data for testing in Expo Go
+ * Provides fallback/mock data for testing in RN CLI Go
  */
 
 import { RestaurantDetails } from '@/services/restaurant.service';

@@ -17,8 +17,8 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
+import { LinearGradient } from '@/shims/rn-linear-gradient';
 import { apiService } from '@/services/api.service';
 import { homeService } from '@/services/home.service';
 import { addressService } from '@/services/address.service';
@@ -2549,7 +2549,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   restaurantName: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     fontSize: 18,
     lineHeight: 27,
@@ -2850,7 +2850,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   freeDeliveryTopText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 7,
     lineHeight: 10,
     color: '#00B14F',
@@ -2918,7 +2918,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   bestSellerText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 8,
     lineHeight: 12,
     color: '#000000',
@@ -2930,7 +2930,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   itemPrice: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
@@ -2954,7 +2954,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   preorderDiscountAmount: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 12,
     lineHeight: 16,
     color: '#00B14F',
@@ -2970,7 +2970,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   originalPrice: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 12,
     lineHeight: 18,
     color: 'rgba(0, 0, 0, 0.45)',
@@ -2978,7 +2978,7 @@ const styles = StyleSheet.create({
     textDecorationStyle: 'solid',
   },
   finalPrice: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 16,
     lineHeight: 24,
     color: '#00B14F',
@@ -2991,14 +2991,14 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   deliveryDateText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 10,
     lineHeight: 14,
     color: 'rgba(0, 0, 0, 0.6)',
     opacity: 0.85,
   },
   availableSlotsText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 10,
     lineHeight: 14,
     color: 'rgba(0, 0, 0, 0.5)',
@@ -3015,14 +3015,14 @@ const styles = StyleSheet.create({
     width: 150,
   },
   itemDescription: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 11,
     lineHeight: 16,
     color: 'rgba(0, 0, 0, 0.6)',
     opacity: 0.85,
   },
   moreButton: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 13,
     lineHeight: 18,
     color: '#00B14F',
@@ -3107,7 +3107,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   preorderImageBadgeText: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 10,
     lineHeight: 14,
     color: '#FFFFFF',
@@ -3138,14 +3138,14 @@ const styles = StyleSheet.create({
     zIndex: 6,
   },
   availabilityTimeTextMain: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 12,
     lineHeight: 16,
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   availabilityTimeTextSub: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 12,
     lineHeight: 16,
     color: '#FFFFFF',
@@ -3237,7 +3237,7 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 177, 79, 0.4)',
   },
   quantityText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#00B14F',
     minWidth: 20,
@@ -3422,7 +3422,7 @@ const styles = StyleSheet.create({
     bottom: 125,
   },
   closeMenuText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 18,
     lineHeight: 27,
     color: '#000000',
@@ -3471,7 +3471,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   quickMenuTextActive: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     opacity: 1,
   },
   quickMenuCount: {
@@ -3483,7 +3483,7 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   quickMenuCountActive: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     opacity: 1,
   },
   searchOverlay: {
@@ -3520,7 +3520,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   closedModalTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 27,
     color: '#111111',
@@ -3541,7 +3541,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   closedModalButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     lineHeight: 20,
     color: '#FFFFFF',
@@ -3554,7 +3554,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   noItemsTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 27,
     color: '#000000',
@@ -3578,7 +3578,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   turnOffVegModeButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     lineHeight: 21,
     color: '#FFFFFF',

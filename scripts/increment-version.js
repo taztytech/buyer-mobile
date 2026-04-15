@@ -126,8 +126,8 @@ function updateAppJson(newVersion) {
   }
   
   const appJson = JSON.parse(fs.readFileSync(APP_JSON_PATH, 'utf8'));
-  const oldVersion = appJson.expo?.version;
-  appJson.expo.version = newVersion;
+  const oldVersion = appJson.rncli?.version;
+  appJson.rncli.version = newVersion;
   
   fs.writeFileSync(APP_JSON_PATH, JSON.stringify(appJson, null, 2) + '\n', 'utf8');
   console.log(`   ✅ app.json: ${oldVersion} → ${newVersion}`);

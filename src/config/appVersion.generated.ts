@@ -3,4 +3,4 @@
 // It keeps the JS/TS layer in sync with native Android versioning.
 
 export const APP_VERSION_NAME = '1.0.5';
-export const APP_VERSION_CODE = 10;
+export const APP_VERSION_CODE = 19;

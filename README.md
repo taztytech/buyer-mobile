@@ -1,6 +1,6 @@
 # Tazty - Food Delivery App
 
-A modern React Native food delivery application built with Expo and TypeScript.
+A modern React Native food delivery application built with RN CLI and TypeScript.
 
 ## Features
 
@@ -14,7 +14,7 @@ A modern React Native food delivery application built with Expo and TypeScript.
 
 - Node.js >= 18
 - npm or yarn
-- Expo CLI
+- RN CLI CLI
 - iOS Simulator (macOS only) or Android Emulator
 
 ## Installation
@@ -67,7 +67,7 @@ Tazty/
 │   ├── assets/            # Images, fonts, icons
 │   └── theme/             # Design system (colors, spacing, typography)
 ├── App.tsx                # Root component
-├── app.json               # Expo configuration
+├── app.json               # RN CLI configuration
 └── package.json           # Dependencies
 ```
 
@@ -102,8 +102,8 @@ npm run build:ios
 eas build --platform ios
 
 ### iOS start app
- npx expo install @expo/ngrok
- npx expo start --tunnel     
+ npx rncli install @rncli/ngrok
+ npx rncli start --tunnel     
 ```
 
 ### Android
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
 
 ## Tech Stack
 
-- **Framework**: React Native with Expo
+- **Framework**: React Native with RN CLI
 - **Language**: TypeScript
 - **Navigation**: Ready for React Navigation
 - **State Management**: Ready for Zustand/Redux Toolkit

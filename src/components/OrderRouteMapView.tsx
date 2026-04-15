@@ -9,7 +9,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { useLiveRiderTracking, LiveRiderLocationUpdate } from '@/hooks/useLiveRiderTracking';
 
 // Same map setup as LocationSelectionScreen: react-native-maps with Google provider
@@ -651,7 +651,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2196F3',
   },
   labelText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 10,
     color: '#FFFFFF',
     textAlign: 'center',

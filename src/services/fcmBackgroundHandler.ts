@@ -20,7 +20,7 @@ let FirebaseMessagingTypes: any = null;
 const BACKGROUND_NOTIFICATIONS_KEY = '@tazty_background_notifications';
 
 try {
-  // Check if we're in a development build (not Expo Go)
+  // Check if we're in a development build (not RN CLI Go)
   const { NativeModules } = require('react-native');
   if (!NativeModules.RNFBAppModule) {
     throw new Error('Firebase native module not available - rebuild required');

@@ -13,13 +13,13 @@ The configuration is automatically set during EAS Build based on the build profi
 ## Configuration Files
 
 ### 1. `app.config.js`
-This file detects the EAS build profile and sets the appropriate API URL in the `extra` field, which is accessible via `expo-constants`.
+This file detects the EAS build profile and sets the appropriate API URL in the `extra` field, which is accessible via `rncli-constants`.
 
 ### 2. `eas.json`
 Defines build profiles (`development`, `preview`, `production`) with environment variables for each profile.
 
 ### 3. `src/config/environment.config.ts`
-Centralized environment configuration that reads from Expo Constants and provides a clean API for accessing environment-specific values throughout the app.
+Centralized environment configuration that reads from RN CLI Constants and provides a clean API for accessing environment-specific values throughout the app.
 
 ## Usage Examples
 
@@ -127,7 +127,7 @@ class ExampleService {
   }
 }
 
-export const exampleService = new ExampleService();
+rnclirt const exampleService = new ExampleService();
 ```
 
 ### Example: Using in Components
@@ -139,7 +139,7 @@ import { envConfig } from '@/config/environment.config';
 import { apiService } from '@/services/api.service';
 import { API_CONFIG } from '@/config/api.config';
 
-export const ExampleComponent: React.FC = () => {
+rnclirt const ExampleComponent: React.FC = () => {
   const [data, setData] = useState(null);
 
   useEffect(() => {
@@ -188,7 +188,7 @@ eas build --profile preview --platform android
 
 ## Local Development
 
-When running locally with `expo start` or `expo run:android`/`expo run:ios`:
+When running locally with `rncli start` or `rncli run:android`/`rncli run:ios`:
 - The app defaults to **development** environment
 - Uses `https://devapi.tazty.in` as the API base URL
 - You can override by setting `EXPO_PUBLIC_API_BASE_URL` environment variable
@@ -196,8 +196,8 @@ When running locally with `expo start` or `expo run:android`/`expo run:ios`:
 ### Override for Local Development
 ```bash
 # Set environment variable before running
-export EXPO_PUBLIC_API_BASE_URL=https://custom-api.example.com
-expo start
+rnclirt EXPO_PUBLIC_API_BASE_URL=https://custom-api.example.com
+rncli start
 ```
 
 Or create a `.env` file (if using dotenv):
@@ -213,8 +213,8 @@ To add new environment-specific variables:
 ```javascript
 const apiConfig = getApiConfig();
 
-module.exports = {
-  expo: {
+module.rnclirts = {
+  rncli: {
     // ... other config
     extra: {
       apiBaseUrl: apiConfig.apiBaseUrl,
@@ -246,9 +246,9 @@ module.exports = {
 
 3. **Access in code**:
 ```typescript
-import Constants from 'expo-constants';
+import Constants from '@/shims/rn-constants';
 
-const myVar = Constants.expoConfig?.extra?.myNewVariable;
+const myVar = Constants.appConfig?.extra?.myNewVariable;
 ```
 
 ## TypeScript Types
@@ -277,7 +277,7 @@ const config: EnvironmentConfig = {
 1. Check that you're using the correct build profile: `eas build --profile <profile>`
 2. Verify `eas.json` has the correct environment variables for your profile
 3. Check `app.config.js` is correctly reading the build profile
-4. Ensure you're accessing the config via `expo-constants` (not `process.env` directly)
+4. Ensure you're accessing the config via `rncli-constants` (not `process.env` directly)
 
 ### Environment not detected
 - The app defaults to `development` if no build profile is detected

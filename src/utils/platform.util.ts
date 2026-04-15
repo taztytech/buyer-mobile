@@ -1,39 +1,39 @@
 /**
  * Platform Detection Utility
- * Detects if app is running in Expo Go for development purposes
+ * Detects if app is running in RN CLI Go for development purposes
  */
 
-import Constants from 'expo-constants';
+import Constants from '@/shims/rn-constants';
 import { Platform } from 'react-native';
 
 /**
- * Check if running in Expo Go
- * In Expo Go, executionEnvironment is 'storeClient'
+ * Check if running in RN CLI Go
+ * In RN CLI Go, executionEnvironment is 'storeClient'
  */
-export const isExpoGo = (): boolean => {
+export const isLimitedRuntime = (): boolean => {
   return Constants.executionEnvironment === 'storeClient';
 };
 
 /**
- * Check if running on iOS in Expo Go
+ * Check if running on iOS in RN CLI Go
  * Useful for conditionally rendering iOS-specific fallbacks
  */
-export const isIOSExpoGo = (): boolean => {
-  return Platform.OS === 'ios' && isExpoGo();
+export const isIOSLimitedRuntime = (): boolean => {
+  return Platform.OS === 'ios' && isLimitedRuntime();
 };
 
 /**
- * Check if running on Android in Expo Go
+ * Check if running on Android in RN CLI Go
  */
-export const isAndroidExpoGo = (): boolean => {
-  return Platform.OS === 'android' && isExpoGo();
+export const isAndroidLimitedRuntime = (): boolean => {
+  return Platform.OS === 'android' && isLimitedRuntime();
 };
 
 /**
- * Check if app is a production/development build (not Expo Go)
+ * Check if app is a production/development build (not RN CLI Go)
  */
 export const isStandaloneBuild = (): boolean => {
-  return !isExpoGo();
+  return !isLimitedRuntime();
 };
 
 /**
@@ -47,9 +47,9 @@ export const isDevelopment = (): boolean => {
  * Platform utility object
  */
 export const PlatformUtil = {
-  isExpoGo,
-  isIOSExpoGo,
-  isAndroidExpoGo,
+  isLimitedRuntime,
+  isIOSLimitedRuntime,
+  isAndroidLimitedRuntime,
   isStandaloneBuild,
   isDevelopment,
   platform: Platform.OS,

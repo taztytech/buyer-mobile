@@ -13,7 +13,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { colors } from '@/theme/colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   title: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: Math.min(22, SCREEN_WIDTH * 0.058),
     color: '#FFFFFF',
     textAlign: 'center',
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   subtitle: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     color: 'rgba(255,255,255,0.75)',
     textAlign: 'center',
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   doneButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#FFFFFF',
   },

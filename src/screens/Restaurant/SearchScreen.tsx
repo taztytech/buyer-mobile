@@ -9,8 +9,8 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
+import { LinearGradient } from '@/shims/rn-linear-gradient';
 import { Shimmer } from '@/components/Shimmer';
 import { OptimizedImage } from '@/components/OptimizedImage';
 import { SearchBar } from '@/components/SearchBar';
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   preorderImageBadgeText: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 10,
     lineHeight: 14,
     color: '#FFFFFF',
@@ -794,7 +794,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   quantityText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     color: '#00B14F',
     minWidth: 20,
@@ -836,14 +836,14 @@ const styles = StyleSheet.create({
     zIndex: 6,
   },
   availabilityTimeTextMain: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 12,
     lineHeight: 16,
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   availabilityTimeTextSub: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 12,
     lineHeight: 16,
     color: '#FFFFFF',
@@ -857,7 +857,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   noResultsTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 27,
     color: '#000000',

@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { OptimizedImage } from '@/components/OptimizedImage';
 import { ItemTiming, formatItemTiming, isItemAvailable } from '@/utils/timing.utils';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   preorderBadgeText: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 10,
     lineHeight: 14,
     color: '#FFFFFF',
@@ -572,7 +572,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   itemPrice: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 16,
     lineHeight: 24,
     color: '#000000',
@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   originalPrice: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     lineHeight: 21,
     color: 'rgba(0, 0, 0, 0.45)',
@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
     textDecorationStyle: 'solid',
   },
   discountedPrice: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 16,
     lineHeight: 24,
     color: '#00B14F',

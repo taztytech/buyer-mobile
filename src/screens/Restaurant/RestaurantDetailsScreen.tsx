@@ -13,9 +13,9 @@ import {
   Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { restaurantService, RestaurantDetails } from '@/services/restaurant.service';
-import { isExpoGo } from '@/utils/platform.util';
+import { isLimitedRuntime } from '@/utils/platform.util';
 import { exotelService } from '@/services/exotel.service';
 import { authService } from '@/services/auth.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
@@ -26,7 +26,7 @@ let MapView: any;
 let Marker: any;
 let PROVIDER_GOOGLE: any;
 
-if (!isExpoGo()) {
+if (!isLimitedRuntime()) {
   try {
     const maps = require('react-native-maps');
     MapView = maps.default;
@@ -394,7 +394,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
             {restaurantData?.locations && restaurantData.locations.length > 0 && (
               <View style={styles.mapWrapper}>
                 <View style={styles.mapContainer}>
-                  {MapView && !isExpoGo() ? (
+                  {MapView && !isLimitedRuntime() ? (
                     <MapView
                       provider={PROVIDER_GOOGLE}
                       style={styles.map}
@@ -417,7 +417,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                       />
                     </MapView>
                   ) : (
-                    // Fallback view for Expo Go
+                    // Fallback view for RN CLI Go
                     <View style={styles.mapFallback}>
                       <MaterialIcons name="location-on" size={48} color="#00B14F" />
                       <Text style={styles.mapFallbackText}>
@@ -431,7 +431,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
                         <Text style={styles.openMapsButtonText}>Open in Maps</Text>
                       </TouchableOpacity>
                       <Text style={styles.expoGoNote}>
-                        📱 Map preview is not available in Expo Go. Use a development build to see the map.
+                        📱 Map preview is not available in RN CLI Go. Use a development build to see the map.
                       </Text>
                     </View>
                   )}
@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 18,
     lineHeight: 27,
     color: '#FFFFFF',
@@ -688,7 +688,7 @@ const styles = StyleSheet.create({
     padding: 40,
   },
   loadingText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     color: '#666666',
     marginTop: 16,
@@ -700,7 +700,7 @@ const styles = StyleSheet.create({
     padding: 40,
   },
   errorText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 16,
     color: '#666666',
     marginTop: 16,
@@ -714,7 +714,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#FFFFFF',
   },
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   mapFallbackText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     lineHeight: 20,
     color: '#333333',
@@ -769,12 +769,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   openMapsButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#FFFFFF',
   },
   expoGoNote: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 12,
     lineHeight: 18,
     color: '#666666',
@@ -798,21 +798,21 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   restaurantName: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 28,
     lineHeight: 36,
     color: '#000000',
     marginBottom: 8,
   },
   subtitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#666666',
     marginBottom: 4,
   },
   cuisines: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     lineHeight: 20,
     color: '#666666',
@@ -820,7 +820,7 @@ const styles = StyleSheet.create({
   },
   address: {
     flex: 1,
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     lineHeight: 20,
     color: '#333333',
@@ -864,7 +864,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   openNow: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#00B14F',
   },
@@ -883,38 +883,38 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   timingDay: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     color: '#666666',
   },
   timingDayToday: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     color: '#000000',
   },
   timingHours: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     color: '#333333',
   },
   timingClosed: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     color: '#999999',
   },
   infoText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 14,
     color: '#333333',
   },
   infoTitle: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     lineHeight: 20,
     color: '#333333',
     flex: 1,
   },
   infoSubtext: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 13,
     lineHeight: 18,
     color: '#666666',
@@ -934,7 +934,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   photoTitle: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     color: '#333333',
   },
@@ -956,7 +956,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E8E8E8',
   },
   badExperienceTitle: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#333333',
@@ -970,7 +970,7 @@ const styles = StyleSheet.create({
   },
   hideRestaurantText: {
     flex: 1,
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     color: '#333333',
   },
@@ -980,21 +980,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   legalLabel: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 13,
     lineHeight: 18,
     color: '#666666',
     marginTop: 12,
   },
   legalValue: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
     lineHeight: 20,
     color: '#999999',
     marginTop: 4,
   },
   termsText: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 13,
     lineHeight: 20,
     color: '#666666',

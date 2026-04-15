@@ -8,7 +8,7 @@ import {
   Animated,
   ScrollView,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   title: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 22,
     lineHeight: 33,
     color: '#000000',
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addressLabel: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#000000',
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   defaultBadgeText: {
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 10,
     lineHeight: 12,
     color: '#FFFFFF',
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   addNewText: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 16,
     lineHeight: 24,
     color: '#000000',

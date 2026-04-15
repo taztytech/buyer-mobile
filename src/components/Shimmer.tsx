@@ -5,7 +5,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet, ViewStyle, Dimensions, DimensionValue } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { LinearGradient } from '@/shims/rn-linear-gradient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 

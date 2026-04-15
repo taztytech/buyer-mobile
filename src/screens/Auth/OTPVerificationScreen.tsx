@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { colors } from '@/theme';
 import { authService } from '@/services/auth.service';
 
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
     top: 64,
     width: 181,
     height: 45,
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 25,
     lineHeight: 45,
     color: '#FFFFFF',
@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
   },
   termsText: {
     width: '100%',
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 13,
     lineHeight: 20,
     textAlign: 'center',
@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   termsLink: {
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     color: colors.primary,
     textDecorationLine: 'underline',
   },

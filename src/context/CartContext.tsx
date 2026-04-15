@@ -711,10 +711,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         if (!currentItem.cartItemId) {
+          // cart_item_id is not ready yet (usually right after first add). In this case,
+          // add only the incremental delta, not the absolute quantity, to avoid over-adding.
+          const addDeltaQuantity = Math.max(1, pendingQuantity - revertQuantity);
           const backendRequest: AddToCartRequest = {
             restaurant_id: restaurantId,
             item_id: currentItem.itemId || parseInt(currentItem.id, 10),
-            quantity: pendingQuantity,
+            quantity: addDeltaQuantity,
             special_instructions: currentItem.specialInstructions,
           };
           const cartWithoutCurrent = { ...cart };
@@ -817,10 +820,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
       if (!currentItem.cartItemId) {
+        // cart_item_id is not ready yet (usually right after first add). In this case,
+        // add only the incremental delta, not the absolute quantity, to avoid over-adding.
+        const addDeltaQuantity = Math.max(1, pending.quantity - pending.previousQuantity);
         const backendRequest: AddToCartRequest = {
           restaurant_id: restaurantId,
           item_id: currentItem.itemId || parseInt(currentItem.id, 10),
-          quantity: pending.quantity,
+          quantity: addDeltaQuantity,
           special_instructions: currentItem.specialInstructions,
         };
         const cartWithoutCurrent = { ...cart };
