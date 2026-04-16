@@ -157,22 +157,17 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
       const { status } = await Location.getForegroundPermissionsAsync();
 
       if (status === 'granted') {
-        const location = await Location.getCurrentPositionAsync({});
-        const addresses = await Location.reverseGeocodeAsync({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-
-        if (addresses.length > 0) {
-          const addr = addresses[0];
-          const locationName = `${addr.district || addr.city || 'Unknown'}, ${addr.region || ''}`;
-          setCurrentLocationName(locationName);
-        }
+        // IMPORTANT:
+        // Do not call GPS on initial mount of AddressSelectionScreen.
+        // This screen is opened immediately after tapping "Skip", and eager geolocation
+        // here can crash on some Android devices/OS variants.
+        // Keep a neutral label; exact coordinates are fetched later in LocationSelectionScreen.
+        setCurrentLocationName('Use current location');
       } else {
         setCurrentLocationName('Location permission required');
       }
     } catch (error) {
-      setCurrentLocationName('Unable to get location');
+      setCurrentLocationName('Use current location');
     }
   };
 
@@ -359,171 +354,20 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
       return;
     }
 
-    // Step 1: Check initial permission status to detect first launch
-    // This MUST be done before requesting permission to accurately detect first launch
-    let initialStatus: string = 'undetermined';
-    let isFirstLaunch = true; // Default to true to be safe
-
     try {
-      const initialPermission = await Location.getForegroundPermissionsAsync();
-      initialStatus = initialPermission.status || 'undetermined';
-      isFirstLaunch = initialStatus === 'undetermined';
-    } catch (error) {
-      // If we can't check permission, assume first launch and proceed
-      // This ensures first launch users can always access the map
-      console.log('Could not check initial permission, assuming first launch:', error);
-      isFirstLaunch = true;
-    }
-
-    // Step 2: Handle first launch differently - navigate immediately without requesting permission
-    // LocationSelectionScreen will handle permission request and location fetching
-    if (isFirstLaunch) {
-      console.log('First launch detected - navigating immediately, LocationSelectionScreen will handle permission');
-      // Navigate immediately without any permission checks
-      // LocationSelectionScreen's getCurrentLocation will request permission and fetch location
-      try {
-        if (onUseCurrentLocation) {
-          onUseCurrentLocation();
-        } else {
-          console.error('onUseCurrentLocation callback is not defined!');
-        }
-      } finally {
-        // Clear loading after navigation decision
-        setIsAddingAddress(false);
-      }
-      return; // Exit early - navigation is done
-    }
-
-    // Step 3: NOT first launch - check and request permission
-    try {
-      let permission = await Location.getForegroundPermissionsAsync();
-
-      // If permission is not granted, request it
-      if (permission.status !== 'granted') {
-        permission = await Location.requestForegroundPermissionsAsync();
-      }
-
-      // Step 4: Handle permission response
-      if (permission.status !== 'granted') {
-        // Permission denied - show instructions
-        if (!permission.canAskAgain) {
-          // Permission is blocked ("Don't ask again") – send user to settings
-          Alert.alert(
-            'Enable Location Access',
-            'To add an address using your current location, please enable location access for Tazty in your device settings.\n\n' +
-            getLocationSettingsGuide(),
-            [
-              { text: 'Not now', style: 'cancel' },
-              {
-                text: 'Open Settings',
-                onPress: () => {
-                  try {
-                    openLocationSettings();
-                  } catch {
-                    // Ignore Linking errors
-                  }
-                },
-              },
-            ]
-          );
-        } else {
-          // Permission was denied but can be asked again
-          Alert.alert(
-            'Location Permission Required',
-            'To add an address using your current location, please allow Tazty to access your location. Turn on device location and choose "While using this app" or "Allow all the time" when prompted.\n\n' +
-            getLocationSettingsGuide()
-          );
-        }
-        return; // Don't navigate if permission is not granted
-      }
-
-      // NOT FIRST LAUNCH: Try to get location first, then navigate
-      let locationCoordinates: { latitude: number; longitude: number } | null = null;
-
-      try {
-        // Check if location services are enabled
-        const isLocationEnabled = await Location.hasServicesEnabledAsync();
-
-        if (!isLocationEnabled) {
-          // Permission granted but location services are disabled - show alert
-          Alert.alert(
-            'Turn on Location',
-            'Location permission is granted, but location services are turned off. Please turn on location services in your device settings to add an address using your current location.\n\n' +
-            getLocationSettingsGuide(),
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Open Settings',
-                onPress: () => {
-                  openLocationSettings();
-                },
-              },
-            ]
-          );
-          return; // Don't navigate if location services are disabled
-        }
-
-        // Location services are enabled - try to get current location
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Platform.OS === 'ios'
-            ? Location.Accuracy.Balanced
-            : Location.Accuracy.High,
-        });
-
-        locationCoordinates = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        };
-      } catch (locationError) {
-        // Location fetch failed - still navigate, LocationSelectionScreen will handle it
-        console.log('Location fetch failed, navigating anyway:', locationError);
-      }
-
-      // Navigate to LocationSelectionScreen
+      // Navigate first. LocationSelectionScreen handles permission and GPS flows safely.
       if (onUseCurrentLocation) {
-        if (locationCoordinates) {
-          // Navigate with current location coordinates
-          onUseCurrentLocation(locationCoordinates.latitude, locationCoordinates.longitude);
-        } else {
-          // Navigate without coordinates - LocationSelectionScreen will handle getting location
-          onUseCurrentLocation();
-        }
+        onUseCurrentLocation();
+      } else {
+        console.error('onUseCurrentLocation callback is not defined!');
       }
     } catch (error) {
-      // ANY error - check if this might be first launch and navigate accordingly
-      console.error('Error in permission check:', error);
-
-      // If we couldn't determine first launch status, assume it is and navigate
-      // This ensures first launch users can always access the map
-      if (isFirstLaunch) {
-        // On first launch, always navigate even if there's an error
-        // LocationSelectionScreen will handle permission request and location fetching
-        console.log('First launch (or assumed first launch) - navigating despite error to ensure user can access map');
-        if (onUseCurrentLocation) {
-          onUseCurrentLocation();
-        } else {
-          console.error('onUseCurrentLocation callback is not defined!');
-        }
-      } else {
-        // Not first launch - show error but still allow navigation as fallback
-        Alert.alert(
-          'Location Error',
-          'Unable to access location. You can still manually set your location on the map.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Continue',
-              onPress: () => {
-                if (onUseCurrentLocation) {
-                  onUseCurrentLocation();
-                }
-              },
-            },
-          ]
-        );
-      }
+      console.error('Error opening location screen:', error);
+      Alert.alert(
+        'Something went wrong',
+        'Unable to open location selection right now. Please try again.'
+      );
     } finally {
-      // Ensure loading is cleared in all non-first-launch flows
       setIsAddingAddress(false);
     }
   };

@@ -43,6 +43,23 @@ interface Region {
   longitudeDelta: number;
 }
 
+const isValidRegion = (value: Region | null | undefined): value is Region => {
+  if (!value) return false;
+  const { latitude, longitude, latitudeDelta, longitudeDelta } = value;
+  return (
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    Number.isFinite(latitudeDelta) &&
+    Number.isFinite(longitudeDelta) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180 &&
+    latitudeDelta > 0 &&
+    longitudeDelta > 0
+  );
+};
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface LocationSelectionScreenProps {
@@ -53,6 +70,7 @@ interface LocationSelectionScreenProps {
   initialLatitude?: number;
   initialLongitude?: number;
   isGuest?: boolean;
+  visible?: boolean;
 }
 
 export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = ({
@@ -63,6 +81,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   initialLatitude,
   initialLongitude,
   isGuest = false,
+  visible = true,
 }) => {
   const isEditing = !!editingAddress;
 
@@ -199,6 +218,10 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   // For new address creation (including redirect from home with no addresses), if there are no initial
   // coordinates, we also try to use the user's current location instead of any hardcoded default.
   useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
     // Skip if editing an address (handled by previous useEffect)
     if (editingAddress) {
       return;
@@ -260,51 +283,21 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         }
       })();
     } else if (!initialLatitude && !initialLongitude) {
-      // No initial coordinates and not editing: try to use current location as the default.
-      // This is used both when user taps "Add address" and when home redirects due to no addresses.
-      // CRITICAL FIX: Delay permission request to ensure screen is fully mounted and ready.
-      // This fixes the issue where permission dialog doesn't show on first launch.
-      const requestLocationWithDelay = async () => {
-        // Small delay to ensure loading state is visible
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        // First, wait for all interactions to complete (ensures screen is fully rendered)
-        await new Promise<void>((resolve) => {
-          InteractionManager.runAfterInteractions(() => resolve());
-        });
-
-        // Additional delay for first launch to ensure app is fully ready
-        // Check if this is first launch (permission is undetermined)
-        try {
-          const permissionStatus = await Location.getForegroundPermissionsAsync();
-          const isFirstLaunch = permissionStatus.status === 'undetermined';
-
-          // Add extra delay for first launch (500ms) to ensure system is ready for permission dialog
-          if (isFirstLaunch) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          } else {
-            // Smaller delay for subsequent launches (200ms)
-            await new Promise(resolve => setTimeout(resolve, 200));
-          }
-        } catch (error) {
-          // If we can't check permission, assume first launch and use longer delay
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-
-        try {
-          // Now request location after ensuring everything is ready
-          await getCurrentLocation(false); // Auto-triggered, not user-initiated
-        } catch (error) {
-          // Silently handle errors
-        }
-      };
-
-      requestLocationWithDelay();
+      // IMPORTANT STABILITY FIX:
+      // Do NOT auto-request location on map screen mount.
+      // On several Android devices, auto native location calls immediately after map load
+      // can cause crashes. We keep map stable and let user trigger location explicitly.
+      setLocationName('Set location');
+      setLocationAddress('Move the pin or use "Use current location"');
     }
-  }, [editingAddress, initialLatitude, initialLongitude]);
+  }, [editingAddress, initialLatitude, initialLongitude, visible]);
 
   // Initialize permission status on mount
   useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
     const checkInitialPermission = async () => {
       try {
         const { status } = await Location.getForegroundPermissionsAsync();
@@ -315,11 +308,15 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     };
 
     checkInitialPermission();
-  }, []);
+  }, [visible]);
 
   // When user returns from system settings (after turning on location/services),
   // automatically try to fetch current location once, for new address flows.
   useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
     // Prevent AppState listener from triggering on initial mount
     // by marking that we've already tried once (via the initial getCurrentLocation call)
     const isInitialMount = !hasTriedAutoLocationOnResume.current;
@@ -333,33 +330,31 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
       // When app becomes active (user returns from background/settings)
       if (nextState === 'active' && prevState !== 'active') {
-        // Skip if we're in the middle of a permission request
-        if (isRequestingPermission.current) {
-          return;
+        try {
+          // Skip if we're in the middle of a permission request
+          if (isRequestingPermission.current) {
+            return;
+          }
+
+          // Check current permission status
+          const { status } = await Location.getForegroundPermissionsAsync();
+
+          // If permission was just granted (changed from denied to granted)
+          const wasPermissionJustGranted =
+            previousPermissionStatus.current !== 'granted' &&
+            status === 'granted';
+
+          // Update previous permission status
+          previousPermissionStatus.current = status;
+
+        // Keep this passive to avoid unstable auto-location native calls on resume.
+        // User can always use the explicit "Use current location" action.
+        if (wasPermissionJustGranted) {
+          // no-op by design
         }
-
-        // Check current permission status
-        const { status } = await Location.getForegroundPermissionsAsync();
-
-        // If permission was just granted (changed from denied to granted)
-        const wasPermissionJustGranted =
-          previousPermissionStatus.current !== 'granted' &&
-          status === 'granted';
-
-        // Update previous permission status
-        previousPermissionStatus.current = status;
-
-        // Auto-fetch location only if permission was just granted
-        // Don't auto-trigger on first app resume after initial mount
-        if (
-          wasPermissionJustGranted &&
-          !editingAddress &&
-          !initialLatitude &&
-          !initialLongitude &&
-          !isCurrentLocationSet &&
-          !hasSelectedLocation
-        ) {
-          getCurrentLocation(false); // Auto-triggered, not user-initiated
+        } catch (error) {
+          // Avoid app crashes on Android during permission-dialog/app-state transitions.
+          // User can still tap "Use current location" to retry safely.
         }
       }
     });
@@ -368,15 +363,22 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       subscription.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingAddress, initialLatitude, initialLongitude, isCurrentLocationSet, hasSelectedLocation]);
+  }, [editingAddress, initialLatitude, initialLongitude, isCurrentLocationSet, hasSelectedLocation, visible]);
 
   // Clear search text when component mounts (ensures fresh state)
   useEffect(() => {
+    if (!visible) {
+      return;
+    }
     setSearchText('');
-  }, []);
+  }, [visible]);
 
   // Update searchText and trigger search when initialSearchQuery changes
   useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
     // Reset search text when initialSearchQuery changes
     if (initialSearchQuery.trim()) {
       setSearchText(initialSearchQuery);
@@ -386,7 +388,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       // Clear search text when initialSearchQuery is empty
       setSearchText('');
     }
-  }, [initialSearchQuery]);
+  }, [initialSearchQuery, visible]);
 
   // Keyboard listeners
   useEffect(() => {
@@ -624,6 +626,10 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   };
 
   const handleRegionChange = (newRegion: Region) => {
+    if (!visible || !isValidRegion(newRegion)) {
+      return;
+    }
+
     // Skip if we're updating from code (search, getCurrentLocation, editing)
     // This prevents overwriting the programmatically set coordinates
     if (isUpdatingFromCode.current) {
@@ -659,8 +665,18 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   };
 
   const handleRegionChangeComplete = async (newRegion: Region) => {
+    if (!visible || !isValidRegion(newRegion)) {
+      return;
+    }
+
     // Skip if we're updating from code (editing address)
     if (isUpdatingFromCode.current) {
+      return;
+    }
+
+    // Important: map emits region callbacks during initial render/animation.
+    // Don't run permission + geocoding flow until user actually drags the pin.
+    if (!hasUserManuallyMovedPin.current) {
       return;
     }
 
@@ -1293,6 +1309,9 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   };
 
   return (
+    !visible ? (
+      <View style={styles.safeArea} />
+    ) : (
     <View style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
@@ -1492,6 +1511,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         />
       </View>
     </View>
+    )
   );
 };
 

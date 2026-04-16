@@ -5,6 +5,23 @@ apply plugin: "com.google.firebase.crashlytics"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
+def readEnvVarFromFile = { File envFile, String key ->
+    if (!envFile.exists()) return null
+    def prefix = "${key}="
+    for (def rawLine : envFile.readLines()) {
+        def line = rawLine?.trim()
+        if (!line || line.startsWith("#")) continue
+        if (!line.startsWith(prefix)) continue
+        def value = line.substring(prefix.length()).trim()
+        // Remove optional surrounding quotes
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.substring(1, value.length() - 1)
+        }
+        return value
+    }
+    return null
+}
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -120,9 +137,21 @@ android {
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
         
-        // Google Maps API Key from environment variable or gradle.properties
-        // Priority: gradle.properties > GOOGLE_MAPS_API_KEY env var
-        def googleMapsApiKey = findProperty('GOOGLE_MAPS_API_KEY') ?: System.getenv('GOOGLE_MAPS_API_KEY') ?: ""
+        // Google Maps API Key sources (Android-native):
+        // 1) gradle.properties GOOGLE_MAPS_API_KEY
+        // 2) shell env GOOGLE_MAPS_API_KEY
+        // 3) project .env / .env.dev / .env.prod
+        // 4) stable fallback key
+        def envDefaultKey = readEnvVarFromFile(rootProject.file("../.env"), "GOOGLE_MAPS_API_KEY")
+        def envDevKey = readEnvVarFromFile(rootProject.file("../.env.dev"), "GOOGLE_MAPS_API_KEY")
+        def envProdKey = readEnvVarFromFile(rootProject.file("../.env.prod"), "GOOGLE_MAPS_API_KEY")
+        def googleMapsApiKey =
+            findProperty('GOOGLE_MAPS_API_KEY') ?:
+            System.getenv('GOOGLE_MAPS_API_KEY') ?:
+            envDefaultKey ?:
+            envDevKey ?:
+            envProdKey ?:
+            "AIzaSyByxizUPOdWROrVV1IikPFPrI-F6EmACk0"
         manifestPlaceholders = [GOOGLE_MAPS_API_KEY: googleMapsApiKey]
     }
     

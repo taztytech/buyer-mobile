@@ -1371,19 +1371,24 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
   const handleBackFromLogin = async () => {
     // Skip: start guest procedure (guest login, analytics) then navigate
-    await authService.guestLogin().catch((err) => {
-      console.warn('[App] Guest login failed on Skip:', err?.message);
-    });
-    await crashlyticsService.setUserId(null);
-    await crashlyticsService.setGlobalContext({
-      app_version: APP_VERSION_NAME,
-      login_state: 'guest',
-    });
-    await analyticsService.setUserProperties({
-      [AnalyticsUserProperties.LOGIN_STATE]: 'guest',
-      [AnalyticsUserProperties.USER_ID]: null,
-      [AnalyticsUserProperties.USER_TYPE]: 'guest',
-    });
+    try {
+      await authService.guestLogin().catch((err) => {
+        console.warn('[App] Guest login failed on Skip:', err?.message);
+      });
+      await crashlyticsService.setUserId(null);
+      await crashlyticsService.setGlobalContext({
+        app_version: APP_VERSION_NAME,
+        login_state: 'guest',
+      });
+      await analyticsService.setUserProperties({
+        [AnalyticsUserProperties.LOGIN_STATE]: 'guest',
+        [AnalyticsUserProperties.USER_ID]: null,
+        [AnalyticsUserProperties.USER_TYPE]: 'guest',
+      });
+    } catch (error) {
+      // Never block skip navigation because of analytics/telemetry failures.
+      console.warn('[App] Skip guest telemetry failed:', error);
+    }
 
     // Reset all overlays so home (hotel list) is visible
     homeScreenSlide.setValue(0);
@@ -1402,7 +1407,12 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
 
     // Go to hotel list if we have location, else address selection
-    const persistedGuestLocation = await loadPersistedGuestLocation();
+    let persistedGuestLocation: Awaited<ReturnType<typeof loadPersistedGuestLocation>> = null;
+    try {
+      persistedGuestLocation = await loadPersistedGuestLocation();
+    } catch (error) {
+      console.warn('[App] Failed to load persisted guest location on Skip:', error);
+    }
     if (persistedGuestLocation) {
       setSelectedLocation(persistedGuestLocation);
       setCurrentScreen('home');
@@ -3043,6 +3053,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             pointerEvents={currentScreen === 'locationSelection' ? 'auto' : 'none'}
           >
             <LocationSelectionScreen
+              visible={currentScreen === 'locationSelection'}
               initialSearchQuery={locationSearchQuery}
               editingAddress={editingAddress}
               initialLatitude={editingAddress?.latitude || initialLocationCoords?.latitude}

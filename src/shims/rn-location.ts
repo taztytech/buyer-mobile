@@ -46,8 +46,17 @@ export const getForegroundPermissionsAsync = async (): Promise<PermissionRespons
     const result = await Geolocation.requestAuthorization('whenInUse');
     return { status: result === 'granted' ? 'granted' : 'denied', canAskAgain: true };
   }
-  const granted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
-  return { status: granted ? 'granted' : 'denied', canAskAgain: true };
+  try {
+    const fineGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+    const coarseGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION);
+    if (fineGranted || coarseGranted) {
+      return { status: 'granted', canAskAgain: true };
+    }
+    // Treat "not granted yet" as undetermined to support first-launch flows.
+    return { status: 'undetermined', canAskAgain: true };
+  } catch {
+    return { status: 'denied', canAskAgain: true };
+  }
 };
 
 export const requestForegroundPermissionsAsync = async (): Promise<PermissionResponse> => {
@@ -55,8 +64,31 @@ export const requestForegroundPermissionsAsync = async (): Promise<PermissionRes
     const result = await Geolocation.requestAuthorization('whenInUse');
     return { status: result === 'granted' ? 'granted' : 'denied', canAskAgain: true };
   }
-  const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
-  return { status: result === PermissionsAndroid.RESULTS.GRANTED ? 'granted' : 'denied', canAskAgain: true };
+  try {
+    // Request FINE first (Android 12+ may still grant approximate location).
+    const fineResult = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+    );
+
+    if (fineResult === PermissionsAndroid.RESULTS.GRANTED) {
+      return { status: 'granted', canAskAgain: true };
+    }
+
+    // If fine is denied, check whether coarse was granted implicitly/previously.
+    const coarseGranted = await PermissionsAndroid.check(
+      PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION
+    );
+    if (coarseGranted) {
+      return { status: 'granted', canAskAgain: true };
+    }
+
+    return {
+      status: 'denied',
+      canAskAgain: fineResult !== PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN,
+    };
+  } catch {
+    return { status: 'denied', canAskAgain: true };
+  }
 };
 
 export const hasServicesEnabledAsync = async (): Promise<boolean> => true;
@@ -65,16 +97,57 @@ export const getCurrentPositionAsync = async (_options: {
   accuracy?: string;
   timeout?: number;
   maximumAge?: number;
-} = {}) =>
-  new Promise<{ coords: { latitude: number; longitude: number } }>((resolve, reject) => {
-    Geolocation.getCurrentPosition(
-      (position) => {
-        resolve({ coords: { latitude: position.coords.latitude, longitude: position.coords.longitude } });
-      },
-      (error) => reject(error),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-    );
+} = {}) => {
+  let enableHighAccuracy = Platform.OS === 'ios' ? true : _options.accuracy === Accuracy.High;
+
+  if (Platform.OS === 'android') {
+    try {
+      const hasFinePermission = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+      );
+      const hasCoarsePermission = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION
+      );
+
+      if (!hasFinePermission && !hasCoarsePermission) {
+        throw new Error('Location permission not granted');
+      }
+
+      // Android 12+ can grant only approximate location.
+      // Never force GPS/high-accuracy mode when FINE is unavailable.
+      if (!hasFinePermission) {
+        enableHighAccuracy = false;
+      }
+    } catch (permissionError) {
+      return Promise.reject(permissionError);
+    }
+  }
+
+  return new Promise<{ coords: { latitude: number; longitude: number } }>((resolve, reject) => {
+    try {
+      Geolocation.getCurrentPosition(
+        (position) => {
+          resolve({ coords: { latitude: position.coords.latitude, longitude: position.coords.longitude } });
+        },
+        (error) => reject(error),
+        {
+          enableHighAccuracy,
+          timeout: _options.timeout ?? 15000,
+          maximumAge: _options.maximumAge ?? 10000,
+          // Android stability: avoid Google Play Services dependency path that can crash on some devices.
+          ...(Platform.OS === 'android'
+            ? {
+                forceLocationManager: true,
+                showLocationDialog: true,
+              }
+            : {}),
+        }
+      );
+    } catch (error) {
+      reject(error);
+    }
   });
+};
 
 export const reverseGeocodeAsync = async ({
   latitude,
