@@ -9,7 +9,7 @@ type PermissionResponse = { status: PermissionStatus; canAskAgain?: boolean };
 let geocoderInitialized = false;
 const FALLBACK_MAPS_API_KEY = 'AIzaSyByxizUPOdWROrVV1IikPFPrI-F6EmACk0';
 
-const resolveMapsApiKey = (): string => {
+export const resolveMapsApiKey = (): string => {
   const keyFromConfig = Constants.appConfig?.extra?.GOOGLE_MAPS_API_KEY;
   const keyFromEnv = process.env.GOOGLE_MAPS_API_KEY || process.env.PUBLIC_GOOGLE_MAPS_API_KEY;
   return (keyFromConfig || keyFromEnv || FALLBACK_MAPS_API_KEY || '').trim();
