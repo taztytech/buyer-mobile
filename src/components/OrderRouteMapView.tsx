@@ -66,9 +66,9 @@ const haversineMeters = (lat1: number, lng1: number, lat2: number, lng2: number)
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(toRadians(lat1)) *
-      Math.cos(toRadians(lat2)) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2);
+    Math.cos(toRadians(lat2)) *
+    Math.sin(dLng / 2) *
+    Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadius * c;
 };
@@ -150,8 +150,9 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     if (storeToAgentRouteCoordinates && storeToAgentRouteCoordinates.length > 1) {
       return storeToAgentRouteCoordinates;
     }
-    // In live mode, do not draw a straight fallback segment for rider->store.
-    // Wait for decoded road geometry from API/fetch.
+    if (agentPointForStoreLeg) {
+      return [agentPointForStoreLeg, restaurantCoordinate];
+    }
     return null;
   }, [
     storeToAgentRouteCoordinates,
@@ -311,9 +312,9 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     const center = getCurrentCenter();
     const fallbackCenter = hasValidAgentCoordinate
       ? {
-          latitude: agentLocationUpdate!.lat,
-          longitude: agentLocationUpdate!.lng,
-        }
+        latitude: agentLocationUpdate!.lat,
+        longitude: agentLocationUpdate!.lng,
+      }
       : null;
     const resolvedCenter = center || fallbackCenter;
     if (!resolvedCenter) return;
@@ -346,8 +347,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   const useNightTheme = isDarkMode;
   const riderIconSource = useNightTheme ? riderNightAsset : riderDayAsset;
   const mainRouteCoordinates = useMemo((): OrderRouteCoordinate[] | null => {
-    // Always require road geometry. A 2-point route is straight fallback.
-    if (routeCoordinates && routeCoordinates.length > 2) return routeCoordinates;
+    if (routeCoordinates && routeCoordinates.length > 1) return routeCoordinates;
     return null;
   }, [
     routeCoordinates,
@@ -381,12 +381,12 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     const toStore = mainRouteCoordinates.slice(0, storeJoinIndexInMainRoute + 1);
     return toStore.length > 1 ? toStore : null;
   }, [storeToAgentPolylineCoords, mainRouteCoordinates, storeJoinIndexInMainRoute]);
-  const showBlueLegOnly =
+  const showBlueLeg =
     showStoreToAgentRoute &&
     !!effectiveStoreToAgentPolylineCoords &&
     effectiveStoreToAgentPolylineCoords.length > 1;
-  const showGreenLegOnly =
-    !showStoreToAgentRoute &&
+  const showGreenLeg =
+    !showBlueLeg &&
     !!customerLegCoordinates &&
     customerLegCoordinates.length > 1;
 
@@ -425,7 +425,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
         }}
       >
         {/* White outline behind route (Rider-style road emphasis) */}
-        {showGreenLegOnly ? (
+        {showGreenLeg ? (
           <>
             <Polyline
               coordinates={customerLegCoordinates}
@@ -445,7 +445,7 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
           </>
         ) : null}
         {/* Agent ↔ store (blue + outline); road polyline or straight fallback */}
-        {showBlueLegOnly ? (
+        {showBlueLeg ? (
           <>
             <Polyline
               coordinates={effectiveStoreToAgentPolylineCoords}

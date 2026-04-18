@@ -2354,9 +2354,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 routeCoordinates={
                   roadRouteCoordinates && roadRouteCoordinates.length > 1
                     ? roadRouteCoordinates
-                    : fallbackMapCoords.mode === 'live'
-                      ? undefined
-                      : fallbackMapCoords.routeCoordinates
+                    : fallbackMapCoords.routeCoordinates
                 }
                 storeToAgentRouteCoordinates={storeToAgentRouteCoordinates}
                 showStoreToAgentRoute={fallbackMapCoords.showStoreToAgentRoute}

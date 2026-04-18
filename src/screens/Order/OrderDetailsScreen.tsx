@@ -96,7 +96,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [orderExpanded, setOrderExpanded] = useState(true);
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
   const [tipExpanded, setTipExpanded] = useState(true);
-  const [promoExpanded, setPromoExpanded] = useState(true);
+  const [couponExpanded, setCouponExpanded] = useState(true);
   const [billExpanded, setBillExpanded] = useState(true);
   const [deliveryLocationExpanded, setDeliveryLocationExpanded] = useState(true);
   const [cancellationExpanded, setCancellationExpanded] = useState(true);
@@ -153,7 +153,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'online' | 'cod'>('online');
   const [selfPickup, setSelfPickup] = useState(false);
   const [notes, setNotes] = useState('');
-  const [promoCode, setPromoCode] = useState('');
+  const [couponCode, setCouponCode] = useState('');
   const [appliedCouponCode, setAppliedCouponCode] = useState<string>('');
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string | undefined>(undefined);
@@ -168,8 +168,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [isUpdatingTip, setIsUpdatingTip] = useState(false);
   const [maxTipAmount, setMaxTipAmount] = useState<number | null>(null);
   const [tipError, setTipError] = useState('');
-  const [promoError, setPromoError] = useState('');
-  const [isApplyingPromo, setIsApplyingPromo] = useState(false);
+  const [couponError, setCouponError] = useState('');
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [showTaxTooltip, setShowTaxTooltip] = useState(false);
 
   // Track latest update sequence to ensure we only apply cart_summary from the most recent update
@@ -272,7 +272,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       !!(appliedCouponCode || backendAppliedOfferCode)
     );
 
-  // Check if cart has any preorder items (used to hide promo code section and skip coupon removal)
+  // Check if cart has any preorder items (used to hide coupon code section and skip coupon removal)
   const hasPreorderItems = cartData?.items?.some((item: any) =>
     item.is_preorder === true &&
     item.preorder_campaign &&
@@ -386,7 +386,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   // The cart summary is refreshed when checkout becomes visible and on explicit user actions
   // that already call `fetchCartSummary()`.
 
-  // Promo removal is button-only (handleRemovePromoCode). No automatic remove-coupon API calls.
+  // Coupon removal is button-only (handleRemoveCouponCode). No automatic remove-coupon API calls.
 
   /** Pass `preloadedCart` after `reloadCart()` to avoid a duplicate GET /cart. */
   const fetchCartSummary = async (preloadedCart?: CartResponse) => {
@@ -410,14 +410,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             setSelectedTip(tipAmount > 0 ? tipAmount : null);
           }
 
-          // Only restore promo code from backend if field is empty (preserve user input)
+          // Only restore coupon code from backend if field is empty (preserve user input)
           // This prevents overwriting what the user has typed
           const offerCodeFromBackend = cartResponse.summary.applied_offer?.offer_code || '';
           setAppliedCouponCode(offerCodeFromBackend);
-          if (promoCode.trim() === '' && offerCodeFromBackend) {
-            setPromoCode(offerCodeFromBackend);
+          if (couponCode.trim() === '' && offerCodeFromBackend) {
+            setCouponCode(offerCodeFromBackend);
           }
-          // Note: We don't clear promo code if user has entered something, even if backend has no offer
+          // Note: We don't clear coupon code if user has entered something, even if backend has no offer
           // This allows user to keep typing/editing without interruption
         }
       } else {
@@ -438,7 +438,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   // Single GET /cart: reloadCart returns the payload; fetchCartSummary reuses it (no duplicate call).
   useEffect(() => {
     if (!visible) {
-      setPromoError('');
+      setCouponError('');
       return;
     }
     void (async () => {
@@ -794,9 +794,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           setNotes(''); // Reset notes for next order
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount
-          // Clear promo UI state so it doesn't persist into next checkout
-          setPromoCode('');
-          setPromoError('');
+          // Clear coupon UI state so it doesn't persist into next checkout
+          setCouponCode('');
+          setCouponError('');
 
           setIsPlacingOrder(false); // Reset loading state before showing confirmation
 
@@ -866,9 +866,9 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           setNotes(''); // Reset notes for next order
           setSelectedTip(null); // Reset tip selection
           setCustomTipAmount(''); // Reset custom tip amount
-          // Clear promo UI state so it doesn't persist into next checkout
-          setPromoCode('');
-          setPromoError('');
+          // Clear coupon UI state so it doesn't persist into next checkout
+          setCouponCode('');
+          setCouponError('');
 
           showConfirmation({
             title: `${selectedPaymentMethod !== "cod" ? "Payment" : "Order"} Successful! 🎉'`,
@@ -1388,49 +1388,49 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     // Don't clear it - it will be used to show the selected custom tip amount
   };
 
-  // Handle promo code apply
-  const handleApplyPromoCode = async () => {
-    if (isApplyingPromo) {
+  // Handle coupon code apply
+  const handleApplyCouponCode = async () => {
+    if (isApplyingCoupon) {
       return;
     }
 
     // Clear previous error
-    setPromoError('');
+    setCouponError('');
 
     // Don't allow applying coupon if cart has preorder items
     if (hasPreorderItems) {
-      setPromoError('Promo codes cannot be applied to preorder items.');
+      setCouponError('Coupon codes cannot be applied to preorder items.');
       return;
     }
 
-    const trimmedCode = promoCode.trim();
+    const trimmedCode = couponCode.trim();
 
     if (!trimmedCode) {
-      setPromoError('Please enter a promo code.');
+      setCouponError('Please enter a coupon code.');
       return;
     }
 
-    // Check if base order total (before any promo discount) is below minimum order amount
+    // Check if base order total (before any coupon discount) is below minimum order amount
     const MINIMUM_ORDER_AMOUNT = 100;
     // Calculate base total: current total + existing discount (if any)
     const baseTotal = totalAmount + discountAmount;
 
-    // Validate minimum order amount before applying promo
+    // Validate minimum order amount before applying coupon
     // The backend will also validate this, but we check here for better UX
     // if (baseTotal < MINIMUM_ORDER_AMOUNT) {
-    //   setPromoError(`Minimum order value of ₹${MINIMUM_ORDER_AMOUNT} required to apply promo codes.`);
+    //   setCouponError(`Minimum order value of ₹${MINIMUM_ORDER_AMOUNT} required to apply coupon codes.`);
     //   return;
     // }
 
     // Enforce uppercase-only input (letters are uppercased; digits remain as-is)
     const normalizedCode = trimmedCode.toUpperCase();
-    if (normalizedCode !== promoCode) {
+    if (normalizedCode !== couponCode) {
       // Sync state to normalized value for UI consistency
-      setPromoCode(normalizedCode);
+      setCouponCode(normalizedCode);
     }
 
     try {
-      setIsApplyingPromo(true);
+      setIsApplyingCoupon(true);
 
       const response = await cartService.applyCoupon(normalizedCode);
 
@@ -1441,29 +1441,29 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         setAppliedCouponCode(normalizedCode);
 
         // Clear any existing error on success
-        setPromoError('');
+        setCouponError('');
       } else {
         // Show error message from API at the bottom of the screen
-        setPromoError(response.message || 'Failed to apply promo code.');
+        setCouponError(response.message || 'Failed to apply coupon code.');
       }
     } catch (error: any) {
-      setPromoError(error?.message || 'Failed to apply promo code.');
+      setCouponError(error?.message || 'Failed to apply coupon code.');
     } finally {
-      setIsApplyingPromo(false);
+      setIsApplyingCoupon(false);
     }
   };
 
-  // Handle promo code removal
-  const handleRemovePromoCode = async () => {
-    if (isApplyingPromo) {
+  // Handle coupon code removal
+  const handleRemoveCouponCode = async () => {
+    if (isApplyingCoupon) {
       return;
     }
 
     // Clear previous error
-    setPromoError('');
+    setCouponError('');
 
     try {
-      setIsApplyingPromo(true);
+      setIsApplyingCoupon(true);
 
       const response = await cartService.removeCoupon();
 
@@ -1471,18 +1471,18 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         // Use updated cart summary from backend (without discount)
         setCartSummary(response.cart_summary);
 
-        // Clear promo code input and any errors on success
-        setPromoCode('');
+        // Clear coupon code input and any errors on success
+        setCouponCode('');
         setAppliedCouponCode('');
-        setPromoError('');
+        setCouponError('');
       } else {
         // Show error message from API at the bottom of the screen
-        setPromoError(response.message || 'Failed to remove promo code.');
+        setCouponError(response.message || 'Failed to remove coupon code.');
       }
     } catch (error: any) {
-      setPromoError(error?.message || 'Failed to remove promo code.');
+      setCouponError(error?.message || 'Failed to remove coupon code.');
     } finally {
-      setIsApplyingPromo(false);
+      setIsApplyingCoupon(false);
     }
   };
 
@@ -1943,41 +1943,41 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 )}
               </View>
 
-              {/* Apply Promo Code Section - Hide if cart has preorder items */}
+              {/* Apply Coupon Code Section - Hide if cart has preorder items */}
               {!hasPreorderItems && (
                 <View style={styles.section}>
                   <TouchableOpacity
                     style={styles.sectionHeader}
-                    onPress={() => setPromoExpanded(!promoExpanded)}
+                    onPress={() => setCouponExpanded(!couponExpanded)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.sectionTitle}>Promo Code</Text>
+                    <Text style={styles.sectionTitle}>Coupon Code</Text>
                     <MaterialIcons
-                      name={promoExpanded ? 'expand-less' : 'expand-more'}
+                      name={couponExpanded ? 'expand-less' : 'expand-more'}
                       size={24}
                       color="#000000"
                     />
                   </TouchableOpacity>
 
-                  {promoExpanded && (
+                  {couponExpanded && (
                     <View style={styles.sectionContent}>
-                      <View style={styles.promoCodeContainer}>
+                      <View style={styles.couponCodeContainer}>
                         <TextInput autoCorrect={false}
-                          style={styles.promoCodeInput}
-                          placeholder="Enter promo code"
+                          style={styles.couponCodeInput}
+                          placeholder="Enter coupon code"
                           placeholderTextColor="rgba(0, 0, 0, 0.4)"
-                          value={promoCode}
+                          value={couponCode}
                           editable={!isCouponApplied}
                           onChangeText={(text) => {
                             // Normalize to uppercase and hard-limit to 15 characters
                             const uppercased = text.toUpperCase();
                             const limited = uppercased.slice(0, 15);
 
-                            setPromoCode(limited);
+                            setCouponCode(limited);
 
-                            // Clear backend promo error when user edits the code
-                            if (promoError) {
-                              setPromoError('');
+                            // Clear backend coupon error when user edits the code
+                            if (couponError) {
+                              setCouponError('');
                             }
                           }}
                           autoCapitalize="characters"
@@ -1985,17 +1985,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                         <TouchableOpacity
                           style={[
                             styles.applyButton,
-                            (isApplyingPromo ||
-                              (!isCouponApplied && !promoCode.trim())) && styles.applyButtonDisabled,
+                            (isApplyingCoupon ||
+                              (!isCouponApplied && !couponCode.trim())) && styles.applyButtonDisabled,
                           ]}
-                          onPress={isCouponApplied ? handleRemovePromoCode : handleApplyPromoCode}
+                          onPress={isCouponApplied ? handleRemoveCouponCode : handleApplyCouponCode}
                           activeOpacity={0.8}
                           disabled={
-                            isApplyingPromo ||
-                            (!isCouponApplied && !promoCode.trim())
+                            isApplyingCoupon ||
+                            (!isCouponApplied && !couponCode.trim())
                           }
                         >
-                          {isApplyingPromo ? (
+                          {isApplyingCoupon ? (
                             <ActivityIndicator size="small" color="#FFFFFF" />
                           ) : (
                             <Text style={styles.applyButtonText}>
@@ -2270,11 +2270,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             </View>
           </SafeAreaView>
         </View>
-        {/* Promo error bar at the bottom of the screen */}
-        {promoError ? (
-          <View style={styles.promoErrorBar}>
-            <Text style={styles.promoErrorBarText} numberOfLines={2}>
-              {promoError}
+        {/* Coupon error bar at the bottom of the screen */}
+        {couponError ? (
+          <View style={styles.couponErrorBar}>
+            <Text style={styles.couponErrorBarText} numberOfLines={2}>
+              {couponError}
             </Text>
           </View>
         ) : null}
@@ -2940,10 +2940,10 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: '#DC2626',
   },
-  promoCodeContainer: {
+  couponCodeContainer: {
     flexDirection: 'row',
   },
-  promoCodeInput: {
+  couponCodeInput: {
     flex: 1,
     backgroundColor: '#F5F5F5',
     borderWidth: 1,
@@ -3105,7 +3105,7 @@ const styles = StyleSheet.create({
   placeOrderButtonDisabled: {
     opacity: 0.6,
   },
-  promoErrorBar: {
+  couponErrorBar: {
     position: 'absolute',
     left: 16,
     right: 16,
@@ -3120,7 +3120,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 6,
   },
-  promoErrorBarText: {
+  couponErrorBarText: {
     fontFamily: 'Poppins',
     fontWeight: '400',
     fontSize: 12,
