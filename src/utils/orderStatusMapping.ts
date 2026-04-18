@@ -31,11 +31,17 @@ export function mapOrderStatusToUI(status: string | null | undefined): StatusCon
       return getStatusConfig('billed');
 
     case 'packed':
+    case 'order-ready':
+    case 'ready-for-pickup':
       return getStatusConfig('packed');
 
     case 'agent-assigned':
     case 'agent_assigned':
       return getStatusConfig('agent-assigned');
+
+    case 'agent-arrived-restaurant':
+    case 'agent_arrived_restaurant':
+      return getStatusConfig('agent-arrived-restaurant');
 
     case 'picked':
       return getStatusConfig('picked');
