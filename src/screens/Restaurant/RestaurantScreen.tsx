@@ -1375,26 +1375,73 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
   }, [menuSections]);
 
+  // Parent passes a new `onBack` every render; keep a ref so the BackHandler subscription stays stable.
+  // Otherwise the effect re-runs constantly, briefly removes the listener, and App.tsx can handle back
+  // with a stale route ref (exploreDishes → profile).
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
+
   // Handle Android back button.
   // Guard with `visible` so this handler does not leak onto other screens
   // (e.g. ExploreDishes / Home) when RestaurantScreen is mounted but hidden.
+  // Always consume the event when this screen is visible: call `onBack` for pop (same as header).
+  // Returning false defers to App.tsx, whose route ref can lag behind and wrongly run exploreDishes → profile.
   useEffect(() => {
     if (!visible) return;
 
     const backAction = () => {
-      // If search is open, close it
       if (showSearch) {
         setShowSearch(false);
         return true;
       }
-      // Otherwise, let the parent handle back (go to previous screen)
-      return false;
+      if (showCustomisationsReviewModal) {
+        setShowCustomisationsReviewModal(false);
+        setReviewingItemId(null);
+        return true;
+      }
+      if (showCustomizationModal) {
+        setShowCustomizationModal(false);
+        setSelectedCustomizableItem(null);
+        setEditingVariantId(null);
+        setEditingVariantQuantity(undefined);
+        setPreselectedAddOns([]);
+        return true;
+      }
+      if (showDetailModal) {
+        setShowDetailModal(false);
+        setSelectedDetailItem(null);
+        setSelectedDetailItemAvailable(true);
+        return true;
+      }
+      if (showOrderSuccess) {
+        setShowOrderSuccess(false);
+        return true;
+      }
+      if (showClosedModal) {
+        setShowClosedModal(false);
+        return true;
+      }
+      if (showQuickMenu) {
+        setShowQuickMenu(false);
+        return true;
+      }
+      onBackRef.current?.();
+      return true;
     };
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
 
     return () => backHandler.remove();
-  }, [visible, showSearch]);
+  }, [
+    visible,
+    showSearch,
+    showCustomizationModal,
+    showCustomisationsReviewModal,
+    showDetailModal,
+    showOrderSuccess,
+    showClosedModal,
+    showQuickMenu,
+  ]);
 
   // Animate background when modal opens/closes
   useEffect(() => {

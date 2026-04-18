@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  BackHandler,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@/shims/rn-vector-icons';
@@ -71,6 +73,18 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
+
+  // Android: consume back here (mounted only on My Favorites) so App route ref cannot mis-route to profile.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onBackRef.current?.();
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
 
   // Only fetch when screen becomes visible for the first time
   useEffect(() => {

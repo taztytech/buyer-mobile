@@ -77,7 +77,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const { showConfirmation } = useConfirmation();
 
   // Default to login so we never flash location overlays before auth resolves; logged-in startup sets home/orders explicitly.
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat'>('login');
+  const [currentScreen, setCurrentScreenState] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -125,7 +125,12 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const isAuthenticatedRef = React.useRef(false);
   const pendingDeepLinkUrlRef = React.useRef<string | null>(null);
   const currentScreenRef = React.useRef(currentScreen);
-  currentScreenRef.current = currentScreen;
+
+  /** Only update via this helper — do not mirror `currentScreen` every render (concurrent renders could briefly restore a stale route ref). */
+  const navigateToScreen = React.useCallback((next: typeof currentScreen) => {
+    currentScreenRef.current = next;
+    setCurrentScreenState(next);
+  }, []);
   const isRestaurantBackTransitioningRef = React.useRef(false);
   const isHandlingAndroidBackRef = React.useRef(false);
   const lastAndroidBackPressAtRef = React.useRef(0);
@@ -383,16 +388,16 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       if (isRazorpayRouter) {
         if (isAuthenticatedRef.current) {
           if (currentScreen !== 'checkout') {
-            setCurrentScreen('home');
+            navigateToScreen('home');
           }
         } else {
-          setCurrentScreen('login');
+          navigateToScreen('login');
         }
         return true;
       }
 
       if (!isAuthenticatedRef.current) {
-        setCurrentScreen('login');
+        navigateToScreen('login');
         return true;
       }
 
@@ -403,12 +408,12 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
       if (isOrderPath) {
         setOrdersCameFrom('notification');
-        setCurrentScreen('orders');
+        navigateToScreen('orders');
         return true;
       }
 
       // Default route for other supported app links.
-      setCurrentScreen('home');
+      navigateToScreen('home');
       return true;
     } catch (error) {
       console.warn('⚠️ Failed to parse deep link URL:', incomingUrl, error);
@@ -575,7 +580,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       // Keep existing back behavior: Orders -> Profile for notification entry.
       setOrdersCameFrom('notification');
       setHighlightOrderId(orderId || null);
-      setCurrentScreen('orders');
+      navigateToScreen('orders');
 
       // Clear highlight after 3 seconds (enough time for scroll animation)
       setTimeout(() => {
@@ -734,7 +739,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             // - Logged-in users: go to login
             // - Guests / expired sessions: continue in guest location setup flow
             if (wasRegisteredUser) {
-              setCurrentScreen('login');
+              navigateToScreen('login');
               setPhoneNumber('');
             } else {
               await authService.guestLogin().catch(() => { });
@@ -745,10 +750,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               const persisted = await loadPersistedGuestLocation();
               if (persisted) {
                 setSelectedLocation(persisted);
-                setCurrentScreen('home');
+                navigateToScreen('home');
                 homeScreenSlide.setValue(0);
               } else {
-                setCurrentScreen('addressSelection');
+                navigateToScreen('addressSelection');
                 addressScreenSlide.setValue(0);
               }
             }
@@ -756,7 +761,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             console.error('[App] Error handling user deletion:', error);
             // Fallback to guest location setup if user is not authenticated
             if (wasRegisteredUser) {
-              setCurrentScreen('login');
+              navigateToScreen('login');
             } else {
               await authService.guestLogin().catch(() => { });
               setAddressSelectionCameFrom('home');
@@ -766,10 +771,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               const persisted = await loadPersistedGuestLocation();
               if (persisted) {
                 setSelectedLocation(persisted);
-                setCurrentScreen('home');
+                navigateToScreen('home');
                 homeScreenSlide.setValue(0);
               } else {
-                setCurrentScreen('addressSelection');
+                navigateToScreen('addressSelection');
                 addressScreenSlide.setValue(0);
               }
             }
@@ -817,7 +822,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             // - Logged-in users: go to login
             // - Guests / expired sessions: continue in guest location setup flow
             if (wasRegisteredUser) {
-              setCurrentScreen('login');
+              navigateToScreen('login');
               setPhoneNumber('');
             } else {
               await authService.guestLogin().catch(() => { });
@@ -828,10 +833,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               const persisted = await loadPersistedGuestLocation();
               if (persisted) {
                 setSelectedLocation(persisted);
-                setCurrentScreen('home');
+                navigateToScreen('home');
                 homeScreenSlide.setValue(0);
               } else {
-                setCurrentScreen('addressSelection');
+                navigateToScreen('addressSelection');
                 addressScreenSlide.setValue(0);
               }
             }
@@ -839,7 +844,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             console.error('[App] Error handling session expiration:', error);
             // Fallback to guest location setup if user is not authenticated
             if (wasRegisteredUser) {
-              setCurrentScreen('login');
+              navigateToScreen('login');
             } else {
               await authService.guestLogin().catch(() => { });
               setAddressSelectionCameFrom('home');
@@ -849,10 +854,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               const persisted = await loadPersistedGuestLocation();
               if (persisted) {
                 setSelectedLocation(persisted);
-                setCurrentScreen('home');
+                navigateToScreen('home');
                 homeScreenSlide.setValue(0);
               } else {
-                setCurrentScreen('addressSelection');
+                navigateToScreen('addressSelection');
                 addressScreenSlide.setValue(0);
               }
             }
@@ -939,7 +944,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
           // If app opened from an FCM tap during cold start, preserve orders navigation.
           if (!startupNotificationNavigationRef.current) {
-            setCurrentScreen('home');
+            navigateToScreen('home');
           }
         } else {
           // Not logged in: show login screen. Guest procedure starts only when user taps Skip.
@@ -955,7 +960,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           if (persistedGuestLocation) {
             setSelectedLocation(persistedGuestLocation);
           }
-          setCurrentScreen('login');
+          navigateToScreen('login');
         }
       } catch (error) {
         // If auth check fails, default to login screen (guest can Skip to start guest procedure)
@@ -969,7 +974,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         if (persistedGuestLocation) {
           setSelectedLocation(persistedGuestLocation);
         }
-        setCurrentScreen('login');
+        navigateToScreen('login');
       } finally {
         setIsCheckingAuth(false);
       }
@@ -1084,7 +1089,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         handleBackToLogin();
         return true;
       case 'welcome':
-        setCurrentScreen('otp');
+        navigateToScreen('otp');
         return true;
       default:
         return false;
@@ -1160,7 +1165,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
   const handleLoginSuccess = (phone: string) => {
     setPhoneNumber(phone);
-    setCurrentScreen('otp');
+    navigateToScreen('otp');
   };
 
   // Ensure notification permission after login
@@ -1241,14 +1246,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
       termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
 
-      setCurrentScreen('home');
+      navigateToScreen('home');
       setIsRegistrationFlow(false);
       reloadCart().catch(() => { });
       ensureNotificationPermission();
     } else {
       // New user - show welcome screen for profile completion
       await analyticsService.logEvent(AnalyticsEvents.OTP_VERIFIED, { method: 'sms' });
-      setCurrentScreen('welcome');
+      navigateToScreen('welcome');
       setIsRegistrationFlow(true);
       ensureNotificationPermission();
     }
@@ -1314,7 +1319,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     privacyPolicyScreenSlide.setValue(SCREEN_WIDTH);
     termsConditionsScreenSlide.setValue(SCREEN_WIDTH);
 
-    setCurrentScreen('home');
+    navigateToScreen('home');
     setIsRegistrationFlow(false);
 
     // Ensure cart (if any) is synced for this user
@@ -1394,11 +1399,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     } else {
       setSelectedLocation(undefined);
     }
-    setCurrentScreen('login');
+    navigateToScreen('login');
   };
 
   const handleBackToLogin = () => {
-    setCurrentScreen('login');
+    navigateToScreen('login');
   };
 
   const handleBackFromLogin = async () => {
@@ -1447,10 +1452,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     }
     if (persistedGuestLocation) {
       setSelectedLocation(persistedGuestLocation);
-      setCurrentScreen('home');
+      navigateToScreen('home');
     } else {
       setSelectedLocation(undefined);
-      setCurrentScreen('addressSelection');
+      navigateToScreen('addressSelection');
       Animated.parallel([
         Animated.timing(homeScreenSlide, {
           toValue: -SCREEN_WIDTH,
@@ -1467,7 +1472,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const transitionGuestToLogin = React.useCallback(() => {
-    setCurrentScreen('login');
+    navigateToScreen('login');
     setAddressSelectionCameFrom('home');
     addressScreenSlide.setValue(SCREEN_WIDTH);
   }, []);
@@ -1486,7 +1491,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       ordersDispatch({ type: 'CLEAR_ORDERS' });
     }
 
-    setCurrentScreen('profile');
+    navigateToScreen('profile');
 
     Animated.parallel([
       Animated.timing(homeScreenSlide, {
@@ -1516,13 +1521,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }),
     ]).start(() => {
-      setCurrentScreen('home');
+      navigateToScreen('home');
     });
   };
 
   // Address Selection Navigation
   const handleNavigateToAddressSelection = () => {
-    setCurrentScreen('addressSelection');
+    navigateToScreen('addressSelection');
 
     Animated.parallel([
       Animated.timing(homeScreenSlide, {
@@ -1545,7 +1550,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       return;
     }
     if (addressSelectionCameFrom === 'myAddresses') {
-      setCurrentScreen('myAddresses');
+      navigateToScreen('myAddresses');
       setAddressSelectionCameFrom('home');
     } else {
       Animated.parallel([
@@ -1560,7 +1565,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           useNativeDriver: true,
         }),
       ]).start(() => {
-        setCurrentScreen('home');
+        navigateToScreen('home');
       });
     }
   };
@@ -1591,7 +1596,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         setAddressSelectionCameFrom('home');
       }
     }
-    setCurrentScreen('locationSelection');
+    navigateToScreen('locationSelection');
 
     Animated.parallel([
       Animated.timing(addressScreenSlide, {
@@ -1611,7 +1616,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const handleNavigateToLocationSelectionFromHome = () => {
     setAddressSelectionCameFrom('home');
     setLocationSelectionCameFrom('home');
-    setCurrentScreen('locationSelection');
+    navigateToScreen('locationSelection');
 
     Animated.timing(locationScreenSlide, {
       toValue: 0,
@@ -1631,7 +1636,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         duration: 300,
         useNativeDriver: true,
       }).start(() => {
-        setCurrentScreen('myAddresses');
+        navigateToScreen('myAddresses');
         setAddressSelectionCameFrom('home');
         setLocationSelectionCameFrom('home');
         setSearchQuery('');
@@ -1657,7 +1662,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           useNativeDriver: true,
         }),
       ]).start(() => {
-        setCurrentScreen('addressSelection');
+        navigateToScreen('addressSelection');
         setSearchQuery('');
         setLocationSelectionCameFrom('home');
       });
@@ -1676,7 +1681,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           useNativeDriver: true,
         }),
       ]).start(() => {
-        setCurrentScreen('home');
+        navigateToScreen('home');
         setAddressSelectionCameFrom('home');
         setLocationSelectionCameFrom('home');
         setSearchQuery('');
@@ -1773,7 +1778,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         duration: 300,
         useNativeDriver: true,
       }).start(() => {
-        setCurrentScreen('myAddresses');
+        navigateToScreen('myAddresses');
         setAddressSelectionCameFrom('home');
         setLocationSelectionCameFrom('home');
         setSearchQuery('');
@@ -1794,7 +1799,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           useNativeDriver: true,
         }),
       ]).start(() => {
-        setCurrentScreen('home');
+        navigateToScreen('home');
         setAddressSelectionCameFrom('home');
         setSearchQuery('');
       });
@@ -1817,7 +1822,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           useNativeDriver: true,
         }),
       ]).start(() => {
-        setCurrentScreen('home');
+        navigateToScreen('home');
         setAddressSelectionCameFrom('home');
         setLocationSelectionCameFrom('home');
         setEditingAddress(null);
@@ -1831,12 +1836,12 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const handleNavigateToCategoryResults = (categoryName: string) => {
     setSelectedCategory(categoryName);
     setCategoryCameFrom('home');
-    setCurrentScreen('categoryResults');
+    navigateToScreen('categoryResults');
   };
 
   const handleBackFromCategoryResults = () => {
     if (categoryCameFrom === 'search') {
-      setCurrentScreen('search');
+      navigateToScreen('search');
       // Re-open search screen with animation
       Animated.timing(searchScreenSlide, {
         toValue: 0,
@@ -1844,9 +1849,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         useNativeDriver: true,
       }).start();
     } else if (categoryCameFrom === 'favorites') {
-      setCurrentScreen('exploreDishes');
+      navigateToScreen('exploreDishes');
     } else {
-      setCurrentScreen('home');
+      navigateToScreen('home');
     }
   };
 
@@ -1858,12 +1863,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   ) => {
     setSelectedRestaurantId(restaurantId);
     setSelectedRestaurantName(restaurantName);
-    setRestaurantCameFrom('category');
-    setCurrentScreen('restaurant');
+    // Favorites → dish category list → restaurant: back returns to My Favorites (not Profile / category list).
+    setRestaurantCameFrom(categoryCameFrom === 'favorites' ? 'favorites' : 'category');
+    navigateToScreen('restaurant');
     analyticsService.logEvent(AnalyticsEvents.RESTAURANT_VIEWED, {
       restaurant_id: restaurantId,
       restaurant_name: restaurantName || undefined,
-      source: 'category',
+      source: categoryCameFrom === 'favorites' ? 'favorites' : 'category',
       distance_km: Number.isFinite(meta?.distanceKm as number) ? meta?.distanceKm : 0,
       is_open: typeof meta?.isOpen === 'boolean' ? meta.isOpen : true,
       screen_name: AnalyticsScreens.RESTAURANT,
@@ -1887,7 +1893,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setSelectedRestaurantId(restaurantId);
     setSelectedRestaurantName(restaurantName);
     setRestaurantCameFrom('home');
-    setCurrentScreen('restaurant');
+    navigateToScreen('restaurant');
 
     // Track restaurant view
     analyticsService.logEvent(AnalyticsEvents.RESTAURANT_VIEWED, {
@@ -1921,7 +1927,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     checkoutScreenSlide.setValue(SCREEN_WIDTH);
 
     // Set screen to checkout
-    setCurrentScreen('checkout');
+    navigateToScreen('checkout');
     analyticsService.logEvent(AnalyticsEvents.CART_VIEWED, {
       cart_value: getTotalPrice(),
       item_count: getTotalItems(),
@@ -1963,14 +1969,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       // Navigate based on where we came from
       if (checkoutCameFrom === 'home') {
         homeScreenSlide.setValue(0);
-        setCurrentScreen('home');
+        navigateToScreen('home');
       } else if (checkoutCameFrom === 'restaurant') {
         // Ensure restaurant layer is visible before switching to it
         restaurantScreenSlide.setValue(0);
-        setCurrentScreen('restaurant');
+        navigateToScreen('restaurant');
       } else {
         ordersScreenSlide.setValue(0);
-        setCurrentScreen('orders');
+        navigateToScreen('orders');
       }
     });
   }, [checkoutScreenSlide, checkoutCameFrom, homeScreenSlide, restaurantScreenSlide, ordersScreenSlide]);
@@ -2000,7 +2006,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     restaurantScreenSlide.setValue(SCREEN_WIDTH);
     // Set target screen before animation to avoid callback race conditions
     // when users quickly tap back after "Add More Items".
-    setCurrentScreen('restaurant');
+    navigateToScreen('restaurant');
 
     // Slide out checkout screen and navigate to restaurant
     Animated.parallel([
@@ -2061,7 +2067,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       // After checkout screen closes, navigate to order detail
       // Use requestAnimationFrame to ensure state updates are processed
       requestAnimationFrame(() => {
-        setCurrentScreen('orderDetail');
+        navigateToScreen('orderDetail');
       });
     });
   }, [checkoutScreenSlide, restaurantScreenSlide, orderDetailScreenSlide]);
@@ -2077,14 +2083,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     }).start(() => {
       // Navigate back to restaurant screen if we came from there, otherwise go to home
       if (checkoutCameFrom === 'restaurant') {
-        setCurrentScreen('restaurant');
+        navigateToScreen('restaurant');
         // Force restaurant screen to reload by briefly hiding and showing
         // This ensures the menu loads properly
         setTimeout(() => {
           // The restaurant screen's useEffect will trigger when visible becomes true
         }, 100);
       } else {
-        setCurrentScreen('home');
+        navigateToScreen('home');
       }
     });
   }, [checkoutScreenSlide, checkoutCameFrom]);
@@ -2105,7 +2111,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       checkoutScreenSlide.setValue(0);
       // After returning from "Add More Items", next back from checkout should go home.
       setCheckoutCameFrom('home');
-      setCurrentScreen('checkout');
+      navigateToScreen('checkout');
       setTimeout(() => {
         isRestaurantBackTransitioningRef.current = false;
       }, 220);
@@ -2123,11 +2129,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     }).start(() => {
       // Set screen after animation completes to prevent double loading
       if (restaurantCameFrom === 'home') {
-        setCurrentScreen('home');
+        navigateToScreen('home');
       } else if (restaurantCameFrom === 'category') {
-        setCurrentScreen('categoryResults');
+        navigateToScreen('categoryResults');
       } else if (restaurantCameFrom === 'search') {
-        setCurrentScreen('search');
+        navigateToScreen('search');
         // Re-open search screen with animation
         Animated.timing(searchScreenSlide, {
           toValue: 0,
@@ -2135,11 +2141,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           useNativeDriver: true,
         }).start();
       } else if (restaurantCameFrom === 'favorites') {
-        setCurrentScreen('exploreDishes');
+        navigateToScreen('exploreDishes');
       } else if (restaurantCameFrom === 'orders') {
-        setCurrentScreen('orders');
+        navigateToScreen('orders');
       } else {
-        setCurrentScreen('categoryResults');
+        navigateToScreen('categoryResults');
       }
       isRestaurantBackTransitioningRef.current = false;
     });
@@ -2148,7 +2154,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   // Navigate to Restaurant Details
   const handleNavigateToRestaurantDetails = () => {
     try {
-      setCurrentScreen('restaurantDetails');
+      navigateToScreen('restaurantDetails');
     } catch (error) {
       // Error navigating to restaurant details
     }
@@ -2156,13 +2162,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
   // Back from Restaurant Details
   const handleBackFromRestaurantDetails = () => {
-    setCurrentScreen('restaurant');
+    navigateToScreen('restaurant');
   };
 
   // Orders Navigation
   const handleNavigateToOrders = () => {
     setOrdersCameFrom('profile'); // Track that we're coming from profile
-    setCurrentScreen('orders');
+    navigateToScreen('orders');
     // Reset orders screen position to show it
     ordersScreenSlide.setValue(0);
     analyticsService.logEvent(AnalyticsEvents.RESTAURANT_LIST_VIEWED, { source: 'orders' });
@@ -2188,13 +2194,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         homeScreenSlide.setValue(0);
 
         // Update state after all positions are set
-        setCurrentScreen('home');
+        navigateToScreen('home');
         setOrdersCameFrom('profile'); // Reset for next time
       } else if (ordersCameFrom === 'notification') {
-        setCurrentScreen('home');
+        navigateToScreen('home');
         setOrdersCameFrom('profile'); // Reset for next time
       } else {
-        setCurrentScreen('profile');
+        navigateToScreen('profile');
       }
     });
   };
@@ -2203,7 +2209,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const handleNavigateToOrderDetail = (orderId: string) => {
     setOrderDetailCameFrom('orders');
     setSelectedOrderId(orderId);
-    setCurrentScreen('orderDetail');
+    navigateToScreen('orderDetail');
     // Reset order detail screen position to show it
     orderDetailScreenSlide.setValue(0);
   };
@@ -2223,12 +2229,12 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     orderDetailScreenSlide.stopAnimation();
     orderDetailScreenSlide.setValue(SCREEN_WIDTH);
     ordersScreenSlide.setValue(0);
-    setCurrentScreen('orders');
+    navigateToScreen('orders');
   };
 
   // My Addresses Navigation
   const handleNavigateToMyAddresses = () => {
-    setCurrentScreen('myAddresses');
+    navigateToScreen('myAddresses');
   };
 
   const handleBackFromMyAddresses = () => {
@@ -2239,7 +2245,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setAddressSelectionCameFrom('home');
     setSearchQuery('');
     setInitialLocationCoords(null);
-    setCurrentScreen('profile');
+    navigateToScreen('profile');
   };
 
   // Handle address changes (trigger HomeScreen refresh)
@@ -2264,7 +2270,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setLocationSelectionCameFrom('myAddresses');
     setAddressSelectionCameFrom('myAddresses');
     setEditingAddress(null); // Clear any editing address
-    setCurrentScreen('locationSelection');
+    navigateToScreen('locationSelection');
 
     // Animate the location screen in
     Animated.timing(locationScreenSlide, {
@@ -2278,7 +2284,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     // Set the correct navigation source
     setLocationSelectionCameFrom('myAddresses');
     setEditingAddress(address); // Store the address being edited
-    setCurrentScreen('locationSelection');
+    navigateToScreen('locationSelection');
 
     // Animate the location screen in
     Animated.timing(locationScreenSlide, {
@@ -2290,17 +2296,17 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
   // Explore Dishes (Favorites) Navigation
   const handleNavigateToExploreDishes = () => {
-    setCurrentScreen('exploreDishes');
+    navigateToScreen('exploreDishes');
   };
 
   const handleBackFromExploreDishes = () => {
-    setCurrentScreen('profile');
+    navigateToScreen('profile');
   };
 
   // Privacy Policy Navigation
   const handleNavigateToPrivacyPolicy = (from: 'profile' | 'login' | 'otp' = 'profile') => {
     setLegalCameFrom(from);
-    setCurrentScreen('privacyPolicy');
+    navigateToScreen('privacyPolicy');
 
     if (from === 'profile') {
       Animated.parallel([
@@ -2333,7 +2339,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         duration: 180,
         useNativeDriver: true,
       }).start(() => {
-        setCurrentScreen('login');
+        navigateToScreen('login');
       });
     } else if (legalCameFrom === 'otp') {
       Animated.timing(privacyPolicyScreenSlide, {
@@ -2341,7 +2347,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         duration: 180,
         useNativeDriver: true,
       }).start(() => {
-        setCurrentScreen('otp');
+        navigateToScreen('otp');
       });
     } else {
       Animated.parallel([
@@ -2356,7 +2362,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           useNativeDriver: true,
         }),
       ]).start(() => {
-        setCurrentScreen('profile');
+        navigateToScreen('profile');
       });
     }
   };
@@ -2364,7 +2370,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   // Terms & Conditions Navigation
   const handleNavigateToTermsConditions = (from: 'profile' | 'login' | 'otp' = 'profile') => {
     setLegalCameFrom(from);
-    setCurrentScreen('termsConditions');
+    navigateToScreen('termsConditions');
 
     if (from === 'profile') {
       Animated.parallel([
@@ -2397,7 +2403,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         duration: 180,
         useNativeDriver: true,
       }).start(() => {
-        setCurrentScreen('login');
+        navigateToScreen('login');
       });
     } else if (legalCameFrom === 'otp') {
       Animated.timing(termsConditionsScreenSlide, {
@@ -2405,7 +2411,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         duration: 180,
         useNativeDriver: true,
       }).start(() => {
-        setCurrentScreen('otp');
+        navigateToScreen('otp');
       });
     } else {
       Animated.parallel([
@@ -2420,14 +2426,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           useNativeDriver: true,
         }),
       ]).start(() => {
-        setCurrentScreen('profile');
+        navigateToScreen('profile');
       });
     }
   };
 
   // FAQ Navigation
   const handleNavigateToFaq = () => {
-    setCurrentScreen('faq');
+    navigateToScreen('faq');
     setLegalCameFrom('profile');
 
     Animated.parallel([
@@ -2451,7 +2457,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         duration: 180,
         useNativeDriver: true,
       }).start(() => {
-        setCurrentScreen('login');
+        navigateToScreen('login');
         setLegalCameFrom('profile');
       });
     } else {
@@ -2467,7 +2473,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           useNativeDriver: true,
         }),
       ]).start(() => {
-        setCurrentScreen('profile');
+        navigateToScreen('profile');
       });
     }
   };
@@ -2482,7 +2488,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
   const handleNavigateToContactUs = (from: 'profile' | 'orders' | 'orderDetail' = 'profile') => {
     setContactUsCameFrom(from);
-    setCurrentScreen('contactUs');
+    navigateToScreen('contactUs');
 
     if (from === 'profile') {
       Animated.parallel([
@@ -2517,25 +2523,25 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           useNativeDriver: true,
         }),
       ]).start(() => {
-        setCurrentScreen('profile');
+        navigateToScreen('profile');
       });
     } else if (contactUsCameFrom === 'orderDetail') {
       // Back to order detail screen - instant, no animation
       contactUsScreenSlide.setValue(SCREEN_WIDTH);
       orderDetailScreenSlide.setValue(0);
-      setCurrentScreen('orderDetail');
+      navigateToScreen('orderDetail');
     } else {
       // Back to orders screen - instant, no animation
       contactUsScreenSlide.setValue(SCREEN_WIDTH);
       ordersScreenSlide.setValue(0);
-      setCurrentScreen('orders');
+      navigateToScreen('orders');
     }
   };
 
   const handleNavigateToHelp = (from: 'profile' | 'orders' = 'profile', order?: OrderListItem) => {
     setHelpCameFrom(from);
     setHelpOrderData(order ?? null);
-    setCurrentScreen('help');
+    navigateToScreen('help');
 
     setIsHelpClosing(false);
 
@@ -2571,7 +2577,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       return;
     }
     if (!deferTargetScreenUntilAnimationEnd && currentScreen !== targetScreen) {
-      setCurrentScreen(targetScreen);
+      navigateToScreen(targetScreen);
     }
     setIsHelpClosing(true);
     const animations = [
@@ -2594,7 +2600,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
     Animated.parallel(animations).start(() => {
       if (deferTargetScreenUntilAnimationEnd && currentScreenRef.current !== targetScreen) {
-        setCurrentScreen(targetScreen);
+        navigateToScreen(targetScreen);
       }
       setIsHelpClosing(false);
       setHelpOrderData(null);
@@ -2630,23 +2636,23 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
   // Edit Profile Navigation
   const handleNavigateToEditProfile = () => {
-    setCurrentScreen('editProfile');
+    navigateToScreen('editProfile');
   };
 
   const handleBackFromEditProfile = () => {
-    setCurrentScreen('profile');
+    navigateToScreen('profile');
   };
 
   // Rate Order Navigation
   const handleNavigateToRateOrder = (orderId: string, orderData?: any) => {
     setSelectedOrderId(orderId);
     setSelectedOrderData(orderData);
-    setCurrentScreen('rateOrder');
+    navigateToScreen('rateOrder');
   };
 
   const handleBackFromRateOrder = () => {
     resetOrdersPersistence(); // Auto refresh the orders page after rating
-    setCurrentScreen('orders');
+    navigateToScreen('orders');
     setSelectedOrderData(null);
   };
 
@@ -2654,7 +2660,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const handleNavigateToOrderTracking = (orderId: string, cameFrom?: 'orders' | 'checkout' | 'orderDetail') => {
     setSelectedOrderId(orderId);
     setOrderTrackingCameFrom(cameFrom || 'orders');
-    setCurrentScreen('orderTracking');
+    navigateToScreen('orderTracking');
   };
 
   const handleBackFromOrderTracking = () => {
@@ -2668,43 +2674,43 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       setSelectedRestaurantAddress('');
       // Set screen to home immediately - this ensures RestaurantScreen is not visible
       // RestaurantScreen only shows when currentScreen === 'restaurant'
-      setCurrentScreen('home');
+      navigateToScreen('home');
       setOrderTrackingCameFrom('orders'); // Reset for next time
     } else if (orderTrackingCameFrom === 'orderDetail') {
       // If came from order detail, go back to order detail
-      setCurrentScreen('orderDetail');
+      navigateToScreen('orderDetail');
     } else {
       // If came from orders, go back to orders
-      setCurrentScreen('orders');
+      navigateToScreen('orders');
     }
   };
 
   // Chat Navigation
   const handleNavigateToOrderHelp = () => {
     setChatCameFrom('orderDetail');
-    setCurrentScreen('chat');
+    navigateToScreen('chat');
   };
 
   const handleBackFromChat = () => {
     // Navigate back based on where we came from
     if (chatCameFrom === 'orderDetail') {
-      setCurrentScreen('orderDetail');
+      navigateToScreen('orderDetail');
       setChatCameFrom(null);
     } else if (chatCameFrom === 'help') {
-      setCurrentScreen('help');
+      navigateToScreen('help');
       setChatCameFrom(null);
     } else {
       // Fallback: if chatCameFrom is not set, try to determine from context
       // Priority: orderDetail (if we have selectedOrderId) > help > orders
       if (selectedOrderId) {
         // If we have a selected order, likely came from orderDetail
-        setCurrentScreen('orderDetail');
+        navigateToScreen('orderDetail');
       } else if (helpCameFrom === 'orders' || helpCameFrom === 'profile') {
         // If help screen was accessed, go back to help
-        setCurrentScreen('help');
+        navigateToScreen('help');
       } else {
         // Ultimate fallback: go to orders screen (safe default)
-        setCurrentScreen('orders');
+        navigateToScreen('orders');
       }
       setChatCameFrom(null);
     }
@@ -2715,7 +2721,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setHasSearchMounted(true);
     searchScreenSlide.stopAnimation();
     searchScreenSlide.setValue(SCREEN_WIDTH);
-    setCurrentScreen('search');
+    navigateToScreen('search');
 
     // Track search start
     analyticsService.logEvent(AnalyticsEvents.SEARCH, { source: 'home_search' });
@@ -2736,7 +2742,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       useNativeDriver: true,
     }).start(() => {
       homeScreenSlide.setValue(0);
-      setCurrentScreen('home');
+      navigateToScreen('home');
     });
   };
 
@@ -2930,7 +2936,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           setSelectedRestaurantName(restaurantName);
           // Remember that we came from orders/orderDetail screen
           setRestaurantCameFrom(currentScreen === 'orders' || currentScreen === 'orderDetail' ? 'orders' : 'home');
-          setCurrentScreen('restaurant');
+          navigateToScreen('restaurant');
 
           Animated.timing(restaurantScreenSlide, {
             toValue: 0,
@@ -3237,7 +3243,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                     // Navigate to category results screen to show restaurants with this dish
                     setSelectedCategory(itemName);
                     setCategoryCameFrom('search');
-                    setCurrentScreen('categoryResults');
+                    navigateToScreen('categoryResults');
 
                     // Close search screen with animation
                     Animated.timing(searchScreenSlide, {
@@ -3255,7 +3261,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                     restaurantScreenSlide.setValue(SCREEN_WIDTH);
 
                     // Set screen to restaurant
-                    setCurrentScreen('restaurant');
+                    navigateToScreen('restaurant');
 
                     // Small delay to ensure screen is mounted before animation
                     requestAnimationFrame(() => {
@@ -3303,13 +3309,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                     // Navigate to category results screen to show restaurants with this dish
                     setSelectedCategory(item.name);
                     setCategoryCameFrom('favorites');
-                    setCurrentScreen('categoryResults');
+                    navigateToScreen('categoryResults');
                   }}
                   onSelectRestaurant={(restaurantId, restaurantName) => {
                     setSelectedRestaurantId(Number(restaurantId));
                     setSelectedRestaurantName(restaurantName);
                     setRestaurantCameFrom('favorites');
-                    setCurrentScreen('restaurant');
+                    navigateToScreen('restaurant');
 
                     // Animate restaurant screen sliding in from right
                     Animated.timing(restaurantScreenSlide, {
@@ -3433,24 +3439,24 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                     if (orderId) {
                       setSelectedOrderId(orderId.toString());
                     }
-                    setCurrentScreen('orders');
+                    navigateToScreen('orders');
                   });
                 }}
                 onNavigateToHome={() => {
                   // Close restaurant screen and go back to appropriate screen
                   if (restaurantCameFrom === 'orders') {
                     // If came from orders (reorder flow), go back to orders screen
-                    setCurrentScreen('orders');
+                    navigateToScreen('orders');
                   } else if (restaurantCameFrom === 'home') {
-                    setCurrentScreen('home');
+                    navigateToScreen('home');
                   } else if (restaurantCameFrom === 'category') {
-                    setCurrentScreen('home');
+                    navigateToScreen('home');
                   } else if (restaurantCameFrom === 'search') {
-                    setCurrentScreen('home');
+                    navigateToScreen('home');
                   } else if (restaurantCameFrom === 'favorites') {
-                    setCurrentScreen('home');
+                    navigateToScreen('home');
                   } else {
-                    setCurrentScreen('home');
+                    navigateToScreen('home');
                   }
 
                   // Animate restaurant screen sliding out to the right

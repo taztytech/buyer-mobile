@@ -8,6 +8,8 @@ import {
   ScrollView,
   Image,
   Animated,
+  BackHandler,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@/shims/rn-vector-icons';
@@ -153,6 +155,18 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
   const categoryScrollViewRef = useRef<ScrollView>(null);
   const hasAutoScrolledRef = useRef(false);
   const isUserScrollingRef = useRef(false);
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
+
+  // Android: handle back here so App.tsx never sees a stale route ref (e.g. exploreDishes → profile).
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onBackRef.current?.();
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
