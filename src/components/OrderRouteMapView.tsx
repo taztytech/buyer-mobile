@@ -72,6 +72,10 @@ const haversineMeters = (lat1: number, lng1: number, lat2: number, lng2: number)
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadius * c;
 };
+const distanceFromPointMeters = (
+  a: OrderRouteCoordinate,
+  b: OrderRouteCoordinate,
+): number => haversineMeters(a.latitude, a.longitude, b.latitude, b.longitude);
 const computeBearing = (
   lat1: number,
   lng1: number,
@@ -146,9 +150,8 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
     if (storeToAgentRouteCoordinates && storeToAgentRouteCoordinates.length > 1) {
       return storeToAgentRouteCoordinates;
     }
-    if (showStoreToAgentRoute && agentPointForStoreLeg) {
-      return [restaurantCoordinate, agentPointForStoreLeg];
-    }
+    // In live mode, do not draw a straight fallback segment for rider->store.
+    // Wait for decoded road geometry from API/fetch.
     return null;
   }, [
     storeToAgentRouteCoordinates,
@@ -342,6 +345,50 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
   const isDarkMode = Appearance.getColorScheme() === 'dark';
   const useNightTheme = isDarkMode;
   const riderIconSource = useNightTheme ? riderNightAsset : riderDayAsset;
+  const mainRouteCoordinates = useMemo((): OrderRouteCoordinate[] | null => {
+    // Always require road geometry. A 2-point route is straight fallback.
+    if (routeCoordinates && routeCoordinates.length > 2) return routeCoordinates;
+    return null;
+  }, [
+    routeCoordinates,
+  ]);
+  const storeJoinIndexInMainRoute = useMemo(() => {
+    if (!mainRouteCoordinates || mainRouteCoordinates.length < 3) return -1;
+    let nearestIndex = -1;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    mainRouteCoordinates.forEach((point, index) => {
+      const distance = distanceFromPointMeters(point, restaurantCoordinate);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    });
+    return nearestIndex;
+  }, [mainRouteCoordinates, restaurantCoordinate]);
+  const customerLegCoordinates = useMemo((): OrderRouteCoordinate[] | null => {
+    if (!mainRouteCoordinates || mainRouteCoordinates.length < 2) return null;
+    if (storeJoinIndexInMainRoute <= 0) return mainRouteCoordinates;
+    const fromStore = mainRouteCoordinates.slice(storeJoinIndexInMainRoute);
+    return fromStore.length > 1 ? fromStore : mainRouteCoordinates;
+  }, [mainRouteCoordinates, storeJoinIndexInMainRoute]);
+  const effectiveStoreToAgentPolylineCoords = useMemo((): OrderRouteCoordinate[] | null => {
+    if (storeToAgentPolylineCoords && storeToAgentPolylineCoords.length > 1) {
+      return storeToAgentPolylineCoords;
+    }
+    if (!mainRouteCoordinates || mainRouteCoordinates.length < 3 || storeJoinIndexInMainRoute <= 0) {
+      return null;
+    }
+    const toStore = mainRouteCoordinates.slice(0, storeJoinIndexInMainRoute + 1);
+    return toStore.length > 1 ? toStore : null;
+  }, [storeToAgentPolylineCoords, mainRouteCoordinates, storeJoinIndexInMainRoute]);
+  const showBlueLegOnly =
+    showStoreToAgentRoute &&
+    !!effectiveStoreToAgentPolylineCoords &&
+    effectiveStoreToAgentPolylineCoords.length > 1;
+  const showGreenLegOnly =
+    !showStoreToAgentRoute &&
+    !!customerLegCoordinates &&
+    customerLegCoordinates.length > 1;
 
   if (!isMapAvailable || !MapView || !Marker || !Polyline) {
     return (
@@ -378,41 +425,37 @@ export const OrderRouteMapView: React.FC<OrderRouteMapViewProps> = ({
         }}
       >
         {/* White outline behind route (Rider-style road emphasis) */}
-        <Polyline
-          coordinates={
-            routeCoordinates && routeCoordinates.length > 1
-              ? routeCoordinates
-              : [restaurantCoordinate, customerCoordinate]
-          }
-          strokeColor={routeOutlineColor}
-          strokeWidth={8}
-          lineCap="round"
-          lineJoin="round"
-        />
-        {/* Main store → customer route (brand green) */}
-        <Polyline
-          coordinates={
-            routeCoordinates && routeCoordinates.length > 1
-              ? routeCoordinates
-              : [restaurantCoordinate, customerCoordinate]
-          }
-          strokeColor={routePrimaryColor}
-          strokeWidth={5}
-          lineCap="round"
-          lineJoin="round"
-        />
-        {/* Agent ↔ store (blue + outline); road polyline or straight fallback */}
-        {storeToAgentPolylineCoords && storeToAgentPolylineCoords.length > 1 ? (
+        {showGreenLegOnly ? (
           <>
             <Polyline
-              coordinates={storeToAgentPolylineCoords}
+              coordinates={customerLegCoordinates}
+              strokeColor={routeOutlineColor}
+              strokeWidth={8}
+              lineCap="round"
+              lineJoin="round"
+            />
+            {/* Main store → customer route (brand green) */}
+            <Polyline
+              coordinates={customerLegCoordinates}
+              strokeColor={routePrimaryColor}
+              strokeWidth={5}
+              lineCap="round"
+              lineJoin="round"
+            />
+          </>
+        ) : null}
+        {/* Agent ↔ store (blue + outline); road polyline or straight fallback */}
+        {showBlueLegOnly ? (
+          <>
+            <Polyline
+              coordinates={effectiveStoreToAgentPolylineCoords}
               strokeColor={routeOutlineColor}
               strokeWidth={7}
               lineCap="round"
               lineJoin="round"
             />
             <Polyline
-              coordinates={storeToAgentPolylineCoords}
+              coordinates={effectiveStoreToAgentPolylineCoords}
               strokeColor="#1E5BE0"
               strokeWidth={4}
               lineCap="round"

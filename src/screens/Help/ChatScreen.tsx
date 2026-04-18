@@ -16,6 +16,7 @@ import {
   LayoutAnimation,
   UIManager,
   Animated,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@/shims/rn-vector-icons';
@@ -186,7 +187,29 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       typingDotLoopsRef.current = [];
       typingDotAnims.forEach(anim => anim.setValue(0));
     }
+
+    return () => {
+      // Ensure loops are always stopped when screen unmounts/hides
+      typingDotLoopsRef.current.forEach(loop => loop.stop && loop.stop());
+      typingDotLoopsRef.current = [];
+      typingDotAnims.forEach(anim => anim.setValue(0));
+    };
   }, [isBotTyping, typingDotAnims]);
+
+  // Handle Android hardware back directly while chat is visible.
+  // This avoids back-navigation races with parent/global handlers.
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'android') {
+      return;
+    }
+
+    const backSubscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      onBack?.();
+      return true;
+    });
+
+    return () => backSubscription.remove();
+  }, [visible, onBack]);
 
   const animateLayout = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);

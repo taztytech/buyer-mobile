@@ -22,14 +22,12 @@ export interface ExotelCallResponse {
 class ExotelService {
   private getExotelApiUrl(): string {
     // Get seller base URL from environment config
-    const sellerBaseUrl = Constants.appConfig?.extra?.TAZTY_SELLER_BASEURL as string | undefined;
-    
-    if (!sellerBaseUrl) {
-      throw new Error('TAZTY_SELLER_BASEURL is not configured in environment variables');
-    }
+    const sellerBaseUrl =
+      (Constants.appConfig?.extra?.TAZTY_SELLER_BASEURL as string | undefined) ||
+      'https://api.valardigital.in';
     
     // Construct the full Exotel API URL by appending /exotel to the base URL
-    return `${sellerBaseUrl}/exotel`;
+    return `${String(sellerBaseUrl).trim().replace(/\/+$/, '')}/exotel`;
   }
 
   /**

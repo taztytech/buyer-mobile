@@ -42,6 +42,7 @@ import { resolveTrackingDisplayOrder, resolveAgentPhoneForExotel } from './track
 import { computeShowStoreToAgentRoute } from './orderTrackingRouteVisibility';
 import { CancelReasonModal } from '@/components/CancelReasonModal';
 import { appConfigService } from '@/services/app-config.service';
+import { config } from '@/constants/config';
 
 const toRadians = (deg: number): number => (deg * Math.PI) / 180;
 const routeDistanceMeters = (
@@ -93,6 +94,99 @@ const decodeRoutePolyline = (encoded: string): Array<{ latitude: number; longitu
   }
 
   return points;
+};
+
+const toCoordinateList = (
+  coordinates: unknown,
+): Array<{ latitude: number; longitude: number }> => {
+  if (!Array.isArray(coordinates)) return [];
+  const points: Array<{ latitude: number; longitude: number }> = [];
+  for (const point of coordinates) {
+    if (!Array.isArray(point) || point.length < 2) continue;
+    const lon = Number(point[0]);
+    const lat = Number(point[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    points.push({ latitude: lat, longitude: lon });
+  }
+  return points;
+};
+
+const getMapsApiKey = (): string => {
+  const candidateKeys = [
+    process.env.GOOGLE_MAPS_API_KEY,
+    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+    process.env.PUBLIC_GOOGLE_MAPS_API_KEY,
+    config.apiKey,
+  ];
+  for (const key of candidateKeys) {
+    const normalized = String(key || '').trim();
+    if (normalized.length > 0) return normalized;
+  }
+  return '';
+};
+
+const fetchRoadRouteCoordinates = async (
+  origin: { latitude: number; longitude: number },
+  destination: { latitude: number; longitude: number },
+  mapsApiKey: string,
+): Promise<Array<{ latitude: number; longitude: number }> | null> => {
+  const fetchJsonWithTimeout = async (url: string, timeoutMs: number) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      const payload = await response.json();
+      return { response, payload };
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
+  const requests: Array<Promise<Array<{ latitude: number; longitude: number }>>> = [];
+
+  if (mapsApiKey) {
+    requests.push((async () => {
+      const googleUrl =
+        `https://maps.googleapis.com/maps/api/directions/json` +
+        `?origin=${encodeURIComponent(`${origin.latitude},${origin.longitude}`)}` +
+        `&destination=${encodeURIComponent(`${destination.latitude},${destination.longitude}`)}` +
+        `&mode=driving&alternatives=false&key=${encodeURIComponent(mapsApiKey)}`;
+      const { response, payload } = await fetchJsonWithTimeout(googleUrl, 3000);
+      if (!(response.ok && payload?.status === 'OK')) throw new Error('google_route_unavailable');
+      const encoded = payload?.routes?.[0]?.overview_polyline?.points;
+      const decoded = typeof encoded === 'string' ? decodeRoutePolyline(encoded) : [];
+      if (decoded.length < 2) throw new Error('google_route_empty');
+      return decoded;
+    })());
+  }
+
+  requests.push((async () => {
+    const primaryUrl =
+      `https://router.project-osrm.org/route/v1/driving/` +
+      `${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}` +
+      `?overview=full&geometries=geojson&alternatives=false&steps=false`;
+    const { payload } = await fetchJsonWithTimeout(primaryUrl, 2600);
+    const parsed = toCoordinateList(payload?.routes?.[0]?.geometry?.coordinates);
+    if (parsed.length < 2) throw new Error('osrm_primary_empty');
+    return parsed;
+  })());
+
+  requests.push((async () => {
+    const backupUrl =
+      `https://routing.openstreetmap.de/routed-car/route/v1/driving/` +
+      `${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}` +
+      `?overview=full&geometries=geojson&alternatives=false&steps=false`;
+    const { payload } = await fetchJsonWithTimeout(backupUrl, 2600);
+    const parsed = toCoordinateList(payload?.routes?.[0]?.geometry?.coordinates);
+    if (parsed.length < 2) throw new Error('osrm_backup_empty');
+    return parsed;
+  })());
+
+  try {
+    return await Promise.any(requests);
+  } catch {
+    return null;
+  }
 };
 
 const resolveDeliveryCode = (order: any): string | null => {
@@ -1044,11 +1138,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   useEffect(() => {
     if (!showTrackingWebView || !fallbackMapCoords) return;
 
-    const mapsApiKey = (process.env.PUBLIC_GOOGLE_MAPS_API_KEY || '').trim();
-    if (!mapsApiKey) {
-      setRoadRouteCoordinates(null);
-      return;
-    }
+    const mapsApiKey = getMapsApiKey();
 
     const origin = fallbackMapCoords.routeOriginCoordinate;
     const destination = fallbackMapCoords.routeTargetCoordinate;
@@ -1065,27 +1155,13 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
     let cancelled = false;
     const fetchRoadRoute = async () => {
-      try {
-        const url =
-          `https://maps.googleapis.com/maps/api/directions/json` +
-          `?origin=${encodeURIComponent(`${origin.latitude},${origin.longitude}`)}` +
-          `&destination=${encodeURIComponent(`${destination.latitude},${destination.longitude}`)}` +
-          `&mode=driving&alternatives=false&key=${encodeURIComponent(mapsApiKey)}`;
-        const response = await fetch(url);
-        const payload = await response.json();
-        const encoded = payload?.routes?.[0]?.overview_polyline?.points;
-        if (!cancelled && typeof encoded === 'string' && encoded.length > 0) {
-          const decoded = decodeRoutePolyline(encoded);
-          if (decoded.length > 1) {
-            setRoadRouteCoordinates(decoded);
-            lastRouteFetchRef.current = { stage, origin, destination };
-            return;
-          }
-        }
-        if (!cancelled) setRoadRouteCoordinates(null);
-      } catch {
-        if (!cancelled) setRoadRouteCoordinates(null);
+      const route = await fetchRoadRouteCoordinates(origin, destination, mapsApiKey);
+      if (!cancelled && route && route.length > 1) {
+        setRoadRouteCoordinates(route);
+        lastRouteFetchRef.current = { stage, origin, destination };
+        return;
       }
+      if (!cancelled) setRoadRouteCoordinates(null);
     };
 
     fetchRoadRoute();
@@ -1106,11 +1182,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       return;
     }
 
-    const mapsApiKey = (process.env.PUBLIC_GOOGLE_MAPS_API_KEY || '').trim();
-    if (!mapsApiKey) {
-      setStoreToAgentRouteCoordinates(null);
-      return;
-    }
+    const mapsApiKey = getMapsApiKey();
 
     const origin = fallbackMapCoords.restaurantCoordinate;
     const destination = fallbackMapCoords.agentCoordinate;
@@ -1124,27 +1196,13 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
     let cancelled = false;
     const fetchStoreToAgentRoute = async () => {
-      try {
-        const url =
-          `https://maps.googleapis.com/maps/api/directions/json` +
-          `?origin=${encodeURIComponent(`${origin.latitude},${origin.longitude}`)}` +
-          `&destination=${encodeURIComponent(`${destination.latitude},${destination.longitude}`)}` +
-          `&mode=driving&alternatives=false&key=${encodeURIComponent(mapsApiKey)}`;
-        const response = await fetch(url);
-        const payload = await response.json();
-        const encoded = payload?.routes?.[0]?.overview_polyline?.points;
-        if (!cancelled && typeof encoded === 'string' && encoded.length > 0) {
-          const decoded = decodeRoutePolyline(encoded);
-          if (decoded.length > 1) {
-            setStoreToAgentRouteCoordinates(decoded);
-            lastStoreToAgentRouteFetchRef.current = { origin, destination };
-            return;
-          }
-        }
-        if (!cancelled) setStoreToAgentRouteCoordinates(null);
-      } catch {
-        if (!cancelled) setStoreToAgentRouteCoordinates(null);
+      const route = await fetchRoadRouteCoordinates(origin, destination, mapsApiKey);
+      if (!cancelled && route && route.length > 1) {
+        setStoreToAgentRouteCoordinates(route);
+        lastStoreToAgentRouteFetchRef.current = { origin, destination };
+        return;
       }
+      if (!cancelled) setStoreToAgentRouteCoordinates(null);
     };
 
     fetchStoreToAgentRoute();
@@ -2296,7 +2354,9 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 routeCoordinates={
                   roadRouteCoordinates && roadRouteCoordinates.length > 1
                     ? roadRouteCoordinates
-                    : fallbackMapCoords.routeCoordinates
+                    : fallbackMapCoords.mode === 'live'
+                      ? undefined
+                      : fallbackMapCoords.routeCoordinates
                 }
                 storeToAgentRouteCoordinates={storeToAgentRouteCoordinates}
                 showStoreToAgentRoute={fallbackMapCoords.showStoreToAgentRoute}

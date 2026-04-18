@@ -1319,6 +1319,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       setRestaurantData(null);
       setMenuSections([]);
       cartReloadedRef.current = false;
+      // Reset search state so a stale `showSearch=true` cannot leak a BackHandler
+      // onto other screens after the user navigates away.
+      setShowSearch(false);
     }
   }, [visible, restaurantId, defaultAddressCoords]);
 
@@ -1372,8 +1375,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     }
   }, [menuSections]);
 
-  // Handle Android back button
+  // Handle Android back button.
+  // Guard with `visible` so this handler does not leak onto other screens
+  // (e.g. ExploreDishes / Home) when RestaurantScreen is mounted but hidden.
   useEffect(() => {
+    if (!visible) return;
+
     const backAction = () => {
       // If search is open, close it
       if (showSearch) {
@@ -1387,7 +1394,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
 
     return () => backHandler.remove();
-  }, [showSearch]);
+  }, [visible, showSearch]);
 
   // Animate background when modal opens/closes
   useEffect(() => {

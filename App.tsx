@@ -126,6 +126,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const pendingDeepLinkUrlRef = React.useRef<string | null>(null);
   const currentScreenRef = React.useRef(currentScreen);
   currentScreenRef.current = currentScreen;
+  const isRestaurantBackTransitioningRef = React.useRef(false);
+  const isHandlingAndroidBackRef = React.useRef(false);
+  const lastAndroidBackPressAtRef = React.useRef(0);
 
   const normalizeOrderStatus = React.useCallback((status: unknown): string => {
     return String(status || '')
@@ -734,7 +737,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               setCurrentScreen('login');
               setPhoneNumber('');
             } else {
-              await authService.guestLogin().catch(() => {});
+              await authService.guestLogin().catch(() => { });
               setAddressSelectionCameFrom('home');
               setLocationSelectionCameFrom('home');
               setSearchQuery('');
@@ -755,7 +758,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             if (wasRegisteredUser) {
               setCurrentScreen('login');
             } else {
-              await authService.guestLogin().catch(() => {});
+              await authService.guestLogin().catch(() => { });
               setAddressSelectionCameFrom('home');
               setLocationSelectionCameFrom('home');
               setSearchQuery('');
@@ -817,7 +820,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               setCurrentScreen('login');
               setPhoneNumber('');
             } else {
-              await authService.guestLogin().catch(() => {});
+              await authService.guestLogin().catch(() => { });
               setAddressSelectionCameFrom('home');
               setLocationSelectionCameFrom('home');
               setSearchQuery('');
@@ -838,7 +841,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             if (wasRegisteredUser) {
               setCurrentScreen('login');
             } else {
-              await authService.guestLogin().catch(() => {});
+              await authService.guestLogin().catch(() => { });
               setAddressSelectionCameFrom('home');
               setLocationSelectionCameFrom('home');
               setSearchQuery('');
@@ -1066,6 +1069,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         handleBackFromContactUs();
         return true;
       case 'help':
+        if (isHelpClosing) {
+          return true;
+        }
         handleBackFromHelp();
         return true;
       case 'login':
@@ -1115,7 +1121,33 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       // Always read latest route — avoids handling back with a stale screen before this effect re-runs
       // (e.g. user on Login UI but listener still thinks previous screen was locationSelection).
       const screen = currentScreenRef.current;
-      return handleBackNavigation(screen);
+      if (Platform.OS !== 'android') {
+        return handleBackNavigation(screen);
+      }
+
+      const now = Date.now();
+      const MIN_BACK_GAP_MS = 280;
+
+      if (isHandlingAndroidBackRef.current) {
+        return true;
+      }
+      if (now - lastAndroidBackPressAtRef.current < MIN_BACK_GAP_MS) {
+        return true;
+      }
+
+      lastAndroidBackPressAtRef.current = now;
+      isHandlingAndroidBackRef.current = true;
+
+      const handled = handleBackNavigation(screen);
+      if (!handled) {
+        isHandlingAndroidBackRef.current = false;
+        return false;
+      }
+
+      setTimeout(() => {
+        isHandlingAndroidBackRef.current = false;
+      }, MIN_BACK_GAP_MS);
+      return true;
     };
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
@@ -2059,6 +2091,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
   // Back from Restaurant (dynamic based on where we came from)
   const handleBackFromRestaurant = () => {
+    if (isRestaurantBackTransitioningRef.current) {
+      return;
+    }
+    isRestaurantBackTransitioningRef.current = true;
+
     // For checkout return flow, switch instantly to avoid showing intermediate screens.
     if (restaurantCameFrom === 'checkout') {
       // Prevent in-flight animations from overriding values after back is pressed.
@@ -2069,8 +2106,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       // After returning from "Add More Items", next back from checkout should go home.
       setCheckoutCameFrom('home');
       setCurrentScreen('checkout');
+      setTimeout(() => {
+        isRestaurantBackTransitioningRef.current = false;
+      }, 220);
       return;
     }
+
+    restaurantScreenSlide.stopAnimation();
 
     // Animate restaurant screen sliding out to the right
     Animated.timing(restaurantScreenSlide, {
@@ -2099,6 +2141,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       } else {
         setCurrentScreen('categoryResults');
       }
+      isRestaurantBackTransitioningRef.current = false;
     });
   };
 
@@ -2175,15 +2218,12 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       setOrdersCameFrom('profile');
     }
 
-    // Animate order detail screen out
-    Animated.timing(orderDetailScreenSlide, {
-      toValue: SCREEN_WIDTH,
-      duration: 0,  // Instant
-      useNativeDriver: true,
-    }).start(() => {
-      setCurrentScreen('orders');
-      ordersScreenSlide.setValue(0);
-    });
+    // Avoid relying on zero-duration animation callback on Android.
+    // Directly update slide values and screen state for deterministic back navigation.
+    orderDetailScreenSlide.stopAnimation();
+    orderDetailScreenSlide.setValue(SCREEN_WIDTH);
+    ordersScreenSlide.setValue(0);
+    setCurrentScreen('orders');
   };
 
   // My Addresses Navigation
@@ -2524,9 +2564,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
   const closeHelpScreen = (
     targetScreen: typeof currentScreen,
-    afterStateCallback?: () => void
+    afterStateCallback?: () => void,
+    deferTargetScreenUntilAnimationEnd: boolean = false
   ) => {
-    if (currentScreen !== targetScreen) {
+    if (isHelpClosing) {
+      return;
+    }
+    if (!deferTargetScreenUntilAnimationEnd && currentScreen !== targetScreen) {
       setCurrentScreen(targetScreen);
     }
     setIsHelpClosing(true);
@@ -2549,6 +2593,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     }
 
     Animated.parallel(animations).start(() => {
+      if (deferTargetScreenUntilAnimationEnd && currentScreenRef.current !== targetScreen) {
+        setCurrentScreen(targetScreen);
+      }
       setIsHelpClosing(false);
       setHelpOrderData(null);
       afterStateCallback?.();
@@ -2556,7 +2603,20 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const handleBackFromHelp = () => {
-    closeHelpScreen(helpCameFrom);
+    // Android safety: normalize potentially stale OrderDetail state before returning to Orders.
+    // This prevents a hidden OrderDetail overlay/back-path from reactivating after Help closes.
+    if (helpCameFrom === 'orders') {
+      orderDetailScreenSlide.stopAnimation();
+      orderDetailScreenSlide.setValue(SCREEN_WIDTH);
+      setOrderDetailCameFrom('orders');
+      setSelectedOrderId('');
+      setSelectedOrderData(null);
+      setChatCameFrom(null);
+    }
+
+    // Always defer screen switch until Help close animation completes.
+    // This avoids transient route mismatch during Android back dispatch.
+    closeHelpScreen(helpCameFrom, undefined, true);
   };
 
   const handleHelpViewOrder = (orderId: string) => {
@@ -2934,11 +2994,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           <NetworkStatusScreen selectedLocation={selectedLocation} />
         ) : !isCheckingAuth && (currentScreen === 'login' || (['termsConditions', 'privacyPolicy'].includes(currentScreen) && legalCameFrom === 'login')) ? (
           <LoginScreen
-              initialPhoneNumber={phoneNumber}
-              onLoginSuccess={handleLoginSuccess}
-              onBack={handleBackFromLogin}
-              onOpenTerms={() => handleNavigateToTermsConditions('login')}
-              onOpenPrivacy={() => handleNavigateToPrivacyPolicy('login')}
+            initialPhoneNumber={phoneNumber}
+            onLoginSuccess={handleLoginSuccess}
+            onBack={handleBackFromLogin}
+            onOpenTerms={() => handleNavigateToTermsConditions('login')}
+            onOpenPrivacy={() => handleNavigateToPrivacyPolicy('login')}
           />
         ) : !isCheckingAuth && (currentScreen === 'otp' || (['termsConditions', 'privacyPolicy'].includes(currentScreen) && legalCameFrom === 'otp')) ? (
           <OTPVerificationScreen
@@ -2962,194 +3022,194 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               ]}
             >
               <HomeScreen
-              onLogout={handleLogout}
-              onNavigateToProfile={handleNavigateToProfile}
-              onNavigateToAddressSelection={handleNavigateToAddressSelection}
-              onNavigateToCategory={handleNavigateToCategoryResults}
-              onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
-              onNavigateToCheckout={handleNavigateToCheckout}
-              onNavigateToSearch={handleNavigateToSearch}
-              onNavigateToLocationSelection={handleNavigateToLocationSelectionFromHome}
-              selectedLocation={selectedLocation}
-              onCategoriesLoaded={setCategoryData}
-              isFocused={currentScreen === 'home'}
-              addressRefreshTrigger={addressRefreshTrigger}
-              onForcedUpdateRequired={handleForcedUpdateRequired}
-              isGuest={!isAuthenticatedRef.current}
-              onNavigateToLogin={transitionGuestToLogin}
+                onLogout={handleLogout}
+                onNavigateToProfile={handleNavigateToProfile}
+                onNavigateToAddressSelection={handleNavigateToAddressSelection}
+                onNavigateToCategory={handleNavigateToCategoryResults}
+                onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
+                onNavigateToCheckout={handleNavigateToCheckout}
+                onNavigateToSearch={handleNavigateToSearch}
+                onNavigateToLocationSelection={handleNavigateToLocationSelectionFromHome}
+                selectedLocation={selectedLocation}
+                onCategoriesLoaded={setCategoryData}
+                isFocused={currentScreen === 'home'}
+                addressRefreshTrigger={addressRefreshTrigger}
+                onForcedUpdateRequired={handleForcedUpdateRequired}
+                isGuest={!isAuthenticatedRef.current}
+                onNavigateToLogin={transitionGuestToLogin}
               />
             </Animated.View>
 
             {/* Always render ProfileScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.profileOverlay,
-              {
-                transform: [{ translateX: profileScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'profile' || currentScreen === 'editProfile' ? 'auto' : 'none'}
-          >
-            <ProfileScreen
-              visible={currentScreen === 'profile'}
-              onBack={handleBackToHome}
-              onLogout={handleLogout}
-              onEditProfile={handleNavigateToEditProfile}
-              onMyOrders={handleNavigateToOrders}
-              onMyAddresses={handleNavigateToMyAddresses}
-              onFavorites={handleNavigateToExploreDishes}
-              onContactUs={() => handleNavigateToContactUs('profile')}
-              onPrivacyPolicy={handleNavigateToPrivacyPolicy}
-              onTermsConditions={handleNavigateToTermsConditions}
-              onFaq={handleNavigateToFaq}
-            />
-          </Animated.View>
-
-          {/* Always render AddressSelectionScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.addressOverlay,
-              {
-                transform: [{ translateX: addressScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'addressSelection' || currentScreen === 'locationSelection' ? 'auto' : 'none'}
-          >
-            <AddressSelectionScreen
-              visible={currentScreen === 'addressSelection'}
-              isGuest={!isAuthenticatedRef.current}
-              onBack={handleBackFromAddressSelection}
-              onUseCurrentLocation={(latitude, longitude) => handleNavigateToLocationSelection(undefined, latitude, longitude)}
-              onSearch={(query) => handleNavigateToLocationSelection(query)}
-              onSelectAddress={(address) => {
-                // Capitalize the type (home -> Home, work -> Work, other -> Other)
-                const formattedType = address.type.charAt(0).toUpperCase() + address.type.slice(1);
-                const location = {
-                  name: formattedType,
-                  address: `${address.address}, ${address.city}`,
-                  latitude: address.latitude,
-                  longitude: address.longitude,
-                  type: address.type,
-                };
-                setSelectedLocation(location);
-                // Persist guest selection to AsyncStorage for next app open
-                if (!isAuthenticatedRef.current) {
-                  saveGuestLocation({ ...location, guestLocationSynced: false }).catch(() => {});
-                }
-                handleAddressChange();
-                handleBackFromAddressSelection();
-              }}
-            />
-          </Animated.View>
-
-          {/* Always render LocationSelectionScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.locationOverlay,
-              {
-                transform: [{ translateX: locationScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'locationSelection' ? 'auto' : 'none'}
-          >
-            <LocationSelectionScreen
-              visible={currentScreen === 'locationSelection'}
-              initialSearchQuery={locationSearchQuery}
-              editingAddress={editingAddress}
-              initialLatitude={editingAddress?.latitude || initialLocationCoords?.latitude}
-              initialLongitude={editingAddress?.longitude || initialLocationCoords?.longitude}
-              isGuest={!isAuthenticatedRef.current}
-              onBack={handleBackFromLocationSelection}
-              onLocationConfirm={handleLocationConfirm}
-            />
-          </Animated.View>
-
-          {/* Always render OrdersScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.ordersOverlay,
-              {
-                transform: [{ translateX: ordersScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'orders' ? 'auto' : 'none'}
-          >
-            <OrdersScreen
-              visible={currentScreen === 'orders'}
-              onBack={handleBackFromOrders}
-              onOrderDetails={handleNavigateToOrderDetail}
-              onReorder={handleReorder}
-              onRateOrder={handleNavigateToRateOrder}
-              highlightOrderId={highlightOrderId}
-              onTrackOrder={handleNavigateToOrderTracking}
-              onHelp={(order) => handleNavigateToHelp('orders', order)}
-              onContactUs={() => handleNavigateToContactUs('orders')}
-              onViewMore={() => {}}
-            />
-          </Animated.View>
-
-          {/* Always render OrderDetailScreen, positioned off-screen initially */}
-          <Animated.View
-            style={[
-              styles.orderDetailOverlay,
-              {
-                transform: [{ translateX: orderDetailScreenSlide }],
-              },
-            ]}
-            pointerEvents={currentScreen === 'orderDetail' ? 'auto' : 'none'}
-          >
-            <OrderDetailScreen
-              key={selectedOrderId}
-              orderId={selectedOrderId}
-              visible={currentScreen === 'orderDetail'}
-              onBack={handleBackFromOrderDetail}
-              onThankDriver={() => {}}
-              onRateOrder={handleNavigateToRateOrder}
-              onReorder={() => handleReorder(selectedOrderId)}
-              onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId, 'orderDetail')}
-              onDownloadInvoice={() => {}}
-              onContactUs={() => handleNavigateToContactUs('orderDetail')}
-              onHelp={handleNavigateToOrderHelp}
-            />
-          </Animated.View>
-
-          {/* Conditionally render ChatScreen */}
-          {currentScreen === 'chat' && (
-            <View style={styles.chatOverlay}>
-              <ChatScreen
-                visible={true}
-                onBack={handleBackFromChat}
-                helpOptionId={chatHelpOptionId}
-                helpOptionTitle={chatHelpOptionTitle}
-                orderId={selectedOrderId}
+            <Animated.View
+              style={[
+                styles.profileOverlay,
+                {
+                  transform: [{ translateX: profileScreenSlide }],
+                },
+              ]}
+              pointerEvents={currentScreen === 'profile' || currentScreen === 'editProfile' ? 'auto' : 'none'}
+            >
+              <ProfileScreen
+                visible={currentScreen === 'profile'}
+                onBack={handleBackToHome}
+                onLogout={handleLogout}
+                onEditProfile={handleNavigateToEditProfile}
+                onMyOrders={handleNavigateToOrders}
+                onMyAddresses={handleNavigateToMyAddresses}
+                onFavorites={handleNavigateToExploreDishes}
+                onContactUs={() => handleNavigateToContactUs('profile')}
+                onPrivacyPolicy={handleNavigateToPrivacyPolicy}
+                onTermsConditions={handleNavigateToTermsConditions}
+                onFaq={handleNavigateToFaq}
               />
-            </View>
-          )}
+            </Animated.View>
 
-          {/* Conditionally render RateOrderScreen only when needed */}
-          {currentScreen === 'rateOrder' && (
-            <View style={styles.rateOrderOverlay}>
-              <RateOrderScreen
-                orderId={parseInt(selectedOrderId)}
-                orderItems={selectedOrderData?.items || []}
-                onBack={handleBackFromRateOrder}
-                onSubmit={() => {
-                  handleBackFromRateOrder();
+            {/* Always render AddressSelectionScreen, positioned off-screen initially */}
+            <Animated.View
+              style={[
+                styles.addressOverlay,
+                {
+                  transform: [{ translateX: addressScreenSlide }],
+                },
+              ]}
+              pointerEvents={currentScreen === 'addressSelection' || currentScreen === 'locationSelection' ? 'auto' : 'none'}
+            >
+              <AddressSelectionScreen
+                visible={currentScreen === 'addressSelection'}
+                isGuest={!isAuthenticatedRef.current}
+                onBack={handleBackFromAddressSelection}
+                onUseCurrentLocation={(latitude, longitude) => handleNavigateToLocationSelection(undefined, latitude, longitude)}
+                onSearch={(query) => handleNavigateToLocationSelection(query)}
+                onSelectAddress={(address) => {
+                  // Capitalize the type (home -> Home, work -> Work, other -> Other)
+                  const formattedType = address.type.charAt(0).toUpperCase() + address.type.slice(1);
+                  const location = {
+                    name: formattedType,
+                    address: `${address.address}, ${address.city}`,
+                    latitude: address.latitude,
+                    longitude: address.longitude,
+                    type: address.type,
+                  };
+                  setSelectedLocation(location);
+                  // Persist guest selection to AsyncStorage for next app open
+                  if (!isAuthenticatedRef.current) {
+                    saveGuestLocation({ ...location, guestLocationSynced: false }).catch(() => { });
+                  }
+                  handleAddressChange();
+                  handleBackFromAddressSelection();
                 }}
               />
-            </View>
-          )}
+            </Animated.View>
 
-          {/* Conditionally render OrderTrackingScreen only when needed */}
-          {currentScreen === 'orderTracking' && (
-            <View style={styles.orderTrackingOverlay}>
-              <OrderTrackingScreen
-                orderId={selectedOrderId}
-                onBack={handleBackFromOrderTracking}
-                onCallPartner={() => {}}
+            {/* Always render LocationSelectionScreen, positioned off-screen initially */}
+            <Animated.View
+              style={[
+                styles.locationOverlay,
+                {
+                  transform: [{ translateX: locationScreenSlide }],
+                },
+              ]}
+              pointerEvents={currentScreen === 'locationSelection' ? 'auto' : 'none'}
+            >
+              <LocationSelectionScreen
+                visible={currentScreen === 'locationSelection'}
+                initialSearchQuery={locationSearchQuery}
+                editingAddress={editingAddress}
+                initialLatitude={editingAddress?.latitude || initialLocationCoords?.latitude}
+                initialLongitude={editingAddress?.longitude || initialLocationCoords?.longitude}
+                isGuest={!isAuthenticatedRef.current}
+                onBack={handleBackFromLocationSelection}
+                onLocationConfirm={handleLocationConfirm}
               />
-            </View>
-          )}
+            </Animated.View>
+
+            {/* Always render OrdersScreen, positioned off-screen initially */}
+            <Animated.View
+              style={[
+                styles.ordersOverlay,
+                {
+                  transform: [{ translateX: ordersScreenSlide }],
+                },
+              ]}
+              pointerEvents={currentScreen === 'orders' ? 'auto' : 'none'}
+            >
+              <OrdersScreen
+                visible={currentScreen === 'orders'}
+                onBack={handleBackFromOrders}
+                onOrderDetails={handleNavigateToOrderDetail}
+                onReorder={handleReorder}
+                onRateOrder={handleNavigateToRateOrder}
+                highlightOrderId={highlightOrderId}
+                onTrackOrder={handleNavigateToOrderTracking}
+                onHelp={(order) => handleNavigateToHelp('orders', order)}
+                onContactUs={() => handleNavigateToContactUs('orders')}
+                onViewMore={() => { }}
+              />
+            </Animated.View>
+
+            {/* Always render OrderDetailScreen, positioned off-screen initially */}
+            <Animated.View
+              style={[
+                styles.orderDetailOverlay,
+                {
+                  transform: [{ translateX: orderDetailScreenSlide }],
+                },
+              ]}
+              pointerEvents={currentScreen === 'orderDetail' ? 'auto' : 'none'}
+            >
+              <OrderDetailScreen
+                key={selectedOrderId}
+                orderId={selectedOrderId}
+                visible={currentScreen === 'orderDetail'}
+                onBack={handleBackFromOrderDetail}
+                onThankDriver={() => { }}
+                onRateOrder={handleNavigateToRateOrder}
+                onReorder={() => handleReorder(selectedOrderId)}
+                onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId, 'orderDetail')}
+                onDownloadInvoice={() => { }}
+                onContactUs={() => handleNavigateToContactUs('orderDetail')}
+                onHelp={handleNavigateToOrderHelp}
+              />
+            </Animated.View>
+
+            {/* Conditionally render ChatScreen */}
+            {currentScreen === 'chat' && (
+              <View style={styles.chatOverlay}>
+                <ChatScreen
+                  visible={true}
+                  onBack={handleBackFromChat}
+                  helpOptionId={chatHelpOptionId}
+                  helpOptionTitle={chatHelpOptionTitle}
+                  orderId={selectedOrderId}
+                />
+              </View>
+            )}
+
+            {/* Conditionally render RateOrderScreen only when needed */}
+            {currentScreen === 'rateOrder' && (
+              <View style={styles.rateOrderOverlay}>
+                <RateOrderScreen
+                  orderId={parseInt(selectedOrderId)}
+                  orderItems={selectedOrderData?.items || []}
+                  onBack={handleBackFromRateOrder}
+                  onSubmit={() => {
+                    handleBackFromRateOrder();
+                  }}
+                />
+              </View>
+            )}
+
+            {/* Conditionally render OrderTrackingScreen only when needed */}
+            {currentScreen === 'orderTracking' && (
+              <View style={styles.orderTrackingOverlay}>
+                <OrderTrackingScreen
+                  orderId={selectedOrderId}
+                  onBack={handleBackFromOrderTracking}
+                  onCallPartner={() => { }}
+                />
+              </View>
+            )}
 
             {/* Keep SearchScreen mounted after first open to prevent mount-time flicker */}
             {hasSearchMounted && (

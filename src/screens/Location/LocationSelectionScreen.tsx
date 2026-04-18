@@ -15,6 +15,7 @@ import {
   Linking,
   AppState,
   InteractionManager,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@/shims/rn-vector-icons';
@@ -1122,6 +1123,27 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       onBack();
     }
   };
+
+  // Handle Android hardware back inside this screen to avoid parent-level
+  // back-handler races while map/timeouts/form state are active.
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'android') {
+      return;
+    }
+
+    const backSubscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      // If address form is open, close it first (standard modal-back behavior).
+      if (showAddressForm) {
+        setShowAddressForm(false);
+        return true;
+      }
+
+      handleBackPress();
+      return true;
+    });
+
+    return () => backSubscription.remove();
+  }, [visible, showAddressForm, onBack]);
 
   // Callback when map is ready - ensure it's at the correct position
   const handleMapReady = () => {
