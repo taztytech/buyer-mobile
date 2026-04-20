@@ -281,6 +281,21 @@ class OrdersService {
   }
 
   /**
+   * Get invoice download details for an order
+   */
+  async getInvoice(orderId: number): Promise<ApiResponse<any>> {
+    try {
+      const response = await apiService.get<any>(`/api/buyer/invoice/${orderId}`);
+      return response;
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch invoice',
+      };
+    }
+  }
+
+  /**
    * Get cancel reasons
    */
   async getCancelReasons(): Promise<ApiResponse<CancelReason[]>> {

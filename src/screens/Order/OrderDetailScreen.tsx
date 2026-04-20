@@ -17,7 +17,9 @@ import {
   AppState,
   NativeModules,
   Platform,
+  PermissionsAndroid,
 } from 'react-native';
+import Share from 'react-native-share';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -293,6 +295,39 @@ const resolveDeliveryTrackingId = (...sources: any[]): string | null => {
   return null;
 };
 
+const resolveInvoiceUrl = (payload: any): string | null => {
+  if (!payload) return null;
+
+  const candidates = [
+    payload?.invoice_url,
+    payload?.invoiceUrl,
+    payload?.download_url,
+    payload?.downloadUrl,
+    payload?.url,
+    payload?.pdf_url,
+    payload?.pdfUrl,
+    payload?.file_url,
+    payload?.fileUrl,
+    payload?.data?.invoice_url,
+    payload?.data?.invoiceUrl,
+    payload?.data?.download_url,
+    payload?.data?.downloadUrl,
+    payload?.data?.url,
+    payload?.data?.pdf_url,
+    payload?.data?.pdfUrl,
+    payload?.data?.file_url,
+    payload?.data?.fileUrl,
+  ];
+
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+
+  return null;
+};
+
 interface OrderDetailScreenProps {
   orderId?: string;
   visible?: boolean;
@@ -352,6 +387,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   } | null>(null);
 
   const cancelWindowSeconds = appConfigService.getCancelTimer();
+  const showInvoiceButton = Boolean(orderData?.invoice?.available);
 
   const canShowCancelForOrder = useMemo(() => {
     if (!orderData) return false;
@@ -757,6 +793,202 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       await fetchOrderDetails();
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  const handleDownloadInvoice = async () => {
+    const fallbackOrderId = orderId ? Number(orderId) : null;
+    const resolvedOrderId = Number(orderData?.id ?? fallbackOrderId);
+
+    if (!Number.isFinite(resolvedOrderId) || resolvedOrderId <= 0) {
+      showConfirmation({
+        title: 'Error',
+        message: 'Unable to download invoice. Order id is missing.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#DC2626',
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    try {
+      const response = await ordersService.getInvoice(resolvedOrderId);
+
+      if (!response.success) {
+        showConfirmation({
+          title: 'Download failed',
+          message: response.error || response.message || 'Unable to fetch invoice. Please try again.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#DC2626',
+          onConfirm: () => {},
+        });
+        return;
+      }
+
+      const invoiceUrl = resolveInvoiceUrl(response.data);
+      if (!invoiceUrl) {
+        showConfirmation({
+          title: 'Invoice unavailable',
+          message: 'Invoice link is not available for this order yet.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => {},
+        });
+        return;
+      }
+
+      if (Platform.OS === 'ios' && !NativeModules?.RNFSManager) {
+        showConfirmation({
+          title: 'Download unavailable',
+          message: 'Local download module is not linked in this iOS build yet. Please reinstall after running pod install.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#DC2626',
+          onConfirm: () => {},
+        });
+        return;
+      }
+
+      let rnfs: any = null;
+      try {
+        // Lazy require prevents app crash when native module is not linked yet.
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const rnfsModule = require('react-native-fs');
+        rnfs = rnfsModule?.default || rnfsModule;
+      } catch {
+        rnfs = null;
+      }
+
+      if (!rnfs?.DocumentDirectoryPath || typeof rnfs?.downloadFile !== 'function') {
+        showConfirmation({
+          title: 'Download unavailable',
+          message: 'Local download is not available in this build yet. Please reinstall the app after iOS pods are installed.',
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#DC2626',
+          onConfirm: () => {},
+        });
+        return;
+      }
+
+      const safeOrderNumber = String(orderData?.order_number || resolvedOrderId).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const fileName = `invoice_${safeOrderNumber}_${Date.now()}.pdf`;
+      if (Platform.OS === 'android' && typeof Platform.Version === 'number' && Platform.Version < 29) {
+        const permission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        );
+        if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+          showConfirmation({
+            title: 'Permission needed',
+            message: 'Storage permission is required to save invoice in Downloads.',
+            confirmText: 'OK',
+            cancelText: '',
+            confirmButtonColor: '#DC2626',
+            onConfirm: () => {},
+          });
+          return;
+        }
+      }
+
+      let targetPath = '';
+      if (Platform.OS === 'android') {
+        let blobUtil: any = null;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const blobModule = require('react-native-blob-util');
+          blobUtil = blobModule?.default || blobModule;
+        } catch {
+          blobUtil = null;
+        }
+
+        const downloadDir = blobUtil?.fs?.dirs?.DownloadDir;
+        if (!blobUtil || !downloadDir) {
+          showConfirmation({
+            title: 'Download unavailable',
+            message: 'Android download manager is not available in this build yet. Please reinstall app.',
+            confirmText: 'OK',
+            cancelText: '',
+            confirmButtonColor: '#DC2626',
+            onConfirm: () => {},
+          });
+          return;
+        }
+
+        targetPath = `${downloadDir}/${fileName}`;
+        const androidDownload = await blobUtil
+          .config({
+            addAndroidDownloads: {
+              useDownloadManager: true,
+              notification: true,
+              title: fileName,
+              description: 'Downloading invoice',
+              mime: 'application/pdf',
+              mediaScannable: true,
+              path: targetPath,
+            },
+          })
+          .fetch('GET', invoiceUrl);
+
+        const rawStatus = androidDownload?.info?.()?.status;
+        const statusCode = typeof rawStatus === 'number' ? rawStatus : Number(rawStatus);
+        // DownloadManager-backed requests may not always expose a reliable HTTP status.
+        // If fetch resolves and status is absent/NaN, treat it as success.
+        if (Number.isFinite(statusCode) && (statusCode < 200 || statusCode >= 300)) {
+          throw new Error(`Invoice download failed (${statusCode}).`);
+        }
+      } else {
+        const baseDirectory = rnfs.TemporaryDirectoryPath || rnfs.CachesDirectoryPath || rnfs.DocumentDirectoryPath;
+        targetPath = `${baseDirectory}/${fileName}`;
+        const downloadResult = await rnfs.downloadFile({
+          fromUrl: invoiceUrl,
+          toFile: targetPath,
+        }).promise;
+
+        if (downloadResult.statusCode < 200 || downloadResult.statusCode >= 300) {
+          throw new Error(`Invoice download failed (${downloadResult.statusCode}).`);
+        }
+
+        const fileUri = `file://${targetPath}`;
+        await Share.open({
+          title: 'Invoice',
+          url: fileUri,
+          type: 'application/pdf',
+          failOnCancel: true,
+          saveToFiles: true,
+        });
+      }
+      _onDownloadInvoice?.();
+      showConfirmation({
+        title: 'Download complete',
+        message: 'Invoice downloaded successfully.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#00B14F',
+        onConfirm: () => {},
+      });
+    } catch (error: any) {
+      const errorMessage = String(error?.message || '').toLowerCase();
+      const errorCode = String(error?.error || error?.code || '').toLowerCase();
+      const isShareCancelled =
+        errorMessage.includes('cancelled') ||
+        errorMessage.includes('canceled') ||
+        errorCode.includes('cancelled') ||
+        errorCode.includes('canceled');
+      if (Platform.OS === 'ios' && isShareCancelled) {
+        return;
+      }
+
+      showConfirmation({
+        title: 'Download failed',
+        message: error?.message || 'Unable to download invoice right now. Please try again.',
+        confirmText: 'OK',
+        cancelText: '',
+        confirmButtonColor: '#DC2626',
+        onConfirm: () => {},
+      });
     }
   };
 
@@ -1720,20 +1952,24 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             <Text style={styles.errorTitle}>Order not found</Text>
           </View>
         ) : (
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            onScrollBeginDrag={() => setShowTaxTooltip(false)}
-            refreshControl={
-              <RefreshControl
-                refreshing={isRefreshing}
-                onRefresh={handleRefresh}
-                tintColor="#00B14F"
-                colors={['#00B14F']}
-              />
-            }
-          >
+          <View style={styles.orderDetailsContent}>
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={[
+                styles.scrollContent,
+                showInvoiceButton && styles.scrollContentWithInvoice,
+              ]}
+              showsVerticalScrollIndicator={false}
+              onScrollBeginDrag={() => setShowTaxTooltip(false)}
+              refreshControl={
+                <RefreshControl
+                  refreshing={isRefreshing}
+                  onRefresh={handleRefresh}
+                  tintColor="#00B14F"
+                  colors={['#00B14F']}
+                />
+              }
+            >
             {/* Delivery Status Card - Illustration + Banner */}
             <View style={[styles.card, styles.statusCard]}>
               <View style={styles.statusIllustrationContainer}>
@@ -2139,16 +2375,6 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             <View style={styles.card}>
               <View style={styles.billHeader}>
                 <Text style={styles.sectionTitle}>Bill Summary</Text>
-                {/* {orderData.invoice?.available && (
-                <TouchableOpacity
-                  style={styles.invoiceButton}
-                  onPress={onDownloadInvoice}
-                  activeOpacity={0.7}
-                >
-                  <MaterialIcons name="download" size={18} color="#00B14F" />
-                  <Text style={styles.invoiceButtonText}>Invoice</Text>
-                </TouchableOpacity>
-              )} */}
               </View>
 
               {(() => {
@@ -2264,7 +2490,20 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 </Text>
               </View>
             </View>
-          </ScrollView>
+            </ScrollView>
+            {showInvoiceButton && (
+              <View style={styles.invoiceFooter}>
+                <TouchableOpacity
+                  style={styles.invoiceButton}
+                  onPress={handleDownloadInvoice}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="download" size={18} color="#00B14F" />
+                  <Text style={styles.invoiceButtonText}>Download Invoice</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         )}
       </SafeAreaView>
 
@@ -2815,10 +3054,16 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  orderDetailsContent: {
+    flex: 1,
+  },
   scrollContent: {
     padding: 20,
     gap: 14,
     paddingBottom: 24,
+  },
+  scrollContentWithInvoice: {
+    paddingBottom: 96,
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -3078,13 +3323,27 @@ const styles = StyleSheet.create({
   invoiceButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    backgroundColor: '#ECFDF3',
   },
   invoiceButtonText: {
     fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
     color: '#00B14F',
     lineHeight: 21,
+  },
+  invoiceFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F3F5',
+    backgroundColor: '#FFFFFF',
   },
   billItems: {
     gap: 12,
