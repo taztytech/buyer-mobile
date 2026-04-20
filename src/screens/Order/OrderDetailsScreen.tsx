@@ -62,6 +62,7 @@ interface OrderDetailsScreenProps {
   showCustomizationModal?: boolean;
   onUpdateCart?: (itemId: string, variantId: string | undefined, newQuantity: number) => void;
   onAddressChange?: () => void;
+  onNavigateToCoupons?: () => void;
 }
 
 export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
@@ -81,6 +82,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   showCustomizationModal = false,
   onUpdateCart,
   onAddressChange,
+  onNavigateToCoupons,
 }) => {
   const {
     cart,
@@ -1764,6 +1766,28 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 )}
               </View>
 
+              {/* Coupons (navigate to Coupons page) */}
+              <View style={styles.section}>
+                <TouchableOpacity
+                  style={styles.sectionHeader}
+                  onPress={() => onNavigateToCoupons?.()}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.couponsHeaderLeft}>
+                    <MaterialIcons name="local-offer" size={20} color="#00B14F" />
+                    <Text style={styles.sectionTitle}>Coupons</Text>
+                  </View>
+                  <View style={styles.couponsChevronWrap}>
+                    <MaterialIcons
+                      name="chevron-right"
+                      size={24}
+                      color="rgba(0, 0, 0, 0.6)"
+                      style={{ left : -20 }}
+                    />
+                  </View>
+                </TouchableOpacity>
+              </View>
+
               {/* Tip Section */}
               <View style={styles.section}>
                 <TouchableOpacity
@@ -2455,6 +2479,14 @@ const styles = StyleSheet.create({
   },
   headerTextContainer: {
     flex: 1,
+  },
+  couponsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  couponsChevronWrap: {
+    paddingLeft: -20,
   },
   restaurantName: {
     fontFamily: 'Poppins_700Bold',
