@@ -44,6 +44,8 @@ interface Region {
   longitudeDelta: number;
 }
 
+const COORDINATE_CHANGE_EPSILON = 0.00005;
+
 const isValidRegion = (value: Region | null | undefined): value is Region => {
   if (!value) return false;
   const { latitude, longitude, latitudeDelta, longitudeDelta } = value;
@@ -122,6 +124,9 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const [isGeocodingInProgress, setIsGeocodingInProgress] = useState(false);
   const [isSearchInProgress, setIsSearchInProgress] = useState(false);
   const [hasUserChangedLocation, setHasUserChangedLocation] = useState(false); // Track if user manually changed location during editing
+  const [hasChangedFromInitialLocation, setHasChangedFromInitialLocation] = useState(
+    !(Number.isFinite(initialLatitude) && Number.isFinite(initialLongitude))
+  );
   const bottomPosition = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<any>(null);
   const isUpdatingFromCode = useRef(false);
@@ -135,6 +140,23 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const previousPermissionStatus = useRef<string | null>(null);
   const isRequestingPermission = useRef(false); // Guard to prevent multiple simultaneous permission requests
   const hasUserManuallyMovedPin = useRef(false); // Track if user has ever manually dragged the pin
+
+  const hasValidInitialCoordinates =
+    Number.isFinite(initialLatitude) &&
+    Number.isFinite(initialLongitude) &&
+    Number(initialLatitude) !== 0 &&
+    Number(initialLongitude) !== 0;
+
+  const hasRegionChangedFromInitial = (latitude: number, longitude: number) => {
+    if (!hasValidInitialCoordinates) {
+      return true;
+    }
+
+    return (
+      Math.abs(latitude - Number(initialLatitude)) > COORDINATE_CHANGE_EPSILON ||
+      Math.abs(longitude - Number(initialLongitude)) > COORDINATE_CHANGE_EPSILON
+    );
+  };
 
   // Reset all cached data when switching contexts (editing vs adding new address)
   useEffect(() => {
@@ -160,13 +182,14 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     setIsGeocodingInProgress(false);
     setIsSearchInProgress(false);
     setHasUserChangedLocation(false); // Reset location change flag
+    setHasChangedFromInitialLocation(!hasValidInitialCoordinates);
 
     // Reset permission tracking and auto-location flag
     hasTriedAutoLocationOnResume.current = false;
     previousPermissionStatus.current = null;
     isRequestingPermission.current = false;
     hasUserManuallyMovedPin.current = false; // Reset manual pin movement flag
-  }, [editingAddress, initialLatitude, initialLongitude, initialSearchQuery]);
+  }, [editingAddress, initialLatitude, initialLongitude, initialSearchQuery, hasValidInitialCoordinates]);
 
   // Update region and location info when editing address changes
   useEffect(() => {
@@ -211,6 +234,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       setGeocodingData(null);
       // Existing address already has coordinates – treat as a confirmed location
       setHasSelectedLocation(true);
+      setHasChangedFromInitialLocation(false);
     }
     // Note: Non-editing cases (adding new address) are handled by the next useEffect
   }, [editingAddress, initialLatitude, initialLongitude]);
@@ -277,6 +301,9 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
               // Initial coordinates provided (from "Add address"), treat as current location
               setIsCurrentLocationSet(true);
               setHasSelectedLocation(true);
+              setHasChangedFromInitialLocation(
+                hasRegionChangedFromInitial(newRegion.latitude, newRegion.longitude)
+              );
             }
           }
         } catch (error) {
@@ -564,6 +591,9 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       isUpdatingFromCode.current = true;
       setRegion(newRegion);
       currentMapRegion.current = newRegion;
+      setHasChangedFromInitialLocation(
+        hasRegionChangedFromInitial(newRegion.latitude, newRegion.longitude)
+      );
 
       // Animate map to new location if map is available
       if (mapRef.current && isMapAvailable) {
@@ -639,6 +669,9 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
 
     // Track the current map position in the ref (without triggering re-render)
     currentMapRegion.current = newRegion;
+      setHasChangedFromInitialLocation(
+        hasRegionChangedFromInitial(newRegion.latitude, newRegion.longitude)
+      );
 
     // User is actively dragging the map (this is manual interaction)
     isDraggingRef.current = true;
@@ -1270,6 +1303,9 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
         isUpdatingFromCode.current = true;
         setRegion(newRegion);
         currentMapRegion.current = newRegion;
+        setHasChangedFromInitialLocation(
+          hasRegionChangedFromInitial(newRegion.latitude, newRegion.longitude)
+        );
 
         // Animate map to new location if map is available
         if (mapRef.current && isMapAvailable) {
@@ -1482,10 +1518,11 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
               <TouchableOpacity
                 style={[
                   styles.confirmButton,
-                  (isGeocodingInProgress || isGettingLocation) && styles.confirmButtonDisabled
+                  (isGeocodingInProgress || isGettingLocation || !hasChangedFromInitialLocation) &&
+                  styles.confirmButtonDisabled
                 ]}
                 onPress={handleConfirm}
-                disabled={isGeocodingInProgress || isGettingLocation}
+                disabled={isGeocodingInProgress || isGettingLocation || !hasChangedFromInitialLocation}
                 activeOpacity={0.7}
               >
                 {isGeocodingInProgress ? (

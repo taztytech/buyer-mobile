@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ScrollView, FlatList, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ScrollView, FlatList, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking, useWindowDimensions, ImageSourcePropType } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { colors, spacing, typography } from '@/theme';
@@ -71,6 +71,45 @@ interface AppOperationStatus {
   message?: string;
   next_open_time?: string;
 }
+
+interface PopularDishItem {
+  id: string;
+  name: string;
+  restaurantName: string;
+  price: number;
+  image: ImageSourcePropType;
+}
+
+const POPULAR_DISHES_MOCK: PopularDishItem[] = [
+  {
+    id: 'popular-1',
+    name: 'Chicken Briyani',
+    restaurantName: 'Tazty Kitchen',
+    price: 180,
+    image: require('../../assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg'),
+  },
+  {
+    id: 'popular-2',
+    name: 'Masala Idly',
+    restaurantName: 'Hotel Sneha',
+    price: 90,
+    image: require('../../assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg'),
+  },
+  {
+    id: 'popular-3',
+    name: 'Szechuan Noodles',
+    restaurantName: 'China Town',
+    price: 140,
+    image: require('../../assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg'),
+  },
+  {
+    id: 'popular-4',
+    name: 'Paneer Fried Rice',
+    restaurantName: 'Dindigul Foods',
+    price: 120,
+    image: require('../../assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg'),
+  },
+];
 
 
 // Utility to normalize veg food types returned by API (handles values like "pure-veg")
@@ -1444,6 +1483,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     );
   }, [onNavigateToCategory]);
 
+  const renderPopularDishItem = ({ item }: { item: PopularDishItem }) => {
+    return (
+      <TouchableOpacity activeOpacity={0.8} style={styles.popularDishCard}>
+        <View style={styles.popularDishImageWrapper}>
+          <Image source={item.image} style={styles.popularDishImage} resizeMode="cover" />
+        </View>
+        <TouchableOpacity activeOpacity={0.8} style={styles.popularDishAddButton}>
+          <Text style={styles.popularDishAddButtonText}>+ Add</Text>
+        </TouchableOpacity>
+        <Text style={styles.popularDishName} numberOfLines={1}>{item.name}</Text>
+        <Text style={styles.popularDishRestaurantName} numberOfLines={1}>{item.restaurantName}</Text>
+      </TouchableOpacity>
+    );
+  };
+
   // Handle pull-to-refresh
   const handleRefresh = React.useCallback(async () => {
     setIsRefreshing(true);
@@ -1937,6 +1991,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     )}
                   </View>
                 )}
+
+                <View style={styles.popularDishesSection}>
+                  <View style={styles.popularDishesHeaderRow}>
+                    <Text style={styles.popularDishesTitle}>Popular Dishes</Text>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => setShowCategoryModal(true)}
+                    >
+                      <Text style={styles.popularDishesViewAll}>View all</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <FlatList
+                    data={POPULAR_DISHES_MOCK}
+                    renderItem={renderPopularDishItem}
+                    keyExtractor={(item) => item.id}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.popularDishesListContent}
+                  />
+                </View>
 
                 {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
                 {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
@@ -2834,6 +2909,90 @@ const styles = StyleSheet.create({
   },
   categoryBadgeShimmerText: {
     marginLeft: 8,
+  },
+  popularDishesSection: {
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  popularDishesHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+    paddingHorizontal: 20,
+  },
+  popularDishesTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 24,
+    lineHeight: 30,
+    color: '#111827',
+  },
+  popularDishesViewAll: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 16,
+    lineHeight: 20,
+    color: '#00B14F',
+  },
+  popularDishesListContent: {
+    paddingLeft: 20,
+    paddingRight: 0,
+  },
+  popularDishCard: {
+    width: 170,
+    marginRight: 12,
+    paddingBottom: 4,
+  },
+  popularDishImageWrapper: {
+    width: '100%',
+    height: 130,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#1F2937',
+    position: 'relative',
+  },
+  popularDishImage: {
+    width: '100%',
+    height: '100%',
+  },
+  popularDishAddButton: {
+    alignSelf: 'center',
+    marginTop: -22,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#22C55E',
+    paddingHorizontal: 26,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 3,
+    elevation: 3,
+  },
+  popularDishAddButtonText: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 15,
+    lineHeight: 20,
+    color: '#22C55E',
+  },
+  popularDishName: {
+    marginTop: 8,
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#111827',
+  },
+  popularDishRestaurantName: {
+    marginTop: 2,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#6B7280',
   },
   // Restaurants Near You Section
   restaurantsSectionTitleContainer: {
