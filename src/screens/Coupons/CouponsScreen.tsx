@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { SplashSuccessModal } from '@/components/SplashSuccessModal';
+import { CouponAppliedModal } from '@/components/CouponAppliedModal';
+import { CouponBurstAnimation } from '@/components/CouponBurstAnimation';
 
 type Coupon = {
   code: string;
@@ -55,9 +56,12 @@ const EXPIRED_COUPONS: Coupon[] = [
 
 export const CouponsScreen: React.FC<CouponsScreenProps> = ({ visible, onBack, onAppliedAndClose }) => {
   const [appliedVisible, setAppliedVisible] = React.useState(false);
+  const [selectedCoupon, setSelectedCoupon] = React.useState<Coupon | null>(null);
+  const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
   const handleApply = (coupon: Coupon) => {
     if (!coupon.enabled) return;
+    setSelectedCoupon(coupon);
     setAppliedVisible(true);
   };
 
@@ -68,6 +72,15 @@ export const CouponsScreen: React.FC<CouponsScreenProps> = ({ visible, onBack, o
 
   return (
     <View style={styles.container} pointerEvents={visible ? 'auto' : 'none'}>
+      {/* Background animation across full Coupons page */}
+      <CouponBurstAnimation
+        active={appliedVisible}
+        mode="fall"
+        width={SCREEN_W}
+        height={SCREEN_H}
+        durationMs={1300}
+      />
+
       <SafeAreaView edges={['top']} style={styles.safeHeader}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.8}>
@@ -121,10 +134,10 @@ export const CouponsScreen: React.FC<CouponsScreenProps> = ({ visible, onBack, o
         <Text style={styles.footerHint}>Check back later for more exciting offers!</Text>
       </ScrollView>
 
-      <SplashSuccessModal
+      <CouponAppliedModal
         visible={appliedVisible}
-        message="Coupon applied successfully"
-        buttonText="OK"
+        couponCode={selectedCoupon?.code || ''}
+        couponTitle={selectedCoupon?.title || ''}
         onClose={handleOk}
       />
     </View>

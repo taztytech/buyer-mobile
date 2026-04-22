@@ -2,7 +2,6 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { MaterialIcons } from '@expo/vector-icons';
-import { RibbonAnimation } from '@/components/RibbonAnimation';
 
 type SplashSuccessModalProps = {
   visible: boolean;
@@ -47,7 +46,6 @@ export const SplashSuccessModal: React.FC<SplashSuccessModalProps> = ({
       onRequestClose={onClose}
     >
       <BlurView intensity={80} tint="dark" style={styles.overlay}>
-        <RibbonAnimation active={visible} />
         <Animated.View style={[styles.card, { opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}>
           <View style={styles.iconWrap}>
             <MaterialIcons name="check" size={26} color="#FFFFFF" />
