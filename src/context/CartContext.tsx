@@ -518,6 +518,14 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         const response = await cartService.addToCart(backendRequest);
+        console.log('[CartContext] addToCart API', {
+          endpoint: '/api/buyer/cart/add',
+          request: backendRequest,
+          response,
+          source: 'addToCart',
+          itemId: normalizedItem.id,
+          restaurantId: effectiveRestaurantId,
+        });
 
         if (response.success) {
           setCartSummary(response.cart_summary || null);
@@ -736,6 +744,14 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
 
           const addResponse = await cartService.addToCart(backendRequest);
+          console.log('[CartContext] addToCart API', {
+            endpoint: '/api/buyer/cart/add',
+            request: backendRequest,
+            response: addResponse,
+            source: 'updateQuantity-fallback',
+            itemId: currentItem.id,
+            restaurantId,
+          });
           if (addResponse.success && addResponse.cart_item_id) {
             setCartSummary(addResponse.cart_summary || null);
             setCart(prev => {
@@ -842,6 +858,14 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           })).filter(c => c.customization_group_id > 0);
         }
         const addResponse = await cartService.addToCart(backendRequest);
+        console.log('[CartContext] addToCart API', {
+          endpoint: '/api/buyer/cart/add',
+          request: backendRequest,
+          response: addResponse,
+          source: 'flushPendingQuantityUpdate-fallback',
+          itemId: currentItem.id,
+          restaurantId,
+        });
         if (addResponse.success && addResponse.cart_item_id) {
           setCartSummary(addResponse.cart_summary || null);
           setCart(prev => {

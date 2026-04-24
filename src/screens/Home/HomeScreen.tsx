@@ -16,10 +16,12 @@ import * as Location from '@/shims/rn-location';
 import { LinearGradient } from '@/shims/rn-linear-gradient';
 import { ViewCartBar } from '@/components/ViewCartBar';
 import { CategoryModal } from '@/components/CategoryModal';
+import { FoodAddCard } from '@/components/FoodAddCard';
 import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { restaurantService } from '@/services/restaurant.service';
+import { favoritesService } from '@/services/favorites.service';
 import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from '@/services/analytics.service';
 
 /** Fixed header / hero block height (independent of screen size and background image) */
@@ -87,6 +89,9 @@ interface PopularDishItem {
   priceLabel?: string;
   basePrice?: number;
   isVeg?: boolean;
+  isFavorite?: boolean;
+  isAvailable?: boolean;
+  isOpen?: boolean;
 }
 
 const POPULAR_DISH_FALLBACK_IMAGE = require('../../assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg');
@@ -156,8 +161,25 @@ const mapHomeCollectionItemToPopularDish = (
     showAddButton,
     priceLabel,
     basePrice: Number.isFinite(basePrice) ? basePrice : undefined,
-    isVeg: isVegFoodType(item?.food_type, item?.is_veg),
+    isVeg: isVegDietaryPreference(item?.dietary_preference),
+    isFavorite: Boolean(item?.is_favorite),
+    isAvailable: item?.is_available !== false,
+    isOpen:
+      typeof item?.is_open === 'boolean'
+        ? item.is_open
+        : typeof item?.store?.is_open === 'boolean'
+          ? item.store.is_open
+          : undefined,
   };
+};
+
+const isVegDietaryPreference = (dietaryPreference?: string): boolean => {
+  if (!dietaryPreference) {
+    return false;
+  }
+
+  const normalized = dietaryPreference.trim().toLowerCase();
+  return normalized === 'veg' || normalized === 'vegetarian' || normalized === 'pure-veg';
 };
 
 
@@ -912,6 +934,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       }
 
       const response = await homeService.getHomeData(lat, lng, vegMode, 1);
+      console.log('[HomeScreen] /api/buyer/home response', {
+        lat,
+        lng,
+        vegMode,
+        page: 1,
+        response,
+      });
 
       // Check if API indicates forced update is required
       // Response format: { success: false, statusCode: 426, message: "Please update your app..." }
@@ -947,9 +976,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         if (Array.isArray(homeCollectionItems) && homeCollectionItems.length > 0) {
           const limitedHomeCollectionItems = homeCollectionItems.slice(0, 5);
+          const mappedItems = limitedHomeCollectionItems.map((item: any, index: number) =>
+            mapHomeCollectionItemToPopularDish(item, index, homeCollectionImageUrl, shouldShowAddButton)
+          );
           setPopularDishesData(
-            limitedHomeCollectionItems.map((item: any, index: number) =>
-              mapHomeCollectionItemToPopularDish(item, index, homeCollectionImageUrl, shouldShowAddButton)
+            mappedItems.map((dish) =>
+              (() => {
+                const favoriteKey = String(dish.restaurantId ?? dish.storeId ?? dish.id);
+                const override =
+                  homeCollectionType === 'store'
+                    ? favoritesService.getRestaurantFavoriteOverride(favoriteKey)
+                    : favoritesService.getItemFavoriteOverride(dish.id);
+                return typeof override === 'boolean' ? { ...dish, isFavorite: override } : dish;
+              })()
             )
           );
         } else {
@@ -1158,7 +1197,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               location: restaurant.location,
               distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
               image: restaurant.logo_url || restaurant.image,
-              isFavorite: restaurant.is_favorite || false,
+              isFavorite:
+                favoritesService.getRestaurantFavoriteOverride(restaurant.id) ??
+                Boolean(restaurant.is_favorite),
               isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
               timings: timings,
               isOpen: isOpen,
@@ -1227,6 +1268,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       const coords = defaultAddressCoords || { latitude: DEFAULT_LOCATION.latitude, longitude: DEFAULT_LOCATION.longitude };
 
       const response = await homeService.getHomeData(coords.latitude, coords.longitude, vegMode, nextPage);
+      console.log('[HomeScreen] /api/buyer/home load-more response', {
+        lat: coords.latitude,
+        lng: coords.longitude,
+        vegMode,
+        page: nextPage,
+        response,
+      });
 
       // Check if API indicates forced update is required
       if (!response.success && response.statusCode === 426) {
@@ -1285,7 +1333,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               location: restaurant.location,
               distance: restaurant.distance ? `${restaurant.distance}Kms` : '0Kms',
               image: restaurant.logo_url || restaurant.image,
-              isFavorite: restaurant.is_favorite || false,
+              isFavorite:
+                favoritesService.getRestaurantFavoriteOverride(restaurant.id) ??
+                Boolean(restaurant.is_favorite),
               isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
               timings: timings,
               isOpen: isOpen,
@@ -1579,7 +1629,78 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [onNavigateToCategory]);
 
   const renderPopularDishItem = ({ item }: { item: PopularDishItem }) => {
+    const handleWishlistPress = async () => {
+      if (isGuest && onNavigateToLogin) {
+        onNavigateToLogin();
+        return;
+      }
+
+      const previousIsFavorite = Boolean(item.isFavorite);
+      const nextIsFavorite = !previousIsFavorite;
+      const favoriteEntityId =
+        popularCollectionType === 'store'
+          ? (item.restaurantId ?? item.storeId ?? item.id)
+          : item.id;
+      if (popularCollectionType === 'store') {
+        favoritesService.setRestaurantFavoriteOverride(favoriteEntityId, nextIsFavorite);
+      } else {
+        favoritesService.setItemFavoriteOverride(favoriteEntityId, nextIsFavorite);
+      }
+      setPopularDishesData(prev =>
+        prev.map(dish =>
+          dish.id === item.id ? { ...dish, isFavorite: nextIsFavorite } : dish
+        )
+      );
+
+      try {
+        console.log('[HomeScreen] wishlist toggle request', {
+          collectionType: popularCollectionType,
+          itemId: item.id,
+          favoriteEntityId,
+          nextIsFavorite,
+        });
+        const response =
+          popularCollectionType === 'store'
+            ? await favoritesService.toggleFavoriteRestaurant(
+                item.restaurantId ?? item.storeId ?? item.id
+              )
+            : await favoritesService.toggleFavoriteItem(item.id);
+        console.log('[HomeScreen] wishlist toggle response', {
+          collectionType: popularCollectionType,
+          itemId: item.id,
+          favoriteEntityId,
+          response,
+        });
+        if (!response.success) {
+          if (popularCollectionType === 'store') {
+            favoritesService.setRestaurantFavoriteOverride(favoriteEntityId, previousIsFavorite);
+          } else {
+            favoritesService.setItemFavoriteOverride(favoriteEntityId, previousIsFavorite);
+          }
+          setPopularDishesData(prev =>
+            prev.map(dish =>
+              dish.id === item.id ? { ...dish, isFavorite: previousIsFavorite } : dish
+            )
+          );
+        }
+      } catch {
+        if (popularCollectionType === 'store') {
+          favoritesService.setRestaurantFavoriteOverride(favoriteEntityId, previousIsFavorite);
+        } else {
+          favoritesService.setItemFavoriteOverride(favoriteEntityId, previousIsFavorite);
+        }
+        setPopularDishesData(prev =>
+          prev.map(dish =>
+            dish.id === item.id ? { ...dish, isFavorite: previousIsFavorite } : dish
+          )
+        );
+      }
+    };
+
     const handleAddPress = async () => {
+      if (item.isAvailable === false) {
+        return;
+      }
       if (!item.storeId) {
         return;
       }
@@ -1592,7 +1713,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       const effectiveStoreName = item.storeName || 'Restaurant';
       setRestaurantInfo(item.storeId, effectiveStoreName, item.storeLogoUrl);
 
-      const addPromise = addToCart(
+      await addToCart(
         {
           id: item.id,
           itemId: Number(item.id),
@@ -1609,49 +1730,89 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       if (onNavigateToRestaurant) {
         onNavigateToRestaurant(item.storeId, effectiveStoreName);
       }
-
-      await addPromise;
     };
 
     return (
-      <TouchableOpacity
-        activeOpacity={popularCollectionType === 'store' ? 0.8 : 1}
-        style={styles.popularDishCard}
-        onPress={() => {
-          if (popularCollectionType === 'store' && item.restaurantId && onNavigateToRestaurant) {
-            onNavigateToRestaurant(item.restaurantId, item.name);
-          }
-        }}
-        disabled={popularCollectionType !== 'store'}
+      <View
+        style={[
+          styles.popularDishCard,
+          popularCollectionType === 'store' ? styles.popularDishCardStore : null,
+        ]}
       >
-        <View style={styles.popularDishImageWrapper}>
-          <Image source={item.image} style={styles.popularDishImage} resizeMode="cover" />
-        </View>
-        {item.showAddButton && (
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.popularDishAddButton}
-            onPress={() => {
-              handleAddPress().catch(() => {});
-            }}
-          >
-            <Text style={styles.popularDishAddButtonText}>+ Add</Text>
-          </TouchableOpacity>
-        )}
-        <View style={styles.popularDishTextContent}>
-          <Text style={styles.popularDishName} numberOfLines={1}>{item.name}</Text>
-          <Text style={styles.popularDishRestaurantName} numberOfLines={1}>
-            {popularCollectionType === 'item'
+        <FoodAddCard
+          image={item.image}
+          name={item.name}
+          subtitle={
+            popularCollectionType === 'item'
               ? `by ${item.storeName || 'Hotel'}`
-              : (item.locality || item.restaurantName)}
-          </Text>
-          {item.priceLabel && (
-            <Text style={styles.popularDishPrice} numberOfLines={1}>{item.priceLabel}</Text>
-          )}
-        </View>
-      </TouchableOpacity>
+              : (item.locality || item.restaurantName)
+          }
+          priceLabel={item.priceLabel}
+          showAddButton={item.showAddButton}
+          isClosed={
+            popularCollectionType === 'store'
+              ? item.isOpen === false
+              : item.isAvailable === false
+          }
+          closedOverlayLabel="Currently closed"
+          unavailableLabel="Not available"
+          imageWidth={popularCollectionType === 'store' ? 140 : 155}
+          imageHeight={popularCollectionType === 'store' ? 160 : 137}
+          imageBorderRadius={popularCollectionType === 'store' ? 18 : 16}
+          showWishlistIcon={true}
+          isWishlisted={Boolean(item.isFavorite)}
+          onWishlistPress={() => {
+            handleWishlistPress().catch(() => {});
+          }}
+          onAddPress={() => {
+            handleAddPress().catch(() => {});
+          }}
+          onPress={() => {
+            if (
+              popularCollectionType === 'store' &&
+              item.isOpen !== false &&
+              item.restaurantId &&
+              onNavigateToRestaurant
+            ) {
+              onNavigateToRestaurant(item.restaurantId, item.name);
+            }
+          }}
+          disabled={popularCollectionType !== 'store' || item.isOpen === false}
+          cardWidth="100%"
+        />
+      </View>
     );
   };
+
+  React.useEffect(() => {
+    const unsubscribe = favoritesService.subscribeToItemFavoriteChanges((itemId, isFavorite) => {
+      setPopularDishesData((prev) =>
+        prev.map((dish) => (dish.id === itemId ? { ...dish, isFavorite } : dish))
+      );
+    });
+    const unsubscribeRestaurant = favoritesService.subscribeToRestaurantFavoriteChanges(
+      (restaurantId, isFavorite) => {
+        setPopularDishesData((prev) =>
+          prev.map((dish) =>
+            String(dish.restaurantId ?? dish.storeId ?? dish.id) === restaurantId
+              ? { ...dish, isFavorite }
+              : dish
+          )
+        );
+        setRestaurantData((prev) =>
+          prev.map((restaurant) =>
+            String(restaurant.id) === restaurantId
+              ? { ...restaurant, isFavorite }
+              : restaurant
+          )
+        );
+      }
+    );
+    return () => {
+      unsubscribe();
+      unsubscribeRestaurant();
+    };
+  }, []);
 
   // Handle pull-to-refresh
   const handleRefresh = React.useCallback(async () => {
@@ -3092,16 +3253,16 @@ const styles = StyleSheet.create({
   },
   popularDishesTitle: {
     fontFamily: 'Poppins',
-    fontWeight: '700',
-    fontSize: 24,
-    lineHeight: 30,
+    fontWeight: '600',
+    fontSize: 20,
+    lineHeight: 26,
     color: '#111827',
   },
   popularDishesViewAll: {
     fontFamily: 'Poppins',
     fontWeight: '600',
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: 14,
+    lineHeight: 18,
     color: '#00B14F',
   },
   popularDishesListContent: {
@@ -3112,6 +3273,9 @@ const styles = StyleSheet.create({
     width: 170,
     marginRight: 12,
     paddingBottom: 6,
+  },
+  popularDishCardStore: {
+    width: 140,
   },
   popularDishImageWrapper: {
     width: '100%',

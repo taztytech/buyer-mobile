@@ -196,6 +196,8 @@ interface RestaurantScreenProps {
   visible: boolean;
   restaurantId: number;
   restaurantName?: string;
+  targetItemId?: string;
+  targetItemName?: string;
   onBack?: () => void;
   onNavigateToDetails?: () => void;
   onNavigateToOrders?: (orderId?: number) => void;
@@ -288,6 +290,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   visible,
   restaurantId,
   restaurantName,
+  targetItemId,
+  targetItemName,
   onBack,
   onNavigateToDetails,
   onNavigateToCheckout,
@@ -411,6 +415,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const scrollViewRef = React.useRef<ScrollView>(null);
   const sectionRefs = React.useRef<{ [key: string]: View | null }>({});
   const sectionPositions = React.useRef<{ [key: string]: number }>({});
+  const autoScrolledTargetRef = useRef<string | null>(null);
   const updatingItemsRef = React.useRef<Set<string>>(new Set());
   // Track latest quantity for each item to prevent stale reads during rapid clicks
   const itemQuantityRefs = React.useRef<{ [key: string]: number }>({});
@@ -448,6 +453,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     const section = menuSections.find(s => s.id === sectionId);
     const item = section?.items.find(i => i.id === itemId);
     const previousState = item?.isFavorite || false;
+    const nextState = !previousState;
+    favoritesService.setItemFavoriteOverride(itemId, nextState);
 
     // Optimistic update
     setMenuSections(prev =>
@@ -456,7 +463,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           ? {
             ...section,
             items: section.items.map(item =>
-              item.id === itemId ? { ...item, isFavorite: !item.isFavorite } : item
+              item.id === itemId ? { ...item, isFavorite: nextState } : item
             ),
           }
           : section
@@ -467,6 +474,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       const response = await favoritesService.toggleFavoriteItem(itemId);
 
       if (!response.success) {
+        favoritesService.setItemFavoriteOverride(itemId, previousState);
         // Revert on failure
         setMenuSections(prev =>
           prev.map(section =>
@@ -482,6 +490,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
         );
       }
     } catch (error) {
+      favoritesService.setItemFavoriteOverride(itemId, previousState);
       // Revert on error
       setMenuSections(prev =>
         prev.map(section =>
@@ -499,6 +508,20 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       setTogglingFavoriteItemId(null);
     }
   };
+
+  useEffect(() => {
+    const unsubscribe = favoritesService.subscribeToItemFavoriteChanges((itemId, isFavorite) => {
+      setMenuSections((prev) =>
+        prev.map((section) => ({
+          ...section,
+          items: section.items.map((menuItem) =>
+            menuItem.id === itemId ? { ...menuItem, isFavorite } : menuItem
+          ),
+        }))
+      );
+    });
+    return unsubscribe;
+  }, []);
 
   // Get total quantity for an item (works for both customizable and non-customizable)
   const getItemQuantity = (itemId: string): number => {
@@ -1318,6 +1341,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     } else if (!visible) {
       setRestaurantData(null);
       setMenuSections([]);
+      autoScrolledTargetRef.current = null;
       cartReloadedRef.current = false;
       // Reset search state so a stale `showSearch=true` cannot leak a BackHandler
       // onto other screens after the user navigates away.
@@ -1374,6 +1398,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       setActiveCategoryId(menuSections[0].id);
     }
   }, [menuSections]);
+
+  useEffect(() => {
+    autoScrolledTargetRef.current = null;
+  }, [restaurantId, targetItemId, targetItemName, visible]);
 
   // Parent passes a new `onBack` every render; keep a ref so the BackHandler subscription stays stable.
   // Otherwise the effect re-runs constantly, briefly removes the listener, and App.tsx can handle back
@@ -1484,14 +1512,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       const lng = selectedLocation?.longitude || defaultAddressCoords?.longitude || 78.1304040;
 
       // Add minimum delay to show shimmer animation (skip during refresh)
-      const promises = [
+      const promises: Array<Promise<any>> = [
         apiService.get(
           `/api/buyer/restaurants/${restaurantId}?lat=${lat}&lng=${lng}&include_items=true`
         ),
       ];
 
       if (!skipDelay) {
-        promises.push(new Promise(resolve => setTimeout(resolve, 1500))); // 1.5 second delay
+        promises.push(new Promise<void>((resolve) => setTimeout(() => resolve(), 1500))); // 1.5 second delay
       }
 
       const [response] = await Promise.all(promises);
@@ -1563,7 +1591,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 isSpicy: false, // API doesn't provide this info
                 isBestSeller: item.is_recommended || false,
                 isCustomizable: item.has_customizations || false,
-                isFavorite: item.is_favorite || false,
+                isFavorite: (() => {
+                  const override = favoritesService.getItemFavoriteOverride(item.id);
+                  return typeof override === 'boolean' ? override : (item.is_favorite || false);
+                })(),
                 addOns: addOns.length > 0 ? addOns : undefined,
                 customizations: item.customizations,
                 timings: item.timings || undefined, // Keep API format (1-7)
@@ -2005,7 +2036,26 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                     // Format delivery date for display
 
                     return (
-                      <View key={item.id}>
+                      <View
+                        key={item.id}
+                        onLayout={(event) => {
+                          const normalizedTargetName = String(targetItemName || '').trim().toLowerCase();
+                          const matchesById = targetItemId ? item.id === String(targetItemId) : false;
+                          const matchesByName = !targetItemId && normalizedTargetName.length > 0
+                            ? item.name.trim().toLowerCase() === normalizedTargetName
+                            : false;
+                          const isTargetItem = matchesById || matchesByName;
+
+                          if (!visible || !isTargetItem || !scrollViewRef.current) return;
+                          if (autoScrolledTargetRef.current === item.id) return;
+
+                          const y = event.nativeEvent.layout.y;
+                          requestAnimationFrame(() => {
+                            scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 110), animated: true });
+                            autoScrolledTargetRef.current = item.id;
+                          });
+                        }}
+                      >
                         <View style={styles.menuItem}>
                           <View style={styles.itemLeft}>
                             {/* Veg/Non-Veg Icon and Spicy Badge */}
@@ -2212,7 +2262,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                             {/* Only show when item is available and image is loaded (or no image) */}
                             {itemAvailable && (loadedImages.has(item.id) || !item.image) && (
                               <>
-                                {cart[item.id] ? (
+                                {getItemQuantity(item.id) > 0 ? (
                                   // Show increment/decrement controls if item is in cart
                                   <View style={styles.quantityControl}>
                                     <TouchableOpacity

@@ -12,7 +12,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { homeService } from '@/services/home.service';
 import { Shimmer } from '@/components/Shimmer';
+import { favoritesService } from '@/services/favorites.service';
+import { API_CONFIG, buildApiUrl } from '@/config/api.config';
 import { useCart } from '@/context/CartContext';
+import { addressService } from '@/services/address.service';
 
 interface PopularDishRowItem {
   id: string;
@@ -29,25 +32,34 @@ interface PopularDishRowItem {
   eta?: string;
   imageUrl?: string;
   cuisineTags?: string;
+  rating?: number;
   distanceKm?: number;
   isVeg?: boolean;
   isStoreOpen: boolean;
   showAddButton: boolean;
+  isFavorite?: boolean;
+  isItemAvailable?: boolean;
 }
 
 type HomeCollectionType = 'store' | 'item' | 'unknown';
 
 interface PopularDishesScreenProps {
   onBack?: () => void;
-  onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
+  onNavigateToRestaurant?: (
+    restaurantId: number,
+    restaurantName: string,
+    meta?: { targetItemId?: string; targetItemName?: string }
+  ) => void;
   onNavigateToCheckout?: (restaurantId: number, restaurantName: string, restaurantAddress?: string, from?: 'home' | 'restaurant') => void;
+  selectedLocation?: { latitude?: number; longitude?: number };
 }
 
 const mapHomeCollectionItem = (
   item: any,
   index: number,
   showAddButton: boolean,
-  isStoreOpen: boolean
+  isStoreOpen: boolean,
+  selectedLocation?: { latitude?: number; longitude?: number }
 ): PopularDishRowItem => {
   const imageUrl =
     item?.image_url ||
@@ -84,15 +96,42 @@ const mapHomeCollectionItem = (
     item?.store?.cuisine_tags ||
     '';
   const distanceRaw = item?.distance ?? item?.store?.distance;
-  const distanceKm = typeof distanceRaw === 'number' ? distanceRaw : Number(distanceRaw);
+  const ratingRaw = item?.rating ?? item?.store?.rating;
+  const rating = typeof ratingRaw === 'number' ? ratingRaw : Number(ratingRaw);
+  const parsedDistanceKm = typeof distanceRaw === 'number' ? distanceRaw : Number(distanceRaw);
+  const locationLatRaw = item?.location?.lat ?? item?.store?.location?.lat;
+  const locationLngRaw = item?.location?.lng ?? item?.store?.location?.lng;
+  const locationLat = typeof locationLatRaw === 'number' ? locationLatRaw : Number(locationLatRaw);
+  const locationLng = typeof locationLngRaw === 'number' ? locationLngRaw : Number(locationLngRaw);
+  const userLat = selectedLocation?.latitude;
+  const userLng = selectedLocation?.longitude;
+  const calculatedDistanceKm =
+    Number.isFinite(userLat) &&
+    Number.isFinite(userLng) &&
+    Number.isFinite(locationLat) &&
+    Number.isFinite(locationLng)
+      ? (() => {
+          const toRad = (deg: number) => (deg * Math.PI) / 180;
+          const dLat = toRad(locationLat - (userLat as number));
+          const dLng = toRad(locationLng - (userLng as number));
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRad(userLat as number)) *
+              Math.cos(toRad(locationLat)) *
+              Math.sin(dLng / 2) *
+              Math.sin(dLng / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          return 6371 * c;
+        })()
+      : NaN;
+  const distanceKm = Number.isFinite(parsedDistanceKm) ? parsedDistanceKm : calculatedDistanceKm;
   const storeIdRaw = item?.store_id ?? item?.store?.id;
   const storeId = typeof storeIdRaw === 'number' ? storeIdRaw : Number(storeIdRaw);
-  const dietaryPreference = String(item?.dietary_preference || '').toLowerCase();
-  const foodType = String(item?.food_type || '').toLowerCase();
+  const dietaryPreference = String(item?.dietary_preference || '').trim().toLowerCase();
   const isVeg =
-    dietaryPreference.includes('veg') ||
-    foodType === 'veg' ||
-    foodType === 'pure-veg';
+    dietaryPreference === 'veg' ||
+    dietaryPreference === 'vegetarian' ||
+    dietaryPreference === 'pure-veg';
 
   return {
     id: String(item?.id ?? `collection-${index}`),
@@ -125,16 +164,20 @@ const mapHomeCollectionItem = (
     eta: typeof eta === 'string' && eta.trim().length > 0 ? eta.trim() : '30-35 mins',
     imageUrl: typeof imageUrl === 'string' && imageUrl.trim().length > 0 ? imageUrl : undefined,
     cuisineTags: typeof cuisineTags === 'string' && cuisineTags.trim().length > 0 ? cuisineTags.trim() : undefined,
+    rating: Number.isFinite(rating) ? rating : undefined,
     distanceKm: Number.isFinite(distanceKm) ? distanceKm : undefined,
     isVeg,
     isStoreOpen,
     showAddButton,
+    isFavorite: Boolean(item?.is_favorite),
+    isItemAvailable: item?.is_available !== false,
   };
 };
 
 export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
   onBack,
   onNavigateToRestaurant,
+  selectedLocation,
 }) => {
   const insets = useSafeAreaInsets();
   const { addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart } = useCart();
@@ -158,9 +201,43 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
     }
 
     try {
-      const homeResponse = await homeService.getHomeData();
-      console.log('[PopularDishesScreen] home API', {
+      let lat = selectedLocation?.latitude;
+      let lng = selectedLocation?.longitude;
+
+      if (typeof lat !== 'number' || typeof lng !== 'number') {
+        try {
+          const addressResponse = await addressService.getAddresses();
+          if (addressResponse.success && Array.isArray(addressResponse.data)) {
+            const defaultAddress = addressResponse.data.find((addr: any) => addr?.is_default);
+            if (defaultAddress) {
+              const resolvedLat = Number(defaultAddress.latitude);
+              const resolvedLng = Number(defaultAddress.longitude);
+              if (Number.isFinite(resolvedLat) && Number.isFinite(resolvedLng)) {
+                lat = resolvedLat;
+                lng = resolvedLng;
+              }
+            }
+          }
+        } catch {
+          // Keep lat/lng as-is when address fetch fails.
+        }
+      }
+      const homeParams = new URLSearchParams();
+      if (typeof lat === 'number' && typeof lng === 'number') {
+        homeParams.append('latitude', lat.toString());
+        homeParams.append('longitude', lng.toString());
+      }
+      const homeRequestUrl = `${buildApiUrl(API_CONFIG.ENDPOINTS.BUYER.HOME)}${homeParams.toString() ? `?${homeParams.toString()}` : ''}`;
+      console.log('[PopularDishesScreen] REQUEST /api/buyer/home', {
+        url: homeRequestUrl,
+        lat,
+        lng,
+      });
+      const homeResponse = await homeService.getHomeData(lat, lng);
+      console.log('[PopularDishesScreen] RESPONSE /api/buyer/home', {
         endpoint: '/api/buyer/home',
+        lat,
+        lng,
         response: homeResponse,
       });
       if (homeResponse.success && homeResponse.data) {
@@ -210,29 +287,58 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
 
         const selectedCollectionId =
           collectionData?.id;
-
-        const itemsResponse =
+        const collectionItemsParams = new URLSearchParams();
+        collectionItemsParams.append('page', '1');
+        if (typeof lat === 'number') {
+          collectionItemsParams.append('lat', lat.toString());
+        }
+        if (typeof lng === 'number') {
+          collectionItemsParams.append('lng', lng.toString());
+        }
+        const collectionItemsRequestUrl =
           selectedCollectionId != null
-            ? await homeService.getCollectionItems(selectedCollectionId, 1)
+            ? `${buildApiUrl(API_CONFIG.ENDPOINTS.BUYER.COLLECTION_ITEMS(selectedCollectionId))}?${collectionItemsParams.toString()}`
             : null;
 
-        console.log('[PopularDishesScreen] collection items API', {
+        console.log('[PopularDishesScreen] REQUEST /api/buyer/collections/:id/items', {
+          url: collectionItemsRequestUrl,
+          collectionId: selectedCollectionId,
+          page: 1,
+          lat,
+          lng,
+        });
+        console.log('[PopularDishesScreen] VIEW_ALL_API_ENDPOINT', collectionItemsRequestUrl);
+        const itemsResponse =
+          selectedCollectionId != null
+            ? await homeService.getCollectionItems(selectedCollectionId, 1, lat, lng)
+            : null;
+        console.log('[PopularDishesScreen] RESPONSE /api/buyer/collections/:id/items', {
+          url: collectionItemsRequestUrl,
           collectionId: selectedCollectionId,
           response: itemsResponse,
         });
+        console.log(
+          '[PopularDishesScreen] VIEW_ALL_COLLECTION_RESPONSE_JSON',
+          JSON.stringify(itemsResponse, null, 2)
+        );
 
         const itemsFromCollectionApi =
           itemsResponse?.success && Array.isArray(itemsResponse.data) ? itemsResponse.data : [];
         const finalItems = itemsFromCollectionApi.length > 0 ? itemsFromCollectionApi : fallbackCollectionItems;
 
         if (Array.isArray(finalItems) && finalItems.length > 0) {
-          setItems(
-            finalItems.map((item: any, index: number) =>
+          const mappedItems = finalItems.map((item: any, index: number) =>
               mapHomeCollectionItem(
                 item,
                 index,
                 resolvedCollectionType === 'item',
                 (() => {
+                  if (typeof item?.is_open === 'boolean') {
+                    return item.is_open;
+                  }
+                  if (typeof item?.store?.is_open === 'boolean') {
+                    return item.store.is_open;
+                  }
                   const sId = Number(item?.store_id ?? item?.store?.id);
                   if (Number.isFinite(sId) && storeOpenById.has(sId)) {
                     return Boolean(storeOpenById.get(sId));
@@ -246,8 +352,23 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
                     return Boolean(storeOpenByName.get(sName));
                   }
                   return true;
-                })()
+                })(),
+                {
+                  latitude: selectedLocation?.latitude,
+                  longitude: selectedLocation?.longitude,
+                }
               )
+            );
+          setItems(
+            mappedItems.map((dish) =>
+              (() => {
+                const favoriteKey = String(dish.restaurantId ?? dish.storeId ?? dish.id);
+                const override =
+                  resolvedCollectionType === 'store'
+                    ? favoritesService.getRestaurantFavoriteOverride(favoriteKey)
+                    : favoritesService.getItemFavoriteOverride(dish.id);
+                return typeof override === 'boolean' ? { ...dish, isFavorite: override } : dish;
+              })()
             )
           );
         } else {
@@ -266,7 +387,7 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
         setIsLoading(false);
       }
     }
-  }, [resolveCollectionType]);
+  }, [resolveCollectionType, selectedLocation?.latitude, selectedLocation?.longitude]);
 
   React.useEffect(() => {
     fetchItems();
@@ -274,6 +395,9 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
 
   const handleAddItemToCart = React.useCallback(async (item: PopularDishRowItem) => {
 
+    if (item.isItemAvailable === false) {
+      return;
+    }
 
     if (!item.storeId) {
       console.log('[PopularDishesScreen] add skipped: missing storeId', item);
@@ -288,9 +412,7 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
     const restaurantName = item.storeName || 'Restaurant';
     setRestaurantInfo(item.storeId, restaurantName, item.storeLogoUrl || undefined);
 
-    // addToCart updates local cart optimistically first, so navigate immediately
-    // to cart summary for a faster UX, then let backend sync continue.
-    const addPromise = addToCart(
+    await addToCart(
       {
         id: item.id,
         itemId: Number(item.id),
@@ -305,11 +427,98 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
     );
 
     if (onNavigateToRestaurant) {
-      onNavigateToRestaurant(item.storeId, restaurantName);
+      onNavigateToRestaurant(item.storeId, restaurantName, {
+        targetItemId: item.id,
+        targetItemName: item.name,
+      });
     }
-
-    await addPromise;
   }, [addToCart, checkRestaurantConflict, clearCart, onNavigateToRestaurant, setRestaurantInfo]);
+
+  const handleToggleFavorite = React.useCallback(async (item: PopularDishRowItem) => {
+    const previousIsFavorite = Boolean(item.isFavorite);
+    const nextIsFavorite = !previousIsFavorite;
+    const favoriteEntityId =
+      homeCollectionType === 'store'
+        ? (item.restaurantId ?? item.storeId ?? item.id)
+        : item.id;
+    if (homeCollectionType === 'store') {
+      favoritesService.setRestaurantFavoriteOverride(favoriteEntityId, nextIsFavorite);
+    } else {
+      favoritesService.setItemFavoriteOverride(favoriteEntityId, nextIsFavorite);
+    }
+    setItems((prev) =>
+      prev.map((dish) =>
+        dish.id === item.id ? { ...dish, isFavorite: nextIsFavorite } : dish
+      )
+    );
+
+    try {
+      console.log('[PopularDishesScreen] wishlist toggle request', {
+        collectionType: homeCollectionType,
+        itemId: item.id,
+        favoriteEntityId,
+        nextIsFavorite,
+      });
+      const response =
+        homeCollectionType === 'store'
+          ? await favoritesService.toggleFavoriteRestaurant(
+              item.restaurantId ?? item.storeId ?? item.id
+            )
+          : await favoritesService.toggleFavoriteItem(item.id);
+      console.log('[PopularDishesScreen] wishlist toggle response', {
+        collectionType: homeCollectionType,
+        itemId: item.id,
+        favoriteEntityId,
+        response,
+      });
+      if (!response.success) {
+        if (homeCollectionType === 'store') {
+          favoritesService.setRestaurantFavoriteOverride(favoriteEntityId, previousIsFavorite);
+        } else {
+          favoritesService.setItemFavoriteOverride(favoriteEntityId, previousIsFavorite);
+        }
+        setItems((prev) =>
+          prev.map((dish) =>
+            dish.id === item.id ? { ...dish, isFavorite: previousIsFavorite } : dish
+          )
+        );
+      }
+    } catch {
+      if (homeCollectionType === 'store') {
+        favoritesService.setRestaurantFavoriteOverride(favoriteEntityId, previousIsFavorite);
+      } else {
+        favoritesService.setItemFavoriteOverride(favoriteEntityId, previousIsFavorite);
+      }
+      setItems((prev) =>
+        prev.map((dish) =>
+          dish.id === item.id ? { ...dish, isFavorite: previousIsFavorite } : dish
+        )
+      );
+    }
+  }, [homeCollectionType]);
+
+  React.useEffect(() => {
+    const unsubscribe = favoritesService.subscribeToItemFavoriteChanges((itemId, isFavorite) => {
+      setItems((prev) =>
+        prev.map((dish) => (dish.id === itemId ? { ...dish, isFavorite } : dish))
+      );
+    });
+    const unsubscribeRestaurant = favoritesService.subscribeToRestaurantFavoriteChanges(
+      (restaurantId, isFavorite) => {
+        setItems((prev) =>
+          prev.map((dish) =>
+            String(dish.restaurantId ?? dish.storeId ?? dish.id) === restaurantId
+              ? { ...dish, isFavorite }
+              : dish
+          )
+        );
+      }
+    );
+    return () => {
+      unsubscribe();
+      unsubscribeRestaurant();
+    };
+  }, []);
 
   const renderLoadingSkeleton = () => (
     <View style={styles.skeletonPage}>
@@ -338,13 +547,39 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
       <>
         <View style={styles.storeImageContainer}>
           {item.imageUrl ? (
-            <Image source={{ uri: item.imageUrl }} style={styles.storeImage} resizeMode="cover" />
+            <Image
+              source={{ uri: item.imageUrl }}
+              style={[styles.storeImage, !item.isStoreOpen && styles.imageClosed]}
+              resizeMode="cover"
+            />
           ) : (
-            <View style={[styles.storeImage, styles.imageFallback]}>
+            <View style={[styles.storeImage, styles.imageFallback, !item.isStoreOpen && styles.imageClosed]}>
               <MaterialIcons name="restaurant-menu" size={24} color="#9CA3AF" />
             </View>
           )}
-          {item.showAddButton && (
+          {!item.isStoreOpen && <View pointerEvents="none" style={styles.disabledImageOverlayStore} />}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.wishlistButton}
+            onPress={() => {
+              handleToggleFavorite(item).catch(() => {});
+            }}
+          >
+            <MaterialIcons
+              name={item.isFavorite ? 'favorite' : 'favorite-border'}
+              size={24}
+              color={item.isFavorite ? '#FF0000' : '#FFFFFF'}
+            />
+          </TouchableOpacity>
+          {!item.isStoreOpen && (
+            <View style={styles.closedStatusRow}>
+              <MaterialIcons name="access-time" size={14} color="#FFFFFF" />
+              <Text style={styles.closedStatusText} numberOfLines={1}>
+                Currently closed
+              </Text>
+            </View>
+          )}
+          {item.showAddButton && item.isStoreOpen && item.isItemAvailable !== false && (
             <TouchableOpacity
               activeOpacity={0.8}
               style={styles.addButton}
@@ -357,12 +592,26 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
               <Text style={styles.addButtonText}>+ Add</Text>
             </TouchableOpacity>
           )}
+          {item.showAddButton && item.isItemAvailable === false && (
+            <View style={styles.closedPill}>
+              <Text style={styles.closedPillText}>Not available</Text>
+            </View>
+          )}
         </View>
         <View style={styles.content}>
           <Text style={styles.name} numberOfLines={1}>
             {item.name}
           </Text>
-          <Text style={styles.storeEtaText} numberOfLines={1}>{item.eta || '20-25 mins'}</Text>
+          <View style={styles.ratingEtaRow}>
+            {typeof item.rating === 'number' && item.rating > 0 ? (
+              <>
+                <MaterialIcons name="star" size={14} color="#00B14F" />
+                <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
+                <Text style={styles.ratingEtaDot}>•</Text>
+              </>
+            ) : null}
+            <Text style={styles.storeEtaText} numberOfLines={1}>{item.eta || '20-25 mins'}</Text>
+          </View>
           <Text style={styles.storeCuisineText} numberOfLines={1}>{item.cuisineTags || 'South Indian'}</Text>
           <Text style={styles.locationText} numberOfLines={1}>
             {item.locality || 'Location unavailable'}
@@ -385,7 +634,7 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
             {item.name}
           </Text>
           {item.priceLabel ? <Text style={styles.price}>{item.priceLabel}</Text> : null}
-          <Text style={styles.description} numberOfLines={1}>
+          <Text style={styles.description} numberOfLines={2}>
             {item.description || ''}
           </Text>
         </View>
@@ -393,30 +642,48 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
           {item.imageUrl ? (
             <Image
               source={{ uri: item.imageUrl }}
-              style={[styles.image, !item.isStoreOpen && styles.imageClosed]}
+              style={[styles.itemImage, (!item.isStoreOpen || item.isItemAvailable === false) && styles.imageClosed]}
               resizeMode="cover"
             />
           ) : (
-            <View style={[styles.image, styles.imageFallback]}>
+            <View style={[styles.itemImage, styles.imageFallback]}>
               <MaterialIcons name="restaurant-menu" size={24} color="#9CA3AF" />
             </View>
           )}
-          {item.showAddButton && item.isStoreOpen && (
+          {(!item.isStoreOpen || item.isItemAvailable === false) && (
+            <View pointerEvents="none" style={styles.disabledImageOverlayItem} />
+          )}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.wishlistButton}
+            onPress={() => {
+              handleToggleFavorite(item).catch(() => {});
+            }}
+          >
+            <MaterialIcons
+              name={item.isFavorite ? 'favorite' : 'favorite-border'}
+              size={24}
+              color={item.isFavorite ? '#FF0000' : '#FFFFFF'}
+            />
+          </TouchableOpacity>
+          {item.showAddButton && item.isStoreOpen && item.isItemAvailable !== false && (
             <TouchableOpacity
               activeOpacity={0.8}
-              style={styles.addButton}
+              style={styles.itemAddButton}
               onPress={() => {
                 handleAddItemToCart(item).catch((error) => {
                   console.log('[PopularDishesScreen] add item failed:', error);
                 });
               }}
             >
-              <Text style={styles.addButtonText}>+ Add</Text>
+              <Text style={styles.itemAddButtonText}>+Add</Text>
             </TouchableOpacity>
           )}
-          {item.showAddButton && !item.isStoreOpen && (
+          {item.showAddButton && (!item.isStoreOpen || item.isItemAvailable === false) && (
             <View style={styles.closedPill}>
-              <Text style={styles.closedPillText}>Closed</Text>
+              <Text style={styles.closedPillText}>
+                {item.isStoreOpen ? 'Not available' : 'Closed'}
+              </Text>
             </View>
           )}
         </View>
@@ -428,10 +695,11 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
     if (homeCollectionType === 'store') {
       return (
         <TouchableOpacity
-          activeOpacity={0.8}
+          activeOpacity={item.isStoreOpen ? 0.8 : 1}
           style={styles.card}
+          disabled={!item.isStoreOpen}
           onPress={() => {
-            if (item.restaurantId && onNavigateToRestaurant) {
+            if (item.isStoreOpen && item.restaurantId && onNavigateToRestaurant) {
               onNavigateToRestaurant(item.restaurantId, item.name);
             }
           }}
@@ -448,9 +716,9 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
     );
   };
 
-  return (
-    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
-      {isLoading ? (
+  const renderTopHeader = () => {
+    if (isLoading) {
+      return (
         <View style={styles.heroWrap}>
           <Shimmer width="100%" height="100%" borderRadius={20} backgroundColor="#DCDCDC" />
           <View style={[styles.heroBackButton, { top: insets.top + 12 }]}>
@@ -465,7 +733,11 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
             </View>
           </View>
         </View>
-      ) : collectionBannerImageUrl ? (
+      );
+    }
+
+    if (collectionBannerImageUrl) {
+      return (
         <View style={styles.heroWrap}>
           <Image source={{ uri: collectionBannerImageUrl }} style={styles.heroImage} resizeMode="cover" />
           <TouchableOpacity
@@ -479,36 +751,51 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
             <Text style={styles.heroInfoTitle} numberOfLines={1}>{headerTitle}</Text>
           </View>
         </View>
-      ) : (
-        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <TouchableOpacity onPress={onBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <MaterialIcons name="arrow-back" size={24} color="#111827" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{headerTitle}</Text>
-          <View style={styles.headerRightSpacer} />
-        </View>
-      )}
-      {isLoading ? renderLoadingSkeleton() : (
-        <FlatList
-          data={items}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => fetchItems(true)}
-              colors={['#00B14F']}
-              tintColor="#00B14F"
-            />
-          }
-          ListEmptyComponent={
+      );
+    }
+
+    return (
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <TouchableOpacity onPress={onBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <MaterialIcons name="arrow-back" size={24} color="#111827" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{headerTitle}</Text>
+        <View style={styles.headerRightSpacer} />
+      </View>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <FlatList
+        key={homeCollectionType === 'store' ? 'store-list' : 'item-list'}
+        data={isLoading ? [] : items}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <>
+            {renderTopHeader()}
+            {isLoading ? renderLoadingSkeleton() : null}
+          </>
+        }
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => fetchItems(true)}
+            colors={['#00B14F']}
+            tintColor="#00B14F"
+          />
+        }
+        ListEmptyComponent={
+          !isLoading ? (
             <View style={styles.emptyWrap}>
               <Text style={styles.emptyText}>No food items found</Text>
             </View>
-          }
-        />
-      )}
+          ) : null
+        }
+      />
     </SafeAreaView>
   );
 };
@@ -578,11 +865,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   heroWrap: {
-    marginHorizontal: 0,
+    marginHorizontal: -16,
     marginTop: 0,
     marginBottom: 10,
-    height: 250,
-    borderRadius: 20,
+    height: 260,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
     overflow: 'hidden',
     backgroundColor: '#F3F4F6',
     justifyContent: 'space-between',
@@ -595,23 +883,25 @@ const styles = StyleSheet.create({
   },
   heroBackButton: {
     position: 'absolute',
-    left: 14,
+    left: 16,
     zIndex: 2,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 50,
     backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E4E4E4',
     alignItems: 'center',
     justifyContent: 'center',
   },
   heroInfoCard: {
     marginTop: 'auto',
-    marginHorizontal: 10,
-    marginBottom: 10,
-    borderRadius: 12,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 10,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
   },
   heroInfoTitle: {
     color: '#111827',
@@ -621,16 +911,16 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 0,
     paddingBottom: 24,
     gap: 14,
   },
   card: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     overflow: 'visible',
-    paddingBottom: 6,
+    marginBottom: 18,
   },
   image: {
     width: 156,
@@ -638,9 +928,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   storeImage: {
-    width: 130,
-    height: 150,
-    borderRadius: 16,
+    width: 140,
+    height: 160,
+    borderRadius: 18,
   },
   imageFallback: {
     justifyContent: 'center',
@@ -648,17 +938,69 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   imageClosed: {
-    opacity: 0.55,
+    opacity: 1,
+  },
+  disabledImageOverlayStore: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 160,
+    borderRadius: 18,
+    backgroundColor: 'rgba(55, 65, 81, 0.45)',
+  },
+  disabledImageOverlayItem: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 137,
+    borderRadius: 16,
+    backgroundColor: 'rgba(55, 65, 81, 0.45)',
   },
   imageContainer: {
-    width: 156,
+    width: 155,
+    height: 160,
     alignItems: 'center',
     position: 'relative',
     overflow: 'visible',
-    paddingBottom: 8,
+    paddingBottom: 0,
+  },
+  itemImage: {
+    width: 155,
+    height: 137,
+    borderRadius: 16,
+  },
+  wishlistButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 4,
+    zIndex: 4,
+  },
+  itemAddButton: {
+    position: 'absolute',
+    top: 115,
+    left: 39.5,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#00B14F',
+    width: 76,
+    height: 37,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemAddButtonText: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 18,
+    lineHeight: 27,
+    color: '#00B14F',
+    opacity: 0.85,
   },
   storeImageContainer: {
-    width: 130,
+    width: 140,
     marginRight: 10,
     alignItems: 'center',
     position: 'relative',
@@ -772,11 +1114,44 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   storeEtaText: {
-    marginTop: 2,
     fontSize: 13,
     lineHeight: 18,
     fontFamily: 'Poppins-Medium',
     color: '#111827',
+  },
+  ratingEtaRow: {
+    marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ratingText: {
+    marginLeft: 4,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Poppins-Medium',
+    color: '#111827',
+  },
+  ratingEtaDot: {
+    marginHorizontal: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#6B7280',
+  },
+  closedStatusRow: {
+    position: 'absolute',
+    left: 8,
+    bottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    maxWidth: '86%',
+  },
+  closedStatusText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontFamily: 'Poppins-Bold',
+    color: '#FFFFFF',
+    flexShrink: 1,
   },
   storeCuisineText: {
     marginTop: 2,

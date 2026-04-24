@@ -163,6 +163,7 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
     if (togglingRestaurantId) return; // Prevent multiple simultaneous calls
 
     setTogglingRestaurantId(restaurantId);
+    favoritesService.setRestaurantFavoriteOverride(restaurantId, false);
 
     try {
       const response = await favoritesService.toggleFavoriteRestaurant(restaurantId);
@@ -170,9 +171,12 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
       if (response.success) {
         // Refresh the favorites list smoothly
         await fetchFavorites(true);
+      } else {
+        favoritesService.setRestaurantFavoriteOverride(restaurantId, true);
       }
     } catch (error) {
       // Silent fail
+      favoritesService.setRestaurantFavoriteOverride(restaurantId, true);
     } finally {
       setTogglingRestaurantId(null);
     }
@@ -342,7 +346,7 @@ export const ExploreDishesScreen: React.FC<ExploreDishesScreenProps> = ({
             <View style={styles.errorContainer}>
               <MaterialIcons name="error-outline" size={48} color="rgba(0, 0, 0, 0.3)" />
               <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={fetchFavorites}>
+              <TouchableOpacity style={styles.retryButton} onPress={() => { fetchFavorites(); }}>
                 <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
             </View>

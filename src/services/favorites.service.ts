@@ -7,6 +7,67 @@ import { apiService, ApiResponse } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
 
 class FavoritesService {
+  private itemFavoriteOverrides = new Map<string, boolean>();
+  private itemFavoriteListeners = new Set<(itemId: string, isFavorite: boolean) => void>();
+  private restaurantFavoriteOverrides = new Map<string, boolean>();
+  private restaurantFavoriteListeners = new Set<(restaurantId: string, isFavorite: boolean) => void>();
+
+  private notifyItemFavoriteChange(itemId: string, isFavorite: boolean) {
+    this.itemFavoriteListeners.forEach((listener) => {
+      try {
+        listener(itemId, isFavorite);
+      } catch {
+        // ignore listener errors
+      }
+    });
+  }
+
+  setItemFavoriteOverride(itemId: number | string, isFavorite: boolean) {
+    const normalizedId = String(itemId);
+    this.itemFavoriteOverrides.set(normalizedId, isFavorite);
+    this.notifyItemFavoriteChange(normalizedId, isFavorite);
+  }
+
+  getItemFavoriteOverride(itemId: number | string): boolean | undefined {
+    return this.itemFavoriteOverrides.get(String(itemId));
+  }
+
+  subscribeToItemFavoriteChanges(listener: (itemId: string, isFavorite: boolean) => void): () => void {
+    this.itemFavoriteListeners.add(listener);
+    return () => {
+      this.itemFavoriteListeners.delete(listener);
+    };
+  }
+
+  private notifyRestaurantFavoriteChange(restaurantId: string, isFavorite: boolean) {
+    this.restaurantFavoriteListeners.forEach((listener) => {
+      try {
+        listener(restaurantId, isFavorite);
+      } catch {
+        // ignore listener errors
+      }
+    });
+  }
+
+  setRestaurantFavoriteOverride(restaurantId: number | string, isFavorite: boolean) {
+    const normalizedId = String(restaurantId);
+    this.restaurantFavoriteOverrides.set(normalizedId, isFavorite);
+    this.notifyRestaurantFavoriteChange(normalizedId, isFavorite);
+  }
+
+  getRestaurantFavoriteOverride(restaurantId: number | string): boolean | undefined {
+    return this.restaurantFavoriteOverrides.get(String(restaurantId));
+  }
+
+  subscribeToRestaurantFavoriteChanges(
+    listener: (restaurantId: string, isFavorite: boolean) => void
+  ): () => void {
+    this.restaurantFavoriteListeners.add(listener);
+    return () => {
+      this.restaurantFavoriteListeners.delete(listener);
+    };
+  }
+
   /**
    * Toggle favorite status for a restaurant
    * @param storeId - Restaurant/Store ID
@@ -14,9 +75,25 @@ class FavoritesService {
   async toggleFavoriteRestaurant(storeId: number | string): Promise<ApiResponse<any>> {
     try {
       const endpoint = `/api/buyer/favorites/restaurants/${storeId}`;
+      console.log('[FavoritesService] REQUEST toggleFavoriteRestaurant', {
+        endpoint,
+        storeId,
+        method: 'POST',
+        body: {},
+      });
       const response = await apiService.post<any>(endpoint, {});
+      console.log('[FavoritesService] RESPONSE toggleFavoriteRestaurant', {
+        endpoint,
+        storeId,
+        response,
+      });
       return response;
     } catch (error: any) {
+      console.log('[FavoritesService] ERROR toggleFavoriteRestaurant', {
+        endpoint: `/api/buyer/favorites/restaurants/${storeId}`,
+        storeId,
+        error: error?.message || error,
+      });
       return {
         success: false,
         error: error.message || 'Failed to toggle favorite',
@@ -49,9 +126,25 @@ class FavoritesService {
   async toggleFavoriteItem(itemId: number | string): Promise<ApiResponse<any>> {
     try {
       const endpoint = `/api/buyer/favorites/items/${itemId}`;
+      console.log('[FavoritesService] REQUEST toggleFavoriteItem', {
+        endpoint,
+        itemId,
+        method: 'POST',
+        body: {},
+      });
       const response = await apiService.post<any>(endpoint, {});
+      console.log('[FavoritesService] RESPONSE toggleFavoriteItem', {
+        endpoint,
+        itemId,
+        response,
+      });
       return response;
     } catch (error: any) {
+      console.log('[FavoritesService] ERROR toggleFavoriteItem', {
+        endpoint: `/api/buyer/favorites/items/${itemId}`,
+        itemId,
+        error: error?.message || error,
+      });
       return {
         success: false,
         error: error.message || 'Failed to toggle favorite item',

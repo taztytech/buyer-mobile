@@ -60,6 +60,8 @@ type RestaurantAnalyticsMeta = {
   distanceKm?: number;
   isOpen?: boolean;
   itemCount?: number;
+  targetItemId?: string;
+  targetItemName?: string;
 };
 
 function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigateToOrders?: () => void }) {
@@ -98,6 +100,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
   const [selectedRestaurantAddress, setSelectedRestaurantAddress] = React.useState<string>('');
+  const [targetRestaurantItemId, setTargetRestaurantItemId] = React.useState<string | undefined>(undefined);
+  const [targetRestaurantItemName, setTargetRestaurantItemName] = React.useState<string | undefined>(undefined);
   const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites' | 'orders' | 'checkout'>('home');
   const [checkoutCameFrom, setCheckoutCameFrom] = React.useState<'restaurant' | 'home' | 'orders'>('restaurant');
   const [hasCheckoutMounted, setHasCheckoutMounted] = React.useState(false);
@@ -1869,6 +1873,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   ) => {
     setSelectedRestaurantId(restaurantId);
     setSelectedRestaurantName(restaurantName);
+    setTargetRestaurantItemId(meta?.targetItemId);
+    setTargetRestaurantItemName(meta?.targetItemName);
     // Favorites → dish category list → restaurant: back returns to My Favorites (not Profile / category list).
     setRestaurantCameFrom(categoryCameFrom === 'favorites' ? 'favorites' : 'category');
     navigateToScreen('restaurant');
@@ -1898,6 +1904,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   ) => {
     setSelectedRestaurantId(restaurantId);
     setSelectedRestaurantName(restaurantName);
+    setTargetRestaurantItemId(meta?.targetItemId);
+    setTargetRestaurantItemName(meta?.targetItemName);
     setRestaurantCameFrom('home');
     navigateToScreen('restaurant');
 
@@ -3350,6 +3358,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                   onBack={handleBackFromPopularDishes}
                   onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
                   onNavigateToCheckout={handleNavigateToCheckout}
+                  selectedLocation={selectedLocation}
                 />
               </View>
             )}
@@ -3448,6 +3457,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                 visible={currentScreen === 'restaurant'}
                 restaurantId={selectedRestaurantId}
                 restaurantName={selectedRestaurantName}
+                targetItemId={targetRestaurantItemId}
+                targetItemName={targetRestaurantItemName}
                 onBack={handleBackFromRestaurant}
                 onNavigateToCheckout={handleNavigateToCheckout}
                 onNavigateToDetails={handleNavigateToRestaurantDetails}

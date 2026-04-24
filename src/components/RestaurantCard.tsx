@@ -67,6 +67,18 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
     setIsFavorite(restaurant.isFavorite || false);
   }, [restaurant.isFavorite]);
 
+  useEffect(() => {
+    const restaurantId = String(restaurant.id);
+    const unsubscribe = favoritesService.subscribeToRestaurantFavoriteChanges(
+      (changedRestaurantId, nextIsFavorite) => {
+        if (changedRestaurantId === restaurantId) {
+          setIsFavorite(nextIsFavorite);
+        }
+      }
+    );
+    return unsubscribe;
+  }, [restaurant.id]);
+
   // Store open/close:
   // Use ONLY the derived isOpen flag from top-level API is_open.
   // Do NOT derive open state from timings.
@@ -173,13 +185,16 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
 
     // Optimistic update
     const previousState = isFavorite;
-    setIsFavorite(!isFavorite);
+    const nextState = !isFavorite;
+    favoritesService.setRestaurantFavoriteOverride(restaurant.id, nextState);
+    setIsFavorite(nextState);
 
     try {
       const response = await favoritesService.toggleFavoriteRestaurant(restaurant.id);
 
       if (!response.success) {
         // Revert on failure
+        favoritesService.setRestaurantFavoriteOverride(restaurant.id, previousState);
         setIsFavorite(previousState);
       }
 
@@ -189,6 +204,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
       }
     } catch (error) {
       // Revert on error
+      favoritesService.setRestaurantFavoriteOverride(restaurant.id, previousState);
       setIsFavorite(previousState);
     } finally {
       setIsTogglingFavorite(false);
