@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CouponAppliedModal } from '@/components/CouponAppliedModal';
-import { CouponBurstAnimation } from '@/components/CouponBurstAnimation';
 
 type Coupon = {
   code: string;
@@ -72,14 +71,7 @@ export const CouponsScreen: React.FC<CouponsScreenProps> = ({ visible, onBack, o
 
   return (
     <View style={styles.container} pointerEvents={visible ? 'auto' : 'none'}>
-      {/* Background animation across full Coupons page */}
-      <CouponBurstAnimation
-        active={appliedVisible}
-        mode="fall"
-        width={SCREEN_W}
-        height={SCREEN_H}
-        durationMs={1300}
-      />
+      {/* Background animation is now rendered inside the applied modal backdrop */}
 
       <SafeAreaView edges={['top']} style={styles.safeHeader}>
         <View style={styles.header}>

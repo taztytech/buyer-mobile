@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Dimensions, ImageBackground } from 'react-native';
 import { BlurView } from 'expo-blur';
+import ConfettiCannon from 'react-native-confetti-cannon';
 
 type CouponAppliedModalProps = {
   visible: boolean;
@@ -10,6 +11,7 @@ type CouponAppliedModalProps = {
 };
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export const CouponAppliedModal: React.FC<CouponAppliedModalProps> = ({
   visible,
@@ -19,11 +21,13 @@ export const CouponAppliedModal: React.FC<CouponAppliedModalProps> = ({
 }) => {
   const scaleAnim = useRef(new Animated.Value(0.78)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const confettiKeyRef = useRef(0);
 
   useEffect(() => {
     if (!visible) return;
     scaleAnim.setValue(0.78);
     opacityAnim.setValue(0);
+    confettiKeyRef.current += 1;
     Animated.parallel([
       Animated.spring(scaleAnim, {
         toValue: 1,
@@ -58,7 +62,22 @@ export const CouponAppliedModal: React.FC<CouponAppliedModalProps> = ({
       onRequestClose={onClose}
     >
       <BlurView intensity={70} tint="dark" style={styles.overlay}>
-        <Animated.View style={{ opacity: opacityAnim, transform: [{ scale: scaleAnim }] }}>
+        {/* Confetti effect (behind the popup card) */}
+        <View pointerEvents="none" style={styles.backdropAnim}>
+          {visible ? (
+            <ConfettiCannon
+              // key forces a fresh burst each time modal opens
+              key={`coupon-confetti-${confettiKeyRef.current}`}
+              count={90}
+              origin={{ x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT - 60 }}
+              fadeOut
+              fallSpeed={2600}
+              explosionSpeed={420}
+              autoStart
+            />
+          ) : null}
+        </View>
+        <Animated.View style={[styles.popupLayer, { opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}>
           <View style={[styles.card, { width: cardWidth, height: cardHeight }]}>
             <ImageBackground
               source={require('@/assets/coupon-applied-template.png')}
@@ -109,6 +128,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     // paddingHorizontal: 22,
+  },
+  backdropAnim: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
+  popupLayer: {
+    zIndex: 2,
   },
   card: {
     borderRadius: 22,
