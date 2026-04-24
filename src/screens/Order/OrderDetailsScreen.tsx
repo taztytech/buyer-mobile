@@ -62,6 +62,7 @@ interface OrderDetailsScreenProps {
   showCustomizationModal?: boolean;
   onUpdateCart?: (itemId: string, variantId: string | undefined, newQuantity: number) => void;
   onAddressChange?: () => void;
+  onNavigateToCoupons?: () => void;
 }
 
 export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
@@ -81,6 +82,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   showCustomizationModal = false,
   onUpdateCart,
   onAddressChange,
+  onNavigateToCoupons,
 }) => {
   const {
     cart,
@@ -1764,6 +1766,28 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 )}
               </View>
 
+              {/* Coupons (navigate to Coupons page) */}
+              <View style={styles.section}>
+                <TouchableOpacity
+                  style={styles.sectionHeader}
+                  onPress={() => onNavigateToCoupons?.()}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.couponsHeaderLeft}>
+                    <MaterialIcons name="local-offer" size={20} color="#00B14F" />
+                    <Text style={styles.sectionTitle}>Coupons</Text>
+                  </View>
+                  <View style={styles.couponsChevronWrap}>
+                    <MaterialIcons
+                      name="chevron-right"
+                      size={24}
+                      color="rgba(0, 0, 0, 0.6)"
+                      style={{ left : -20 }}
+                    />
+                  </View>
+                </TouchableOpacity>
+              </View>
+
               {/* Tip Section */}
               <View style={styles.section}>
                 <TouchableOpacity
@@ -1940,71 +1964,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 )}
               </View>
 
-              {/* Apply Promo Code Section - Hide if cart has preorder items */}
-              {!hasPreorderItems && (
-                <View style={styles.section}>
-                  <TouchableOpacity
-                    style={styles.sectionHeader}
-                    onPress={() => setPromoExpanded(!promoExpanded)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.sectionTitle}>Promo Code</Text>
-                    <MaterialIcons
-                      name={promoExpanded ? 'expand-less' : 'expand-more'}
-                      size={24}
-                      color="#000000"
-                    />
-                  </TouchableOpacity>
-
-                  {promoExpanded && (
-                    <View style={styles.sectionContent}>
-                      <View style={styles.promoCodeContainer}>
-                        <TextInput autoCorrect={false}
-                          style={styles.promoCodeInput}
-                          placeholder="Enter promo code"
-                          placeholderTextColor="rgba(0, 0, 0, 0.4)"
-                          value={promoCode}
-                          editable={!isCouponApplied}
-                          onChangeText={(text) => {
-                            // Normalize to uppercase and hard-limit to 15 characters
-                            const uppercased = text.toUpperCase();
-                            const limited = uppercased.slice(0, 15);
-
-                            setPromoCode(limited);
-
-                            // Clear backend promo error when user edits the code
-                            if (promoError) {
-                              setPromoError('');
-                            }
-                          }}
-                          autoCapitalize="characters"
-                        />
-                        <TouchableOpacity
-                          style={[
-                            styles.applyButton,
-                            (isApplyingPromo ||
-                              (!isCouponApplied && !promoCode.trim())) && styles.applyButtonDisabled,
-                          ]}
-                          onPress={isCouponApplied ? handleRemovePromoCode : handleApplyPromoCode}
-                          activeOpacity={0.8}
-                          disabled={
-                            isApplyingPromo ||
-                            (!isCouponApplied && !promoCode.trim())
-                          }
-                        >
-                          {isApplyingPromo ? (
-                            <ActivityIndicator size="small" color="#FFFFFF" />
-                          ) : (
-                            <Text style={styles.applyButtonText}>
-                              {isCouponApplied ? 'Remove' : 'Apply'}
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )}
+              {/* Promo Code UI intentionally disabled */}
 
               {/* Bill Details Section */}
               <View style={styles.section}>
@@ -2455,6 +2415,14 @@ const styles = StyleSheet.create({
   },
   headerTextContainer: {
     flex: 1,
+  },
+  couponsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  couponsChevronWrap: {
+    paddingLeft: -20,
   },
   restaurantName: {
     fontFamily: 'Poppins_700Bold',

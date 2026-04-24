@@ -21,6 +21,7 @@ import { CategoryResultsScreen } from '@/screens/Category/CategoryResultsScreen'
 import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
 import { RestaurantDetailsScreen } from '@/screens/Restaurant/RestaurantDetailsScreen';
 import { OrderDetailsScreen } from '@/screens/Order/OrderDetailsScreen';
+import { CouponsScreen } from '@/screens/Coupons/CouponsScreen';
 import { ExploreDishesScreen } from '@/screens/Favorites/ExploreDishesScreen';
 import { ContentPage } from '@/screens/Legal/ContentPage';
 import { HelpScreen } from '@/screens/Help/HelpScreen';
@@ -78,7 +79,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const { showConfirmation } = useConfirmation();
 
   // Default to login so we never flash location overlays before auth resolves; logged-in startup sets home/orders explicitly.
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'coupons' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -101,6 +102,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites' | 'orders' | 'checkout'>('home');
   const [checkoutCameFrom, setCheckoutCameFrom] = React.useState<'restaurant' | 'home' | 'orders'>('restaurant');
   const [hasCheckoutMounted, setHasCheckoutMounted] = React.useState(false);
+  const [hasCouponsMounted, setHasCouponsMounted] = React.useState(false);
   const [hasSearchMounted, setHasSearchMounted] = React.useState(false);
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
@@ -355,6 +357,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const faqScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const restaurantScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const checkoutScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const couponsScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   // Chat screen state
   const [chatHelpOptionId] = React.useState<string>('');
   const [chatHelpOptionTitle] = React.useState<string>('');
@@ -512,6 +515,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       restaurantDetails: AnalyticsScreens.RESTAURANT_DETAILS,
       exploreDishes: AnalyticsScreens.EXPLORE_DISHES,
       checkout: AnalyticsScreens.CHECKOUT,
+      coupons: 'Coupons',
       privacyPolicy: AnalyticsScreens.PRIVACY_POLICY,
       termsConditions: AnalyticsScreens.TERMS_CONDITIONS,
       help: AnalyticsScreens.HELP,
@@ -576,6 +580,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       faqScreenSlide.setValue(SCREEN_WIDTH);
       restaurantScreenSlide.setValue(SCREEN_WIDTH);
       checkoutScreenSlide.setValue(SCREEN_WIDTH);
+      couponsScreenSlide.setValue(SCREEN_WIDTH);
       setEditingAddress(null);
       setSelectedOrderData(null);
 
@@ -1060,6 +1065,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       case 'checkout':
         handleBackFromCheckout();
         return true;
+      case 'coupons':
+        handleBackFromCoupons();
+        return true;
       case 'exploreDishes':
         handleBackFromExploreDishes();
         return true;
@@ -1110,6 +1118,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     handleBackFromRestaurant,
     handleBackFromRestaurantDetails,
     handleBackFromCheckout,
+    handleBackFromCoupons,
     handleBackFromExploreDishes,
     handleBackFromPrivacyPolicy,
     handleBackFromTermsConditions,
@@ -1213,6 +1222,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       orderDetailScreenSlide.setValue(SCREEN_WIDTH);
       restaurantScreenSlide.setValue(SCREEN_WIDTH);
       checkoutScreenSlide.setValue(SCREEN_WIDTH);
+      couponsScreenSlide.setValue(SCREEN_WIDTH);
       helpScreenSlide.setValue(SCREEN_WIDTH);
       contactUsScreenSlide.setValue(SCREEN_WIDTH);
       faqScreenSlide.setValue(SCREEN_WIDTH);
@@ -1286,6 +1296,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     orderDetailScreenSlide.setValue(SCREEN_WIDTH);
     restaurantScreenSlide.setValue(SCREEN_WIDTH);
     checkoutScreenSlide.setValue(SCREEN_WIDTH);
+    couponsScreenSlide.setValue(SCREEN_WIDTH);
     helpScreenSlide.setValue(SCREEN_WIDTH);
     contactUsScreenSlide.setValue(SCREEN_WIDTH);
     faqScreenSlide.setValue(SCREEN_WIDTH);
@@ -1405,6 +1416,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     orderDetailScreenSlide.setValue(SCREEN_WIDTH);
     restaurantScreenSlide.setValue(SCREEN_WIDTH);
     checkoutScreenSlide.setValue(SCREEN_WIDTH);
+    couponsScreenSlide.setValue(SCREEN_WIDTH);
     helpScreenSlide.setValue(SCREEN_WIDTH);
     contactUsScreenSlide.setValue(SCREEN_WIDTH);
     faqScreenSlide.setValue(SCREEN_WIDTH);
@@ -1919,6 +1931,34 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     });
   }, [cartSummary?.delivery_fee, checkoutScreenSlide, getTotalItems, getTotalPrice]);
 
+  // Coupons Navigation (from Checkout)
+  const handleNavigateToCoupons = React.useCallback(() => {
+    setHasCouponsMounted(true);
+    couponsScreenSlide.setValue(SCREEN_WIDTH);
+    setCurrentScreen('coupons');
+    requestAnimationFrame(() => {
+      Animated.timing(couponsScreenSlide, {
+        toValue: 0,
+        duration: 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [couponsScreenSlide]);
+
+  const handleBackFromCoupons = React.useCallback(() => {
+    Animated.timing(couponsScreenSlide, {
+      toValue: SCREEN_WIDTH,
+      duration: 200,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => {
+      // Return to checkout
+      checkoutScreenSlide.setValue(0);
+      setCurrentScreen('checkout');
+    });
+  }, [couponsScreenSlide, checkoutScreenSlide]);
+
   // Back from Checkout
   const handleBackFromCheckout = useCallback(() => {
     // Slide out checkout screen
@@ -2142,6 +2182,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         profileScreenSlide.setValue(SCREEN_WIDTH);
         restaurantScreenSlide.setValue(SCREEN_WIDTH);
         checkoutScreenSlide.setValue(SCREEN_WIDTH);
+        couponsScreenSlide.setValue(SCREEN_WIDTH);
         homeScreenSlide.setValue(0);
 
         // Update state after all positions are set
@@ -3426,6 +3467,26 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                   onOrderSuccess={handleOrderSuccessFromCheckout}
                   onOrderCancel={handleOrderCancelFromCheckout}
                   onAddressChange={handleAddressChange}
+                  onNavigateToCoupons={handleNavigateToCoupons}
+                />
+              </Animated.View>
+            )}
+
+            {/* Coupons Screen (opened from Checkout) */}
+            {hasCouponsMounted && (
+              <Animated.View
+                style={[
+                  styles.couponsOverlay,
+                  {
+                    transform: [{ translateX: couponsScreenSlide }],
+                  },
+                ]}
+                pointerEvents={currentScreen === 'coupons' ? 'auto' : 'none'}
+              >
+                <CouponsScreen
+                  visible={currentScreen === 'coupons'}
+                  onBack={handleBackFromCoupons}
+                  onAppliedAndClose={handleBackFromCoupons}
                 />
               </Animated.View>
             )}
@@ -3759,6 +3820,16 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     zIndex: 9,
     backgroundColor: '#FFFFFF',
+  },
+  couponsOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: SCREEN_WIDTH,
+    zIndex: 10,
+    backgroundColor: '#F3F4F6',
   },
   testFCMOverlay: {
     position: 'absolute',
