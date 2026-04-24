@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CouponAppliedModal } from '@/components/CouponAppliedModal';
@@ -55,18 +55,21 @@ const EXPIRED_COUPONS: Coupon[] = [
 
 export const CouponsScreen: React.FC<CouponsScreenProps> = ({ visible, onBack, onAppliedAndClose }) => {
   const [appliedVisible, setAppliedVisible] = React.useState(false);
-  const [selectedCoupon, setSelectedCoupon] = React.useState<Coupon | null>(null);
-  const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+  const [confettiKey, setConfettiKey] = React.useState(0);
 
   const handleApply = (coupon: Coupon) => {
     if (!coupon.enabled) return;
-    setSelectedCoupon(coupon);
+    // Increment first so modal+confetti render in same commit (no effect-delay)
+    setConfettiKey((k) => k + 1);
     setAppliedVisible(true);
   };
 
   const handleOk = () => {
     setAppliedVisible(false);
-    onAppliedAndClose();
+    // Ensure the popup is gone before navigating back to cart/checkout
+    setTimeout(() => {
+      onAppliedAndClose();
+    }, 0);
   };
 
   return (
@@ -128,8 +131,7 @@ export const CouponsScreen: React.FC<CouponsScreenProps> = ({ visible, onBack, o
 
       <CouponAppliedModal
         visible={appliedVisible}
-        couponCode={selectedCoupon?.code || ''}
-        couponTitle={selectedCoupon?.title || ''}
+        confettiKey={confettiKey}
         onClose={handleOk}
       />
     </View>
