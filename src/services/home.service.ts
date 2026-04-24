@@ -46,6 +46,14 @@ export interface DishItem {
   sequence?: number;
 }
 
+export interface CollectionItem {
+  id: number | string;
+  name: string;
+  image_url?: string;
+  restaurant_name?: string;
+  sequence?: number;
+}
+
 export interface RestaurantTiming {
   day: number;
   open_time: string;
@@ -86,6 +94,28 @@ export interface OrganizationBanner {
   sequence?: number;
 }
 
+export interface HomeCollectionMeta {
+  page?: number;
+  limit?: number;
+  total?: number;
+  totalPages?: number;
+  hasNext?: boolean;
+  hasPrev?: boolean;
+}
+
+export interface HomeCollectionSection {
+  collection?: {
+    id?: number | string;
+    title?: string;
+    description?: string | null;
+    image_url?: string;
+    type?: string;
+    page?: string;
+  };
+  data?: any[];
+  meta?: HomeCollectionMeta;
+}
+
 export interface HomeData {
   promotional_banner?: BannerItem | BannerItem[];
   nearby_restaurants?: Restaurant[];
@@ -99,6 +129,7 @@ export interface HomeData {
   background_image_url?: string;
   home_screen_background_image?: string;
   organization_banner?: OrganizationBanner[];
+  home_collection?: HomeCollectionSection;
 }
 
 class HomeService {
@@ -373,6 +404,105 @@ class HomeService {
       return {
         success: false,
         error: error.message || 'Failed to fetch home data',
+        message: error.message,
+      };
+    }
+  }
+
+  /**
+   * Fetch active buyer collections (used for popular dishes section)
+   */
+  async getCollections(limit: number = 20, page: number = 1): Promise<ApiResponse<CollectionItem[]>> {
+    try {
+      const params: Record<string, any> = {
+        limit: limit.toString(),
+        page: page.toString(),
+      };
+
+      const response = await apiService.get<any>(
+        API_CONFIG.ENDPOINTS.BUYER.COLLECTIONS,
+        params
+      );
+
+      if (!response.success) {
+        return response as ApiResponse<CollectionItem[]>;
+      }
+
+      const rawData = response.data as any;
+      const nestedData = rawData?.data ?? rawData;
+
+      // Accept common API shapes:
+      // 1) { data: { collections: [...] } }
+      // 2) { data: [...] }
+      // 3) { collections: [...] }
+      const collections =
+        (Array.isArray(nestedData?.collections) && nestedData.collections) ||
+        (Array.isArray(rawData?.collections) && rawData.collections) ||
+        (Array.isArray(nestedData) && nestedData) ||
+        [];
+
+      return {
+        ...response,
+        data: collections as CollectionItem[],
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch collections',
+        message: error.message,
+      };
+    }
+  }
+
+  /**
+   * Fetch items for a specific buyer collection
+   * Endpoint: /api/buyer/collections/{id}/items
+   */
+  async getCollectionItems(
+    collectionId: string | number,
+    page: number = 1,
+    lat?: number,
+    lng?: number
+  ): Promise<ApiResponse<any[]>> {
+    try {
+      const params: Record<string, any> = {
+        page: page.toString(),
+      };
+
+      if (lat !== undefined) {
+        params.lat = lat.toString();
+      }
+      if (lng !== undefined) {
+        params.lng = lng.toString();
+      }
+
+      const response = await apiService.get<any>(
+        API_CONFIG.ENDPOINTS.BUYER.COLLECTION_ITEMS(collectionId),
+        params
+      );
+
+      if (!response.success) {
+        return response as ApiResponse<any[]>;
+      }
+
+      const rawData = response.data as any;
+      const nestedData = rawData?.data ?? rawData;
+
+      const items =
+        (Array.isArray(nestedData?.items) && nestedData.items) ||
+        (Array.isArray(nestedData?.data) && nestedData.data) ||
+        (Array.isArray(rawData?.items) && rawData.items) ||
+        (Array.isArray(nestedData) && nestedData) ||
+        [];
+
+      return {
+        ...response,
+        data: items as any[],
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch collection items',
         message: error.message,
       };
     }

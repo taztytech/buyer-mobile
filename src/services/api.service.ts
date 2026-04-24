@@ -767,22 +767,8 @@ class ApiService {
         config.body = JSON.stringify(sanitizedRequestPayload);
       }
 
-      // Centralized request logging for debugging purposes
+      // Parse request payload once for optional debug logging and error reporting
       const requestBody = config.body ? JSON.parse(config.body as string) : undefined;
-      console.log(
-        '[apiService][request]',
-        safeStringify({
-          method,
-          endpoint: url,
-          body: requestBody,
-          hasBody: Boolean(config.body),
-          headers: {
-            'X-App-Version-Name': (headers as Record<string, string>)['X-App-Version-Name'],
-            'X-App-Version-Code': (headers as Record<string, string>)['X-App-Version-Code'],
-          },
-          timestamp: new Date().toISOString(),
-        }),
-      );
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
@@ -798,6 +784,23 @@ class ApiService {
       // CRITICAL: Always bypass cache for home API to prevent stale 426 responses
       // This fixes the issue where old cached 426 responses persist after app update/reinstall
       const isHomeEndpoint = endpoint.includes('/api/buyer/home');
+
+      if (isHomeEndpoint) {
+        console.log(
+          '[apiService][home][request]',
+          safeStringify({
+            method,
+            endpoint: url,
+            body: requestBody,
+            hasBody: Boolean(config.body),
+            headers: {
+              'X-App-Version-Name': (headers as Record<string, string>)['X-App-Version-Name'],
+              'X-App-Version-Code': (headers as Record<string, string>)['X-App-Version-Code'],
+            },
+            timestamp: new Date().toISOString(),
+          }),
+        );
+      }
       
       // If cache-control header indicates no-cache, use no-store cache option
       // OR if this is the home endpoint, always bypass cache
@@ -877,27 +880,20 @@ class ApiService {
 
       const responseData = await response.json();
 
-      // Dedicated logging for home API responses to debug home screen issues
+      // Dedicated logging for home API responses
       if (isHomeEndpoint) {
         console.log(
-          '[apiService][home][response]--------========',
-          responseData?.data?.data?.cod_settings
+          '[apiService][home][response]',
+          safeStringify({
+            status: response.status,
+            statusText: response.statusText,
+            success: response.ok,
+            duration: `${duration}ms`,
+            fullResponse: responseData,
+            timestamp: new Date().toISOString(),
+          })
         );
       }
-
-      console.log('[apiService][response]', safeStringify({
-        method,
-        endpoint: url,
-        status: response.status,
-        statusText: response.statusText,
-        success: response.ok,
-        fullResponse: responseData,
-        data: responseData?.data ?? responseData,
-        message: responseData?.message,
-        error: responseData?.error,
-        duration: `${duration}ms`,
-        timestamp: new Date().toISOString(),
-      }));
 
       // Check for user deletion indicators
       // IMPORTANT: Only trust:

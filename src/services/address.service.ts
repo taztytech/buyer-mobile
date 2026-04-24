@@ -250,6 +250,8 @@ class AddressService {
 
     let body: AddAddressRequest;
 
+
+    console.log('body address service-------------------->>>>>>>>>', JSON.stringify(parsed));
     if (structured) {
       const pc = pincodeDigits(parsed.pincode) ?? pincodeFromAddress ?? '625001';
       body = {
@@ -280,6 +282,7 @@ class AddressService {
         is_default: true,
       };
     }
+    console.log('body address service-------------------->>>>>>>>>', typeof parsed.address2 === 'string' ? parsed.address2.slice(0, 200) : undefined, typeof parsed.address3 === 'string' ? parsed.address3.slice(0, 200) : undefined);
 
     const response = await this.addAddress(body);
     if (response.success) {

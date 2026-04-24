@@ -37,6 +37,8 @@ export const API_CONFIG = {
     // Buyer endpoints
     BUYER: {
       HOME: '/api/buyer/home',
+      COLLECTIONS: '/api/buyer/collections',
+      COLLECTION_ITEMS: (id: string | number) => `/api/buyer/collections/${id}/items`,
       SEARCH: '/api/buyer/search',
       FAVORITES_RESTAURANTS: '/api/buyer/favorites/restaurants',
       FAVORITES_ITEMS: '/api/buyer/favorites/items',

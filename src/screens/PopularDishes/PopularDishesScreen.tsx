@@ -1,0 +1,811 @@
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  Image,
+  RefreshControl,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@/shims/rn-vector-icons';
+import { homeService } from '@/services/home.service';
+import { Shimmer } from '@/components/Shimmer';
+import { useCart } from '@/context/CartContext';
+
+interface PopularDishRowItem {
+  id: string;
+  restaurantId?: number;
+  storeId?: number;
+  storeName?: string;
+  storeLogoUrl?: string;
+  name: string;
+  subtitle: string;
+  priceLabel?: string;
+  basePrice?: number;
+  description?: string;
+  locality?: string;
+  eta?: string;
+  imageUrl?: string;
+  cuisineTags?: string;
+  distanceKm?: number;
+  isVeg?: boolean;
+  isStoreOpen: boolean;
+  showAddButton: boolean;
+}
+
+type HomeCollectionType = 'store' | 'item' | 'unknown';
+
+interface PopularDishesScreenProps {
+  onBack?: () => void;
+  onNavigateToRestaurant?: (restaurantId: number, restaurantName: string) => void;
+  onNavigateToCheckout?: (restaurantId: number, restaurantName: string, restaurantAddress?: string, from?: 'home' | 'restaurant') => void;
+}
+
+const mapHomeCollectionItem = (
+  item: any,
+  index: number,
+  showAddButton: boolean,
+  isStoreOpen: boolean
+): PopularDishRowItem => {
+  const imageUrl =
+    item?.image_url ||
+    item?.image ||
+    item?.thumbnail ||
+    item?.thumbnail_url ||
+    item?.collection_image ||
+    (Array.isArray(item?.images) && item.images.length > 0 ? item.images[0] : undefined);
+  const basePriceRaw = item?.price?.base_price ?? item?.base_price;
+  const basePrice = typeof basePriceRaw === 'number' ? basePriceRaw : Number(basePriceRaw);
+  const currency = String(item?.price?.currency || 'INR').toUpperCase();
+  const priceLabel = Number.isFinite(basePrice)
+    ? currency === 'INR'
+      ? `₹${basePrice.toFixed(2)}`
+      : `${currency} ${basePrice.toFixed(2)}`
+    : undefined;
+  const sourceName =
+    item?.store_name ||
+    item?.store?.name ||
+    item?.restaurant_name ||
+    item?.restaurant?.name;
+  const locality =
+    item?.store?.location?.locality ||
+    item?.location?.locality ||
+    item?.locality ||
+    'chinna chokkikulam';
+  const eta =
+    item?.delivery_time ||
+    item?.eta ||
+    '30-35 mins';
+  const cuisineTags =
+    item?.cuisine_tags ||
+    item?.cuisines ||
+    item?.store?.cuisine_tags ||
+    '';
+  const distanceRaw = item?.distance ?? item?.store?.distance;
+  const distanceKm = typeof distanceRaw === 'number' ? distanceRaw : Number(distanceRaw);
+  const storeIdRaw = item?.store_id ?? item?.store?.id;
+  const storeId = typeof storeIdRaw === 'number' ? storeIdRaw : Number(storeIdRaw);
+  const dietaryPreference = String(item?.dietary_preference || '').toLowerCase();
+  const foodType = String(item?.food_type || '').toLowerCase();
+  const isVeg =
+    dietaryPreference.includes('veg') ||
+    foodType === 'veg' ||
+    foodType === 'pure-veg';
+
+  return {
+    id: String(item?.id ?? `collection-${index}`),
+    restaurantId: Number.isFinite(Number(item?.id)) ? Number(item?.id) : undefined,
+    storeId: Number.isFinite(storeId) ? storeId : undefined,
+    storeName:
+      typeof item?.store_name === 'string' && item.store_name.trim().length > 0
+        ? item.store_name.trim()
+        : typeof item?.store?.name === 'string' && item.store.name.trim().length > 0
+          ? item.store.name.trim()
+          : undefined,
+    storeLogoUrl:
+      typeof item?.store?.logo_url === 'string' && item.store.logo_url.trim().length > 0
+        ? item.store.logo_url.trim()
+        : undefined,
+    name: String(item?.name || item?.title || `Food Item ${index + 1}`),
+    subtitle:
+      typeof sourceName === 'string' && sourceName.trim().length > 0
+        ? `by ${sourceName.trim()}`
+        : 'by Hotel',
+    priceLabel,
+    basePrice: Number.isFinite(basePrice) ? basePrice : undefined,
+    description:
+      typeof item?.long_desc === 'string' && item.long_desc.trim().length > 0
+        ? item.long_desc.trim()
+        : typeof item?.short_desc === 'string' && item.short_desc.trim().length > 0
+          ? item.short_desc.trim()
+          : '',
+    locality: typeof locality === 'string' && locality.trim().length > 0 ? locality.trim() : 'chinna chokkikulam',
+    eta: typeof eta === 'string' && eta.trim().length > 0 ? eta.trim() : '30-35 mins',
+    imageUrl: typeof imageUrl === 'string' && imageUrl.trim().length > 0 ? imageUrl : undefined,
+    cuisineTags: typeof cuisineTags === 'string' && cuisineTags.trim().length > 0 ? cuisineTags.trim() : undefined,
+    distanceKm: Number.isFinite(distanceKm) ? distanceKm : undefined,
+    isVeg,
+    isStoreOpen,
+    showAddButton,
+  };
+};
+
+export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
+  onBack,
+  onNavigateToRestaurant,
+}) => {
+  const insets = useSafeAreaInsets();
+  const { addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart } = useCart();
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [items, setItems] = React.useState<PopularDishRowItem[]>([]);
+  const [headerTitle, setHeaderTitle] = React.useState('All Food Items');
+  const [collectionBannerImageUrl, setCollectionBannerImageUrl] = React.useState<string | null>(null);
+  const [homeCollectionType, setHomeCollectionType] = React.useState<HomeCollectionType>('unknown');
+
+  const resolveCollectionType = React.useCallback((rawType: any): HomeCollectionType => {
+    const typeStr = String(rawType || '').toLowerCase();
+    return typeStr === 'store' ? 'store' : typeStr === 'item' ? 'item' : 'unknown';
+  }, []);
+
+  const fetchItems = React.useCallback(async (refresh: boolean = false) => {
+    if (refresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+
+    try {
+      const homeResponse = await homeService.getHomeData();
+      console.log('[PopularDishesScreen] home API', {
+        endpoint: '/api/buyer/home',
+        response: homeResponse,
+      });
+      if (homeResponse.success && homeResponse.data) {
+        const actualData = (homeResponse.data as any).data || homeResponse.data;
+        const collectionSection = (actualData as any)?.home_collection;
+        const collectionData = collectionSection?.collection;
+        const fallbackCollectionItems = Array.isArray(collectionSection?.data) ? collectionSection.data : [];
+        const nearbyRestaurants = Array.isArray((actualData as any)?.nearby_restaurants)
+          ? (actualData as any).nearby_restaurants
+          : [];
+        const storeOpenById = new Map<number, boolean>();
+        const storeOpenByName = new Map<string, boolean>();
+        nearbyRestaurants.forEach((restaurant: any) => {
+          const rId = Number(restaurant?.id);
+          if (Number.isFinite(rId)) {
+            storeOpenById.set(rId, Boolean(restaurant?.is_open));
+          }
+          const rName = typeof restaurant?.name === 'string' ? restaurant.name.trim().toLowerCase() : '';
+          if (rName.length > 0) {
+            storeOpenByName.set(rName, Boolean(restaurant?.is_open));
+          }
+        });
+        const collectionTitle =
+          collectionData?.display_title ||
+          collectionData?.title ||
+          collectionData?.name;
+        const collectionImageUrl =
+          collectionData?.banner_image_url ||
+          collectionData?.banner_url ||
+          collectionData?.background_image_url ||
+          collectionData?.image_url;
+        const resolvedCollectionType = resolveCollectionType(
+          collectionData?.type || fallbackCollectionItems[0]?.type
+        );
+        setHomeCollectionType(resolvedCollectionType);
+
+        setHeaderTitle(
+          typeof collectionTitle === 'string' && collectionTitle.trim().length > 0
+            ? collectionTitle.trim()
+            : 'All Food Items'
+        );
+        setCollectionBannerImageUrl(
+          typeof collectionImageUrl === 'string' && collectionImageUrl.trim().length > 0
+            ? collectionImageUrl.trim()
+            : null
+        );
+
+        const selectedCollectionId =
+          collectionData?.id;
+
+        const itemsResponse =
+          selectedCollectionId != null
+            ? await homeService.getCollectionItems(selectedCollectionId, 1)
+            : null;
+
+        console.log('[PopularDishesScreen] collection items API', {
+          collectionId: selectedCollectionId,
+          response: itemsResponse,
+        });
+
+        const itemsFromCollectionApi =
+          itemsResponse?.success && Array.isArray(itemsResponse.data) ? itemsResponse.data : [];
+        const finalItems = itemsFromCollectionApi.length > 0 ? itemsFromCollectionApi : fallbackCollectionItems;
+
+        if (Array.isArray(finalItems) && finalItems.length > 0) {
+          setItems(
+            finalItems.map((item: any, index: number) =>
+              mapHomeCollectionItem(
+                item,
+                index,
+                resolvedCollectionType === 'item',
+                (() => {
+                  const sId = Number(item?.store_id ?? item?.store?.id);
+                  if (Number.isFinite(sId) && storeOpenById.has(sId)) {
+                    return Boolean(storeOpenById.get(sId));
+                  }
+                  const sName = typeof item?.store_name === 'string'
+                    ? item.store_name.trim().toLowerCase()
+                    : typeof item?.store?.name === 'string'
+                      ? item.store.name.trim().toLowerCase()
+                      : '';
+                  if (sName.length > 0 && storeOpenByName.has(sName)) {
+                    return Boolean(storeOpenByName.get(sName));
+                  }
+                  return true;
+                })()
+              )
+            )
+          );
+        } else {
+          setItems([]);
+        }
+      } else {
+        setHeaderTitle('All Food Items');
+        setCollectionBannerImageUrl(null);
+        setHomeCollectionType('unknown');
+        setItems([]);
+      }
+    } finally {
+      if (refresh) {
+        setIsRefreshing(false);
+      } else {
+        setIsLoading(false);
+      }
+    }
+  }, [resolveCollectionType]);
+
+  React.useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
+
+  const handleAddItemToCart = React.useCallback(async (item: PopularDishRowItem) => {
+
+
+    if (!item.storeId) {
+      console.log('[PopularDishesScreen] add skipped: missing storeId', item);
+      return;
+    }
+
+    const hasConflict = checkRestaurantConflict(item.storeId);
+    if (hasConflict) {
+      await clearCart();
+    }
+
+    const restaurantName = item.storeName || 'Restaurant';
+    setRestaurantInfo(item.storeId, restaurantName, item.storeLogoUrl || undefined);
+
+    // addToCart updates local cart optimistically first, so navigate immediately
+    // to cart summary for a faster UX, then let backend sync continue.
+    const addPromise = addToCart(
+      {
+        id: item.id,
+        itemId: Number(item.id),
+        name: item.name,
+        price: item.basePrice ?? 0,
+        quantity: 1,
+        isVeg: Boolean(item.isVeg),
+        image: item.imageUrl,
+        isCustomizable: false,
+      },
+      item.storeId
+    );
+
+    if (onNavigateToRestaurant) {
+      onNavigateToRestaurant(item.storeId, restaurantName);
+    }
+
+    await addPromise;
+  }, [addToCart, checkRestaurantConflict, clearCart, onNavigateToRestaurant, setRestaurantInfo]);
+
+  const renderLoadingSkeleton = () => (
+    <View style={styles.skeletonPage}>
+      <View style={styles.skeletonSectionTitleWrap}>
+        <Shimmer width={148} height={22} borderRadius={6} backgroundColor="#E8E8E8" />
+        <Shimmer width={26} height={26} borderRadius={13} backgroundColor="#E8E8E8" />
+      </View>
+      <View style={styles.skeletonList}>
+        {[0, 1, 2].map((row) => (
+          <View key={`popular-skeleton-${row}`} style={styles.skeletonCard}>
+            <View style={styles.skeletonContent}>
+              <Shimmer width="72%" height={20} borderRadius={6} backgroundColor="#E8E8E8" />
+              <Shimmer width="58%" height={18} borderRadius={6} backgroundColor="#E8E8E8" style={styles.skeletonGapSmall} />
+              <Shimmer width="38%" height={14} borderRadius={6} backgroundColor="#E8E8E8" style={styles.skeletonGapSmall} />
+              <Shimmer width="64%" height={14} borderRadius={6} backgroundColor="#E8E8E8" style={styles.skeletonGapSmall} />
+            </View>
+            <Shimmer width={156} height={120} borderRadius={16} backgroundColor="#E8E8E8" />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+
+  const renderItemContent = (item: PopularDishRowItem) => (
+    homeCollectionType === 'store' ? (
+      <>
+        <View style={styles.storeImageContainer}>
+          {item.imageUrl ? (
+            <Image source={{ uri: item.imageUrl }} style={styles.storeImage} resizeMode="cover" />
+          ) : (
+            <View style={[styles.storeImage, styles.imageFallback]}>
+              <MaterialIcons name="restaurant-menu" size={24} color="#9CA3AF" />
+            </View>
+          )}
+          {item.showAddButton && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.addButton}
+              onPress={() => {
+                handleAddItemToCart(item).catch((error) => {
+                  console.log('[PopularDishesScreen] add item failed:', error);
+                });
+              }}
+            >
+              <Text style={styles.addButtonText}>+ Add</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={styles.content}>
+          <Text style={styles.name} numberOfLines={1}>
+            {item.name}
+          </Text>
+          <Text style={styles.storeEtaText} numberOfLines={1}>{item.eta || '20-25 mins'}</Text>
+          <Text style={styles.storeCuisineText} numberOfLines={1}>{item.cuisineTags || 'South Indian'}</Text>
+          <Text style={styles.locationText} numberOfLines={1}>
+            {item.locality || 'Location unavailable'}
+          </Text>
+          <View style={styles.distanceRow}>
+            <MaterialIcons name="place" size={16} color="#00B14F" />
+            <Text style={styles.distanceText}>
+              {typeof item.distanceKm === 'number' ? `${item.distanceKm.toFixed(2)}Kms` : '--'}
+            </Text>
+          </View>
+        </View>
+      </>
+    ) : (
+      <>
+        <View style={styles.content}>
+          <View style={[styles.foodTypeBadge, item.isVeg ? styles.foodTypeBadgeVeg : styles.foodTypeBadgeNonVeg]}>
+            <View style={[styles.foodTypeInnerDot, item.isVeg ? styles.foodTypeInnerDotVeg : styles.foodTypeInnerDotNonVeg]} />
+          </View>
+          <Text style={styles.name} numberOfLines={1}>
+            {item.name}
+          </Text>
+          {item.priceLabel ? <Text style={styles.price}>{item.priceLabel}</Text> : null}
+          <Text style={styles.description} numberOfLines={1}>
+            {item.description || ''}
+          </Text>
+        </View>
+        <View style={styles.imageContainer}>
+          {item.imageUrl ? (
+            <Image
+              source={{ uri: item.imageUrl }}
+              style={[styles.image, !item.isStoreOpen && styles.imageClosed]}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.image, styles.imageFallback]}>
+              <MaterialIcons name="restaurant-menu" size={24} color="#9CA3AF" />
+            </View>
+          )}
+          {item.showAddButton && item.isStoreOpen && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.addButton}
+              onPress={() => {
+                handleAddItemToCart(item).catch((error) => {
+                  console.log('[PopularDishesScreen] add item failed:', error);
+                });
+              }}
+            >
+              <Text style={styles.addButtonText}>+ Add</Text>
+            </TouchableOpacity>
+          )}
+          {item.showAddButton && !item.isStoreOpen && (
+            <View style={styles.closedPill}>
+              <Text style={styles.closedPillText}>Closed</Text>
+            </View>
+          )}
+        </View>
+      </>
+    )
+  );
+
+  const renderItem = ({ item }: { item: PopularDishRowItem }) => {
+    if (homeCollectionType === 'store') {
+      return (
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={styles.card}
+          onPress={() => {
+            if (item.restaurantId && onNavigateToRestaurant) {
+              onNavigateToRestaurant(item.restaurantId, item.name);
+            }
+          }}
+        >
+          {renderItemContent(item)}
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <View style={styles.card}>
+        {renderItemContent(item)}
+      </View>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      {isLoading ? (
+        <View style={styles.heroWrap}>
+          <Shimmer width="100%" height="100%" borderRadius={20} backgroundColor="#DCDCDC" />
+          <View style={[styles.heroBackButton, { top: insets.top + 12 }]}>
+            <MaterialIcons name="chevron-left" size={24} color="#9CA3AF" />
+          </View>
+          <View style={styles.heroInfoCard}>
+            <Shimmer width="62%" height={22} borderRadius={6} backgroundColor="#E8E8E8" />
+            <Shimmer width="100%" height={1} borderRadius={0} backgroundColor="#D1D5DB" style={styles.heroSkeletonDivider} />
+            <View style={styles.heroSkeletonBottomRow}>
+              <Shimmer width="35%" height={16} borderRadius={6} backgroundColor="#E8E8E8" />
+              <Shimmer width="24%" height={16} borderRadius={6} backgroundColor="#E8E8E8" />
+            </View>
+          </View>
+        </View>
+      ) : collectionBannerImageUrl ? (
+        <View style={styles.heroWrap}>
+          <Image source={{ uri: collectionBannerImageUrl }} style={styles.heroImage} resizeMode="cover" />
+          <TouchableOpacity
+            onPress={onBack}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={[styles.heroBackButton, { top: insets.top + 12 }]}
+          >
+            <MaterialIcons name="chevron-left" size={24} color="#0F3D35" />
+          </TouchableOpacity>
+          <View style={styles.heroInfoCard}>
+            <Text style={styles.heroInfoTitle} numberOfLines={1}>{headerTitle}</Text>
+          </View>
+        </View>
+      ) : (
+        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+          <TouchableOpacity onPress={onBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <MaterialIcons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{headerTitle}</Text>
+          <View style={styles.headerRightSpacer} />
+        </View>
+      )}
+      {isLoading ? renderLoadingSkeleton() : (
+        <FlatList
+          data={items}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => fetchItems(true)}
+              colors={['#00B14F']}
+              tintColor="#00B14F"
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <Text style={styles.emptyText}>No food items found</Text>
+            </View>
+          }
+        />
+      )}
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#111827',
+  },
+  headerRightSpacer: {
+    width: 24,
+  },
+  loaderWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  skeletonPage: {
+    paddingTop: 6,
+  },
+  skeletonSectionTitleWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  skeletonList: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 24,
+    gap: 14,
+  },
+  skeletonCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  skeletonContent: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  skeletonGapSmall: {
+    marginTop: 6,
+  },
+  heroSkeletonDivider: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  heroSkeletonBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  heroWrap: {
+    marginHorizontal: 0,
+    marginTop: 0,
+    marginBottom: 10,
+    height: 250,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'space-between',
+  },
+  heroImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F3F4F6',
+  },
+  heroBackButton: {
+    position: 'absolute',
+    left: 14,
+    zIndex: 2,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroInfoCard: {
+    marginTop: 'auto',
+    marginHorizontal: 10,
+    marginBottom: 10,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  heroInfoTitle: {
+    color: '#111827',
+    fontSize: 34 / 2,
+    lineHeight: 46 / 2,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 24,
+    gap: 14,
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    overflow: 'visible',
+    paddingBottom: 6,
+  },
+  image: {
+    width: 156,
+    height: 120,
+    borderRadius: 16,
+  },
+  storeImage: {
+    width: 130,
+    height: 150,
+    borderRadius: 16,
+  },
+  imageFallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  imageClosed: {
+    opacity: 0.55,
+  },
+  imageContainer: {
+    width: 156,
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'visible',
+    paddingBottom: 8,
+  },
+  storeImageContainer: {
+    width: 130,
+    marginRight: 10,
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'visible',
+    paddingBottom: 0,
+  },
+  addButton: {
+    position: 'absolute',
+    bottom: -6,
+    alignSelf: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#22C55E',
+    paddingHorizontal: 22,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addButtonText: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 16,
+    lineHeight: 22,
+    color: '#22C55E',
+  },
+  closedPill: {
+    position: 'absolute',
+    bottom: -6,
+    alignSelf: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    paddingHorizontal: 18,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closedPillText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 14,
+    lineHeight: 18,
+    color: '#6B7280',
+  },
+  content: {
+    flex: 1,
+    paddingRight: 16,
+    paddingTop: 0,
+    justifyContent: 'flex-start',
+    gap: 2,
+  },
+  name: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#111827',
+  },
+  description: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: 'Poppins',
+    color: '#6B7280',
+  },
+  price: {
+    marginTop: 3,
+    fontSize: 16,
+    lineHeight: 21,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#111827',
+  },
+  byHotelText: {
+    marginTop: 2,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Poppins',
+    color: '#6B7280',
+  },
+  foodTypeBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 2,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  foodTypeBadgeVeg: {
+    borderColor: '#16A34A',
+  },
+  foodTypeBadgeNonVeg: {
+    borderColor: '#DC2626',
+  },
+  foodTypeInnerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  foodTypeInnerDotVeg: {
+    backgroundColor: '#16A34A',
+  },
+  foodTypeInnerDotNonVeg: {
+    backgroundColor: '#DC2626',
+  },
+  locationText: {
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: 'Poppins',
+    color: '#6B7280',
+  },
+  storeEtaText: {
+    marginTop: 2,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Poppins-Medium',
+    color: '#111827',
+  },
+  storeCuisineText: {
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: 'Poppins',
+    color: '#6B7280',
+  },
+  distanceRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  distanceText: {
+    marginLeft: 4,
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: 'Poppins-Medium',
+    color: '#6B7280',
+  },
+  emptyWrap: {
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    fontFamily: 'Poppins',
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+});

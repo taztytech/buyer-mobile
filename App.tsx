@@ -22,6 +22,7 @@ import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
 import { RestaurantDetailsScreen } from '@/screens/Restaurant/RestaurantDetailsScreen';
 import { OrderDetailsScreen } from '@/screens/Order/OrderDetailsScreen';
 import { ExploreDishesScreen } from '@/screens/Favorites/ExploreDishesScreen';
+import { PopularDishesScreen } from '@/screens/PopularDishes/PopularDishesScreen';
 import { ContentPage } from '@/screens/Legal/ContentPage';
 import { HelpScreen } from '@/screens/Help/HelpScreen';
 import { ContactUsScreen } from '@/screens/Help/ContactUsScreen';
@@ -77,7 +78,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const { showConfirmation } = useConfirmation();
 
   // Default to login so we never flash location overlays before auth resolves; logged-in startup sets home/orders explicitly.
-  const [currentScreen, setCurrentScreenState] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat'>('login');
+  const [currentScreen, setCurrentScreenState] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'popularDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat'>('login');
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -509,6 +510,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       restaurant: AnalyticsScreens.RESTAURANT,
       restaurantDetails: AnalyticsScreens.RESTAURANT_DETAILS,
       exploreDishes: AnalyticsScreens.EXPLORE_DISHES,
+      popularDishes: 'Popular Dishes',
       checkout: AnalyticsScreens.CHECKOUT,
       privacyPolicy: AnalyticsScreens.PRIVACY_POLICY,
       termsConditions: AnalyticsScreens.TERMS_CONDITIONS,
@@ -1061,6 +1063,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       case 'exploreDishes':
         handleBackFromExploreDishes();
         return true;
+      case 'popularDishes':
+        handleBackFromPopularDishes();
+        return true;
       case 'privacyPolicy':
         handleBackFromPrivacyPolicy();
         return true;
@@ -1112,6 +1117,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     handleBackFromRestaurantDetails,
     handleBackFromCheckout,
     handleBackFromExploreDishes,
+    handleBackFromPopularDishes,
     handleBackFromPrivacyPolicy,
     handleBackFromTermsConditions,
     handleBackFromFaq,
@@ -2303,6 +2309,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     navigateToScreen('profile');
   };
 
+  const handleNavigateToPopularDishes = () => {
+    navigateToScreen('popularDishes');
+  };
+
+  const handleBackFromPopularDishes = () => {
+    navigateToScreen('home');
+  };
+
   // Privacy Policy Navigation
   const handleNavigateToPrivacyPolicy = (from: 'profile' | 'login' | 'otp' = 'profile') => {
     setLegalCameFrom(from);
@@ -3032,6 +3046,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                 onNavigateToProfile={handleNavigateToProfile}
                 onNavigateToAddressSelection={handleNavigateToAddressSelection}
                 onNavigateToCategory={handleNavigateToCategoryResults}
+                onNavigateToPopularDishes={handleNavigateToPopularDishes}
                 onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
                 onNavigateToCheckout={handleNavigateToCheckout}
                 onNavigateToSearch={handleNavigateToSearch}
@@ -3325,6 +3340,16 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                       useNativeDriver: true,
                     }).start();
                   }}
+                />
+              </View>
+            )}
+
+            {currentScreen === 'popularDishes' && (
+              <View style={styles.exploreDishesOverlay} pointerEvents="auto">
+                <PopularDishesScreen
+                  onBack={handleBackFromPopularDishes}
+                  onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
+                  onNavigateToCheckout={handleNavigateToCheckout}
                 />
               </View>
             )}

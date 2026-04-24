@@ -35,6 +35,7 @@ interface HomeScreenProps {
   onNavigateToProfile?: () => void;
   onNavigateToAddressSelection?: () => void;
   onNavigateToCategory?: (categoryName: string) => void;
+  onNavigateToPopularDishes?: () => void;
   onNavigateToRestaurant?: (
     restaurantId: number,
     restaurantName: string,
@@ -74,42 +75,90 @@ interface AppOperationStatus {
 
 interface PopularDishItem {
   id: string;
+  restaurantId?: number;
+  storeId?: number;
+  storeName?: string;
+  locality?: string;
+  storeLogoUrl?: string;
   name: string;
   restaurantName: string;
-  price: number;
   image: ImageSourcePropType;
+  showAddButton: boolean;
+  priceLabel?: string;
+  basePrice?: number;
+  isVeg?: boolean;
 }
 
-const POPULAR_DISHES_MOCK: PopularDishItem[] = [
-  {
-    id: 'popular-1',
-    name: 'Chicken Briyani',
-    restaurantName: 'Tazty Kitchen',
-    price: 180,
-    image: require('../../assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg'),
-  },
-  {
-    id: 'popular-2',
-    name: 'Masala Idly',
-    restaurantName: 'Hotel Sneha',
-    price: 90,
-    image: require('../../assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg'),
-  },
-  {
-    id: 'popular-3',
-    name: 'Szechuan Noodles',
-    restaurantName: 'China Town',
-    price: 140,
-    image: require('../../assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg'),
-  },
-  {
-    id: 'popular-4',
-    name: 'Paneer Fried Rice',
-    restaurantName: 'Dindigul Foods',
-    price: 120,
-    image: require('../../assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg'),
-  },
-];
+const POPULAR_DISH_FALLBACK_IMAGE = require('../../assets/pre-prepared-food-showcasing-ready-eat-delicious-meals-go.jpg');
+
+const mapHomeCollectionItemToPopularDish = (
+  item: any,
+  index: number,
+  collectionImageUrl?: string,
+  showAddButton: boolean = false
+): PopularDishItem => {
+  const imageUrl =
+    item?.image_url ||
+    item?.image ||
+    item?.thumbnail ||
+    item?.thumbnail_url ||
+    item?.collection_image ||
+    collectionImageUrl ||
+    (Array.isArray(item?.images) && item.images.length > 0 ? item.images[0] : undefined);
+
+  const basePriceRaw = item?.price?.base_price ?? item?.base_price;
+  const basePrice = typeof basePriceRaw === 'number' ? basePriceRaw : Number(basePriceRaw);
+  const currency = String(item?.price?.currency || 'INR').toUpperCase();
+  const priceLabel = Number.isFinite(basePrice)
+    ? currency === 'INR'
+      ? `₹${basePrice.toFixed(2)}`
+      : `${currency} ${basePrice.toFixed(2)}`
+    : undefined;
+
+  return {
+    id: String(item?.id ?? `collection-${index}`),
+    restaurantId: Number.isFinite(Number(item?.id)) ? Number(item?.id) : undefined,
+    storeId: Number.isFinite(Number(item?.store_id ?? item?.store?.id))
+      ? Number(item?.store_id ?? item?.store?.id)
+      : undefined,
+    storeName:
+      typeof item?.store_name === 'string' && item.store_name.trim().length > 0
+        ? item.store_name.trim()
+        : typeof item?.store?.name === 'string' && item.store.name.trim().length > 0
+          ? item.store.name.trim()
+          : undefined,
+    locality:
+      typeof item?.store?.location?.locality === 'string' && item.store.location.locality.trim().length > 0
+        ? item.store.location.locality.trim()
+        : typeof item?.location?.locality === 'string' && item.location.locality.trim().length > 0
+          ? item.location.locality.trim()
+          : undefined,
+    storeLogoUrl:
+      typeof item?.store?.logo_url === 'string' && item.store.logo_url.trim().length > 0
+        ? item.store.logo_url.trim()
+        : undefined,
+    name: String(item?.name || item?.title || `Dish ${index + 1}`),
+    restaurantName: (() => {
+      const locality =
+        item?.store?.location?.locality ||
+        item?.location?.locality ||
+        item?.locality ||
+        item?.store?.location?.city ||
+        item?.location?.city;
+      if (typeof locality === 'string' && locality.trim().length > 0) {
+        return locality.trim();
+      }
+      return 'Location unavailable';
+    })(),
+    image: typeof imageUrl === 'string' && imageUrl.trim().length > 0
+      ? { uri: imageUrl }
+      : POPULAR_DISH_FALLBACK_IMAGE,
+    showAddButton,
+    priceLabel,
+    basePrice: Number.isFinite(basePrice) ? basePrice : undefined,
+    isVeg: isVegFoodType(item?.food_type, item?.is_veg),
+  };
+};
 
 
 // Utility to normalize veg food types returned by API (handles values like "pure-veg")
@@ -141,6 +190,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToProfile,
   onNavigateToAddressSelection,
   onNavigateToCategory,
+  onNavigateToPopularDishes,
   onNavigateToRestaurant,
   onNavigateToCheckout,
   onNavigateToSearch,
@@ -153,7 +203,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   isFocused = true,
   onForcedUpdateRequired,
 }) => {
-  const { restaurantId, restaurantName, restaurantLogo, getTotalItems, flushPendingQuantityUpdate } = useCart();
+  const {
+    restaurantId,
+    restaurantName,
+    restaurantLogo,
+    getTotalItems,
+    flushPendingQuantityUpdate,
+    addToCart,
+    setRestaurantInfo,
+    checkRestaurantConflict,
+    clearCart,
+  } = useCart();
   const { vegMode, setVegMode, isVegModeEnabled } = useVegMode();
   const { showConfirmation } = useConfirmation();
   const insets = useSafeAreaInsets();
@@ -182,6 +242,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [carouselData, setCarouselData] = React.useState<CarouselItem[]>([]);
   const [categoryData, setCategoryData] = React.useState<CategoryItem[]>([]);
   const [restaurantData, setRestaurantData] = React.useState<Restaurant[]>([]);
+  const [popularDishesData, setPopularDishesData] = React.useState<PopularDishItem[]>([]);
+  const [popularDishesTitle, setPopularDishesTitle] = React.useState('Popular Dishes');
+  const [popularCollectionType, setPopularCollectionType] = React.useState<'store' | 'item' | 'unknown'>('unknown');
   const [isLoadingBanners, setIsLoadingBanners] = React.useState(true);
   const [isLoadingCategories, setIsLoadingCategories] = React.useState(true);
   const [isLoadingRestaurants, setIsLoadingRestaurants] = React.useState(true);
@@ -243,7 +306,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Derived state for the header display
   const activeOrganizationBanner = organizationBanners.length > 0 ? organizationBanners[activeBannerIndex] : null;
-  const homeTopBackgroundColor = activeOrganizationBanner?.background_color || '#FFFFFF';
+  const homeTopBackgroundColor = activeOrganizationBanner?.background_color || '#00B14F';
   const displayBackgroundImageUrl = activeOrganizationBanner?.image_url || '';
   const promoTitle = activeOrganizationBanner?.title || (isLoadingBanners ? '' : '');
   const promoSubtitle = activeOrganizationBanner?.subtitle || (isLoadingBanners ? '' : '');
@@ -867,6 +930,32 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       if (response.success && response.data) {
         // The API returns data nested as: { data: { data: { promotional_banner: {...} } } }
         const actualData = (response.data as any).data || response.data;
+        const homeCollectionTitle = (actualData as any)?.home_collection?.collection?.title;
+        const homeCollectionItems = (actualData as any)?.home_collection?.data;
+        const homeCollectionImageUrl = (actualData as any)?.home_collection?.collection?.image_url;
+        const homeCollectionType = String((actualData as any)?.home_collection?.collection?.type || '').toLowerCase();
+        const shouldShowAddButton = homeCollectionType === 'item';
+        setPopularCollectionType(
+          homeCollectionType === 'store' ? 'store' : homeCollectionType === 'item' ? 'item' : 'unknown'
+        );
+
+        setPopularDishesTitle(
+          typeof homeCollectionTitle === 'string' && homeCollectionTitle.trim().length > 0
+            ? homeCollectionTitle.trim()
+            : 'Popular Dishes'
+        );
+
+        if (Array.isArray(homeCollectionItems) && homeCollectionItems.length > 0) {
+          const limitedHomeCollectionItems = homeCollectionItems.slice(0, 5);
+          setPopularDishesData(
+            limitedHomeCollectionItems.map((item: any, index: number) =>
+              mapHomeCollectionItemToPopularDish(item, index, homeCollectionImageUrl, shouldShowAddButton)
+            )
+          );
+        } else {
+          setPopularDishesData([]);
+        }
+
         const promotionalBanner = actualData.promotional_banner;
         const whatsOnYourMind = actualData.whats_on_your_mind;
         const nearbyRestaurants = actualData.nearby_restaurants;
@@ -1104,6 +1193,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         onCategoriesLoaded?.([]);
         setHasNetworkError(true);
         setRestaurantData([]);
+        setPopularDishesData([]);
+        setPopularDishesTitle('Popular Dishes');
+        setPopularCollectionType('unknown');
       }
     } catch (error) {
       setCarouselData([]);
@@ -1111,6 +1203,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       onCategoriesLoaded?.([]);
       setHasNetworkError(true);
       setRestaurantData([]);
+      setPopularDishesData([]);
+      setPopularDishesTitle('Popular Dishes');
+      setPopularCollectionType('unknown');
     } finally {
       setIsLoadingBanners(false);
       setIsLoadingCategories(false);
@@ -1484,16 +1579,76 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [onNavigateToCategory]);
 
   const renderPopularDishItem = ({ item }: { item: PopularDishItem }) => {
+    const handleAddPress = async () => {
+      if (!item.storeId) {
+        return;
+      }
+
+      const hasConflict = checkRestaurantConflict(item.storeId);
+      if (hasConflict) {
+        await clearCart();
+      }
+
+      const effectiveStoreName = item.storeName || 'Restaurant';
+      setRestaurantInfo(item.storeId, effectiveStoreName, item.storeLogoUrl);
+
+      const addPromise = addToCart(
+        {
+          id: item.id,
+          itemId: Number(item.id),
+          name: item.name,
+          price: item.basePrice ?? 0,
+          quantity: 1,
+          isVeg: Boolean(item.isVeg),
+          image: typeof item.image === 'object' && item.image && 'uri' in item.image ? item.image.uri : undefined,
+          isCustomizable: false,
+        },
+        item.storeId
+      );
+
+      if (onNavigateToRestaurant) {
+        onNavigateToRestaurant(item.storeId, effectiveStoreName);
+      }
+
+      await addPromise;
+    };
+
     return (
-      <TouchableOpacity activeOpacity={0.8} style={styles.popularDishCard}>
+      <TouchableOpacity
+        activeOpacity={popularCollectionType === 'store' ? 0.8 : 1}
+        style={styles.popularDishCard}
+        onPress={() => {
+          if (popularCollectionType === 'store' && item.restaurantId && onNavigateToRestaurant) {
+            onNavigateToRestaurant(item.restaurantId, item.name);
+          }
+        }}
+        disabled={popularCollectionType !== 'store'}
+      >
         <View style={styles.popularDishImageWrapper}>
           <Image source={item.image} style={styles.popularDishImage} resizeMode="cover" />
         </View>
-        <TouchableOpacity activeOpacity={0.8} style={styles.popularDishAddButton}>
-          <Text style={styles.popularDishAddButtonText}>+ Add</Text>
-        </TouchableOpacity>
-        <Text style={styles.popularDishName} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.popularDishRestaurantName} numberOfLines={1}>{item.restaurantName}</Text>
+        {item.showAddButton && (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.popularDishAddButton}
+            onPress={() => {
+              handleAddPress().catch(() => {});
+            }}
+          >
+            <Text style={styles.popularDishAddButtonText}>+ Add</Text>
+          </TouchableOpacity>
+        )}
+        <View style={styles.popularDishTextContent}>
+          <Text style={styles.popularDishName} numberOfLines={1}>{item.name}</Text>
+          <Text style={styles.popularDishRestaurantName} numberOfLines={1}>
+            {popularCollectionType === 'item'
+              ? `by ${item.storeName || 'Hotel'}`
+              : (item.locality || item.restaurantName)}
+          </Text>
+          {item.priceLabel && (
+            <Text style={styles.popularDishPrice} numberOfLines={1}>{item.priceLabel}</Text>
+          )}
+        </View>
       </TouchableOpacity>
     );
   };
@@ -1577,6 +1732,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           ref={scrollViewRef}
           style={styles.container}
           contentContainerStyle={{
+            flexGrow: 1,
             paddingBottom: totalCartItems > 0 ? 100 + insets.bottom : 0
           }}
           stickyHeaderIndices={[3]}
@@ -1730,7 +1886,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 {isLoadingLocation ? (
                   <>
                     {/* Search Bar Shimmer */}
-                    <View style={{ flex: 1 }}>
+                    <View style={styles.searchBarWrapper}>
                       <Shimmer width="100%" height={60} borderRadius={10} />
                     </View>
 
@@ -1740,7 +1896,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 ) : (
                   <>
                     <TouchableOpacity
-                      style={{ flex: 1, }}
+                      style={styles.searchBarWrapper}
                       onPress={onNavigateToSearch}
                       activeOpacity={0.7}
                       disabled={!isLocationServiceable}
@@ -1757,6 +1913,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         <MaterialIcons
                           name="search"
                           size={24}
+                          style={{marginLeft: 10}}
                           color={isLocationServiceable ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)"}
                         />
                         <Text
@@ -1883,7 +2040,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           )}
 
           {/* Solid background for everything after the header */}
-          <View style={{ backgroundColor: colors.background, flex: 1 }}>
+          <View style={{ backgroundColor: isLocationServiceable ? colors.background : '#FFFFFF', flex: 1 }}>
 
             {/* Unserviceable Location Error Screen */}
             {!isLocationServiceable && !isLoadingBanners && !isLoadingCategories && !isLoadingRestaurants && (
@@ -1994,23 +2151,31 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
                 <View style={styles.popularDishesSection}>
                   <View style={styles.popularDishesHeaderRow}>
-                    <Text style={styles.popularDishesTitle}>Popular Dishes</Text>
+                    <Text style={styles.popularDishesTitle}>{popularDishesTitle}</Text>
                     <TouchableOpacity
                       activeOpacity={0.7}
-                      onPress={() => setShowCategoryModal(true)}
+                      onPress={() => {
+                        if (onNavigateToPopularDishes) {
+                          onNavigateToPopularDishes();
+                          return;
+                        }
+                        setShowCategoryModal(true);
+                      }}
                     >
                       <Text style={styles.popularDishesViewAll}>View all</Text>
                     </TouchableOpacity>
                   </View>
 
-                  <FlatList
-                    data={POPULAR_DISHES_MOCK}
-                    renderItem={renderPopularDishItem}
-                    keyExtractor={(item) => item.id}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.popularDishesListContent}
-                  />
+                  {popularDishesData.length > 0 && (
+                    <FlatList
+                      data={popularDishesData}
+                      renderItem={renderPopularDishItem}
+                      keyExtractor={(item) => item.id}
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.popularDishesListContent}
+                    />
+                  )}
                 </View>
 
                 {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
@@ -2543,7 +2708,7 @@ const styles = StyleSheet.create({
     height: 50,
     gap: 11,
     marginTop: 16,
-    marginHorizontal: -12,
+    marginHorizontal: 0,
   },
   searchBar: {
     flex: 1,
@@ -2551,9 +2716,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 8,
     paddingRight: 10,
     gap: 4,
+  },
+  searchBarWrapper: {
+    flex: 1,
+    marginLeft: 0,
   },
   searchBarDisabled: {
     opacity: 0.4,
@@ -2943,12 +3111,12 @@ const styles = StyleSheet.create({
   popularDishCard: {
     width: 170,
     marginRight: 12,
-    paddingBottom: 4,
+    paddingBottom: 6,
   },
   popularDishImageWrapper: {
     width: '100%',
     height: 130,
-    borderRadius: 24,
+    borderRadius: 22,
     overflow: 'hidden',
     backgroundColor: '#1F2937',
     position: 'relative',
@@ -2959,13 +3127,13 @@ const styles = StyleSheet.create({
   },
   popularDishAddButton: {
     alignSelf: 'center',
-    marginTop: -22,
+    marginTop: -18,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#22C55E',
-    paddingHorizontal: 26,
-    height: 44,
+    paddingHorizontal: 24,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 3,
@@ -2978,8 +3146,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#22C55E',
   },
+  popularDishTextContent: {
+    marginTop: 10,
+    paddingHorizontal: 1,
+  },
   popularDishName: {
-    marginTop: 8,
     fontFamily: 'Poppins',
     fontWeight: '700',
     fontSize: 14,
@@ -2993,6 +3164,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     color: '#6B7280',
+  },
+  popularDishPrice: {
+    marginTop: 4,
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 16,
+    lineHeight: 22,
+    color: '#111827',
   },
   // Restaurants Near You Section
   restaurantsSectionTitleContainer: {
