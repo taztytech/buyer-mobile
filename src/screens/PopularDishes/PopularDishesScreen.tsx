@@ -7,6 +7,7 @@ import {
   FlatList,
   Image,
   RefreshControl,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@/shims/rn-vector-icons';
@@ -16,6 +17,7 @@ import { favoritesService } from '@/services/favorites.service';
 import { API_CONFIG, buildApiUrl } from '@/config/api.config';
 import { useCart } from '@/context/CartContext';
 import { addressService } from '@/services/address.service';
+import { useVegMode } from '@/context/VegModeContext';
 
 interface PopularDishRowItem {
   id: string;
@@ -52,6 +54,9 @@ interface PopularDishesScreenProps {
   ) => void;
   onNavigateToCheckout?: (restaurantId: number, restaurantName: string, restaurantAddress?: string, from?: 'home' | 'restaurant') => void;
   selectedLocation?: { latitude?: number; longitude?: number };
+  selectedCollectionId?: number;
+  isGuest?: boolean;
+  onNavigateToLogin?: () => void;
 }
 
 const mapHomeCollectionItem = (
@@ -178,15 +183,69 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
   onBack,
   onNavigateToRestaurant,
   selectedLocation,
+  selectedCollectionId,
+  isGuest = false,
+  onNavigateToLogin,
 }) => {
   const insets = useSafeAreaInsets();
   const { addToCart, setRestaurantInfo, checkRestaurantConflict, clearCart } = useCart();
+  const { vegMode } = useVegMode();
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [items, setItems] = React.useState<PopularDishRowItem[]>([]);
   const [headerTitle, setHeaderTitle] = React.useState('All Food Items');
   const [collectionBannerImageUrl, setCollectionBannerImageUrl] = React.useState<string | null>(null);
   const [homeCollectionType, setHomeCollectionType] = React.useState<HomeCollectionType>('unknown');
+  const [showSearch, setShowSearch] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [activeDietaryFilter, setActiveDietaryFilter] = React.useState<'veg' | 'non-veg' | null>(null);
+
+  const visibleItems = React.useMemo(() => {
+    const normalizeText = (value: string) => {
+      return value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+
+    const query = normalizeText(searchQuery);
+    if (!query) return [];
+
+    const queryTokens = query.split(' ').filter(Boolean);
+
+    return items.filter((item) => {
+      const haystack = normalizeText(
+        [
+          item.name || '',
+          item.subtitle || '',
+          item.locality || '',
+          item.description || '',
+          item.storeName || '',
+          item.cuisineTags || '',
+        ].join(' ')
+      );
+
+      if (haystack.includes(query)) {
+        return true;
+      }
+
+      // Keep search forgiving for partial multi-word inputs.
+      return queryTokens.some((token) => haystack.includes(token));
+    });
+  }, [items, searchQuery]);
+
+  const filteredItems = React.useMemo(() => {
+    if (activeDietaryFilter === 'veg') {
+      return items.filter((item) => item.isVeg === true);
+    }
+    if (activeDietaryFilter === 'non-veg') {
+      return items.filter((item) => item.isVeg === false);
+    }
+    return items;
+  }, [activeDietaryFilter, items]);
 
   const resolveCollectionType = React.useCallback((rawType: any): HomeCollectionType => {
     const typeStr = String(rawType || '').toLowerCase();
@@ -285,8 +344,10 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
             : null
         );
 
-        const selectedCollectionId =
-          collectionData?.id;
+        const effectiveCollectionId =
+          typeof selectedCollectionId === 'number'
+            ? selectedCollectionId
+            : collectionData?.id;
         const collectionItemsParams = new URLSearchParams();
         collectionItemsParams.append('page', '1');
         if (typeof lat === 'number') {
@@ -295,26 +356,35 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
         if (typeof lng === 'number') {
           collectionItemsParams.append('lng', lng.toString());
         }
+        if (vegMode === 'all' || vegMode === 'pure') {
+          collectionItemsParams.append('veg_mode', vegMode);
+        }
         const collectionItemsRequestUrl =
-          selectedCollectionId != null
-            ? `${buildApiUrl(API_CONFIG.ENDPOINTS.BUYER.COLLECTION_ITEMS(selectedCollectionId))}?${collectionItemsParams.toString()}`
+          effectiveCollectionId != null
+            ? `${buildApiUrl(API_CONFIG.ENDPOINTS.BUYER.COLLECTION_ITEMS(effectiveCollectionId))}?${collectionItemsParams.toString()}`
             : null;
 
         console.log('[PopularDishesScreen] REQUEST /api/buyer/collections/:id/items', {
           url: collectionItemsRequestUrl,
-          collectionId: selectedCollectionId,
+          collectionId: effectiveCollectionId,
           page: 1,
           lat,
           lng,
         });
         console.log('[PopularDishesScreen] VIEW_ALL_API_ENDPOINT', collectionItemsRequestUrl);
         const itemsResponse =
-          selectedCollectionId != null
-            ? await homeService.getCollectionItems(selectedCollectionId, 1, lat, lng)
+          effectiveCollectionId != null
+            ? await homeService.getCollectionItems(
+                effectiveCollectionId,
+                1,
+                lat,
+                lng,
+                vegMode === 'all' || vegMode === 'pure' ? vegMode : undefined
+              )
             : null;
         console.log('[PopularDishesScreen] RESPONSE /api/buyer/collections/:id/items', {
           url: collectionItemsRequestUrl,
-          collectionId: selectedCollectionId,
+          collectionId: effectiveCollectionId,
           response: itemsResponse,
         });
         console.log(
@@ -387,13 +457,17 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
         setIsLoading(false);
       }
     }
-  }, [resolveCollectionType, selectedLocation?.latitude, selectedLocation?.longitude]);
+  }, [resolveCollectionType, selectedCollectionId, selectedLocation?.latitude, selectedLocation?.longitude, vegMode]);
 
   React.useEffect(() => {
     fetchItems();
   }, [fetchItems]);
 
   const handleAddItemToCart = React.useCallback(async (item: PopularDishRowItem) => {
+    if (isGuest && onNavigateToLogin) {
+      onNavigateToLogin();
+      return;
+    }
 
     if (item.isItemAvailable === false) {
       return;
@@ -412,10 +486,19 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
     const restaurantName = item.storeName || 'Restaurant';
     setRestaurantInfo(item.storeId, restaurantName, item.storeLogoUrl || undefined);
 
+    const numericItemId = Number(item.id);
+    if (!Number.isFinite(numericItemId) || numericItemId <= 0) {
+      console.log('[PopularDishesScreen] add skipped: invalid item id', {
+        itemId: item.id,
+        item,
+      });
+      return;
+    }
+
     await addToCart(
       {
         id: item.id,
-        itemId: Number(item.id),
+        itemId: numericItemId,
         name: item.name,
         price: item.basePrice ?? 0,
         quantity: 1,
@@ -426,15 +509,21 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
       item.storeId
     );
 
+    // Navigate only after add succeeds to avoid false "added" perception.
     if (onNavigateToRestaurant) {
       onNavigateToRestaurant(item.storeId, restaurantName, {
         targetItemId: item.id,
         targetItemName: item.name,
       });
     }
-  }, [addToCart, checkRestaurantConflict, clearCart, onNavigateToRestaurant, setRestaurantInfo]);
+  }, [addToCart, checkRestaurantConflict, clearCart, isGuest, onNavigateToLogin, onNavigateToRestaurant, setRestaurantInfo]);
 
   const handleToggleFavorite = React.useCallback(async (item: PopularDishRowItem) => {
+    if (isGuest && onNavigateToLogin) {
+      onNavigateToLogin();
+      return;
+    }
+
     const previousIsFavorite = Boolean(item.isFavorite);
     const nextIsFavorite = !previousIsFavorite;
     const favoriteEntityId =
@@ -495,7 +584,7 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
         )
       );
     }
-  }, [homeCollectionType]);
+  }, [homeCollectionType, isGuest, onNavigateToLogin]);
 
   React.useEffect(() => {
     const unsubscribe = favoritesService.subscribeToItemFavoriteChanges((itemId, isFavorite) => {
@@ -633,6 +722,11 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
           <Text style={styles.name} numberOfLines={1}>
             {item.name}
           </Text>
+          {item.subtitle ? (
+            <Text style={styles.byHotelText} numberOfLines={1}>
+              {item.subtitle}
+            </Text>
+          ) : null}
           {item.priceLabel ? <Text style={styles.price}>{item.priceLabel}</Text> : null}
           <Text style={styles.description} numberOfLines={2}>
             {item.description || ''}
@@ -760,22 +854,140 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
           <MaterialIcons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{headerTitle}</Text>
-        <View style={styles.headerRightSpacer} />
+        <TouchableOpacity
+          onPress={() => setShowSearch(true)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={styles.headerRightSpacer}
+        >
+          <MaterialIcons name="search" size={22} color="#111827" />
+        </TouchableOpacity>
       </View>
     );
   };
 
+  if (showSearch) {
+    return (
+      <SafeAreaView style={styles.container} edges={['left', 'right']}>
+        <View style={[styles.searchScreenHeader, { paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity
+            onPress={() => {
+              setShowSearch(false);
+              setSearchQuery('');
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.searchBackButton}
+          >
+            <MaterialIcons name="chevron-left" size={24} color="#111827" />
+          </TouchableOpacity>
+          <View style={styles.searchInputWrap}>
+            <MaterialIcons name="search" size={20} color="#22C55E" />
+            <TextInput
+              value={searchQuery}
+              onChangeText={(text) => setSearchQuery(text)}
+              placeholder="Search for dishes..."
+              placeholderTextColor="#9CA3AF"
+              style={styles.searchInput}
+              autoCorrect={false}
+              autoFocus
+            />
+          </View>
+        </View>
+        <FlatList
+          key={homeCollectionType === 'store' ? 'store-search-list' : 'item-search-list'}
+          data={isLoading ? [] : visibleItems}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.searchListContent}
+          ListEmptyComponent={
+            !isLoading ? (
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyText}>
+                  {searchQuery.trim() ? 'No matching food items found' : 'Start typing to search dishes'}
+                </Text>
+              </View>
+            ) : null
+          }
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <FlatList
         key={homeCollectionType === 'store' ? 'store-list' : 'item-list'}
-        data={isLoading ? [] : items}
+        data={isLoading ? [] : filteredItems}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <>
             {renderTopHeader()}
+            <View style={styles.topActionRow}>
+              <View style={styles.dietaryChipsRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.dietaryChip,
+                    activeDietaryFilter === 'veg' && styles.dietaryChipActive,
+                  ]}
+                  onPress={() => setActiveDietaryFilter((prev) => (prev === 'veg' ? null : 'veg'))}
+                  activeOpacity={0.75}
+                >
+                  <View style={styles.dietaryIconSlot}>
+                    {activeDietaryFilter === 'veg' ? (
+                      <MaterialIcons name="close" size={14} color="#00B14F" />
+                    ) : (
+                      <View style={[styles.dietaryDotWrap, styles.dietaryDotWrapVeg]}>
+                        <View style={[styles.dietaryDot, styles.dietaryDotVeg]} />
+                      </View>
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.dietaryChipText,
+                      activeDietaryFilter === 'veg' && styles.dietaryChipTextActive,
+                    ]}
+                  >
+                    Veg
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.dietaryChip,
+                    activeDietaryFilter === 'non-veg' && styles.dietaryChipActive,
+                  ]}
+                  onPress={() => setActiveDietaryFilter((prev) => (prev === 'non-veg' ? null : 'non-veg'))}
+                  activeOpacity={0.75}
+                >
+                  <View style={styles.dietaryIconSlot}>
+                    {activeDietaryFilter === 'non-veg' ? (
+                      <MaterialIcons name="close" size={14} color="#00B14F" />
+                    ) : (
+                      <View style={[styles.dietaryDotWrap, styles.dietaryDotWrapNonVeg]}>
+                        <View style={[styles.dietaryDot, styles.dietaryDotNonVeg]} />
+                      </View>
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.dietaryChipText,
+                      activeDietaryFilter === 'non-veg' && styles.dietaryChipTextActive,
+                    ]}
+                  >
+                    Non - Veg
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowSearch(true)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.searchTriggerButton}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="search" size={24} color="#00B14F" />
+              </TouchableOpacity>
+            </View>
             {isLoading ? renderLoadingSkeleton() : null}
           </>
         }
@@ -791,7 +1003,9 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
         ListEmptyComponent={
           !isLoading ? (
             <View style={styles.emptyWrap}>
-              <Text style={styles.emptyText}>No food items found</Text>
+              <Text style={styles.emptyText}>
+                {activeDietaryFilter ? 'No items in selected food type' : 'No food items found'}
+              </Text>
             </View>
           ) : null
         }
@@ -912,7 +1126,128 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 0,
-    paddingBottom: 24,
+    paddingBottom: 0,
+    gap: 14,
+  },
+  topActionRow: {
+    paddingHorizontal: 0,
+    paddingTop: 6,
+    paddingBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dietaryChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  dietaryChip: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.25)',
+    borderRadius: 13,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    height: 29,
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    gap: 5,
+  },
+  dietaryChipActive: {
+    borderColor: '#00B14F',
+    backgroundColor: 'rgba(0, 177, 79, 0.08)',
+  },
+  dietaryChipText: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#1F2937',
+    opacity: 0.85,
+  },
+  dietaryChipTextActive: {
+    color: '#00B14F',
+  },
+  dietaryIconSlot: {
+    width: 14,
+    height: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dietaryDotWrap: {
+    width: 14,
+    height: 14,
+    borderRadius: 2,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dietaryDotWrapVeg: {
+    borderColor: '#22C55E',
+  },
+  dietaryDotWrapNonVeg: {
+    borderColor: '#EF4444',
+  },
+  dietaryDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  dietaryDotVeg: {
+    backgroundColor: '#22C55E',
+  },
+  dietaryDotNonVeg: {
+    backgroundColor: '#EF4444',
+  },
+  searchTriggerButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -2,
+  },
+  searchScreenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  searchBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  searchInputWrap: {
+    flex: 1,
+    height: 54,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#111827',
+    paddingVertical: 0,
+  },
+  searchListContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 0,
     gap: 14,
   },
   card: {
@@ -1051,33 +1386,33 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     paddingTop: 0,
     justifyContent: 'flex-start',
-    gap: 2,
+    gap: 4,
   },
   name: {
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
     fontFamily: 'Poppins-SemiBold',
     color: '#111827',
   },
   description: {
-    marginTop: 4,
-    fontSize: 12,
-    lineHeight: 17,
+    marginTop: 2,
+    fontSize: 14,
+    lineHeight: 20,
     fontFamily: 'Poppins',
     color: '#6B7280',
   },
   price: {
-    marginTop: 3,
-    fontSize: 16,
-    lineHeight: 21,
+    marginTop: 0,
+    fontSize: 34 / 2,
+    lineHeight: 24,
     fontFamily: 'Poppins-SemiBold',
     color: '#111827',
   },
   byHotelText: {
-    marginTop: 2,
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: 'Poppins',
+    marginTop: 0,
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: 'Poppins-Medium',
     color: '#6B7280',
   },
   foodTypeBadge: {

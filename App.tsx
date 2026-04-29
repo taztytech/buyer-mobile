@@ -96,6 +96,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     type?: 'home' | 'work' | 'other';
   } | undefined>(undefined);
   const [selectedCategory, setSelectedCategory] = React.useState('Briyani');
+  const [selectedPopularCollectionId, setSelectedPopularCollectionId] = React.useState<number | undefined>(undefined);
   const [categoryData, setCategoryData] = React.useState<any[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
@@ -1465,6 +1466,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       navigateToScreen('home');
     } else {
       setSelectedLocation(undefined);
+      setAddressSelectionCameFrom('registration');
       navigateToScreen('addressSelection');
       Animated.parallel([
         Animated.timing(homeScreenSlide, {
@@ -1554,6 +1556,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const handleBackFromAddressSelection = () => {
+    if (addressSelectionCameFrom === 'registration') {
+      transitionGuestToLogin();
+      setAddressSelectionCameFrom('home');
+      return;
+    }
     // Guest without location: go back to login with smooth transition
     if (!isAuthenticatedRef.current && !selectedLocation) {
       transitionGuestToLogin();
@@ -1595,7 +1602,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       setInitialLocationCoords(null);
     }
     // Track where we're coming from based on current screen
-    if (currentScreen === 'addressSelection') {
+    if (currentScreenRef.current === 'addressSelection') {
       setLocationSelectionCameFrom('addressSelection');
     } else {
       // Coming from home or myAddresses
@@ -2317,11 +2324,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     navigateToScreen('profile');
   };
 
-  const handleNavigateToPopularDishes = () => {
+  const handleNavigateToPopularDishes = (collectionId?: number) => {
+    setSelectedPopularCollectionId(collectionId);
     navigateToScreen('popularDishes');
   };
 
   const handleBackFromPopularDishes = () => {
+    setSelectedPopularCollectionId(undefined);
     navigateToScreen('home');
   };
 
@@ -3359,6 +3368,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                   onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
                   onNavigateToCheckout={handleNavigateToCheckout}
                   selectedLocation={selectedLocation}
+                  selectedCollectionId={selectedPopularCollectionId}
+                  isGuest={!isAuthenticatedRef.current}
+                  onNavigateToLogin={transitionGuestToLogin}
                 />
               </View>
             )}

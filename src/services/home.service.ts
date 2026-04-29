@@ -22,7 +22,7 @@ export interface BannerItem {
   banner_url?: string;
   redirect_url?: string;
   sequence?: number;
-  promotion_type?: 'restaurant_id' | 'category_id' | 'url';
+  promotion_type?: 'restaurant_id' | 'category_id' | 'collection_id' | 'url';
   promotion_link?: string;
 }
 
@@ -88,9 +88,13 @@ export interface PaginationMetadata {
 export interface OrganizationBanner {
   title?: string;
   subtitle?: string;
+  cta_button?: string;
+  button_text?: string;
+  button_color?: string;
   image_url?: string;
   background_color?: string;
   promotion_type?: string;
+  promotion_link?: string;
   sequence?: number;
 }
 
@@ -130,6 +134,14 @@ export interface HomeData {
   home_screen_background_image?: string;
   organization_banner?: OrganizationBanner[];
   home_collection?: HomeCollectionSection;
+}
+
+export interface HomeRestaurantsFilterParams {
+  sort_by?: 'distance' | 'rating';
+  filters?: {
+    cuisines?: string[];
+    availability?: 'open' | 'closed';
+  };
 }
 
 class HomeService {
@@ -365,7 +377,8 @@ class HomeService {
     latitude?: number,
     longitude?: number,
     vegMode?: 'off' | 'pure' | 'all',
-    page: number = 1
+    page: number = 1,
+    restaurantFilters?: HomeRestaurantsFilterParams
   ): Promise<ApiResponse<HomeData>> {
     try {
       // Build query params as object (apiService.get will handle URL encoding)
@@ -384,6 +397,30 @@ class HomeService {
         params.page = page.toString();
       }
 
+      if (restaurantFilters?.sort_by) {
+        params.sort_by = restaurantFilters.sort_by;
+      }
+
+      const cuisineFilters = Array.isArray(restaurantFilters?.filters?.cuisines)
+        ? restaurantFilters?.filters?.cuisines
+        : [];
+      const hasCuisines = cuisineFilters.length > 0;
+      const hasAvailability = Boolean(restaurantFilters?.filters?.availability);
+      if (hasCuisines || hasAvailability) {
+        // Keep JSON payload for existing backend compatibility.
+        params.filters = JSON.stringify({
+          ...(hasCuisines ? { cuisines: cuisineFilters } : {}),
+          ...(hasAvailability ? { availability: restaurantFilters?.filters?.availability } : {}),
+        });
+        // Also send explicit keys so backend can parse values directly.
+        if (hasCuisines) {
+          params['filters[cuisines]'] = cuisineFilters.join(',');
+        }
+        if (hasAvailability) {
+          params['filters[availability]'] = restaurantFilters?.filters?.availability;
+        }
+      }
+
       // CRITICAL: Always use cache-busting headers for home API
       // This prevents HTTP cache from returning stale responses
       // We call this API fresh whenever user comes to homepage, so no timestamp needed
@@ -393,14 +430,38 @@ class HomeService {
         'Expires': '0',
       };
 
+      console.log('[HomeService] REQUEST /api/buyer/home', {
+        endpoint: API_CONFIG.ENDPOINTS.BUYER.HOME,
+        params,
+        headers: cacheBustingHeaders,
+      });
+
       const response = await apiService.get<HomeData>(
         API_CONFIG.ENDPOINTS.BUYER.HOME,
         params,
         cacheBustingHeaders
       );
 
+      console.log('[HomeService] RESPONSE /api/buyer/home', {
+        endpoint: API_CONFIG.ENDPOINTS.BUYER.HOME,
+        params,
+        success: response?.success,
+        message: response?.message,
+        error: response?.error,
+        data: response?.data,
+      });
+
       return response;
     } catch (error: any) {
+      console.log('[HomeService] ERROR /api/buyer/home', {
+        endpoint: API_CONFIG.ENDPOINTS.BUYER.HOME,
+        latitude,
+        longitude,
+        vegMode,
+        page,
+        restaurantFilters,
+        error: error?.message || error,
+      });
       return {
         success: false,
         error: error.message || 'Failed to fetch home data',
@@ -462,7 +523,8 @@ class HomeService {
     collectionId: string | number,
     page: number = 1,
     lat?: number,
-    lng?: number
+    lng?: number,
+    vegMode?: 'all' | 'pure'
   ): Promise<ApiResponse<any[]>> {
     try {
       const params: Record<string, any> = {
@@ -474,6 +536,9 @@ class HomeService {
       }
       if (lng !== undefined) {
         params.lng = lng.toString();
+      }
+      if (vegMode === 'all' || vegMode === 'pure') {
+        params.veg_mode = vegMode;
       }
 
       const response = await apiService.get<any>(

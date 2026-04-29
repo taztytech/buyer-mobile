@@ -113,7 +113,7 @@ export const FoodAddCard: React.FC<FoodAddCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    paddingBottom: 6,
+    paddingBottom: 0,
   },
   imageWrapper: {
     width: 155,

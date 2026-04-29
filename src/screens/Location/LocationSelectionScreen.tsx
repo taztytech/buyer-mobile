@@ -124,9 +124,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
   const [isGeocodingInProgress, setIsGeocodingInProgress] = useState(false);
   const [isSearchInProgress, setIsSearchInProgress] = useState(false);
   const [hasUserChangedLocation, setHasUserChangedLocation] = useState(false); // Track if user manually changed location during editing
-  const [hasChangedFromInitialLocation, setHasChangedFromInitialLocation] = useState(
-    !(Number.isFinite(initialLatitude) && Number.isFinite(initialLongitude))
-  );
+  const [hasChangedFromInitialLocation, setHasChangedFromInitialLocation] = useState(false);
   const bottomPosition = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<any>(null);
   const isUpdatingFromCode = useRef(false);
@@ -182,7 +180,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
     setIsGeocodingInProgress(false);
     setIsSearchInProgress(false);
     setHasUserChangedLocation(false); // Reset location change flag
-    setHasChangedFromInitialLocation(!hasValidInitialCoordinates);
+    setHasChangedFromInitialLocation(false);
 
     // Reset permission tracking and auto-location flag
     hasTriedAutoLocationOnResume.current = false;

@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
-import { homeService, BannerItem, CategoryItem, Restaurant, OrganizationBanner } from '@/services/home.service';
+import { homeService, BannerItem, CategoryItem, Restaurant, OrganizationBanner, HomeRestaurantsFilterParams } from '@/services/home.service';
 import { paymentConfigService } from '@/services/payment-config.service';
 import { appConfigService } from '@/services/app-config.service';
 import { addressService } from '@/services/address.service';
@@ -37,7 +37,7 @@ interface HomeScreenProps {
   onNavigateToProfile?: () => void;
   onNavigateToAddressSelection?: () => void;
   onNavigateToCategory?: (categoryName: string) => void;
-  onNavigateToPopularDishes?: () => void;
+  onNavigateToPopularDishes?: (collectionId?: number) => void;
   onNavigateToRestaurant?: (
     restaurantId: number,
     restaurantName: string,
@@ -63,7 +63,7 @@ interface CarouselItem {
   buttonColor?: string;
   imageUrl?: string;
   sequence?: number;
-  promotionType?: 'restaurant_id' | 'category_id' | 'url';
+  promotionType?: 'restaurant_id' | 'category_id' | 'collection_id' | 'organization' | 'organisation' | 'url';
   promotionLink?: string;
   backgroundColor?: string;
 }
@@ -74,6 +74,81 @@ interface AppOperationStatus {
   message?: string;
   next_open_time?: string;
 }
+
+interface HomeFilterOption {
+  label: string;
+  value: string;
+}
+
+interface HomeFilterDefinition {
+  key: 'sort_by' | 'veg_mode' | 'cuisines' | 'availability' | string;
+  label: string;
+  selection_type: 'single' | 'multiple';
+  options: HomeFilterOption[];
+}
+
+type HomeFilterSelections = Record<string, string | string[]>;
+
+const DEFAULT_HOME_FILTERS: HomeFilterDefinition[] = [
+  {
+    key: 'sort_by',
+    label: 'Sort By',
+    selection_type: 'single',
+    options: [
+      { label: 'Distance', value: 'distance' },
+      { label: 'Rating', value: 'rating' },
+    ],
+  },
+  {
+    key: 'veg_mode',
+    label: 'Food Type',
+    selection_type: 'single',
+    options: [
+      { label: 'All', value: 'all' },
+      { label: 'Pure Veg', value: 'pure' },
+    ],
+  },
+  {
+    key: 'cuisines',
+    label: 'Cuisine',
+    selection_type: 'multiple',
+    options: [
+      { label: 'South Indian', value: 'south_indian' },
+      { label: 'Chettinad', value: 'chettinad' },
+      { label: 'Biryani', value: 'biryani' },
+      { label: 'BBQ', value: 'bbq' },
+      { label: 'Grill', value: 'grill' },
+      { label: 'Arabian', value: 'arabian' },
+      { label: 'Tandoori', value: 'tandoori' },
+      { label: 'Chinese', value: 'chinese' },
+      { label: 'North Indian', value: 'north_indian' },
+      { label: 'Fast Food', value: 'fast_food' },
+      { label: 'Burger', value: 'burger' },
+      { label: 'Cafe', value: 'cafe' },
+      { label: 'Bakery', value: 'bakery' },
+      { label: 'Beverages', value: 'beverages' },
+      { label: 'Juices', value: 'juices' },
+      { label: 'Ice Cream', value: 'ice_cream' },
+      { label: 'Desserts', value: 'desserts' },
+      { label: 'Sweets', value: 'sweets' },
+      { label: 'Parotta', value: 'parotta' },
+      { label: 'Meals', value: 'meals' },
+      { label: 'Fried Chicken', value: 'fried_chicken' },
+      { label: 'Italian', value: 'italian' },
+      { label: 'Korean', value: 'korean' },
+      { label: 'Pizza', value: 'pizza' },
+    ],
+  },
+  {
+    key: 'availability',
+    label: 'Availability',
+    selection_type: 'single',
+    options: [
+      { label: 'Open', value: 'open' },
+      { label: 'Closed', value: 'closed' },
+    ],
+  },
+];
 
 interface PopularDishItem {
   id: string;
@@ -264,6 +339,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [carouselData, setCarouselData] = React.useState<CarouselItem[]>([]);
   const [categoryData, setCategoryData] = React.useState<CategoryItem[]>([]);
   const [restaurantData, setRestaurantData] = React.useState<Restaurant[]>([]);
+  const [homeFilterDefinitions, setHomeFilterDefinitions] = React.useState<HomeFilterDefinition[]>([]);
+  const [selectedHomeFilters, setSelectedHomeFilters] = React.useState<HomeFilterSelections>({});
+  const [draftHomeFilters, setDraftHomeFilters] = React.useState<HomeFilterSelections>({});
+  const [showHomeFilterModal, setShowHomeFilterModal] = React.useState(false);
+  const [activeHomeFilterKey, setActiveHomeFilterKey] = React.useState<string>('sort_by');
+  const [quickFilterKey, setQuickFilterKey] = React.useState<string | null>(null);
   const [popularDishesData, setPopularDishesData] = React.useState<PopularDishItem[]>([]);
   const [popularDishesTitle, setPopularDishesTitle] = React.useState('Popular Dishes');
   const [popularCollectionType, setPopularCollectionType] = React.useState<'store' | 'item' | 'unknown'>('unknown');
@@ -326,16 +407,133 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [homeBackgroundImageUrl, setHomeBackgroundImageUrl] = React.useState<string | null>(null);
   const [headerBackgroundLoadFailed, setHeaderBackgroundLoadFailed] = React.useState(false);
 
+  const isHomeFilterApplied = (filterKey: string) => {
+    const value = selectedHomeFilters[filterKey];
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    return String(value || '').trim().length > 0;
+  };
+
+  const getHomeFilterSelectedCount = (filter: HomeFilterDefinition) => {
+    const value = selectedHomeFilters[filter.key];
+    if (Array.isArray(value)) {
+      return value.length;
+    }
+    return String(value || '').trim().length > 0 ? 1 : 0;
+  };
+
+  const resolveVegModeForApi = (filters: HomeFilterSelections): 'off' | 'pure' | 'all' => {
+    const selectedVegMode = String(filters.veg_mode || '').toLowerCase();
+    if (selectedVegMode === 'pure' || selectedVegMode === 'all') {
+      return selectedVegMode;
+    }
+    return vegMode;
+  };
+
+  const buildRestaurantFilterParams = (filters: HomeFilterSelections): HomeRestaurantsFilterParams | undefined => {
+    const sortByRaw = String(filters.sort_by || '').toLowerCase();
+    const sortBy = sortByRaw === 'distance' || sortByRaw === 'rating' ? sortByRaw : undefined;
+    const cuisines = Array.isArray(filters.cuisines) ? filters.cuisines.filter((value) => String(value).trim().length > 0) : [];
+    const availabilityRaw = String(filters.availability || '').toLowerCase();
+    const availability = availabilityRaw === 'open' || availabilityRaw === 'closed' ? availabilityRaw : undefined;
+
+    if (!sortBy && cuisines.length === 0 && !availability) {
+      return undefined;
+    }
+
+    return {
+      ...(sortBy ? { sort_by: sortBy } : {}),
+      ...(cuisines.length > 0 || availability
+        ? {
+            filters: {
+              ...(cuisines.length > 0 ? { cuisines } : {}),
+              ...(availability ? { availability } : {}),
+            },
+          }
+        : {}),
+    };
+  };
+
+  const filteredRestaurantData = React.useMemo(() => {
+    const toNumber = (rawDistance: string): number => {
+      const parsed = Number(String(rawDistance || '').replace(/[^0-9.]/g, ''));
+      return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+    };
+
+    const normalizedSelections = selectedHomeFilters;
+    let filtered = [...restaurantData];
+
+    const availabilityFilter = String(normalizedSelections.availability || '').toLowerCase();
+    if (availabilityFilter === 'open') {
+      filtered = filtered.filter((restaurant) => restaurant.isOpen !== false);
+    } else if (availabilityFilter === 'closed') {
+      filtered = filtered.filter((restaurant) => restaurant.isOpen === false);
+    }
+
+    const foodTypeFilter = String(normalizedSelections.veg_mode || '').toLowerCase();
+    if (foodTypeFilter === 'pure') {
+      filtered = filtered.filter((restaurant) => Boolean(restaurant.isVeg));
+    }
+
+    const selectedCuisineValues = Array.isArray(normalizedSelections.cuisines)
+      ? normalizedSelections.cuisines
+      : [];
+    if (selectedCuisineValues.length > 0) {
+      filtered = filtered.filter((restaurant) => {
+        const cuisineText = String(restaurant.cuisine || '').toLowerCase();
+        return selectedCuisineValues.some((value) => {
+          const normalizedValue = value.replace(/_/g, ' ').toLowerCase();
+          return cuisineText.includes(normalizedValue);
+        });
+      });
+    }
+
+    const sortBy = String(normalizedSelections.sort_by || '').toLowerCase();
+    if (sortBy === 'distance') {
+      filtered.sort((a, b) => toNumber(a.distance) - toNumber(b.distance));
+    } else if (sortBy === 'rating') {
+      filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    }
+
+    return filtered;
+  }, [restaurantData, selectedHomeFilters]);
+
   // Derived state for the header display
   const activeOrganizationBanner = organizationBanners.length > 0 ? organizationBanners[activeBannerIndex] : null;
+  const activeHomeFilter = homeFilterDefinitions.find((filter) => filter.key === activeHomeFilterKey) || homeFilterDefinitions[0];
+  const homeFilterModalTitle = quickFilterKey
+    ? (activeHomeFilter?.key === 'cuisines' ? 'Cuisines' : activeHomeFilter?.label || 'Filter')
+    : 'Filter';
   const homeTopBackgroundColor = activeOrganizationBanner?.background_color || '#00B14F';
   const displayBackgroundImageUrl = activeOrganizationBanner?.image_url || '';
   const promoTitle = activeOrganizationBanner?.title || (isLoadingBanners ? '' : '');
   const promoSubtitle = activeOrganizationBanner?.subtitle || (isLoadingBanners ? '' : '');
+  const promoType = String(activeOrganizationBanner?.promotion_type || '').trim().toLowerCase();
+  const promoCtaButton =
+    promoType === 'organization' || promoType === 'organisation'
+      ? ''
+      : activeOrganizationBanner?.cta_button ||
+        activeOrganizationBanner?.button_text ||
+        '';
+  const hasPromoCtaNavigation =
+    typeof activeOrganizationBanner?.promotion_type === 'string' &&
+    activeOrganizationBanner.promotion_type.trim().length > 0 &&
+    String(activeOrganizationBanner?.promotion_link || '').trim().length > 0;
   const hasExistingBannerVisual = Boolean(activeOrganizationBanner?.image_url || activeOrganizationBanner?.background_color);
 
   const shouldShowBadgesRow =
     appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0);
+
+  React.useEffect(() => {
+    if (homeFilterDefinitions.length === 0) {
+      return;
+    }
+    const hasCurrent = homeFilterDefinitions.some((filter) => filter.key === activeHomeFilterKey);
+    if (!hasCurrent) {
+      setActiveHomeFilterKey(homeFilterDefinitions[0].key);
+    }
+  }, [activeHomeFilterKey, homeFilterDefinitions]);
 
   React.useEffect(() => {
     setHeaderBackgroundLoadFailed(false);
@@ -885,16 +1083,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [categoryData, restaurantData]);
 
   // Fetch home data function - can be called multiple times
-  const fetchHomeData = React.useCallback(async (latitude?: number, longitude?: number) => {
+  const fetchHomeData = React.useCallback(async (
+    latitude?: number,
+    longitude?: number,
+    filtersOverride?: HomeFilterSelections,
+    options?: { sectionScope?: 'full' | 'restaurants_and_collections' }
+  ) => {
+    const sectionScope = options?.sectionScope ?? 'full';
+    const isPartialFilterRefresh = sectionScope === 'restaurants_and_collections';
     try {
       setHasNetworkError(false);
       setNoRestaurantsFound(false);
-      // Reset shimmers whenever a new fetch starts so UI never shows a blank state
-      setShowBannerShimmer(true);
-      setShowCategoryShimmer(true);
+      // Reset shimmers for sections that are part of this refresh scope.
+      if (!isPartialFilterRefresh) {
+        setShowBannerShimmer(true);
+        setShowCategoryShimmer(true);
+      }
       setShowRestaurantShimmer(true);
-      setIsLoadingBanners(true);
-      setIsLoadingCategories(true);
+      if (!isPartialFilterRefresh) {
+        setIsLoadingBanners(true);
+        setIsLoadingCategories(true);
+      }
       setIsLoadingRestaurants(true);
 
       // Reset pagination state for fresh load
@@ -927,18 +1136,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       // If location is not serviceable, stop loading and don't fetch data
       if (!serviceable) {
-        setIsLoadingBanners(false);
-        setIsLoadingCategories(false);
+        if (!isPartialFilterRefresh) {
+          setIsLoadingBanners(false);
+          setIsLoadingCategories(false);
+        }
         setIsLoadingRestaurants(false);
         return;
       }
 
-      const response = await homeService.getHomeData(lat, lng, vegMode, 1);
+      const effectiveFilters = filtersOverride ?? selectedHomeFilters;
+      const effectiveVegMode = resolveVegModeForApi(effectiveFilters);
+      const restaurantFilterParams = buildRestaurantFilterParams(effectiveFilters);
+      const response = await homeService.getHomeData(lat, lng, effectiveVegMode, 1, restaurantFilterParams);
       console.log('[HomeScreen] /api/buyer/home response', {
         lat,
         lng,
-        vegMode,
+        vegMode: effectiveVegMode,
         page: 1,
+        restaurantFilterParams,
         response,
       });
 
@@ -950,8 +1165,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           onForcedUpdateRequired(response.message);
         }
         // Stop loading and don't process data
-        setIsLoadingBanners(false);
-        setIsLoadingCategories(false);
+        if (!isPartialFilterRefresh) {
+          setIsLoadingBanners(false);
+          setIsLoadingCategories(false);
+        }
         setIsLoadingRestaurants(false);
         return;
       }
@@ -1001,6 +1218,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         const pagination = actualData.pagination;
         const appOperationStatusData = actualData.app_operation_status;
         const codSettings = actualData.cod_settings;
+        const filtersPayload = (actualData as any)?.filters;
 
         // Store COD settings globally for checkout/payment screens
         paymentConfigService.setCodSettings(codSettings);
@@ -1015,145 +1233,153 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           setAppOperationStatus(appOperationStatusData);
         }
 
-        // Home header background image (URL string from API — any supported key)
-        const rawHeaderBg =
-          (actualData as any).home_background_image_url ??
-          (actualData as any).home_background_image ??
-          (actualData as any).header_background_image ??
-          (actualData as any).background_image_url ??
-          (actualData as any).home_screen_background_image;
-        const headerBgStr = typeof rawHeaderBg === 'string' ? rawHeaderBg.trim() : '';
-        setHomeBackgroundImageUrl(headerBgStr.length > 0 ? headerBgStr : null);
-
-        // Handle organization banners for dynamic header
-        const orgBannerRaw = (actualData as any).organization_banner;
-        if (orgBannerRaw && Array.isArray(orgBannerRaw)) {
-          setOrganizationBanners(orgBannerRaw);
+        if (Array.isArray(filtersPayload) && filtersPayload.length > 0) {
+          setHomeFilterDefinitions(filtersPayload as HomeFilterDefinition[]);
         } else {
-          setOrganizationBanners([]);
+          setHomeFilterDefinitions(DEFAULT_HOME_FILTERS);
         }
 
-        // Handle promotional banners
-        if (promotionalBanner) {
-          // Handle if it's a single object or array
-          const bannerArray = Array.isArray(promotionalBanner) ? promotionalBanner : [promotionalBanner];
-          // Transform API data to carousel format
-          const transformedBanners: CarouselItem[] = bannerArray.map((banner: BannerItem, index: number) => ({
-            id: banner.id || `banner-${index}`,
-            title: banner.title || '',
-            description: banner.subtitle || banner.description || '',
-            buttonText: banner.cta_button || banner.button_text || '',
-            buttonColor: banner.button_color,
-            imageUrl: banner.image_url || banner.banner_url,
-            sequence: banner.sequence !== undefined ? banner.sequence : index,
-            promotionType: banner.promotion_type,
-            promotionLink: banner.promotion_link,
-            backgroundColor: banner.background_color,
-          }));
+        if (!isPartialFilterRefresh) {
+          // Home header background image (URL string from API — any supported key)
+          const rawHeaderBg =
+            (actualData as any).home_background_image_url ??
+            (actualData as any).home_background_image ??
+            (actualData as any).header_background_image ??
+            (actualData as any).background_image_url ??
+            (actualData as any).home_screen_background_image;
+          const headerBgStr = typeof rawHeaderBg === 'string' ? rawHeaderBg.trim() : '';
+          setHomeBackgroundImageUrl(headerBgStr.length > 0 ? headerBgStr : null);
 
-          // Sort banners by sequence field
-          const sortedBanners = transformedBanners.sort((a, b) => {
-            const seqA = a.sequence !== undefined ? a.sequence : 999;
-            const seqB = b.sequence !== undefined ? b.sequence : 999;
-            return seqA - seqB;
-          });
+          // Handle organization banners for dynamic header
+          const orgBannerRaw = (actualData as any).organization_banner;
+          if (orgBannerRaw && Array.isArray(orgBannerRaw)) {
+            setOrganizationBanners(orgBannerRaw);
+          } else {
+            setOrganizationBanners([]);
+          }
 
-          if (sortedBanners.length > 0) {
-            setCarouselData(sortedBanners);
+          // Handle promotional banners
+          if (promotionalBanner) {
+            // Handle if it's a single object or array
+            const bannerArray = Array.isArray(promotionalBanner) ? promotionalBanner : [promotionalBanner];
+            // Transform API data to carousel format
+            const transformedBanners: CarouselItem[] = bannerArray.map((banner: BannerItem, index: number) => ({
+              id: banner.id || `banner-${index}`,
+              title: banner.title || '',
+              description: banner.subtitle || banner.description || '',
+              buttonText: banner.cta_button || banner.button_text || '',
+              buttonColor: banner.button_color,
+              imageUrl: banner.image_url || banner.banner_url,
+              sequence: banner.sequence !== undefined ? banner.sequence : index,
+              promotionType: banner.promotion_type,
+              promotionLink: banner.promotion_link,
+              backgroundColor: banner.background_color,
+            }));
+
+            // Sort banners by sequence field
+            const sortedBanners = transformedBanners.sort((a, b) => {
+              const seqA = a.sequence !== undefined ? a.sequence : 999;
+              const seqB = b.sequence !== undefined ? b.sequence : 999;
+              return seqA - seqB;
+            });
+
+            if (sortedBanners.length > 0) {
+              setCarouselData(sortedBanners);
+            } else {
+              setCarouselData([]);
+            }
           } else {
             setCarouselData([]);
           }
-        } else {
-          setCarouselData([]);
-        }
 
-        // Handle categories - use fallback if empty or undefined
-        if (whatsOnYourMind && Array.isArray(whatsOnYourMind) && whatsOnYourMind.length > 0) {
-          // Filter categories based on vegMode
-          let filteredCategories = whatsOnYourMind;
+          // Handle categories - use fallback if empty or undefined
+          if (whatsOnYourMind && Array.isArray(whatsOnYourMind) && whatsOnYourMind.length > 0) {
+            // Filter categories based on vegMode
+            let filteredCategories = whatsOnYourMind;
 
-          if (vegMode === 'pure') {
-            // Show only Veg categories (handles values like "pure-veg")
-            filteredCategories = whatsOnYourMind.filter((category: CategoryItem) =>
-              isVegFoodType(category.food_type, category.is_veg)
-            );
-          } else if (vegMode === 'all') {
-            // Show all categories regardless of food_type
-            filteredCategories = whatsOnYourMind;
-          }
-          // If vegMode is 'off', show all categories (no filtering)
+            if (vegMode === 'pure') {
+              // Show only Veg categories (handles values like "pure-veg")
+              filteredCategories = whatsOnYourMind.filter((category: CategoryItem) =>
+                isVegFoodType(category.food_type, category.is_veg)
+              );
+            } else if (vegMode === 'all') {
+              // Show all categories regardless of food_type
+              filteredCategories = whatsOnYourMind;
+            }
+            // If vegMode is 'off', show all categories (no filtering)
 
-          // If filtered categories is empty, fetch dishes from API based on vegMode
-          if (filteredCategories.length === 0 && vegMode !== 'off') {
-            const foodTypeParam = vegMode === 'pure' ? 'Veg' : undefined;
-            const dishResponse = await homeService.getDishes(foodTypeParam, 10, 1, vegMode);
+            // If filtered categories is empty, fetch dishes from API based on vegMode
+            if (filteredCategories.length === 0 && vegMode !== 'off') {
+              const foodTypeParam = vegMode === 'pure' ? 'Veg' : undefined;
+              const dishResponse = await homeService.getDishes(foodTypeParam, 10, 1, vegMode);
 
-            if (dishResponse.success && dishResponse.data?.dishes) {
-              // Transform dishes to category format
-              const dishCategories: CategoryItem[] = dishResponse.data.dishes.map((dish: any) => ({
-                id: dish.id,
-                name: dish.name || dish.dish_name,
-                description: dish.description,
-                icon: dish.image || dish.image_url || dish.dish_image,
-                sequence: dish.sequence,
-                food_type: dish.food_type || dish.foodType || dish.type,
-                is_veg: dish.is_veg || dish.isVeg || dish.is_vegetarian,
-              }));
+              if (dishResponse.success && dishResponse.data?.dishes) {
+                // Transform dishes to category format
+                const dishCategories: CategoryItem[] = dishResponse.data.dishes.map((dish: any) => ({
+                  id: dish.id,
+                  name: dish.name || dish.dish_name,
+                  description: dish.description,
+                  icon: dish.image || dish.image_url || dish.dish_image,
+                  sequence: dish.sequence,
+                  food_type: dish.food_type || dish.foodType || dish.type,
+                  is_veg: dish.is_veg || dish.isVeg || dish.is_vegetarian,
+                }));
 
-              // Sort by sequence
-              const sortedDishCategories = dishCategories.sort((a, b) => {
+                // Sort by sequence
+                const sortedDishCategories = dishCategories.sort((a, b) => {
+                  const seqA = a.sequence !== undefined ? a.sequence : 999;
+                  const seqB = b.sequence !== undefined ? b.sequence : 999;
+                  return seqA - seqB;
+                });
+
+                // Add "View All" at the end
+                const categoriesWithViewAll = [
+                  ...sortedDishCategories,
+                  {
+                    id: 'view-all',
+                    name: 'View All',
+                    description: 'See all categories',
+                    icon: require('@/assets/Group 1272628220.png'),
+                  }
+                ];
+
+                setCategoryData(categoriesWithViewAll);
+                onCategoriesLoaded?.(categoriesWithViewAll);
+              } else {
+                setCategoryData([]);
+                onCategoriesLoaded?.([]);
+              }
+            } else {
+              // Sort filtered categories by sequence field (dev/iOS)
+              const sortedCategories = [...filteredCategories].sort((a, b) => {
                 const seqA = a.sequence !== undefined ? a.sequence : 999;
                 const seqB = b.sequence !== undefined ? b.sequence : 999;
                 return seqA - seqB;
               });
 
-              // Add "View All" at the end
-              const categoriesWithViewAll = [
-                ...sortedDishCategories,
+              // Add "View All" item at the end (only if we have categories after filtering)
+              const categoriesWithViewAll = sortedCategories.length > 0 ? [
+                ...sortedCategories,
                 {
                   id: 'view-all',
                   name: 'View All',
                   description: 'See all categories',
                   icon: require('@/assets/Group 1272628220.png'),
                 }
-              ];
+              ] : sortedCategories;
 
-              setCategoryData(categoriesWithViewAll);
-              onCategoriesLoaded?.(categoriesWithViewAll);
-            } else {
-              setCategoryData([]);
-              onCategoriesLoaded?.([]);
+              // Deduplicate categories by ID
+              const uniqueCategories = Array.from(
+                new Map(categoriesWithViewAll.map(item => [item.id.toString(), item])).values()
+              );
+
+              setCategoryData(uniqueCategories);
+              onCategoriesLoaded?.(uniqueCategories);
             }
           } else {
-            // Sort filtered categories by sequence field (dev/iOS)
-            const sortedCategories = [...filteredCategories].sort((a, b) => {
-              const seqA = a.sequence !== undefined ? a.sequence : 999;
-              const seqB = b.sequence !== undefined ? b.sequence : 999;
-              return seqA - seqB;
-            });
-
-            // Add "View All" item at the end (only if we have categories after filtering)
-            const categoriesWithViewAll = sortedCategories.length > 0 ? [
-              ...sortedCategories,
-              {
-                id: 'view-all',
-                name: 'View All',
-                description: 'See all categories',
-                icon: require('@/assets/Group 1272628220.png'),
-              }
-            ] : sortedCategories;
-
-            // Deduplicate categories by ID
-            const uniqueCategories = Array.from(
-              new Map(categoriesWithViewAll.map(item => [item.id.toString(), item])).values()
-            );
-
-            setCategoryData(uniqueCategories);
-            onCategoriesLoaded?.(uniqueCategories);
+            setCategoryData([]);
+            onCategoriesLoaded?.([]);
           }
-        } else {
-          setCategoryData([]);
-          onCategoriesLoaded?.([]);
         }
 
         // Handle restaurants - show error if empty or undefined
@@ -1229,9 +1455,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         }
       } else {
         // API call failed - show network error
-        setCarouselData([]);
-        setCategoryData([]);
-        onCategoriesLoaded?.([]);
+        if (!isPartialFilterRefresh) {
+          setCarouselData([]);
+          setCategoryData([]);
+          onCategoriesLoaded?.([]);
+        }
         setHasNetworkError(true);
         setRestaurantData([]);
         setPopularDishesData([]);
@@ -1239,20 +1467,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setPopularCollectionType('unknown');
       }
     } catch (error) {
-      setCarouselData([]);
-      setCategoryData([]);
-      onCategoriesLoaded?.([]);
+      if (!isPartialFilterRefresh) {
+        setCarouselData([]);
+        setCategoryData([]);
+        onCategoriesLoaded?.([]);
+      }
       setHasNetworkError(true);
       setRestaurantData([]);
       setPopularDishesData([]);
       setPopularDishesTitle('Popular Dishes');
       setPopularCollectionType('unknown');
     } finally {
-      setIsLoadingBanners(false);
-      setIsLoadingCategories(false);
+      if (!isPartialFilterRefresh) {
+        setIsLoadingBanners(false);
+        setIsLoadingCategories(false);
+      }
       setIsLoadingRestaurants(false);
     }
-  }, [vegMode]);
+  }, [onCategoriesLoaded, onForcedUpdateRequired, resolveVegModeForApi, selectedHomeFilters, vegMode]);
 
   // Load more restaurants function for pagination
   const loadMoreRestaurants = React.useCallback(async () => {
@@ -1267,12 +1499,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       const nextPage = currentPage + 1;
       const coords = defaultAddressCoords || { latitude: DEFAULT_LOCATION.latitude, longitude: DEFAULT_LOCATION.longitude };
 
-      const response = await homeService.getHomeData(coords.latitude, coords.longitude, vegMode, nextPage);
+      const effectiveVegMode = resolveVegModeForApi(selectedHomeFilters);
+      const restaurantFilterParams = buildRestaurantFilterParams(selectedHomeFilters);
+      const response = await homeService.getHomeData(
+        coords.latitude,
+        coords.longitude,
+        effectiveVegMode,
+        nextPage,
+        restaurantFilterParams
+      );
       console.log('[HomeScreen] /api/buyer/home load-more response', {
         lat: coords.latitude,
         lng: coords.longitude,
-        vegMode,
+        vegMode: effectiveVegMode,
         page: nextPage,
+        restaurantFilterParams,
         response,
       });
 
@@ -1368,7 +1609,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, hasMoreRestaurants, isLoadingRestaurants, currentPage, defaultAddressCoords, vegMode]);
+  }, [isLoadingMore, hasMoreRestaurants, isLoadingRestaurants, currentPage, defaultAddressCoords, selectedHomeFilters, vegMode]);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleLogout = async () => {
@@ -1500,6 +1741,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         }
         break;
 
+      case 'collection_id':
+        // Navigate to View All / Popular Dishes with a specific collection id
+        if (onNavigateToPopularDishes) {
+          const collectionId = parseInt(item.promotionLink, 10);
+          if (!isNaN(collectionId)) {
+            onNavigateToPopularDishes(collectionId);
+          } else {
+            onNavigateToPopularDishes();
+          }
+        }
+        break;
+
       case 'url':
         // Open external URL in system browser
         Linking.openURL(item.promotionLink).catch((err) => {
@@ -1518,7 +1771,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         // Unknown promotion type, do nothing
         break;
     }
-  }, [onNavigateToRestaurant, onNavigateToCategory, showConfirmation]);
+  }, [onNavigateToRestaurant, onNavigateToCategory, onNavigateToPopularDishes, showConfirmation]);
+
+  const handleOrganizationBannerCTAClick = React.useCallback(() => {
+    if (!activeOrganizationBanner) {
+      return;
+    }
+
+    const promotionTypeRaw = String(activeOrganizationBanner.promotion_type || '').trim().toLowerCase();
+    const promotionLinkRaw = String(activeOrganizationBanner.promotion_link || '').trim();
+    if (!promotionTypeRaw || !promotionLinkRaw) {
+      return;
+    }
+
+    handleBannerCTAClick({
+      id: `organization-banner-${activeBannerIndex}`,
+      title: activeOrganizationBanner.title || '',
+      description: activeOrganizationBanner.subtitle || '',
+      buttonText: activeOrganizationBanner.cta_button || activeOrganizationBanner.button_text || '',
+      promotionType: promotionTypeRaw as CarouselItem['promotionType'],
+      promotionLink: promotionLinkRaw,
+      backgroundColor: activeOrganizationBanner.background_color,
+    });
+  }, [activeBannerIndex, activeOrganizationBanner, handleBannerCTAClick]);
 
   const renderCarouselItem = React.useCallback(({ item }: { item: CarouselItem }) => {
     return (
@@ -1562,7 +1837,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             >
               {item.description}
             </Text>
-            {item.buttonText ? (
+            {item.buttonText && item.promotionType !== 'organization' && item.promotionType !== 'organisation' ? (
               <View
                 style={[
                   styles.adButton,
@@ -1698,6 +1973,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     };
 
     const handleAddPress = async () => {
+      if (isGuest && onNavigateToLogin) {
+        onNavigateToLogin();
+        return;
+      }
+
       if (item.isAvailable === false) {
         return;
       }
@@ -1713,22 +1993,37 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       const effectiveStoreName = item.storeName || 'Restaurant';
       setRestaurantInfo(item.storeId, effectiveStoreName, item.storeLogoUrl);
 
-      await addToCart(
-        {
-          id: item.id,
-          itemId: Number(item.id),
-          name: item.name,
-          price: item.basePrice ?? 0,
-          quantity: 1,
-          isVeg: Boolean(item.isVeg),
-          image: typeof item.image === 'object' && item.image && 'uri' in item.image ? item.image.uri : undefined,
-          isCustomizable: false,
-        },
-        item.storeId
-      );
+      try {
+        await addToCart(
+          {
+            id: item.id,
+            itemId: Number(item.id),
+            name: item.name,
+            price: item.basePrice ?? 0,
+            quantity: 1,
+            isVeg: Boolean(item.isVeg),
+            image: typeof item.image === 'object' && item.image && 'uri' in item.image ? item.image.uri : undefined,
+            isCustomizable: false,
+          },
+          item.storeId
+        );
 
-      if (onNavigateToRestaurant) {
-        onNavigateToRestaurant(item.storeId, effectiveStoreName);
+        if (onNavigateToRestaurant) {
+          onNavigateToRestaurant(item.storeId, effectiveStoreName);
+        }
+      } catch (error: any) {
+        const errorMessage =
+          typeof error?.message === 'string' && error.message.trim().length > 0
+            ? error.message.trim()
+            : 'Unable to add this item right now. Please try again.';
+        showConfirmation({
+          title: 'Unable to add item',
+          message: errorMessage,
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#00B14F',
+          onConfirm: () => { },
+        });
       }
     };
 
@@ -1813,6 +2108,80 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       unsubscribeRestaurant();
     };
   }, []);
+
+  const openHomeFilters = React.useCallback(() => {
+    setQuickFilterKey(null);
+    setDraftHomeFilters(selectedHomeFilters);
+    setShowHomeFilterModal(true);
+  }, [selectedHomeFilters]);
+
+  const openHomeFiltersForKey = (filterKey: string) => {
+    setQuickFilterKey(filterKey);
+    setActiveHomeFilterKey(filterKey);
+    setDraftHomeFilters(selectedHomeFilters);
+    setShowHomeFilterModal(true);
+  };
+
+  const startRestaurantFilterLoading = () => {
+    setHasNetworkError(false);
+    setNoRestaurantsFound(false);
+    setShowRestaurantShimmer(true);
+    setIsLoadingRestaurants(true);
+  };
+
+  const handleHomeFilterSelect = React.useCallback(
+    (filter: HomeFilterDefinition, value: string) => {
+      setDraftHomeFilters((prev) => {
+        const next: HomeFilterSelections = { ...prev };
+        if (filter.selection_type === 'multiple') {
+          const current = Array.isArray(next[filter.key]) ? [...(next[filter.key] as string[])] : [];
+          if (current.includes(value)) {
+            next[filter.key] = current.filter((entry) => entry !== value);
+          } else {
+            next[filter.key] = [...current, value];
+          }
+        } else {
+          const current = String(next[filter.key] || '');
+          next[filter.key] = current === value ? '' : value;
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  const handleApplyHomeFilters = React.useCallback(async () => {
+    startRestaurantFilterLoading();
+    setSelectedHomeFilters(draftHomeFilters);
+    setQuickFilterKey(null);
+    setShowHomeFilterModal(false);
+    const lat = externalSelectedLocation?.latitude || defaultAddressCoords?.latitude || DEFAULT_LOCATION.latitude;
+    const lng = externalSelectedLocation?.longitude || defaultAddressCoords?.longitude || DEFAULT_LOCATION.longitude;
+    await fetchHomeData(lat, lng, draftHomeFilters, { sectionScope: 'restaurants_and_collections' });
+  }, [defaultAddressCoords, draftHomeFilters, externalSelectedLocation, fetchHomeData]);
+
+  const handleClearHomeFilters = React.useCallback(async () => {
+    startRestaurantFilterLoading();
+    setDraftHomeFilters({});
+    setSelectedHomeFilters({});
+    setQuickFilterKey(null);
+    setShowHomeFilterModal(false);
+    const lat = externalSelectedLocation?.latitude || defaultAddressCoords?.latitude || DEFAULT_LOCATION.latitude;
+    const lng = externalSelectedLocation?.longitude || defaultAddressCoords?.longitude || DEFAULT_LOCATION.longitude;
+    await fetchHomeData(lat, lng, {}, { sectionScope: 'restaurants_and_collections' });
+  }, [defaultAddressCoords, externalSelectedLocation, fetchHomeData]);
+
+  const handleClearSingleHomeFilter = async (filterKey: string) => {
+    startRestaurantFilterLoading();
+    const nextFilters: HomeFilterSelections = { ...selectedHomeFilters };
+    delete nextFilters[filterKey];
+    setDraftHomeFilters(nextFilters);
+    setSelectedHomeFilters(nextFilters);
+
+    const lat = externalSelectedLocation?.latitude || defaultAddressCoords?.latitude || DEFAULT_LOCATION.latitude;
+    const lng = externalSelectedLocation?.longitude || defaultAddressCoords?.longitude || DEFAULT_LOCATION.longitude;
+    await fetchHomeData(lat, lng, nextFilters, { sectionScope: 'restaurants_and_collections' });
+  };
 
   // Handle pull-to-refresh
   const handleRefresh = React.useCallback(async () => {
@@ -2138,7 +2507,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     opacity: searchSectionBottomY > 0 ? 1 : 0
                   },
                 ]}
-                pointerEvents="none"
+                pointerEvents="box-none"
                 testID="home-header-image-overlay"
               >
                 {isLoadingBanners && !hasExistingBannerVisual ? (
@@ -2184,12 +2553,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <View style={styles.headerImageInnerContent}>
                     <View
                       style={[styles.homePromoBlockInImageSection, !isLocationServiceable && styles.homePromoBlockDisabled]}
-                      pointerEvents="none"
+                      pointerEvents="box-none"
                     >
                       <Text style={styles.homePromoHeadline}>{promoTitle}</Text>
-                      <Text style={styles.homePromoSubline}>
-                        {promoSubtitle}
-                      </Text>
+                      {promoSubtitle ? (
+                        <Text style={styles.homePromoSubline}>
+                          {promoSubtitle}
+                        </Text>
+                      ) : null}
+                      {promoCtaButton ? (
+                        <TouchableOpacity
+                          activeOpacity={hasPromoCtaNavigation ? 0.8 : 1}
+                          onPress={hasPromoCtaNavigation ? handleOrganizationBannerCTAClick : undefined}
+                          style={styles.homePromoCtaButton}
+                          disabled={!hasPromoCtaNavigation}
+                        >
+                          <Text style={styles.homePromoCtaButtonText}>{promoCtaButton}</Text>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                   </View>
                 )}
@@ -2311,21 +2692,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 )}
 
                 <View style={styles.popularDishesSection}>
-                  <View style={styles.popularDishesHeaderRow}>
-                    <Text style={styles.popularDishesTitle}>{popularDishesTitle}</Text>
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        if (onNavigateToPopularDishes) {
-                          onNavigateToPopularDishes();
-                          return;
-                        }
-                        setShowCategoryModal(true);
-                      }}
-                    >
-                      <Text style={styles.popularDishesViewAll}>View all</Text>
-                    </TouchableOpacity>
-                  </View>
+                  {popularDishesTitle.trim().toLowerCase() !== 'popular dishes' ? (
+                    <View style={styles.popularDishesHeaderRow}>
+                      <Text style={styles.popularDishesTitle}>{popularDishesTitle}</Text>
+                      {onNavigateToPopularDishes ? (
+                        <TouchableOpacity
+                          onPress={() => onNavigateToPopularDishes()}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.popularDishesViewAll}>View all</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ) : null}
 
                   {popularDishesData.length > 0 && (
                     <FlatList
@@ -2340,7 +2719,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 </View>
 
                 {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
-                {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
+                {(showRestaurantShimmer || filteredRestaurantData.length > 0 || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
                   <View style={styles.restaurantsSectionTitleContainer}>
                     <LinearGradient
                       colors={['rgba(0, 0, 0, 0)', '#000000']}
@@ -2358,52 +2737,77 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   </View>
                 )}
 
-                {/* Filter Buttons - Hidden */}
-                {/* <View style={styles.filterContainer}>
-        {showRestaurantShimmer ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterScrollContent}
-          >
-            <Shimmer width={80} height={29} borderRadius={13} backgroundColor="#E8E8E8" />
-            <Shimmer width={70} height={29} borderRadius={13} backgroundColor="#E8E8E8" />
-            <Shimmer width={60} height={29} borderRadius={13} backgroundColor="#E8E8E8" />
-            <Shimmer width={50} height={29} borderRadius={13} backgroundColor="#E8E8E8" />
-            <Shimmer width={120} height={29} borderRadius={13} backgroundColor="#E8E8E8" />
-          </ScrollView>
-        ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterScrollContent}
-          >
-            <TouchableOpacity style={styles.filterButtonActive} testID="filter-filters">
-              <MaterialIcons name="filter-list" size={16} color="#00B14F" />
-              <Text style={styles.filterTextActive}>Filters</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.filterButtonInactive} testID="filter-sort">
-              <Text style={styles.filterTextInactive}>Sort By</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.filterButtonInactive} testID="filter-price">
-              <Text style={styles.filterTextInactive}>Price</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.filterButtonInactive} testID="filter-veg">
-              <Text style={styles.filterTextInactive}>Veg</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.filterButtonInactive} testID="filter-delivery">
-              <Text style={styles.filterTextInactive}>10 Mins Delivery</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        )}
-      </View> */}
+                {homeFilterDefinitions.length > 0 && (
+                  <View style={styles.filterContainer}>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.filterRowScroll}
+                      contentContainerStyle={styles.filterRowScrollContent}
+                    >
+                      <TouchableOpacity
+                        style={styles.filterButtonInactive}
+                        onPress={openHomeFilters}
+                        testID="home-filter-button"
+                      >
+                        <MaterialIcons
+                          name="filter-list"
+                          size={16}
+                          color="#6B7280"
+                        />
+                        <Text style={styles.filterTextInactive}>
+                          Filters
+                        </Text>
+                      </TouchableOpacity>
+                      {homeFilterDefinitions.map((filter) => {
+                        const applied = isHomeFilterApplied(filter.key);
+                        const selectedCount = getHomeFilterSelectedCount(filter);
+                        const showCount = filter.selection_type === 'multiple' && selectedCount > 1;
+                        return (
+                          <TouchableOpacity
+                            key={`home-filter-type-${filter.key}`}
+                            style={applied ? styles.homeFilterTypeChipActive : styles.homeFilterTypeChip}
+                            onPress={() => {
+                              if (filter.selection_type === 'multiple' && applied) {
+                                openHomeFiltersForKey(filter.key);
+                                return;
+                              }
+                              setActiveHomeFilterKey(filter.key);
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <View style={styles.homeFilterTypeChipContent}>
+                              {applied && showCount && (
+                                <MaterialIcons name="filter-list" size={14} color="#00B14F" style={styles.homeFilterTypeChipFilterIcon} />
+                              )}
+                              {applied && !showCount && (
+                                <TouchableOpacity
+                                  onPress={(event) => {
+                                    event.stopPropagation();
+                                    handleClearSingleHomeFilter(filter.key).catch(() => {});
+                                  }}
+                                  hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                                  style={styles.homeFilterTypeChipCloseButton}
+                                >
+                                  <MaterialIcons name="close" size={14} color="#00B14F" style={styles.homeFilterTypeChipCloseIcon} />
+                                </TouchableOpacity>
+                              )}
+                              <Text style={applied ? styles.homeFilterTypeChipTextActive : styles.homeFilterTypeChipText}>
+                                {filter.label}
+                              </Text>
+                              {applied && showCount && (
+                                <Text style={styles.homeFilterTypeChipCountTextActive}>({selectedCount})</Text>
+                              )}
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
 
                 {/* Restaurant List - Only show if there's data, still loading, or error states */}
-                {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
+                {(showRestaurantShimmer || filteredRestaurantData.length > 0 || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
                   <View style={styles.restaurantListContainer}>
                     {showRestaurantShimmer ? (
                       <>
@@ -2455,9 +2859,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                           <Text style={styles.retryButtonText}>Retry</Text>
                         </TouchableOpacity>
                       </View>
+                    ) : filteredRestaurantData.length === 0 ? (
+                      <View style={styles.noRestaurantsContainer}>
+                        <MaterialIcons name="tune" size={64} color="rgba(0, 0, 0, 0.2)" />
+                        <Text style={styles.noRestaurantsTitle}>No matching restaurants</Text>
+                        <Text style={styles.noRestaurantsMessage}>
+                          Try changing or clearing filters to see more restaurants.
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.retryButton}
+                          onPress={handleClearHomeFilters}
+                          activeOpacity={0.7}
+                        >
+                          <MaterialIcons name="clear-all" size={20} color="#FFFFFF" />
+                          <Text style={styles.retryButtonText}>Clear Filters</Text>
+                        </TouchableOpacity>
+                      </View>
                     ) : (
                       <FlatList
-                        data={restaurantData}
+                        data={filteredRestaurantData}
                         renderItem={({ item: restaurant }) => (
                           <View style={styles.restaurantCardWrapper}>
                             <RestaurantCard
@@ -2513,6 +2933,112 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     )}
                   </View>
                 )}
+
+                <Modal
+                  visible={showHomeFilterModal}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setShowHomeFilterModal(false)}
+                >
+                  <View style={styles.homeFiltersOverlay}>
+                    <View style={styles.homeFiltersCard}>
+                      <View style={styles.homeFiltersHeader}>
+                        <Text style={styles.homeFiltersTitle}>{homeFilterModalTitle}</Text>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setQuickFilterKey(null);
+                            setShowHomeFilterModal(false);
+                          }}
+                        >
+                          <MaterialIcons name="close" size={22} color="#9CA3AF" />
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.homeFiltersDivider} />
+                      <View style={styles.homeFiltersBody}>
+                        {!quickFilterKey && (
+                          <View style={styles.homeFiltersLeftPane}>
+                            {homeFilterDefinitions.map((filter) => (
+                              <TouchableOpacity
+                                key={filter.key}
+                                style={[
+                                  styles.homeFilterTab,
+                                  activeHomeFilter?.key === filter.key && styles.homeFilterTabActive,
+                                ]}
+                                onPress={() => setActiveHomeFilterKey(filter.key)}
+                                activeOpacity={1}
+                              >
+                                <Text
+                                  style={[
+                                    styles.homeFilterTabText,
+                                    activeHomeFilter?.key === filter.key && styles.homeFilterTabTextActive,
+                                  ]}
+                                >
+                                  {filter.label}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+                        <ScrollView
+                          style={quickFilterKey ? styles.homeFiltersRightPaneQuick : styles.homeFiltersRightPane}
+                          contentContainerStyle={styles.homeFiltersRightPaneContent}
+                          showsVerticalScrollIndicator={false}
+                        >
+                          {activeHomeFilter?.options.map((option) => {
+                            const selectedValue = draftHomeFilters[activeHomeFilter.key];
+                            const isSelected = Array.isArray(selectedValue)
+                              ? selectedValue.includes(option.value)
+                              : String(selectedValue || '') === option.value;
+                            return (
+                              <TouchableOpacity
+                                key={`${activeHomeFilter.key}-${option.value}`}
+                                style={styles.homeFilterOptionRow}
+                                onPress={() => handleHomeFilterSelect(activeHomeFilter, option.value)}
+                                activeOpacity={1}
+                              >
+                                <MaterialIcons
+                                  name={isSelected ? 'check-box' : 'check-box-outline-blank'}
+                                  size={22}
+                                  color={isSelected ? '#00B14F' : '#9CA3AF'}
+                                />
+                                <Text style={styles.homeFilterOptionText}>{option.label}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                      <View
+                        style={[
+                          styles.homeFiltersFooter,
+                          quickFilterKey && styles.homeFiltersFooterQuick,
+                          { paddingBottom: Math.max(insets.bottom, 12) },
+                        ]}
+                      >
+                        {!quickFilterKey && (
+                          <TouchableOpacity
+                            style={styles.homeFiltersClearButton}
+                            onPress={() => {
+                              handleClearHomeFilters().catch(() => {});
+                            }}
+                          >
+                            <Text style={styles.homeFiltersClearText}>Clear Filters</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={[
+                            styles.homeFiltersApplyButton,
+                            quickFilterKey && styles.homeFiltersApplyButtonFullWidth,
+                          ]}
+                          onPress={() => {
+                            handleApplyHomeFilters().catch(() => {});
+                          }}
+                        >
+                          <Text style={styles.homeFiltersApplyText}>Apply</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                </Modal>
               </>
             )}
 
@@ -2749,6 +3275,24 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.35)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
+  },
+  homePromoCtaButton: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    minWidth: 94,
+    height: 36,
+    paddingHorizontal: 20,
+    borderRadius: 18,
+    backgroundColor: '#F59E0B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  homePromoCtaButtonText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 16,
+    lineHeight: 20,
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
   homePromoBlockDisabled: {
     opacity: 0.45,
@@ -3248,7 +3792,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 8,
     paddingHorizontal: 20,
   },
   popularDishesTitle: {
@@ -3271,8 +3815,8 @@ const styles = StyleSheet.create({
   },
   popularDishCard: {
     width: 170,
-    marginRight: 12,
-    paddingBottom: 6,
+    marginRight: 10,
+    paddingBottom: 0,
   },
   popularDishCardStore: {
     width: 140,
@@ -3365,11 +3909,32 @@ const styles = StyleSheet.create({
   // Filter buttons
   filterContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingTop: 14,
+    paddingBottom: 20,
     backgroundColor: '#FFFFFF',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterRowScroll: {
+    width: '100%',
+  },
+  filterRowScrollContent: {
+    alignItems: 'center',
+    gap: 10,
+    paddingRight: 4,
   },
   filterScrollContent: {
     gap: 10,
+  },
+  filterChipsScroll: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  filterChipsContent: {
+    gap: 10,
+    paddingRight: 4,
   },
   filterButtonActive: {
     flexDirection: 'row',
@@ -3420,6 +3985,192 @@ const styles = StyleSheet.create({
         paddingTop: 4,
       },
     }),
+  },
+  homeFilterTypeChip: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    height: 29,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 13,
+    backgroundColor: '#FFFFFF',
+  },
+  homeFilterTypeChipActive: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    height: 29,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 177, 79, 0.35)',
+    borderRadius: 13,
+    backgroundColor: '#ECFDF3',
+  },
+  homeFilterTypeChipText: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 13,
+    lineHeight: 16,
+    color: '#374151',
+  },
+  homeFilterTypeChipTextActive: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 13,
+    lineHeight: 16,
+    color: '#00B14F',
+  },
+  homeFilterTypeChipCountTextActive: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 13,
+    lineHeight: 16,
+    color: '#00B14F',
+  },
+  homeFilterTypeChipContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  homeFilterTypeChipCloseIcon: {
+    marginRight: 1,
+  },
+  homeFilterTypeChipFilterIcon: {
+    marginRight: 1,
+  },
+  homeFilterTypeChipCloseButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  homeFiltersOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  homeFiltersCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+    height: '80%',
+    width: '100%',
+  },
+  homeFiltersHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  homeFiltersTitle: {
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 30 / 2,
+    lineHeight: 44 / 2,
+    color: '#111827',
+  },
+  homeFiltersDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  homeFiltersBody: {
+    flexDirection: 'row',
+    flex: 1,
+    overflow: 'hidden',
+  },
+  homeFiltersLeftPane: {
+    width: '36%',
+    borderRightWidth: 1,
+    borderRightColor: '#E5E7EB',
+    backgroundColor: '#FAFAFA',
+  },
+  homeFiltersRightPane: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  homeFiltersRightPaneQuick: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  homeFiltersRightPaneContent: {
+    paddingTop: 14,
+    paddingBottom: 24,
+  },
+  homeFilterTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderLeftWidth: 3,
+    borderLeftColor: 'transparent',
+  },
+  homeFilterTabActive: {
+    backgroundColor: '#FFFFFF',
+    borderLeftColor: '#00B14F',
+  },
+  homeFilterTabText: {
+    fontFamily: 'Poppins-Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#374151',
+  },
+  homeFilterTabTextActive: {
+    color: '#00B14F',
+    fontFamily: 'Poppins-SemiBold',
+  },
+  homeFilterOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  homeFilterOptionText: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#111827',
+  },
+  homeFiltersFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+  },
+  homeFiltersFooterQuick: {
+    justifyContent: 'center',
+    paddingHorizontal: 25,
+  },
+  homeFiltersClearButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+  },
+  homeFiltersClearText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 24 / 2,
+    lineHeight: 16,
+    color: '#00B14F',
+  },
+  homeFiltersApplyButton: {
+    minWidth: 150,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    backgroundColor: '#00B14F',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  homeFiltersApplyButtonFullWidth: {
+    width: '100%',
+    minWidth: 0,
+  },
+  homeFiltersApplyText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#FFFFFF',
   },
   // Restaurant List
   restaurantListContainer: {

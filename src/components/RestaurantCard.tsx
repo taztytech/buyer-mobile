@@ -413,6 +413,14 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             )}
           </TouchableOpacity>
 
+          {!isRestaurantOpen && <View style={styles.grayOverlayHomeHorizontal} />}
+          {!isRestaurantOpen && (
+            <View style={styles.closedOverlayHomeHorizontal}>
+              <Text style={styles.closedTextCurrently}>CURRENTLY</Text>
+              <Text style={styles.closedTextClosed}>CLOSED</Text>
+            </View>
+          )}
+
         </View>
 
         <View style={styles.detailsContainerHomeHorizontal}>
@@ -452,6 +460,12 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
                 {restaurant.distance}
               </Text>
             </View>
+          )}
+
+          {!isRestaurantOpen && nextOpeningInfo && (
+            <Text style={styles.openingTimeTextHomeHorizontal} numberOfLines={1} ellipsizeMode="tail">
+              {nextOpeningInfo.message}
+            </Text>
           )}
         </View>
       </TouchableOpacity>
@@ -1274,6 +1288,21 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  grayOverlayHomeHorizontal: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(100, 100, 100, 0.68)',
+    zIndex: 2,
+  },
+  closedOverlayHomeHorizontal: {
+    position: 'absolute',
+    left: 8,
+    bottom: 8,
+    zIndex: 3,
+  },
   heartButtonHomeHorizontal: {
     position: 'absolute',
     top: 8,
@@ -1342,6 +1371,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     color: '#6B7280',
+  },
+  openingTimeTextHomeHorizontal: {
+    fontFamily: 'Poppins-Regular',
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#6B7280',
+    marginTop: 2,
   },
   imageContainerHomeOutlined: {
     width: '100%',
