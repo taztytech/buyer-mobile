@@ -13,7 +13,6 @@ const VegModeContext = createContext<VegModeContextType | undefined>(undefined);
 
 export const VegModeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [vegMode, setVegModeState] = useState<VegModeType>('off');
-  const [isLoaded, setIsLoaded] = useState(false);
 
   // Load veg mode preference from storage on mount
   useEffect(() => {
@@ -26,8 +25,6 @@ export const VegModeProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       } catch (error) {
         // Silent fail
-      } finally {
-        setIsLoaded(true);
       }
     };
 
@@ -48,11 +45,8 @@ export const VegModeProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const isVegModeEnabled = vegMode !== 'off';
 
-  // Don't render children until veg mode is loaded
-  if (!isLoaded) {
-    return null;
-  }
-
+  // Always render children so the tree (e.g. HomeScreen) stays mounted; skipping children until
+  // isLoaded breaks hook ordering / Fast Refresh ("Should have a queue" / invalid hook call).
   return (
     <VegModeContext.Provider value={{ vegMode, setVegMode, isVegModeEnabled }}>
       {children}

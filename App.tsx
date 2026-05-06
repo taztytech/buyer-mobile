@@ -51,7 +51,12 @@ import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 // import { initMeta } from '@/analytics/metaInit';
 // import { trackCheckout, trackViewRestaurant } from '@/analytics/metaEvents';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Cold start can report window width 0; overlay slides use translateX(SCREEN_WIDTH) for "off screen".
+// If SCREEN_WIDTH is 0, every overlay sits at translateX 0 and full-screen white layers (e.g. help) hide the app.
+const _initialWindowW = Dimensions.get('window').width;
+const _initialScreenW = Dimensions.get('screen').width;
+const SCREEN_WIDTH =
+  _initialWindowW > 0 ? _initialWindowW : _initialScreenW > 0 ? _initialScreenW : 375;
 // Let native splash auto-hide immediately - don't prevent it
 // SplashScreen.preventAutoHideAsync();
 

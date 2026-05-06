@@ -29,8 +29,8 @@ const HEADER_BACKGROUND_HEIGHT = 660;
 /** Promotional carousel banner card height */
 const STORE_BANNER_HEIGHT = 220;
 const HOME_TOP_BG_FALLBACK = '#8B1D2C';
-const AFTER_SEARCH_SPACER = 12;
-const HOME_HEADER_IMAGE_HEIGHT = 320;
+/** Must match `styles.headerBackground.paddingBottom` */
+const HOME_HEADER_BACKGROUND_PADDING_BOTTOM = 12;
 
 interface HomeScreenProps {
   onLogout?: () => void;
@@ -282,7 +282,7 @@ const DEFAULT_LOCATION = {
 
 
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({
+export const HomeScreen = ({
   onLogout,
   onNavigateToProfile,
   onNavigateToAddressSelection,
@@ -299,7 +299,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   addressRefreshTrigger,
   isFocused = true,
   onForcedUpdateRequired,
-}) => {
+}: HomeScreenProps) => {
   const {
     restaurantId,
     restaurantName,
@@ -314,21 +314,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const { vegMode, setVegMode, isVegModeEnabled } = useVegMode();
   const { showConfirmation } = useConfirmation();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const bannerWidth = Math.max(0, windowWidth - 40);
-  const [searchSectionBottomY, setSearchSectionBottomY] = React.useState<number>(0);
+  const heroImageHeight = React.useMemo(
+    () => Math.max(280, Math.min(420, Math.round(windowHeight * 0.42))),
+    [windowHeight]
+  );
+  const promoTextTopOffset = 5;
+  /** Scroll Y where the org hero starts (bottom of location-only header stack). */
+  const [headerPromoTopY, setHeaderPromoTopY] = React.useState(0);
+  /** Measured search strip height so promo can start after search row. */
+  const [headerSearchStripHeight, setHeaderSearchStripHeight] = React.useState(0);
 
   const [organizationBanners, setOrganizationBanners] = React.useState<OrganizationBanner[]>([]);
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
 
-  // Auto-slide for organization banner
-  React.useEffect(() => {
-    if (!organizationBanners || organizationBanners.length <= 1) return;
-    const interval = setInterval(() => {
-      setActiveBannerIndex(prev => (prev + 1) % organizationBanners.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [organizationBanners]);
   const totalCartItems = getTotalItems();
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
   const [hasShownLocationModal, setHasShownLocationModal] = React.useState(false);
@@ -347,6 +347,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [quickFilterKey, setQuickFilterKey] = React.useState<string | null>(null);
   const [popularDishesData, setPopularDishesData] = React.useState<PopularDishItem[]>([]);
   const [popularDishesTitle, setPopularDishesTitle] = React.useState('Popular Dishes');
+  const [popularDishesDescription, setPopularDishesDescription] = React.useState('');
   const [popularCollectionType, setPopularCollectionType] = React.useState<'store' | 'item' | 'unknown'>('unknown');
   const [isLoadingBanners, setIsLoadingBanners] = React.useState(true);
   const [isLoadingCategories, setIsLoadingCategories] = React.useState(true);
@@ -371,11 +372,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showRestaurantShimmer, setShowRestaurantShimmer] = React.useState(true);
   const [tempVegSelection, setTempVegSelection] = React.useState<'pure' | 'all'>('pure');
   const [selectedLocation, setSelectedLocation] = React.useState(externalSelectedLocation || { name: DEFAULT_LOCATION.name, address: DEFAULT_LOCATION.address });
-
-  // Debug: Log whenever selectedLocation changes
-  React.useEffect(() => {
-    // selectedLocation tracking
-  }, [selectedLocation]);
+  // Refresh trigger - increments to force data reload
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_refreshTrigger, _setRefreshTrigger] = React.useState(0);
+  // Location serviceability state
+  const [isLocationServiceable, setIsLocationServiceable] = React.useState(true);
 
   const scrollYAnimated = React.useRef(new Animated.Value(0)).current;
 
@@ -503,10 +504,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const activeOrganizationBanner = organizationBanners.length > 0 ? organizationBanners[activeBannerIndex] : null;
   const activeHomeFilter = homeFilterDefinitions.find((filter) => filter.key === activeHomeFilterKey) || homeFilterDefinitions[0];
   const homeFilterModalTitle = quickFilterKey
-    ? (activeHomeFilter?.key === 'cuisines' ? 'Cuisines' : activeHomeFilter?.label || 'Filter')
-    : 'Filter';
+    ? (activeHomeFilter?.key === 'cuisines' ? 'Cuisines' : activeHomeFilter?.label || 'Filters')
+    : 'Filters';
   const homeTopBackgroundColor = activeOrganizationBanner?.background_color || '#00B14F';
   const displayBackgroundImageUrl = activeOrganizationBanner?.image_url || '';
+  const hasDisplayHeroImageUrl = displayBackgroundImageUrl.length > 0;
+  const effectiveHeroBackgroundColor = headerBackgroundLoadFailed ? HOME_TOP_BG_FALLBACK : homeTopBackgroundColor;
   const promoTitle = activeOrganizationBanner?.title || (isLoadingBanners ? '' : '');
   const promoSubtitle = activeOrganizationBanner?.subtitle || (isLoadingBanners ? '' : '');
   const promoType = String(activeOrganizationBanner?.promotion_type || '').trim().toLowerCase();
@@ -521,6 +524,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     activeOrganizationBanner.promotion_type.trim().length > 0 &&
     String(activeOrganizationBanner?.promotion_link || '').trim().length > 0;
   const hasExistingBannerVisual = Boolean(activeOrganizationBanner?.image_url || activeOrganizationBanner?.background_color);
+  const showHomeOrgHero =
+    isLoadingBanners ||
+    organizationBanners.length > 0 ||
+    (displayBackgroundImageUrl != null && displayBackgroundImageUrl.length > 0);
 
   const shouldShowBadgesRow =
     appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0);
@@ -536,15 +543,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [activeHomeFilterKey, homeFilterDefinitions]);
 
   React.useEffect(() => {
+    // Reset image failure state whenever banner image changes, otherwise a prior failure
+    // can keep later banners hidden and leave a dark/blank hero block.
     setHeaderBackgroundLoadFailed(false);
-  }, [homeBackgroundImageUrl]);
+  }, [displayBackgroundImageUrl]);
 
-  // Refresh trigger - increments to force data reload
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_refreshTrigger, _setRefreshTrigger] = React.useState(0);
+  // Debug: Log whenever selectedLocation changes
+  React.useEffect(() => {
+    // selectedLocation tracking
+  }, [selectedLocation]);
 
-  // Location serviceability state
-  const [isLocationServiceable, setIsLocationServiceable] = React.useState(true);
+  // Auto-slide for organization banner
+  React.useEffect(() => {
+    if (!organizationBanners || organizationBanners.length <= 1) return;
+    const interval = setInterval(() => {
+      setActiveBannerIndex(prev => (prev + 1) % organizationBanners.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [organizationBanners]);
+
   const hasCartItems = totalCartItems > 0;
 
   /**
@@ -1177,6 +1194,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         // The API returns data nested as: { data: { data: { promotional_banner: {...} } } }
         const actualData = (response.data as any).data || response.data;
         const homeCollectionTitle = (actualData as any)?.home_collection?.collection?.title;
+        const homeCollectionDescription = (actualData as any)?.home_collection?.collection?.description;
         const homeCollectionItems = (actualData as any)?.home_collection?.data;
         const homeCollectionImageUrl = (actualData as any)?.home_collection?.collection?.image_url;
         const homeCollectionType = String((actualData as any)?.home_collection?.collection?.type || '').toLowerCase();
@@ -1189,6 +1207,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           typeof homeCollectionTitle === 'string' && homeCollectionTitle.trim().length > 0
             ? homeCollectionTitle.trim()
             : 'Popular Dishes'
+        );
+        setPopularDishesDescription(
+          typeof homeCollectionDescription === 'string' ? homeCollectionDescription.trim() : ''
         );
 
         if (Array.isArray(homeCollectionItems) && homeCollectionItems.length > 0) {
@@ -1426,7 +1447,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               isFavorite:
                 favoritesService.getRestaurantFavoriteOverride(restaurant.id) ??
                 Boolean(restaurant.is_favorite),
-              isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
+              isVeg: isVegFoodType(
+                String(restaurant.food_type || restaurant.dietary_preference || ''),
+                Boolean(restaurant.is_veg)
+              ),
               timings: timings,
               isOpen: isOpen,
             };
@@ -1577,7 +1601,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               isFavorite:
                 favoritesService.getRestaurantFavoriteOverride(restaurant.id) ??
                 Boolean(restaurant.is_favorite),
-              isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
+              isVeg: isVegFoodType(
+                String(restaurant.food_type || restaurant.dietary_preference || ''),
+                Boolean(restaurant.is_veg)
+              ),
               timings: timings,
               isOpen: isOpen,
             };
@@ -1610,6 +1637,36 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       setIsLoadingMore(false);
     }
   }, [isLoadingMore, hasMoreRestaurants, isLoadingRestaurants, currentPage, defaultAddressCoords, selectedHomeFilters, vegMode]);
+
+  React.useEffect(() => {
+    const unsubscribe = favoritesService.subscribeToItemFavoriteChanges((itemId, isFavorite) => {
+      setPopularDishesData((prev) =>
+        prev.map((dish) => (dish.id === itemId ? { ...dish, isFavorite } : dish))
+      );
+    });
+    const unsubscribeRestaurant = favoritesService.subscribeToRestaurantFavoriteChanges(
+      (restaurantId, isFavorite) => {
+        setPopularDishesData((prev) =>
+          prev.map((dish) =>
+            String(dish.restaurantId ?? dish.storeId ?? dish.id) === restaurantId
+              ? { ...dish, isFavorite }
+              : dish
+          )
+        );
+        setRestaurantData((prev) =>
+          prev.map((restaurant) =>
+            String(restaurant.id) === restaurantId
+              ? { ...restaurant, isFavorite }
+              : restaurant
+          )
+        );
+      }
+    );
+    return () => {
+      unsubscribe();
+      unsubscribeRestaurant();
+    };
+  }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleLogout = async () => {
@@ -1878,7 +1935,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       >
         <View style={[styles.categoryBadgeImageWrap, isViewAll && styles.categoryBadgeImageWrapViewAll]}>
           {isViewAll ? (
-            <MaterialIcons name="apps" size={20} color="#111827" testID={`category-image-${item.id}`} />
+            <MaterialIcons name="apps" size={24} color="#111827" testID={`category-image-${item.id}`} />
           ) : (
             <Image
               source={imageSource}
@@ -2032,6 +2089,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         style={[
           styles.popularDishCard,
           popularCollectionType === 'store' ? styles.popularDishCardStore : null,
+          popularCollectionType === 'item' ? styles.popularDishCardItem : null,
         ]}
       >
         <FoodAddCard
@@ -2049,7 +2107,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               ? item.isOpen === false
               : item.isAvailable === false
           }
-          closedOverlayLabel="Currently closed"
+          closedOverlayLabel={
+            popularCollectionType === 'store'
+              ? 'Currently closed'
+              : 'Not available'
+          }
           unavailableLabel="Not available"
           imageWidth={popularCollectionType === 'store' ? 140 : 155}
           imageHeight={popularCollectionType === 'store' ? 160 : 137}
@@ -2078,36 +2140,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </View>
     );
   };
-
-  React.useEffect(() => {
-    const unsubscribe = favoritesService.subscribeToItemFavoriteChanges((itemId, isFavorite) => {
-      setPopularDishesData((prev) =>
-        prev.map((dish) => (dish.id === itemId ? { ...dish, isFavorite } : dish))
-      );
-    });
-    const unsubscribeRestaurant = favoritesService.subscribeToRestaurantFavoriteChanges(
-      (restaurantId, isFavorite) => {
-        setPopularDishesData((prev) =>
-          prev.map((dish) =>
-            String(dish.restaurantId ?? dish.storeId ?? dish.id) === restaurantId
-              ? { ...dish, isFavorite }
-              : dish
-          )
-        );
-        setRestaurantData((prev) =>
-          prev.map((restaurant) =>
-            String(restaurant.id) === restaurantId
-              ? { ...restaurant, isFavorite }
-              : restaurant
-          )
-        );
-      }
-    );
-    return () => {
-      unsubscribe();
-      unsubscribeRestaurant();
-    };
-  }, []);
 
   const openHomeFilters = React.useCallback(() => {
     setQuickFilterKey(null);
@@ -2212,8 +2244,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     // Save scroll position for restoration after refresh
     scrollPositionRef.current = scrollY;
 
-    // Category section becomes sticky after header + taller banner + reserved spacer + section title
-    const threshold = 520;
+    // Category section becomes sticky after header + responsive hero + badges + title
+    const threshold = 520 + (showHomeOrgHero ? heroImageHeight - 320 : 0);
     setIsCategorySectionSticky(scrollY > threshold);
 
     // Check if user has scrolled near the bottom (within 500px)
@@ -2230,7 +2262,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         loadMoreRestaurants();
       }
     }
-  }, [hasMoreRestaurants, isLoadingMore, isLoadingRestaurants, loadMoreRestaurants]);
+  }, [hasMoreRestaurants, isLoadingMore, isLoadingRestaurants, loadMoreRestaurants, showHomeOrgHero, heroImageHeight]);
 
   const handleCartPress = React.useCallback(async () => {
     if (!restaurantId || !onNavigateToCheckout || !hasCartItems) {
@@ -2245,6 +2277,87 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     await flushPendingQuantityUpdate();
     onNavigateToCheckout(restaurantId, restaurantName, 'home');
   }, [restaurantId, restaurantName, hasCartItems, onNavigateToCheckout, ensureCartRestaurantOpen, flushPendingQuantityUpdate]);
+
+  /** Not a hook — must run only during render after all hooks above. */
+  function renderHomeSearchRow() {
+    return (
+      <>
+        {isLoadingLocation ? (
+          <>
+            <View style={styles.searchBarWrapper}>
+              <Shimmer width="100%" height={60} borderRadius={10} />
+            </View>
+            <Shimmer width={46} height={60} borderRadius={10} />
+          </>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={styles.searchBarWrapper}
+              onPress={onNavigateToSearch}
+              activeOpacity={0.7}
+              disabled={!isLocationServiceable}
+            >
+              <LinearGradient
+                colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[
+                  styles.searchBar,
+                  !isLocationServiceable && styles.searchBarDisabled
+                ]}
+              >
+                <MaterialIcons
+                  name="search"
+                  size={24}
+                  style={{ marginLeft: 10 }}
+                  color={isLocationServiceable ? '#FFFFFF' : 'rgba(255, 255, 255, 0.4)'}
+                />
+                <Text
+                  style={[
+                    styles.searchInput,
+                    !isLocationServiceable && styles.searchInputDisabled
+                  ]}
+                  numberOfLines={1}
+                >
+                  Search Restaurants & foods..
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.vegModeContainer,
+                !isLocationServiceable && styles.vegModeContainerDisabled
+              ]}
+              onPress={handleVegModeToggle}
+              disabled={!isLocationServiceable}
+              testID="veg-mode-toggle"
+            >
+              <Text
+                style={[
+                  styles.vegModeLabel,
+                  !isLocationServiceable && styles.vegModeLabelDisabled
+                ]}
+              >
+                VEG
+              </Text>
+              <View style={[
+                styles.vegToggle,
+                isVegModeEnabled && styles.vegToggleActive,
+                !isLocationServiceable && styles.vegToggleDisabled
+              ]}>
+                <View style={[
+                  styles.vegToggleThumb,
+                  isVegModeEnabled && styles.vegToggleThumbActive,
+                  !isLocationServiceable && styles.vegToggleThumbDisabled
+                ]} />
+              </View>
+            </TouchableOpacity>
+          </>
+        )}
+      </>
+    );
+  }
 
   return (
     <View style={[styles.outerContainer, { backgroundColor: colors.background }]}>
@@ -2288,10 +2401,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           }
         >
 
-          {/* Header Content Wrapper */}
-          <View style={styles.headerStack} testID="header-stack">
+          {/* Header: location row (hero + search follow in scroll order below). */}
+          <View
+            style={styles.headerStack}
+            testID="header-stack"
+            onLayout={(e) => setHeaderPromoTopY(e.nativeEvent.layout.height)}
+          >
             <View
-              style={[styles.headerBackground, { paddingTop: insets.top + 10, backgroundColor: homeTopBackgroundColor }]}
+              style={[
+                styles.headerBackground,
+                {
+                  paddingTop: insets.top + 10,
+                  backgroundColor: homeTopBackgroundColor,
+                  paddingBottom: showHomeOrgHero ? 0 : HOME_HEADER_BACKGROUND_PADDING_BOTTOM,
+                },
+              ]}
               testID="header-background"
             >
               {/* Location Section */}
@@ -2405,124 +2529,37 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 )}
               </View>
 
-              {/* Search Bar and VEG Mode Toggle */}
-              <View
-                style={styles.searchSection}
-                onLayout={(e) => {
-                  const { y, height } = e.nativeEvent.layout;
-                  setSearchSectionBottomY(y + height);
-                }}
-              >
-                {isLoadingLocation ? (
-                  <>
-                    {/* Search Bar Shimmer */}
-                    <View style={styles.searchBarWrapper}>
-                      <Shimmer width="100%" height={60} borderRadius={10} />
-                    </View>
-
-                    {/* VEG Mode Shimmer */}
-                    <Shimmer width={46} height={60} borderRadius={10} />
-                  </>
-                ) : (
-                  <>
-                    <TouchableOpacity
-                      style={styles.searchBarWrapper}
-                      onPress={onNavigateToSearch}
-                      activeOpacity={0.7}
-                      disabled={!isLocationServiceable}
-                    >
-                      <LinearGradient
-                        colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={[
-                          styles.searchBar,
-                          !isLocationServiceable && styles.searchBarDisabled
-                        ]}
-                      >
-                        <MaterialIcons
-                          name="search"
-                          size={24}
-                          style={{marginLeft: 10}}
-                          color={isLocationServiceable ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)"}
-                        />
-                        <Text
-                          style={[
-                            styles.searchInput,
-                            !isLocationServiceable && styles.searchInputDisabled
-                          ]}
-                          numberOfLines={1}
-                        >
-                          Search Restaurants & foods..
-                        </Text>
-                      </LinearGradient>
-                    </TouchableOpacity>
-
-                    {/* VEG Mode Toggle */}
-                    <TouchableOpacity
-                      style={[
-                        styles.vegModeContainer,
-                        !isLocationServiceable && styles.vegModeContainerDisabled
-                      ]}
-                      onPress={handleVegModeToggle}
-                      disabled={!isLocationServiceable}
-                      testID="veg-mode-toggle"
-                    >
-                      <Text
-                        style={[
-                          styles.vegModeLabel,
-                          !isLocationServiceable && styles.vegModeLabelDisabled
-                        ]}
-                      >
-                        VEG
-                      </Text>
-                      <View style={[
-                        styles.vegToggle,
-                        isVegModeEnabled && styles.vegToggleActive,
-                        !isLocationServiceable && styles.vegToggleDisabled
-                      ]}>
-                        <View style={[
-                          styles.vegToggleThumb,
-                          isVegModeEnabled && styles.vegToggleThumbActive,
-                          !isLocationServiceable && styles.vegToggleThumbDisabled
-                        ]} />
-                      </View>
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-
             </View>
           </View>
 
-          {/* Organization Banner Section (Overlay + Spacer) */}
-          {(isLoadingBanners || organizationBanners.length > 0 || (displayBackgroundImageUrl && displayBackgroundImageUrl.length > 0)) && (
+          {/* Promo hero (absolute) + spacer, then search — same scroll mechanics as before refactor. */}
+          {showHomeOrgHero ? (
             <>
-              {/* Background image section (overlay, outside header) */}
-              <View
+              <TouchableOpacity
                 style={[
                   styles.headerImageOverlay,
                   {
-                    top: searchSectionBottomY + AFTER_SEARCH_SPACER,
-                    opacity: searchSectionBottomY > 0 ? 1 : 0
+                    backgroundColor: effectiveHeroBackgroundColor,
+                    top: headerPromoTopY + headerSearchStripHeight - 1,
+                    height: heroImageHeight + 1,
+                    opacity: headerPromoTopY > 0 && headerSearchStripHeight > 0 ? 1 : 0,
                   },
                 ]}
-                pointerEvents="box-none"
+                activeOpacity={hasPromoCtaNavigation ? 0.9 : 1}
+                onPress={hasPromoCtaNavigation ? handleOrganizationBannerCTAClick : undefined}
+                disabled={!hasPromoCtaNavigation}
                 testID="home-header-image-overlay"
               >
                 {isLoadingBanners && !hasExistingBannerVisual ? (
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }]}>
                     <ActivityIndicator size="large" color={colors.primary} />
                   </View>
-                ) : displayBackgroundImageUrl && !headerBackgroundLoadFailed ? (
-                  <OptimizedImage
-                    source={displayBackgroundImageUrl}
-                    style={StyleSheet.absoluteFill}
-                    contentFit="cover"
-                    showShimmer={false}
-                    transition={200}
-                    priority="high"
-                    cachePolicy="memory-disk"
+                ) : hasDisplayHeroImageUrl ? (
+                  <Image
+                    source={{ uri: displayBackgroundImageUrl }}
+                    style={StyleSheet.absoluteFillObject}
+                    resizeMode="cover"
+                    onLoad={() => setHeaderBackgroundLoadFailed(false)}
                     onError={() => setHeaderBackgroundLoadFailed(true)}
                     testID="home-header-image-section-remote"
                   />
@@ -2530,29 +2567,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
                 {(!isLoadingBanners || hasExistingBannerVisual) && (
                   <>
-                    <LinearGradient
-                      colors={[homeTopBackgroundColor, homeTopBackgroundColor, 'rgba(0,0,0,0)']}
-                      locations={[0, 0.6, 1]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
-                      style={styles.headerImageSectionTopFade}
-                    />
-
-                    {/* Lighter at top, darker downwards */}
-                    <LinearGradient
-                      colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.10)', 'rgba(0,0,0,0.18)']}
-                      locations={[0, 0.55, 1]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
-                      style={styles.headerImageDarkenGradient}
-                    />
+                    {hasDisplayHeroImageUrl ? (
+                      <LinearGradient
+                        colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.10)', 'rgba(0,0,0,0.18)']}
+                        locations={[0, 0.55, 1]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                        style={styles.headerImageDarkenGradient}
+                      />
+                    ) : null}
                   </>
                 )}
 
                 {!isLoadingLocation && (
                   <View style={styles.headerImageInnerContent}>
                     <View
-                      style={[styles.homePromoBlockInImageSection, !isLocationServiceable && styles.homePromoBlockDisabled]}
+                      style={[
+                        styles.homePromoBlockInImageSection,
+                        !isLocationServiceable && styles.homePromoBlockDisabled,
+                        { marginTop: promoTextTopOffset },
+                      ]}
                       pointerEvents="box-none"
                     >
                       <Text style={styles.homePromoHeadline}>{promoTitle}</Text>
@@ -2574,15 +2608,60 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     </View>
                   </View>
                 )}
-              </View>
+              </TouchableOpacity>
 
-              {/* Reserve space for overlay image section */}
-              <View style={styles.headerImageOverlaySpacer} />
+              <View
+                style={[
+                  styles.homePromoSearchStack,
+                  { backgroundColor: effectiveHeroBackgroundColor },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.headerSearchStrip,
+                    styles.headerSearchStripInPromoStack,
+                    { backgroundColor: effectiveHeroBackgroundColor },
+                  ]}
+                  testID="header-search-strip"
+                  onLayout={(e) => setHeaderSearchStripHeight(e.nativeEvent.layout.height)}
+                >
+                  <View style={[styles.searchSection, styles.searchSectionBelowHero]}>
+                    {renderHomeSearchRow()}
+                  </View>
+                </View>
+                <View
+                  style={[
+                    styles.headerImageOverlaySpacer,
+                    {
+                      height: heroImageHeight + 1,
+                      marginTop: -1,
+                      backgroundColor: effectiveHeroBackgroundColor,
+                    },
+                  ]}
+                />
+              </View>
             </>
-          )}
+          ) : null}
+
+          {!showHomeOrgHero ? (
+            <View
+              style={[styles.headerSearchStrip, { backgroundColor: homeTopBackgroundColor }]}
+              testID="header-search-strip"
+            >
+              <View style={styles.searchSection}>{renderHomeSearchRow()}</View>
+            </View>
+          ) : null}
 
           {/* Solid background for everything after the header */}
-          <View style={{ backgroundColor: isLocationServiceable ? colors.background : '#FFFFFF', flex: 1 }}>
+          <View
+            style={{
+              backgroundColor: isLocationServiceable ? colors.background : '#FFFFFF',
+              flex: 1,
+              position: 'relative',
+              zIndex: 200,
+              elevation: 0,
+            }}
+          >
 
             {/* Unserviceable Location Error Screen */}
             {!isLocationServiceable && !isLoadingBanners && !isLoadingCategories && !isLoadingRestaurants && (
@@ -2618,8 +2697,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         >
                           {[1, 2, 3, 4, 5, 6].map((item) => (
                             <View key={item} style={styles.categoryBadgeShimmer}>
-                              <Shimmer width={32} height={32} borderRadius={16} backgroundColor="#E8E8E8" />
-                              <Shimmer width={58} height={12} borderRadius={6} backgroundColor="#E8E8E8" style={styles.categoryBadgeShimmerText} />
+                              <Shimmer width={64} height={64} borderRadius={32} backgroundColor="#E8E8E8" />
+                              <Shimmer width={72} height={12} borderRadius={6} backgroundColor="#E8E8E8" style={styles.categoryBadgeShimmerText} />
                             </View>
                           ))}
                         </ScrollView>
@@ -2642,7 +2721,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <View
                     style={[
                       styles.carouselContainer,
-                      { marginTop: shouldShowBadgesRow ? 8 : 12 },
+                      { marginTop: shouldShowBadgesRow ? 12 : 16 },
                     ]}
                   >
                     {showBannerShimmer ? (
@@ -2693,16 +2772,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
                 <View style={styles.popularDishesSection}>
                   {popularDishesTitle.trim().toLowerCase() !== 'popular dishes' ? (
-                    <View style={styles.popularDishesHeaderRow}>
-                      <Text style={styles.popularDishesTitle}>{popularDishesTitle}</Text>
-                      {onNavigateToPopularDishes ? (
-                        <TouchableOpacity
-                          onPress={() => onNavigateToPopularDishes()}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.popularDishesViewAll}>View all</Text>
-                        </TouchableOpacity>
-                      ) : null}
+                    <View style={styles.popularDishesHeaderBlock}>
+                      <View style={styles.popularDishesHeaderRow}>
+                        <View style={styles.popularDishesHeaderTextBlock}>
+                          <Text style={styles.popularDishesTitle}>{popularDishesTitle}</Text>
+                          <View style={styles.popularDishesDescriptionRow}>
+                            {popularDishesDescription.length > 0 ? (
+                              <Text style={styles.popularDishesDescription} numberOfLines={1}>
+                                {popularDishesDescription}
+                              </Text>
+                            ) : <View style={styles.popularDishesDescriptionSpacer} />}
+                            {onNavigateToPopularDishes ? (
+                              <TouchableOpacity
+                                onPress={() => onNavigateToPopularDishes()}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.popularDishesViewAll}>View all</Text>
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+                        </View>
+                      </View>
                     </View>
                   ) : null}
 
@@ -3223,13 +3313,32 @@ const styles = StyleSheet.create({
   headerBackground: {
     width: '100%',
     paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingBottom: HOME_HEADER_BACKGROUND_PADDING_BOTTOM,
     gap: 12,
-    minHeight: 180,
   },
   headerStack: {
     position: 'relative',
     width: '100%',
+    zIndex: 100,
+    elevation: 12,
+  },
+  headerSearchStrip: {
+    width: '100%',
+    paddingHorizontal: 20,
+    paddingBottom: HOME_HEADER_BACKGROUND_PADDING_BOTTOM,
+    zIndex: 100,
+    elevation: 0,
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  /** Single column: hero spacer + search (same bg, no seam between image and search). */
+  homePromoSearchStack: {
+    width: '100%',
+  },
+  headerSearchStripInPromoStack: {
+    paddingTop: 15,
   },
   homeFutureContentSpacer: {
     width: '100%',
@@ -3253,17 +3362,22 @@ const styles = StyleSheet.create({
   },
   homePromoBlockInImageSection: {
     width: '100%',
-    paddingTop: 12,
+    paddingTop: 0,
   },
   homePromoHeadline: {
     fontFamily: 'Poppins-SemiBold',
     fontSize: 36,
-    lineHeight: 42,
+    lineHeight: 44,
     color: '#FFFFFF',
     letterSpacing: 0.5,
     textShadowColor: 'rgba(0, 0, 0, 0.45)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
+    ...Platform.select({
+      android: {
+        includeFontPadding: false,
+      },
+    }),
   },
   homePromoSubline: {
     marginTop: 8,
@@ -3415,6 +3529,10 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginHorizontal: 0,
   },
+  /** Search below promo hero; strip padding provides separation from image. */
+  searchSectionBelowHero: {
+    marginTop: 0,
+  },
   searchBar: {
     flex: 1,
     height: 50,
@@ -3499,24 +3617,25 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     height: 220
   },
-  afterSearchSpacer: {
-    height: AFTER_SEARCH_SPACER,
-  },
   headerImageOverlay: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: HOME_HEADER_IMAGE_HEIGHT,
-    zIndex: 50,
-    elevation: 6,
+    overflow: 'hidden',
+    zIndex: 1,
+    elevation: 0,
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
   },
   headerImageOverlaySpacer: {
-    height: HOME_HEADER_IMAGE_HEIGHT,
+    height: 320,
   },
   headerImageInnerContent: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingTop: 0,
     paddingBottom: 16,
     justifyContent: 'flex-start',
     position: 'relative',
@@ -3528,7 +3647,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 160,
+    height: 64,
     zIndex: 1,
   },
   headerImageDarkenGradient: {
@@ -3709,105 +3828,127 @@ const styles = StyleSheet.create({
   categoryListContainer: {
     width: '100%',
     minHeight: 48,
-    paddingLeft: 20,
+    paddingLeft: 8,
     marginBottom: 0,
     backgroundColor: '#FFFFFF',
-    paddingTop: 8,
-    paddingBottom: 8,
+    paddingTop: 10,
+    paddingBottom: 10,
+    position: 'relative',
+    zIndex: 220,
+    elevation: 0,
   },
   categoryListContainerSticky: {
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.08)',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   categoryListContent: {
     paddingRight: 20,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 0,
   },
   categoryBadge: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.06)',
-    paddingVertical: 4,
-    paddingLeft: 4,
-    paddingRight: 10,
+    justifyContent: 'flex-start',
+    alignSelf: 'flex-start',
+    backgroundColor: 'transparent',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
     marginRight: 8,
-    maxWidth: 200,
+    width: 82,
   },
   categoryBadgeImageWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    padding: 3,
     justifyContent: 'center',
     alignItems: 'center',
   },
   categoryBadgeImageWrapViewAll: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F3F4F6',
   },
   categoryBadgeImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 29,
   },
   categoryBadgeLabel: {
-    marginLeft: 8,
-    flexShrink: 1,
+    marginTop: 10,
     fontFamily: 'Poppins',
     fontWeight: '600',
     fontSize: 11,
     lineHeight: 15,
-    color: '#111827',
-    maxWidth: 120,
+    color: '#4B5563',
+    textAlign: 'center',
+    width: '100%',
   },
   categoryBadgeShimmer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
+    justifyContent: 'flex-start',
     marginRight: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 4,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.04)',
+    width: 82,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    backgroundColor: 'transparent',
   },
   categoryBadgeShimmerText: {
-    marginLeft: 8,
+    marginLeft: 0,
+    marginTop: 8,
   },
   popularDishesSection: {
     paddingTop: 12,
     paddingBottom: 8,
     backgroundColor: '#FFFFFF',
   },
-  popularDishesHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  popularDishesHeaderBlock: {
     marginBottom: 8,
+  },
+  popularDishesHeaderRow: {
     paddingHorizontal: 20,
   },
+  popularDishesHeaderTextBlock: {
+    width: '100%',
+  },
+  popularDishesDescriptionRow: {
+    marginTop: 4,
+    marginBottom: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  popularDishesDescriptionSpacer: {
+    flex: 1,
+  },
   popularDishesTitle: {
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-    fontSize: 20,
-    lineHeight: 26,
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 17,
+    lineHeight: 23,
     color: '#111827',
   },
   popularDishesViewAll: {
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 13,
     lineHeight: 18,
     color: '#00B14F',
+  },
+  popularDishesDescription: {
+    flex: 1,
+    marginRight: 12,
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#6B7280',
   },
   popularDishesListContent: {
     paddingLeft: 20,
@@ -3817,6 +3958,9 @@ const styles = StyleSheet.create({
     width: 170,
     marginRight: 10,
     paddingBottom: 0,
+  },
+  popularDishCardItem: {
+    width: 155,
   },
   popularDishCardStore: {
     width: 140,

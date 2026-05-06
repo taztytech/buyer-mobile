@@ -1531,6 +1531,14 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       if (nestedData) {
         const restaurant = nestedData;
         setRestaurantData(restaurant);
+        const itemImageDebugList = (restaurant.categories || [])
+          .flatMap((category: any) => category?.items || [])
+          .map((item: any) => ({
+            id: item?.id,
+            name: item?.name,
+            imageUrl: Array.isArray(item?.images) && item.images.length > 0 ? item.images[0] : null,
+          }));
+        console.log('[RestaurantScreen] item image urls', itemImageDebugList);
 
         // DON'T set restaurant info here - it will be set when adding first item to cart
         // This prevents overwriting cart restaurant info when viewing different restaurants

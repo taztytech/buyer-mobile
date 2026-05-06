@@ -15,6 +15,7 @@ import { MaterialIcons } from '@/shims/rn-vector-icons';
 import { homeService, DishItem } from '@/services/home.service';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const CATEGORY_CIRCLE_SIZE = 64;
 
 export interface CategoryItem {
   id: number | string;
@@ -111,8 +112,13 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     (cat) => cat.id !== 'view-all' && cat.name !== 'View All'
   );
 
-  // Use dishes from API if loaded, otherwise use categories from props
-  const displayData = allDishes.length > 0 ? allDishes : filteredCategories;
+  // Prefer fetched dishes only when they are at least as complete as the
+  // category list already available on Home. This prevents "View All" from
+  // collapsing to a single item when the dishes API returns a narrow subset.
+  const displayData =
+    allDishes.length >= filteredCategories.length && allDishes.length > 0
+      ? allDishes
+      : filteredCategories;
 
   const renderCategoryItem = ({ item }: { item: CategoryItem }) => {
     const imageSource = typeof item.icon === 'string' ? { uri: item.icon } : item.icon;
@@ -243,23 +249,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   imageContainer: {
-    width: (SCREEN_WIDTH - 80) / 4,
-    height: (SCREEN_WIDTH - 80) / 4,
-    borderRadius: ((SCREEN_WIDTH - 80) / 4) / 2,
-    backgroundColor: '#F5F5F5',
+    width: CATEGORY_CIRCLE_SIZE,
+    height: CATEGORY_CIRCLE_SIZE,
+    borderRadius: CATEGORY_CIRCLE_SIZE / 2,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    padding: 3,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
     overflow: 'hidden',
   },
   categoryImage: {
     width: '100%',
     height: '100%',
+    borderRadius: CATEGORY_CIRCLE_SIZE / 2,
   },
   categoryName: {
-    fontFamily: 'Poppins-Regular',
+    fontFamily: 'Poppins',
+    fontWeight: '600',
     fontSize: 12,
-    color: '#000000',
+    lineHeight: 16,
+    color: '#4B5563',
     textAlign: 'center',
   },
   loadingContainer: {

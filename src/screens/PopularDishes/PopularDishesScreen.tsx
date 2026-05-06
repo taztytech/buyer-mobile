@@ -194,6 +194,7 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [items, setItems] = React.useState<PopularDishRowItem[]>([]);
   const [headerTitle, setHeaderTitle] = React.useState('All Food Items');
+  const [headerDescription, setHeaderDescription] = React.useState('');
   const [collectionBannerImageUrl, setCollectionBannerImageUrl] = React.useState<string | null>(null);
   const [homeCollectionType, setHomeCollectionType] = React.useState<HomeCollectionType>('unknown');
   const [showSearch, setShowSearch] = React.useState(false);
@@ -323,6 +324,10 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
           collectionData?.display_title ||
           collectionData?.title ||
           collectionData?.name;
+        const collectionDescription =
+          collectionData?.description ||
+          collectionData?.display_description ||
+          '';
         const collectionImageUrl =
           collectionData?.banner_image_url ||
           collectionData?.banner_url ||
@@ -337,6 +342,9 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
           typeof collectionTitle === 'string' && collectionTitle.trim().length > 0
             ? collectionTitle.trim()
             : 'All Food Items'
+        );
+        setHeaderDescription(
+          typeof collectionDescription === 'string' ? collectionDescription.trim() : ''
         );
         setCollectionBannerImageUrl(
           typeof collectionImageUrl === 'string' && collectionImageUrl.trim().length > 0
@@ -446,6 +454,7 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
         }
       } else {
         setHeaderTitle('All Food Items');
+        setHeaderDescription('');
         setCollectionBannerImageUrl(null);
         setHomeCollectionType('unknown');
         setItems([]);
@@ -631,8 +640,9 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
     </View>
   );
 
-  const renderItemContent = (item: PopularDishRowItem) => (
-    homeCollectionType === 'store' ? (
+  const renderItemContent = (item: PopularDishRowItem) => {
+    const isItemUnavailable = item.isItemAvailable === false;
+    return homeCollectionType === 'store' ? (
       <>
         <View style={styles.storeImageContainer}>
           {item.imageUrl ? (
@@ -640,6 +650,7 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
               source={{ uri: item.imageUrl }}
               style={[styles.storeImage, !item.isStoreOpen && styles.imageClosed]}
               resizeMode="cover"
+              blurRadius={!item.isStoreOpen ? 2 : 0}
             />
           ) : (
             <View style={[styles.storeImage, styles.imageFallback, !item.isStoreOpen && styles.imageClosed]}>
@@ -682,8 +693,10 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
             </TouchableOpacity>
           )}
           {item.showAddButton && item.isItemAvailable === false && (
-            <View style={styles.closedPill}>
-              <Text style={styles.closedPillText}>Not available</Text>
+            <View pointerEvents="none" style={styles.storeAvailabilityBar}>
+              <Text style={styles.storeAvailabilityText}>
+                Not available
+              </Text>
             </View>
           )}
         </View>
@@ -728,39 +741,46 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
             </Text>
           ) : null}
           {item.priceLabel ? <Text style={styles.price}>{item.priceLabel}</Text> : null}
-          <Text style={styles.description} numberOfLines={2}>
-            {item.description || ''}
-          </Text>
         </View>
         <View style={styles.imageContainer}>
-          {item.imageUrl ? (
-            <Image
-              source={{ uri: item.imageUrl }}
-              style={[styles.itemImage, (!item.isStoreOpen || item.isItemAvailable === false) && styles.imageClosed]}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.itemImage, styles.imageFallback]}>
-              <MaterialIcons name="restaurant-menu" size={24} color="#9CA3AF" />
-            </View>
-          )}
-          {(!item.isStoreOpen || item.isItemAvailable === false) && (
-            <View pointerEvents="none" style={styles.disabledImageOverlayItem} />
-          )}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.wishlistButton}
-            onPress={() => {
-              handleToggleFavorite(item).catch(() => {});
-            }}
-          >
-            <MaterialIcons
-              name={item.isFavorite ? 'favorite' : 'favorite-border'}
-              size={24}
-              color={item.isFavorite ? '#FF0000' : '#FFFFFF'}
-            />
-          </TouchableOpacity>
-          {item.showAddButton && item.isStoreOpen && item.isItemAvailable !== false && (
+          <View style={styles.itemImageClip}>
+            {item.imageUrl ? (
+              <Image
+                source={{ uri: item.imageUrl }}
+                style={[styles.itemImage, isItemUnavailable && styles.imageClosed]}
+                resizeMode="cover"
+                blurRadius={isItemUnavailable ? 2 : 0}
+              />
+            ) : (
+              <View style={[styles.itemImage, styles.imageFallback]}>
+                <MaterialIcons name="restaurant-menu" size={24} color="#9CA3AF" />
+              </View>
+            )}
+            {isItemUnavailable && (
+              <View pointerEvents="none" style={styles.disabledImageOverlayItem} />
+            )}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.wishlistButton}
+              onPress={() => {
+                handleToggleFavorite(item).catch(() => {});
+              }}
+            >
+              <MaterialIcons
+                name={item.isFavorite ? 'favorite' : 'favorite-border'}
+                size={24}
+                color={item.isFavorite ? '#FF0000' : '#FFFFFF'}
+              />
+            </TouchableOpacity>
+            {item.showAddButton && isItemUnavailable && (
+              <View pointerEvents="none" style={styles.itemAvailabilityBar}>
+                <Text style={styles.itemAvailabilityText}>
+                  Not available
+                </Text>
+              </View>
+            )}
+          </View>
+          {item.showAddButton && !isItemUnavailable && (
             <TouchableOpacity
               activeOpacity={0.8}
               style={styles.itemAddButton}
@@ -773,17 +793,10 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
               <Text style={styles.itemAddButtonText}>+Add</Text>
             </TouchableOpacity>
           )}
-          {item.showAddButton && (!item.isStoreOpen || item.isItemAvailable === false) && (
-            <View style={styles.closedPill}>
-              <Text style={styles.closedPillText}>
-                {item.isStoreOpen ? 'Not available' : 'Closed'}
-              </Text>
-            </View>
-          )}
         </View>
       </>
     )
-  );
+  };
 
   const renderItem = ({ item }: { item: PopularDishRowItem }) => {
     if (homeCollectionType === 'store') {
@@ -843,6 +856,11 @@ export const PopularDishesScreen: React.FC<PopularDishesScreenProps> = ({
           </TouchableOpacity>
           <View style={styles.heroInfoCard}>
             <Text style={styles.heroInfoTitle} numberOfLines={1}>{headerTitle}</Text>
+            {headerDescription.length > 0 ? (
+              <Text style={styles.heroInfoDescription} numberOfLines={2}>
+                {headerDescription}
+              </Text>
+            ) : null}
           </View>
         </View>
       );
@@ -1123,6 +1141,13 @@ const styles = StyleSheet.create({
     lineHeight: 46 / 2,
     fontFamily: 'Poppins-SemiBold',
   },
+  heroInfoDescription: {
+    marginTop: 2,
+    color: '#6B7280',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Poppins',
+  },
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 0,
@@ -1282,16 +1307,16 @@ const styles = StyleSheet.create({
     right: 0,
     height: 160,
     borderRadius: 18,
-    backgroundColor: 'rgba(55, 65, 81, 0.45)',
+    backgroundColor: 'rgba(120, 120, 120, 0.55)',
   },
   disabledImageOverlayItem: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 137,
+    bottom: 0,
     borderRadius: 16,
-    backgroundColor: 'rgba(55, 65, 81, 0.45)',
+    backgroundColor: 'rgba(120, 120, 120, 0.55)',
   },
   imageContainer: {
     width: 155,
@@ -1300,6 +1325,13 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'visible',
     paddingBottom: 0,
+  },
+  itemImageClip: {
+    width: 155,
+    height: 137,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
   },
   itemImage: {
     width: 155,
@@ -1362,24 +1394,45 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: '#22C55E',
   },
-  closedPill: {
+  storeAvailabilityBar: {
     position: 'absolute',
-    bottom: -6,
-    alignSelf: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    paddingHorizontal: 18,
-    height: 40,
-    alignItems: 'center',
+    left: 10,
+    right: 10,
+    bottom: 10,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    backgroundColor: 'transparent',
+    alignItems: 'flex-start',
     justifyContent: 'center',
+    zIndex: 3,
   },
-  closedPillText: {
+  storeAvailabilityText: {
     fontFamily: 'Poppins-SemiBold',
-    fontSize: 14,
-    lineHeight: 18,
-    color: '#6B7280',
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#F9FAFB',
+    textAlign: 'left',
+    width: '100%',
+  },
+  itemAvailabilityBar: {
+    position: 'absolute',
+    left: 10,
+    right: 10,
+    bottom: 10,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    backgroundColor: 'transparent',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    zIndex: 3,
+  },
+  itemAvailabilityText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#F9FAFB',
+    textAlign: 'left',
+    width: '100%',
   },
   content: {
     flex: 1,
@@ -1389,9 +1442,10 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   name: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: 14,
+    lineHeight: 21,
+    fontFamily: 'Poppins',
+    fontWeight: '600',
     color: '#111827',
   },
   description: {
@@ -1403,16 +1457,17 @@ const styles = StyleSheet.create({
   },
   price: {
     marginTop: 0,
-    fontSize: 34 / 2,
-    lineHeight: 24,
+    fontSize: 16,
+    lineHeight: 23,
     fontFamily: 'Poppins-SemiBold',
     color: '#111827',
   },
   byHotelText: {
     marginTop: 0,
-    fontSize: 15,
-    lineHeight: 22,
-    fontFamily: 'Poppins-Medium',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
     color: '#6B7280',
   },
   foodTypeBadge: {

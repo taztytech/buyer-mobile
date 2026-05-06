@@ -43,6 +43,11 @@ export const FoodAddCard: React.FC<FoodAddCardProps> = ({
   imageHeight = 137,
   imageBorderRadius = 16,
 }) => {
+  const closedStatusLabel =
+    typeof closedOverlayLabel === 'string' && closedOverlayLabel.trim().length > 0
+      ? closedOverlayLabel
+      : unavailableLabel;
+
   return (
     <TouchableOpacity
       activeOpacity={disabled ? 1 : 0.8}
@@ -51,7 +56,12 @@ export const FoodAddCard: React.FC<FoodAddCardProps> = ({
       disabled={disabled || !onPress}
     >
       <View style={[styles.imageWrapper, { width: imageWidth, height: imageHeight, borderRadius: imageBorderRadius }]}>
-        <Image source={image} style={[styles.image, isClosed && styles.imageClosed]} resizeMode="cover" />
+        <Image
+          source={image}
+          style={[styles.image, isClosed && styles.imageClosed]}
+          resizeMode="cover"
+          blurRadius={isClosed ? 2 : 0}
+        />
         {isClosed ? <View pointerEvents="none" style={styles.disabledImageOverlay} /> : null}
         {showWishlistIcon ? (
           <TouchableOpacity
@@ -69,27 +79,20 @@ export const FoodAddCard: React.FC<FoodAddCardProps> = ({
             />
           </TouchableOpacity>
         ) : null}
-        {!showAddButton && isClosed ? (
+        {isClosed ? (
           <View style={styles.closedOverlayRow}>
-            <MaterialIcons name="access-time" size={14} color="#FFFFFF" />
-            <Text style={styles.closedOverlayText} numberOfLines={1}>
-              {closedOverlayLabel}
+            <Text style={styles.closedOverlayText}>
+              {closedStatusLabel}
             </Text>
           </View>
         ) : null}
       </View>
 
-      {showAddButton ? (
-        isClosed ? (
-          <View style={styles.closedPill}>
-            <Text style={styles.closedPillText}>{unavailableLabel}</Text>
-          </View>
-        ) : (
-          <TouchableOpacity activeOpacity={0.8} style={styles.addButton} onPress={onAddPress} disabled={!onAddPress}>
-            <Text style={styles.addButtonPlus}>+</Text>
-            <Text style={styles.addButtonText}>Add</Text>
-          </TouchableOpacity>
-        )
+      {showAddButton && !isClosed ? (
+        <TouchableOpacity activeOpacity={0.8} style={styles.addButton} onPress={onAddPress} disabled={!onAddPress}>
+          <Text style={styles.addButtonPlus}>+</Text>
+          <Text style={styles.addButtonText}>Add</Text>
+        </TouchableOpacity>
       ) : null}
 
       <View style={[styles.textContent, { width: imageWidth }]}>
@@ -133,7 +136,7 @@ const styles = StyleSheet.create({
   },
   disabledImageOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(55, 65, 81, 0.45)',
+    backgroundColor: 'rgba(120, 120, 120, 0.55)',
   },
   wishlistButton: {
     position: 'absolute',
@@ -173,39 +176,17 @@ const styles = StyleSheet.create({
     color: '#00B14F',
     opacity: 0.85,
   },
-  closedPill: {
-    alignSelf: 'center',
-    marginTop: -22,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 9,
-    borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    width: 76,
-    height: 37,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 3,
-    elevation: 3,
-  },
-  closedPillText: {
-    fontFamily: 'Poppins-SemiBold',
-    fontSize: 14,
-    lineHeight: 18,
-    color: '#6B7280',
-  },
   closedOverlayRow: {
     position: 'absolute',
-    left: 8,
-    bottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    maxWidth: '86%',
+    left: 12,
+    right: 12,
+    bottom: 10,
+    zIndex: 3,
   },
   closedOverlayText: {
-    fontFamily: 'Poppins-Bold',
-    fontSize: 11,
-    lineHeight: 14,
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 13,
+    lineHeight: 18,
     color: '#FFFFFF',
     flexShrink: 1,
   },

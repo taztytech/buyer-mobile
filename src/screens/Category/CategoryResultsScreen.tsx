@@ -568,11 +568,18 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
                         delayPressIn={0}
                       >
                         {imageSource && (
-                          <Image
-                            source={imageSource}
-                            style={styles.categoryFoodImage}
-                            resizeMode="contain"
-                          />
+                          <View
+                            style={[
+                              styles.categoryFoodImageWrap,
+                              !hasSearched && selectedCategory === category && styles.categoryFoodImageWrapActive,
+                            ]}
+                          >
+                            <Image
+                              source={imageSource}
+                              style={styles.categoryFoodImage}
+                              resizeMode="cover"
+                            />
+                          </View>
                         )}
                         <Text
                           style={[
@@ -592,24 +599,6 @@ export const CategoryResultsScreen: React.FC<CategoryResultsScreenProps> = ({
             {/* Line separator */}
             <View style={styles.lineContainer}>
               <View style={styles.fullLine} />
-              {/* Selected category indicator line */}
-              {!hasSearched && (() => {
-                const selectedIndex = displayCategories.indexOf(selectedCategory);
-                if (selectedIndex === -1) return null;
-
-                // Calculate position based on category index and scroll offset
-                const categoryWidth = 74 + 4; // categoryItemWrapper width + marginRight
-                const leftOffset = 20 + (selectedIndex * categoryWidth) + (74 - 67) / 2 - scrollOffset; // paddingLeft + offset + centering - scroll
-
-                return (
-                  <View
-                    style={[
-                      styles.selectedLine,
-                      { left: leftOffset }
-                    ]}
-                  />
-                );
-              })()}
             </View>
 
             {/* Filter Buttons */}
@@ -820,7 +809,7 @@ const styles = StyleSheet.create({
   categorySection: {
     // marginTop: 10,
     marginBottom: 0,
-    height: 75,
+    height: 90,
   },
   categoryScroll: {
     paddingHorizontal: 20,
@@ -828,10 +817,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   categoryItemWrapper: {
-    width: 74,
-    marginRight: 4,
+    width: 82,
+    marginRight: 8,
     alignItems: 'center',
-    height: 75,
+    height: 90,
     justifyContent: 'center',
   },
   exploreButton: {
@@ -850,12 +839,29 @@ const styles = StyleSheet.create({
   },
   categoryItem: {
     alignItems: 'center',
-    gap: 3,
+    gap: 8,
     justifyContent: 'center',
   },
+  categoryFoodImageWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    padding: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  categoryFoodImageWrapActive: {
+    borderColor: '#22C55E',
+    borderWidth: 2,
+  },
   categoryFoodImage: {
-    width: 55,
-    height: 45,
+    width: '100%',
+    height: '100%',
+    borderRadius: 29,
   },
   categoryText: {
     fontFamily: 'Poppins',
@@ -867,7 +873,8 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   selectedCategoryText: {
-    color: '#00B14F',
+    color: '#22C55E',
+    fontWeight: '700',
   },
   // Line Container
   lineContainer: {
@@ -881,14 +888,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
     top: 2,
-  },
-  selectedLine: {
-    position: 'absolute',
-    width: 67,
-    height: 5,
-    backgroundColor: '#00B14F',
-    top: 0,
-    borderRadius: 2.5,
   },
   // Filter Section
   filterSection: {
