@@ -47,6 +47,8 @@ import { analyticsService, AnalyticsEvents, AnalyticsScreens, AnalyticsUserPrope
 import { inAppUpdateService } from '@/services/inAppUpdate.service';
 import { crashlyticsService } from '@/services/crashlytics.service';
 import { ForcedUpdateModal } from '@/components/ForcedUpdateModal';
+import { ManagedAppGate } from '@/components/ManagedAppGate';
+import { OfferDetailScreen } from '@/screens/Offer/OfferDetailScreen';
 import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 // import { initMeta } from '@/analytics/metaInit';
 // import { trackCheckout, trackViewRestaurant } from '@/analytics/metaEvents';
@@ -78,7 +80,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const { showConfirmation } = useConfirmation();
 
   // Default to login so we never flash location overlays before auth resolves; logged-in startup sets home/orders explicitly.
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat' | 'offerDetail'>('login');
+  /** Offer being viewed on the offerDetail screen. */
+  const [selectedOfferId, setSelectedOfferId] = React.useState<number | null>(null);
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -519,6 +523,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       faq: AnalyticsScreens.FAQ,
       orderHelp: 'Order Help',
       chat: 'Chat',
+      offerDetail: 'Offer Detail',
     };
 
     const screenName = screenNameMap[currentScreen];
@@ -1024,6 +1029,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       case 'orderDetail':
         handleBackFromOrderDetail();
         return true;
+      case 'offerDetail':
+        // Without this case the switch fell through to `default: return false`,
+        // which tells React Native the back press was NOT handled — Android
+        // then ran its default action and closed the app.
+        setSelectedOfferId(null);
+        setCurrentScreen('home');
+        return true;
       case 'chat':
         handleBackFromChat();
         return true;
@@ -1439,6 +1451,19 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setAddressSelectionCameFrom('home');
     addressScreenSlide.setValue(SCREEN_WIDTH);
   }, []);
+
+  /**
+   * Open a promo offer. Guests go to login first — a claim is tied to a user
+   * id, so letting a guest reach the booking CTA would only surface a 401.
+   */
+  const handleNavigateToOffer = (offerId: number) => {
+    if (!isAuthenticatedRef.current) {
+      transitionGuestToLogin();
+      return;
+    }
+    setSelectedOfferId(offerId);
+    setCurrentScreen('offerDetail');
+  };
 
   const handleNavigateToProfile = () => {
     // Guests: redirect to login page with smooth transition
@@ -2977,6 +3002,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               onForcedUpdateRequired={handleForcedUpdateRequired}
               isGuest={!isAuthenticatedRef.current}
               onNavigateToLogin={transitionGuestToLogin}
+              onNavigateToOffer={handleNavigateToOffer}
               />
             </Animated.View>
 
@@ -3121,6 +3147,32 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                 helpOptionId={chatHelpOptionId}
                 helpOptionTitle={chatHelpOptionTitle}
                 orderId={selectedOrderId}
+              />
+            </View>
+          )}
+
+          {/* Promo offer detail — reached from the home offer strip or a
+              promo_offer banner tap. */}
+          {currentScreen === 'offerDetail' && selectedOfferId !== null && (
+            <View style={styles.chatOverlay}>
+              <OfferDetailScreen
+                offerId={selectedOfferId}
+                onBack={() => {
+                  setSelectedOfferId(null);
+                  setCurrentScreen('home');
+                }}
+                onProceedToPayment={offer => {
+                  // By this point useOfferClaim has held the slot AND put the
+                  // offer in the cart, so the normal checkout has something to
+                  // charge for. Payment success then confirms the claim.
+                  setSelectedOfferId(null);
+                  handleNavigateToCheckout(
+                    offer.store_id,
+                    offer.subtitle || offer.name,
+                    undefined,
+                    'home',
+                  );
+                }}
               />
             </View>
           )}
@@ -3531,23 +3583,25 @@ export default function App() {
           }}
         />
       )}
-      <VegModeProvider>
-        <CartProvider>
-          <ConfirmationProvider>
-            <SafeAreaProvider>
-              <SnackbarProvider>
-                <OrdersProvider>
-                  <AppContent
-                    onNotificationNavigateToOrders={() => {
-                      setShowCustomSplash(false);
-                    }}
-                  />
-                </OrdersProvider>
-              </SnackbarProvider>
-            </SafeAreaProvider>
-          </ConfirmationProvider>
-        </CartProvider>
-      </VegModeProvider>
+      <SafeAreaProvider>
+        <ManagedAppGate>
+          <VegModeProvider>
+            <CartProvider>
+              <ConfirmationProvider>
+                <SnackbarProvider>
+                  <OrdersProvider>
+                    <AppContent
+                      onNotificationNavigateToOrders={() => {
+                        setShowCustomSplash(false);
+                      }}
+                    />
+                  </OrdersProvider>
+                </SnackbarProvider>
+              </ConfirmationProvider>
+            </CartProvider>
+          </VegModeProvider>
+        </ManagedAppGate>
+      </SafeAreaProvider>
     </>
   );
 }

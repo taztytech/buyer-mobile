@@ -35,6 +35,12 @@ export interface AddToCartRequest {
   special_instructions?: string;
   is_preorder?: boolean;
   campaign_id?: string;
+  /**
+   * Promo offer being claimed. The API holds one of the offer's limited slots,
+   * prices the line from the offer rather than the item, forces quantity 1,
+   * and rejects anything else in the cart.
+   */
+  promo_offer_id?: number;
 }
 
 export interface CartItemResponse {

@@ -154,7 +154,7 @@ module.exports = {
     name: "Tazty",
     slug: "Tazty",
     scheme: "in.tazty.buyer",
-    version: "1.0.5",
+    version: "1.0.6",
     orientation: "portrait",
     icon: "./src/assets/icon.png",
     userInterfaceStyle: "light",
@@ -248,6 +248,9 @@ module.exports = {
       EXPO_PUBLIC_DELIVERY_TRACK_BASE_URL:
         process.env.EXPO_PUBLIC_DELIVERY_TRACK_BASE_URL,
       TAZTY_SELLER_BASEURL: process.env.TAZTY_SELLER_BASEURL || process.env.EXPO_PUBLIC_TAZTY_SELLER_BASEURL,
+      godfatherPublicUrl:
+        process.env.EXPO_PUBLIC_GODFATHER_PUBLIC_URL ||
+        "https://api.godfather.tazty.in",
       eas: {
         projectId: "7d65a380-eee0-49b0-9f39-a5cd6eaede5a"
       }

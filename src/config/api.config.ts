@@ -52,6 +52,12 @@ export const API_CONFIG = {
       CART_TIP: '/api/buyer/cart/tip',
       CART_APPLY_COUPON: '/api/buyer/cart/apply-coupon',
       CART_REMOVE_COUPON: '/api/buyer/cart/remove-coupon',
+      // Promo Offer endpoints (combo offers with limited slots — not coupons)
+      OFFERS_ACTIVE: '/api/buyer/offers/active',
+      OFFER_DETAIL: (id: number | string) => `/api/buyer/offers/${id}`,
+      OFFER_RESERVE: (id: number | string) => `/api/buyer/offers/${id}/reserve`,
+      OFFER_CONFIRM: (id: number | string) => `/api/buyer/offers/${id}/confirm`,
+      OFFER_CANCEL: (id: number | string) => `/api/buyer/offers/${id}/cancel`,
       // Dish endpoint
       DISH: '/dish',
     },

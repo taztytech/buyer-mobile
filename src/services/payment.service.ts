@@ -7,6 +7,7 @@ import RazorpayCheckout from 'react-native-razorpay';
 import { apiService, ApiResponse } from './api.service';
 import { analyticsService, AnalyticsEvents } from './analytics.service';
 import { crashlyticsService } from './crashlytics.service';
+import offersService from './offers.service';
 
 // Payment Interfaces
 export interface InitiatePaymentRequest {
@@ -401,6 +402,12 @@ class PaymentService {
         payment_method: 'online',
         gateway: 'razorpay',
       });
+
+      // Convert a held offer slot into a confirmed claim. No-op when the order
+      // has no offer. Never throws — the payment has already succeeded, and a
+      // confirm failure must not be reported to the customer as a failed
+      // payment. An unconfirmed slot is released by the server's reaper.
+      await offersService.confirmForOrder(orderId, 'online');
       const purchaseValue = normalizedAnalyticsAmount;
       const purchaseCurrency = (paymentDetails.currency || 'INR').toUpperCase();
       if (Number.isFinite(purchaseValue) && purchaseValue > 0) {

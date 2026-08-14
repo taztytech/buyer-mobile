@@ -715,25 +715,51 @@ class ApiService {
    * Handle API errors
    */
   private handleError(error: any): ApiError {
-    if (error.response) {
-      // Server responded with error status
+    // This client uses fetch, not axios. Fetch rejections carry neither
+    // `.response` nor `.request`, so the axios-shaped branches below used to
+    // never match and every network failure fell through to the raw
+    // `error.message` — users were shown "Network request failed" or
+    // "Aborted" instead of anything actionable, and a slow server looked
+    // identical to a dead signal.
+
+    // Timeout: AbortController fired after API_CONFIG.TIMEOUT.
+    if (error?.name === 'AbortError' || /abort/i.test(error?.message ?? '')) {
+      return {
+        message:
+          'The server took too long to respond. Please try again in a moment.',
+        status: 0,
+        code: 'TIMEOUT',
+      };
+    }
+
+    // Connectivity: fetch throws TypeError when the request never leaves the
+    // device or DNS/TLS fails.
+    if (
+      error instanceof TypeError ||
+      /network request failed|failed to fetch|network error/i.test(
+        error?.message ?? '',
+      )
+    ) {
+      return {
+        message: 'No internet connection. Please check your network and try again.',
+        status: 0,
+        code: 'OFFLINE',
+      };
+    }
+
+    // Kept for any axios-based caller; harmless with fetch.
+    if (error?.response) {
       return {
         message: error.response.data?.message || 'An error occurred',
         status: error.response.status,
         code: error.response.data?.code,
       };
-    } else if (error.request) {
-      // Request made but no response
-      return {
-        message: 'Network error. Please check your connection.',
-        status: 0,
-      };
-    } else {
-      // Something else happened
-      return {
-        message: error.message || 'An unexpected error occurred',
-      };
     }
+
+    return {
+      message: error?.message || 'Something went wrong. Please try again.',
+      status: 0,
+    };
   }
 
   /**

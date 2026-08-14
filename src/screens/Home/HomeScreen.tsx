@@ -5,6 +5,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
 import { homeService, BannerItem, CategoryItem, Restaurant, OrganizationBanner } from '@/services/home.service';
+import { OfferBannerSection } from '@/components/OfferBannerSection';
+import type { Offer } from '@/services/offers.service';
 import { paymentConfigService } from '@/services/payment-config.service';
 import { appConfigService } from '@/services/app-config.service';
 import { addressService } from '@/services/address.service';
@@ -32,6 +34,8 @@ const HOME_HEADER_IMAGE_HEIGHT = 320;
 
 interface HomeScreenProps {
   onLogout?: () => void;
+  /** Open a promo offer — from the offer strip or a promo_offer banner tap. */
+  onNavigateToOffer?: (offerId: number) => void;
   onNavigateToProfile?: () => void;
   onNavigateToAddressSelection?: () => void;
   onNavigateToCategory?: (categoryName: string) => void;
@@ -60,7 +64,10 @@ interface CarouselItem {
   buttonColor?: string;
   imageUrl?: string;
   sequence?: number;
-  promotionType?: 'restaurant_id' | 'category_id' | 'url';
+  // Mirrors BannerItem.promotion_type. 'promo_offer' banners are created
+  // automatically when an offer is published and carry the offer id in
+  // promotionLink.
+  promotionType?: 'restaurant_id' | 'category_id' | 'url' | 'organization' | 'promo_offer';
   promotionLink?: string;
   backgroundColor?: string;
 }
@@ -102,6 +109,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToProfile,
   onNavigateToAddressSelection,
   onNavigateToCategory,
+  onNavigateToOffer,
   onNavigateToRestaurant,
   onNavigateToCheckout,
   onNavigateToSearch,
@@ -123,6 +131,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [searchSectionBottomY, setSearchSectionBottomY] = React.useState<number>(0);
 
   const [organizationBanners, setOrganizationBanners] = React.useState<OrganizationBanner[]>([]);
+  const [offerBanners, setOfferBanners] = React.useState<Offer[]>([]);
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
 
   // Auto-slide for organization banner
@@ -866,6 +875,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           setOrganizationBanners([]);
         }
 
+        // Live promo offers. Already clock-filtered server-side, so whatever
+        // arrives here is claimable right now — no expiry logic in the app.
+        const offerBannerRaw = (actualData as any).offer_banner;
+        setOfferBanners(
+          Array.isArray(offerBannerRaw) ? (offerBannerRaw as Offer[]) : [],
+        );
+
         // Handle promotional banners
         if (promotionalBanner) {
           // Handle if it's a single object or array
@@ -1299,6 +1315,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
 
     switch (item.promotionType) {
+      case 'promo_offer':
+        // Banner auto-created when an offer is published; promotionLink holds
+        // the offer id. Guests are diverted to login by onNavigateToOffer,
+        // since a claim is tied to a user id.
+        {
+          const offerId = parseInt(item.promotionLink, 10);
+          if (!isNaN(offerId)) {
+            onNavigateToOffer?.(offerId);
+          }
+        }
+        break;
+
       case 'restaurant_id':
         // Navigate to restaurant page with the restaurant ID
         if (onNavigateToRestaurant) {
@@ -1334,7 +1362,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         // Unknown promotion type, do nothing
         break;
     }
-  }, [onNavigateToRestaurant, onNavigateToCategory, showConfirmation]);
+  }, [onNavigateToRestaurant, onNavigateToCategory, onNavigateToOffer, showConfirmation]);
 
   const renderCarouselItem = React.useCallback(({ item }: { item: CarouselItem }) => {
     return (
@@ -1937,6 +1965,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     )}
                   </View>
                 )}
+
+                {/* Limited-slot offers, pinned below the shop banners.
+                    Renders nothing when there are none. */}
+                <OfferBannerSection
+                  offers={offerBanners}
+                  onOfferPress={offer => onNavigateToOffer?.(offer.id)}
+                />
 
                 {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
                 {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (

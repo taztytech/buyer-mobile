@@ -22,7 +22,9 @@ export interface BannerItem {
   banner_url?: string;
   redirect_url?: string;
   sequence?: number;
-  promotion_type?: 'restaurant_id' | 'category_id' | 'url';
+  // 'promo_offer' banners are created automatically when an offer is
+  // published; promotion_link carries the offer id.
+  promotion_type?: 'restaurant_id' | 'category_id' | 'url' | 'organization' | 'promo_offer';
   promotion_link?: string;
 }
 
@@ -99,6 +101,13 @@ export interface HomeData {
   background_image_url?: string;
   home_screen_background_image?: string;
   organization_banner?: OrganizationBanner[];
+  /**
+   * Live promo offers for the strip below the shop banners. Carries
+   * buyer_state / slots_remaining / opens_in_seconds, so the section renders
+   * real state without its own request. Offers past their window are filtered
+   * out server-side by clock, so nothing expired can arrive here.
+   */
+  offer_banner?: any[];
 }
 
 class HomeService {
