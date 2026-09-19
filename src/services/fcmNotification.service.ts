@@ -770,12 +770,39 @@ class FCMNotificationService {
       data.order_status ||
       data.current_status ||
       '';
-    const normalizedStatus = rawStatus.toString().trim().toLowerCase();
-    const target: NotificationNavigationTarget['target'] = 'orders';
+    const normalizedStatus = rawStatus.toString().trim().toLowerCase().replace(/[_\s]+/g, '-');
+
+    /**
+     * The live order notification carries a TRACK ORDER button, and pressing it
+     * sets open_tracking. That is the one case that skips the orders list and
+     * goes straight to the map - tapping the notification itself still lands on
+     * My Orders, which is what a customer expects from the body of a
+     * notification.
+     *
+     * The status is checked too, so a stale notification for a delivered order
+     * cannot open a map with nothing on it.
+     */
+    const trackableStatuses = [
+      'agent-assigned',
+      'agent-arrived-restaurant',
+      'picked',
+      'out-for-delivery',
+      'on-the-way',
+      'agent-nearby',
+      'packed',
+    ];
+    const wantsTracking =
+      String(data.open_tracking ?? '').toLowerCase() === 'true' &&
+      (!normalizedStatus || trackableStatuses.includes(normalizedStatus));
+    const target: NotificationNavigationTarget['target'] = wantsTracking
+      ? 'track'
+      : 'orders';
     const normalizedOrderId = orderId || '';
     const navigationPayload: NotificationNavigationTarget = { orderId: normalizedOrderId, target };
 
-    console.log(`🧭 FCM: Navigating to My Orders for order: ${normalizedOrderId || 'N/A'}, status: ${normalizedStatus || 'unknown'}`);
+    console.log(
+      `🧭 FCM: Navigating to ${target} for order: ${normalizedOrderId || 'N/A'}, status: ${normalizedStatus || 'unknown'}`,
+    );
 
     // Call navigation callback if set
     if (this.navigationCallback) {

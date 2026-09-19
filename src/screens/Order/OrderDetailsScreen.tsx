@@ -23,6 +23,7 @@ import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/addre
 import { paymentService, PaymentErrorType } from '@/services/payment.service';
 import { homeService } from '@/services/home.service';
 import { cartService, CartSummary, CartResponse } from '@/services/cart.service';
+import offersService from '@/services/offers.service';
 import { restaurantService } from '@/services/restaurant.service';
 import { paymentConfigService } from '@/services/payment-config.service';
 import { useCart } from '@/context/CartContext';
@@ -164,6 +165,10 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
   const [cartSummary, setCartSummary] = useState<CartSummary | null>(null);
   const [isLoadingCartSummary, setIsLoadingCartSummary] = useState(false);
+  // Set when the cart could not be priced. Every bill line falls back to 0 when
+  // cartSummary is null, so without this the screen shows a confident ₹0.00
+  // bill and an enabled Place Order button after a failed fetch.
+  const [cartSummaryError, setCartSummaryError] = useState('');
   const [cartData, setCartData] = useState<any>(null);
   const [isUpdatingTip, setIsUpdatingTip] = useState(false);
   const [maxTipAmount, setMaxTipAmount] = useState<number | null>(null);
@@ -245,8 +250,31 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const codMinAmount = codSettings?.cod_min_amount ?? 0;
   const codMaxAmount = codSettings?.cod_max_amount ?? Number.MAX_SAFE_INTEGER;
 
+  /**
+   * Offer orders are standalone: no extra items, and quantity is fixed at 1.
+   *
+   * Read from the cart rather than from offersService's in-memory flag. That
+   * flag only clears on a successful ONLINE confirm, so it would stay set
+   * after a COD offer order or an abandoned one and wrongly lock the next
+   * normal order; and being in-memory it is lost on restart, wrongly
+   * unlocking an offer cart that is still there. The cart row is the truth.
+   */
+  const cartHasOffer = ((cartData?.items ?? []) as any[]).some(
+    (i) => !!i?.promo_offer_id,
+  );
+
+  // An offer configured as online-only must not present COD at all. The API
+  // rejects it anyway, but only after the customer has chosen and committed —
+  // hiding it here means they never pick an option that cannot succeed.
+  // The payment mode is only known from the in-memory claim, so gate it on the
+  // cart actually holding an offer; otherwise a stale flag from an abandoned
+  // offer would hide COD on an ordinary order.
+  const offerIsOnlineOnly =
+    cartHasOffer && offersService.isPendingOfferOnlineOnly();
+
   const isCodAllowed =
     isCodEnabled &&
+    !offerIsOnlineOnly &&
     totalAmount >= codMinAmount &&
     totalAmount <= codMaxAmount;
 
@@ -392,6 +420,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const fetchCartSummary = async (preloadedCart?: CartResponse) => {
     try {
       setIsLoadingCartSummary(true);
+      setCartSummaryError('');
       const cartResponse = preloadedCart ?? (await cartService.getCart());
 
       if (cartResponse.items.length > 0) {
@@ -419,6 +448,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           }
           // Note: We don't clear promo code if user has entered something, even if backend has no offer
           // This allows user to keep typing/editing without interruption
+        } else {
+          // Items but no summary: the server could not price the cart.
+          setCartSummary(null);
+          setCartSummaryError(
+            "We couldn't calculate your bill. Please try again.",
+          );
         }
       } else {
         setCartData(null);
@@ -428,7 +463,15 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         setSelectedTip(null);
       }
     } catch (error: any) {
+      // Previously this swallowed the error and left every bill line at its
+      // ₹0.00 fallback, so a failed cart fetch was indistinguishable from a
+      // free order and checkout stayed enabled. Surface it and block payment.
+      console.error('[OrderDetails] Cart summary fetch failed:', error?.message);
       setCartData(null);
+      setCartSummary(null);
+      setCartSummaryError(
+        error?.message || "We couldn't load your bill. Please try again.",
+      );
     } finally {
       setIsLoadingCartSummary(false);
     }
@@ -858,6 +901,16 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         });
 
         if (paymentResult.success || selectedPaymentMethod === "cod") {
+          // COD had no confirm step at all: only the online path (inside
+          // paymentService) converted a held offer slot into a confirmed
+          // claim. A COD offer booking therefore stayed "reserved" until the
+          // server's reaper released the slot — the seat was given away and
+          // the seller never saw a confirmed booking. Online is already
+          // confirmed by paymentService, so only COD is handled here.
+          if (selectedPaymentMethod === "cod") {
+            await offersService.confirmForOrder(orderId, 'cod');
+          }
+
           // Payment successful - clear local cart and reset form (backend handles API clearing)
           clearCart(false);
           setNotes(''); // Reset notes for next order
@@ -1579,7 +1632,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                   <View style={styles.sectionContent}>
                     {/* Order Items */}
                     {visibleOrderItems.length === 0 ? null : visibleOrderItems.map((item, index) => {
-                      const isAtQuantityLimit = getLocalItemTotalQuantity(item.id) >= MAX_ITEM_QUANTITY;
+                      // An offer is always quantity 1 — the server forces it and
+                      // the per-user limit makes anything else meaningless, so
+                      // "+" could only fail.
+                      const isAtQuantityLimit =
+                        cartHasOffer ||
+                        getLocalItemTotalQuantity(item.id) >= MAX_ITEM_QUANTITY;
                       const itemPrice = (Number(item.price) || 0) * (Number(item.quantity) || 0);
                       const lineKey = `${item.id}-${item.variantId || 'base'}-${item.addOnIds?.join('_') || 'no-addon'}-${index}`;
 
@@ -1626,9 +1684,17 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                             <TouchableOpacity
                               onPress={() => handleDecrement(item.id, item.variantId)}
                               activeOpacity={0.7}
+                              disabled={cartHasOffer}
                               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                             >
-                              <Text style={styles.quantityButton}>-</Text>
+                              <Text
+                                style={[
+                                  styles.quantityButton,
+                                  cartHasOffer && styles.quantityButtonDisabled,
+                                ]}
+                              >
+                                -
+                              </Text>
                             </TouchableOpacity>
                             <Text style={styles.quantityText}>{item.quantity}</Text>
                             <TouchableOpacity
@@ -1654,20 +1720,24 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                       );
                     })}
 
-                    {/* Add More Items Button */}
-                    <TouchableOpacity
-                      style={styles.addMoreButton}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        if (onAddMoreItems) {
-                          onAddMoreItems();
-                        } else if (onBack) {
-                          onBack();
-                        }
-                      }}
-                    >
-                      <Text style={styles.addMoreButtonText}>+ Add More Items</Text>
-                    </TouchableOpacity>
+                    {/* Add More Items Button — hidden for offer orders, which
+                        are standalone. The API rejects a second item, so this
+                        button could only ever produce an error. */}
+                    {!cartHasOffer && (
+                      <TouchableOpacity
+                        style={styles.addMoreButton}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          if (onAddMoreItems) {
+                            onAddMoreItems();
+                          } else if (onBack) {
+                            onBack();
+                          }
+                        }}
+                      >
+                        <Text style={styles.addMoreButtonText}>+ Add More Items</Text>
+                      </TouchableOpacity>
+                    )}
 
                     {/* Notes */}
                     <View style={styles.notesContainer}>
@@ -2023,6 +2093,12 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 
                 {billExpanded && (
                   <View style={styles.sectionContent}>
+                    {!!cartSummaryError && (
+                      <View style={styles.billErrorBox} testID="bill-error">
+                        <MaterialIcons name="error-outline" size={18} color="#DC2626" />
+                        <Text style={styles.billErrorText}>{cartSummaryError}</Text>
+                      </View>
+                    )}
                     <View style={styles.billRow}>
                       <Text style={styles.billLabel}>Item Total</Text>
                       <Text style={styles.billValue}>₹{itemTotal.toFixed(2)}</Text>
@@ -2252,10 +2328,15 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               </View>
 
               <TouchableOpacity
-                style={[styles.placeOrderButton, isPlacingOrder && styles.placeOrderButtonDisabled]}
+                style={[
+                  styles.placeOrderButton,
+                  (isPlacingOrder || !cartSummary) && styles.placeOrderButtonDisabled,
+                ]}
                 activeOpacity={0.8}
                 onPress={handlePlaceOrder}
-                disabled={isPlacingOrder}
+                // No summary means no priced bill. Letting the order through
+                // here is how a ₹0.00 checkout became placeable.
+                disabled={isPlacingOrder || !cartSummary}
               >
                 <Text style={styles.placeOrderButtonText}>Place Order</Text>
                 {isPlacingOrder ? (
@@ -2978,6 +3059,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 12,
+  },
+  billErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  billErrorText: {
+    flex: 1,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    letterSpacing: 0.1,
+    color: '#DC2626',
   },
   billLabel: {
     fontFamily: 'Poppins',

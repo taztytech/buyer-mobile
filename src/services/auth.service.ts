@@ -11,6 +11,7 @@ import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 import { fcmNotificationService } from './fcmNotification.service';
 import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from './analytics.service';
 import { crashlyticsService } from './crashlytics.service';
+import { clarityIdentify } from './clarity.service';
 import { addressService } from './address.service';
 
 // Types
@@ -188,10 +189,13 @@ class AuthService {
           };
           await storageService.saveUser(userToSave);
 
-          // Analytics + Crashlytics identity
+          // Analytics + Crashlytics + Clarity identity
           if (uid) {
             await analyticsService.setUserId(uid);
             await crashlyticsService.setUserId(uid);
+            // The id only, never the phone number sitting beside it - Clarity
+            // warns against personally identifying values in this field.
+            clarityIdentify(uid);
           }
 
           // Set user properties (visible in Analytics user properties)

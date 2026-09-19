@@ -41,6 +41,12 @@ export interface AddToCartRequest {
    * and rejects anything else in the cart.
    */
   promo_offer_id?: number;
+  /**
+   * 99 Store deal being taken. The API prices the line at the deal price,
+   * caps the quantity by the deal's limits, rejects anything else in the
+   * cart, and refuses coupons on it.
+   */
+  store_deal_id?: number;
 }
 
 export interface CartItemResponse {
@@ -65,6 +71,15 @@ export interface CartItemResponse {
     delivery_date: string;
     available_slots: number;
     free_delivery: boolean;
+  };
+  /** Set when the line is a ₹99 Store deal. */
+  store_deal_id?: number;
+  store_deal?: {
+    id: number;
+    deal_price: number;
+    menu_price: number;
+    /** (menu price − deal price) × quantity, for the "You saved" line. */
+    savings: number;
   };
 }
 

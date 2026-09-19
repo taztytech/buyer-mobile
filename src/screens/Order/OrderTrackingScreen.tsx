@@ -345,6 +345,10 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
     'out-for-delivery',
     'on_the_way',
     'on-the-way',
+    'agent_nearby',
+    'agent-nearby',
+    'reached_delivery',
+    'reached-delivery',
     'delivered',
   ]);
 

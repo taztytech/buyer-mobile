@@ -37,8 +37,22 @@ export function mapOrderStatusToUI(status: string | null | undefined): StatusCon
     case 'agent_assigned':
       return getStatusConfig('agent-assigned');
 
+    case 'agent-arrived-restaurant':
+    case 'agent_arrived_restaurant':
+    case 'reached-restaurant':
+    case 'reached_restaurant':
+      return getStatusConfig('agent-arrived-restaurant');
+
     case 'picked':
+    case 'picked-up':
+    case 'picked_up':
       return getStatusConfig('picked');
+
+    case 'agent-nearby':
+    case 'agent_nearby':
+    case 'reached-delivery':
+    case 'reached_delivery':
+      return getStatusConfig('agent-nearby');
 
     case 'out-for-delivery':
     case 'out_for_delivery':
@@ -112,6 +126,12 @@ function getStatusConfig(status: string): StatusConfig {
       bgColor: 'rgba(245, 158, 11, 0.1)',
       iconName: 'local-shipping',
     },
+    'agent-nearby': {
+      label: 'Almost there',
+      color: '#F59E0B',
+      bgColor: 'rgba(245, 158, 11, 0.1)',
+      iconName: 'my-location',
+    },
     delivered: {
       label: 'Delivered',
       color: '#00B14F',
@@ -164,6 +184,7 @@ const TRACKING_STATUS_ORDER: string[] = [
   'agent-arrived-restaurant',
   'picked',
   'out-for-delivery',
+  'agent-nearby',
   'delivered',
 ];
 
@@ -179,6 +200,13 @@ function normalizeStatusForTimeline(status: string | null | undefined): string |
     'out_for_delivery': 'out-for-delivery',
     'on_the_way': 'out-for-delivery',
     'on-the-way': 'out-for-delivery',
+    'picked_up': 'picked',
+    'picked-up': 'picked',
+    'agent_nearby': 'agent-nearby',
+    'reached_delivery': 'agent-nearby',
+    'reached-delivery': 'agent-nearby',
+    'reached_customer': 'agent-nearby',
+    'reached-customer': 'agent-nearby',
     'completed': 'delivered',
   };
   return aliases[n] ?? n;

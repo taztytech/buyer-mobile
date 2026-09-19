@@ -37,17 +37,85 @@ class FCMService : FirebaseMessagingService() {
         Log.d(TAG, "From: ${remoteMessage.from}")
         Log.d(TAG, "Message data payload: ${remoteMessage.data}")
         
-        // Check if message contains a notification payload
-        remoteMessage.notification?.let {
-            Log.d(TAG, "Message Notification Body: ${it.body}")
-            val imageUrl = it.imageUrl?.toString() ?: remoteMessage.data["image"] ?: remoteMessage.data["imageUrl"]
-            showNotification(it.title ?: "New Notification", it.body ?: "", remoteMessage.data, imageUrl)
+        val data = remoteMessage.data
+        if (remoteMessage.notification != null) {
+            // A notification block is present, so show it exactly as before.
+            val notification = remoteMessage.notification!!
+            Log.d(TAG, "Message Notification Body: ${notification.body}")
+            val imageUrl = notification.imageUrl?.toString() ?: data["image"] ?: data["imageUrl"]
+            showNotification(
+                notification.title ?: "New Notification",
+                notification.body ?: "",
+                data,
+                imageUrl
+            )
+        } else if (data.isNotEmpty()) {
+            // Data-only message. Android shows nothing by itself, which is the
+            // point: an order update is drawn here so it can stay ongoing, keep
+            // one entry per order, and carry a TRACK ORDER button. Everything
+            // else becomes an ordinary notification built from the same title
+            // and body the server used to put in the notification block.
+            handleDataOnlyMessage(data)
         }
         
         // Send message to React Native
         sendMessageToReactNative(remoteMessage)
     }
     
+    /**
+     * Route a data-only message. A live order owns one tray entry for its own
+     * order, rewritten by every status push; anything else is a one-off
+     * notification.
+     */
+    private fun handleDataOnlyMessage(data: Map<String, String>) {
+        val title = data["title"] ?: "Tazty"
+        val body = data["body"] ?: ""
+        val orderId = data["order_id"] ?: data["orderId"]
+        val orderNumber = data["order_number"] ?: data["orderNumber"]
+        val orderKey = orderNumber ?: orderId
+        val isOrder = (data["type"] ?: "") == "order" && orderKey != null
+        if (!isOrder) {
+            showNotification(title, body, data, data["image_url"] ?: data["imageUrl"])
+            return
+        }
+        val live = (data["live_order"] ?: "false") == "true"
+
+        if (live) {
+            /**
+             * One ongoing entry per order, rewritten by each status push, with
+             * a TRACK ORDER button on it.
+             *
+             * Drawn straight from here rather than by a foreground service:
+             * Play only grants FOREGROUND_SERVICE_DATA_SYNC against a demo
+             * video of the feature working, so the service - and with it the
+             * arrival time that refreshes itself - waits for the release where
+             * that video exists. LiveOrderService and LiveOrderDismissReceiver
+             * are kept for it and are not wired up in this build.
+             *
+             * The text still moves with every status, and on Android 13 and
+             * below the entry cannot be swiped away.
+             */
+            val notification = LiveOrderNotifier.build(
+                context = this,
+                orderKey = orderKey!!,
+                orderId = orderId,
+                orderNumber = orderNumber,
+                title = title,
+                body = body,
+                ongoing = true,
+                alert = true,
+                showTrackAction = true
+            )
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.notify(LiveOrderNotifier.notificationId(orderKey), notification)
+        } else {
+            // Delivered, cancelled or refunded: the live entry goes, and the
+            // final word is shown as an ordinary, dismissable notification.
+            LiveOrderNotifier.cancel(this, orderKey!!)
+            showNotification(title, body, data, data["image_url"] ?: data["imageUrl"])
+        }
+    }
+
     private fun sendTokenToReactNative(token: String) {
         val reactContext = (application as MainApplication).reactNativeHost.reactInstanceManager.currentReactContext
         reactContext?.let {
@@ -66,8 +134,16 @@ class FCMService : FirebaseMessagingService() {
         if (reactContext != null) {
             // App is in foreground, send event directly
             val params = Arguments.createMap().apply {
-                putString("title", remoteMessage.notification?.title)
-                putString("body", remoteMessage.notification?.body)
+                // A data-only message carries its text in data, so fall back
+                // to it - otherwise the foreground handler sees an empty title.
+                putString(
+                    "title",
+                    remoteMessage.notification?.title ?: remoteMessage.data["title"]
+                )
+                putString(
+                    "body",
+                    remoteMessage.notification?.body ?: remoteMessage.data["body"]
+                )
                 val dataMap = Arguments.createMap()
                 remoteMessage.data.forEach { (key, value) ->
                     dataMap.putString(key, value)
@@ -82,8 +158,8 @@ class FCMService : FirebaseMessagingService() {
             // App is in background/quit state, use headless task
             val intent = Intent(this, FCMHeadlessTaskService::class.java).apply {
                 putExtra("data", remoteMessage.data.toString())
-                putExtra("title", remoteMessage.notification?.title)
-                putExtra("body", remoteMessage.notification?.body)
+                putExtra("title", remoteMessage.notification?.title ?: remoteMessage.data["title"])
+                putExtra("body", remoteMessage.notification?.body ?: remoteMessage.data["body"])
             }
             startService(intent)
         }

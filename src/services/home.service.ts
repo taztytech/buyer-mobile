@@ -86,6 +86,38 @@ export interface OrganizationBanner {
   background_color?: string;
   promotion_type?: string;
   sequence?: number;
+
+  /**
+   * Appearance, all optional. Anything unset falls back to the values the
+   * home screen used before these existed, so an older banner is unaffected.
+   */
+  media_type?: string;
+  video_url?: string;
+  /** Shown until the video's first frame is ready. */
+  poster_url?: string;
+  title_font_size?: number;
+  title_color?: string;
+  subtitle_font_size?: number;
+  subtitle_color?: string;
+  /** Only applied when the family is bundled in the app. */
+  font_family?: string;
+  gradient_from?: string;
+  gradient_to?: string;
+  gradient_direction?: string;
+
+  /**
+   * Tamil title and subtitle, with their own font and sizes.
+   *
+   * Present only when the admin filled them in, which is also what decides
+   * whether the banner shows its language toggle at all. The font is separate
+   * because no Latin family bundled here carries Tamil glyphs - Poppins
+   * included - so reusing font_family would leave the phone to substitute one.
+   */
+  title_ta?: string;
+  subtitle_ta?: string;
+  font_family_ta?: string;
+  title_font_size_ta?: number;
+  subtitle_font_size_ta?: number;
 }
 
 export interface HomeData {

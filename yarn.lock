@@ -756,10 +756,140 @@
     "@eslint/core" "^0.16.0"
     levn "^0.4.1"
 
+"@expo-google-fonts/alfa-slab-one@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/alfa-slab-one/-/alfa-slab-one-0.4.1.tgz"
+  integrity sha512-Rcs488qe79FOHlRxEUw688JF2YK6z4hm8lUrpzuV625/nU4SYmxbv7xv6g4eCxhHn96vDLG9/tCm6A3iQzMgDQ==
+
+"@expo-google-fonts/anek-tamil@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/anek-tamil/-/anek-tamil-0.4.1.tgz"
+  integrity sha512-matv57yK7D0KmYcflAjpqBbfUck+LnDgzK8Km2arcH7mvCyXpLAKhYg4TUASHIYe9nMJadNZ+g5RZWb5h4W8Hw==
+
+"@expo-google-fonts/arima@^0.4.2":
+  version "0.4.2"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/arima/-/arima-0.4.2.tgz"
+  integrity sha512-DkEKCXFIKoQyDL+MIfxcONxqQVIVuuqhnQW4huh9V+BNWbGOyVDZtjyxmvX0PBrt8bgedETfqqigcqHllFbx3g==
+
+"@expo-google-fonts/baloo-thambi-2@^0.4.2":
+  version "0.4.2"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/baloo-thambi-2/-/baloo-thambi-2-0.4.2.tgz"
+  integrity sha512-gBzX8d4lwZQKdrFz4vgTBmtU8NmzsRjcwR1DXxHZ26FNa+ty9Vh4RRoQaFjoyoAGmPMzBgwlE+4fFkwZIc9f3w==
+
+"@expo-google-fonts/bowlby-one-sc@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/bowlby-one-sc/-/bowlby-one-sc-0.4.1.tgz"
+  integrity sha512-28k98DQ7HXEijLE5d3rS6YZKF90DIZDSfu63GkTM7P7vN6rNmwZWkDG+qlTxcx+cGexS3yc7n2dlKWCpJU23xQ==
+
+"@expo-google-fonts/bungee@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/bungee/-/bungee-0.4.1.tgz"
+  integrity sha512-t62Y/bjQUYpaLZ9Wtu2vcmbWjB78gZDKGgaXsrBWI/2Qy1ShlxFycQP8GBUcNx7x3wTy/JJCHrU8YkxywYBKqw==
+
+"@expo-google-fonts/catamaran@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/catamaran/-/catamaran-0.4.1.tgz"
+  integrity sha512-6lROj+7ld8aEVLWKItLgmF3yrZORqiQonwaYt9h3V8tscAesrhLIgyZFx8HT6F1neyHyi0oou9JvzG18PIoAuA==
+
+"@expo-google-fonts/chewy@^0.4.0":
+  version "0.4.0"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/chewy/-/chewy-0.4.0.tgz"
+  integrity sha512-xDeMnRVyvb4Zb0ptSqNc2XNnVPz13yyeAMNObHbymnktpHJgKkbgILevdZIs0tcxK6oKKGQCR6XG3MxXJjSGtQ==
+
+"@expo-google-fonts/coiny@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/coiny/-/coiny-0.4.1.tgz"
+  integrity sha512-rf6Y7nDqor08ZJYks4Gtu+srJJbwGYxtYME8LW5YFBbCdjVfjI6Ggydyusvn4YQA8TEhElazRkRHh16JL06/zw==
+
+"@expo-google-fonts/fredoka@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/fredoka/-/fredoka-0.4.1.tgz"
+  integrity sha512-px3uHDidG1RI7mMAjfKQktK9yZoVn/Uvqgp1G/Zkd6ZN9flXFxhUoPDRZdcCj2knFvkKmlvOx96SD3j4fxq7ig==
+
+"@expo-google-fonts/hind-madurai@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/hind-madurai/-/hind-madurai-0.4.1.tgz"
+  integrity sha512-zD7BiLElz1MlqXeXGvYp6p3I63kvnIA6Toxz6OgxiYa8BSBGEJZls2oAyb9zkzDtkVs0YiJyRG/wxuJR2m+DTg==
+
+"@expo-google-fonts/inter@^0.4.2":
+  version "0.4.2"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/inter/-/inter-0.4.2.tgz"
+  integrity sha512-syfiImMaDmq7cFi0of+waE2M4uSCyd16zgyWxdPOY7fN2VBmSLKEzkfbZgeOjJq61kSqPBNNtXjggiQiSD6gMQ==
+
+"@expo-google-fonts/kalam@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/kalam/-/kalam-0.4.1.tgz"
+  integrity sha512-A5LZoojqb9OCzOI/2WDRofaIQGGzC5zzmKxqxCFIx1jSYOO8g7q+5fZdd+QfJ6pY6VLzO4j5xoJq0ptcHFpQSg==
+
+"@expo-google-fonts/kavivanar@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/kavivanar/-/kavivanar-0.4.1.tgz"
+  integrity sha512-nTn0En/ptS4KPRWb/hFjMIXNBALytlg2GUNK4NUt3zYmOcFSap1qRmo9CmnVW5rFh2VvjJJ9HHok0UsGvgvmqQ==
+
+"@expo-google-fonts/lobster@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/lobster/-/lobster-0.4.1.tgz"
+  integrity sha512-oQGNAlr9/9XlWQk270QUmvqbgGRZjXbEW6FwGxn5ZK6RHyVRAL1MtCbunjjyV3O5aLoZ4Cmh1CuYCHyIMqLe0w==
+
+"@expo-google-fonts/montserrat@^0.4.2":
+  version "0.4.2"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/montserrat/-/montserrat-0.4.2.tgz"
+  integrity sha512-Xyq7rKJhhZOE1Xk4wKSSVoUeOkFmQEMhtZ3pdFrgYckGZMs115Apmld1AI8Ju+yrl5GzDdfRCCqRr33dvEDYUA==
+
+"@expo-google-fonts/mukta-malar@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/mukta-malar/-/mukta-malar-0.4.1.tgz"
+  integrity sha512-QOZADxUh3LZGchAQY0ewApZ5evaJRbFg1BinQ2BfNRReT/wbnby8jQ147w9IY3DOrqETSFZX+kNKf0QW22j7Gw==
+
+"@expo-google-fonts/noto-sans-tamil@^0.4.3":
+  version "0.4.3"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/noto-sans-tamil/-/noto-sans-tamil-0.4.3.tgz"
+  integrity sha512-1TBkwJ8gJPnt1UIC+um987hYb/QmRDATGKbtwDW6dajISxr8b7+EVjwMESMJaQxfNS8VWE4IBT2jYmpBGw4D+w==
+
+"@expo-google-fonts/oi@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/oi/-/oi-0.4.1.tgz"
+  integrity sha512-Kla9bRH2UeCrfbGM3Xft0f16JadIxg82wGU5PFfqNLl2rsfmY9kFCyTOaCM0WWGCeHcNqCUSZKZrgAD8CFMY1w==
+
+"@expo-google-fonts/pacifico@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/pacifico/-/pacifico-0.4.1.tgz"
+  integrity sha512-w21ZIeNdwVWPH173HNszX8ML1deogOsHcxhJ0ghpbyBzr7R6PGSJ6yWL5jBixvWV/E34xDk28aNn/cX+gqzf3Q==
+
+"@expo-google-fonts/passion-one@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/passion-one/-/passion-one-0.4.1.tgz"
+  integrity sha512-/zvj/jQhO/E1RENJGlJVMigsUVnNXSnLpduMSqegR+DAXit/Rq3iQ1tP327Utmup2tgQwzi9esAWHdzWQ641PA==
+
+"@expo-google-fonts/playfair-display@^0.4.2":
+  version "0.4.2"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/playfair-display/-/playfair-display-0.4.2.tgz"
+  integrity sha512-mWhBV59RUjSS3aYpytUb7UyHHTnXcHh7epAn7gq+M4XAEh5PuMKUrP8eiUfkJLb6UwHZCi7EhQpUzxHu5OL96w==
+
 "@expo-google-fonts/poppins@^0.4.1":
   version "0.4.1"
   resolved "https://registry.npmjs.org/@expo-google-fonts/poppins/-/poppins-0.4.1.tgz"
   integrity sha512-LiX5oEryJqDt3UmWwr4oqf11hGMz/JEffkkNcZ3UtGwyoMFzXmBmTwcrAWrEttxypxmLNmPykDg+CY2VjKve9A==
+
+"@expo-google-fonts/righteous@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/righteous/-/righteous-0.4.1.tgz"
+  integrity sha512-oWlxXmRNYRN5aHW2cLJopUTr7T+mNRGfKjBeQlYLbOIf1yn6UF5kcg9PqkD6gG8BG1pKxzT3jXzcRvFSRL1HKA==
+
+"@expo-google-fonts/rubik-bubbles@^0.4.0":
+  version "0.4.0"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/rubik-bubbles/-/rubik-bubbles-0.4.0.tgz"
+  integrity sha512-GVO3kN0Ffz52lIjOqOFGJWgBpC88UZUgKrHLzNgjKRoI90URf3x1CAldaXeI1uJjypNTbK+szCQKECTGSR+W+Q==
+
+"@expo-google-fonts/titan-one@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/titan-one/-/titan-one-0.4.1.tgz"
+  integrity sha512-KTpJP6ZQWQF4lIafV8DBfCRVM+TiG+SsEKcYvBJWS4u+OXRYPlacOMEZPjCkpz3ZqWTy3zJpku1jbcwx6R7pjw==
+
+"@expo-google-fonts/ultra@^0.4.0":
+  version "0.4.0"
+  resolved "https://registry.npmjs.org/@expo-google-fonts/ultra/-/ultra-0.4.0.tgz"
+  integrity sha512-LTyF6gI1m8Yo5bGHn58OkLP7Uf+Y96pEdy5EXP5VI9LH3PUYluw/d7WwpEMGer0VA3o2YdECog1e4akJJ9t2JQ==
 
 "@expo/apple-utils@2.1.12":
   version "2.1.12"
@@ -3334,6 +3464,11 @@ big-integer@1.6.x:
   resolved "https://registry.npmjs.org/big-integer/-/big-integer-1.6.52.tgz"
   integrity sha512-QxD8cf2eVqJOOz63z6JIN9BzvVs/dlySa5HGSBH5xtR8dPteIRQnBxxKqkNTiT6jbDTF6jAfrd4oMcND9RGbQg==
 
+boolbase@^1.0.0:
+  version "1.0.0"
+  resolved "https://registry.npmjs.org/boolbase/-/boolbase-1.0.0.tgz"
+  integrity sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww==
+
 bplist-creator@0.1.0:
   version "0.1.0"
   resolved "https://registry.npmjs.org/bplist-creator/-/bplist-creator-0.1.0.tgz"
@@ -3747,6 +3882,30 @@ crypto-random-string@^2.0.0:
   resolved "https://registry.npmjs.org/crypto-random-string/-/crypto-random-string-2.0.0.tgz"
   integrity sha512-v1plID3y9r/lPhviJ1wrXpLeyUIGAZ2SHNYTEapm7/8A9nLPoyvVp3RK/EPFqn5kEznyWgYZNsRtYYIWbuG8KA==
 
+css-select@^5.1.0:
+  version "5.2.2"
+  resolved "https://registry.npmjs.org/css-select/-/css-select-5.2.2.tgz"
+  integrity sha512-TizTzUddG/xYLA3NXodFM0fSbNizXjOKhqiQQwvhlspadZokn1KDy0NZFS0wuEubIYAV5/c1/lAr0TaaFXEXzw==
+  dependencies:
+    boolbase "^1.0.0"
+    css-what "^6.1.0"
+    domhandler "^5.0.2"
+    domutils "^3.0.1"
+    nth-check "^2.0.1"
+
+css-tree@^1.1.3:
+  version "1.1.3"
+  resolved "https://registry.npmjs.org/css-tree/-/css-tree-1.1.3.tgz"
+  integrity sha512-tRpdppF7TRazZrjJ6v3stzv93qxRcSsFmW6cX0Zm2NVKpxE1WV1HblnghVv9TreireHkqI/VDEsfolRF1p6y7Q==
+  dependencies:
+    mdn-data "2.0.14"
+    source-map "^0.6.1"
+
+css-what@^6.1.0:
+  version "6.2.2"
+  resolved "https://registry.npmjs.org/css-what/-/css-what-6.2.2.tgz"
+  integrity sha512-u/O3vwbptzhMs3L1fQE82ZSLHQQfto5gyZzwteVIEyeaY5Fc7R4dapF/BvRoSYFeqfBk4m0V1Vafq5Pjv25wvA==
+
 csstype@^3.0.2:
   version "3.1.3"
 
@@ -3873,10 +4032,40 @@ dir-glob@^3.0.1:
   dependencies:
     path-type "^4.0.0"
 
+dom-serializer@^2.0.0:
+  version "2.0.0"
+  resolved "https://registry.npmjs.org/dom-serializer/-/dom-serializer-2.0.0.tgz"
+  integrity sha512-wIkAryiqt/nV5EQKqQpo3SToSOV9J0DnbJqwK7Wv/Trc92zIAYZ4FlMu+JPFW1DfGFt81ZTCGgDEabffXeLyJg==
+  dependencies:
+    domelementtype "^2.3.0"
+    domhandler "^5.0.2"
+    entities "^4.2.0"
+
+domelementtype@^2.3.0:
+  version "2.3.0"
+  resolved "https://registry.npmjs.org/domelementtype/-/domelementtype-2.3.0.tgz"
+  integrity sha512-OLETBj6w0OsagBwdXnPdN0cnMfF9opN69co+7ZrbfPGrdpPVNBUj02spi6B1N7wChLQiPn4CSH/zJvXw56gmHw==
+
+domhandler@^5.0.2, domhandler@^5.0.3:
+  version "5.0.3"
+  resolved "https://registry.npmjs.org/domhandler/-/domhandler-5.0.3.tgz"
+  integrity sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w==
+  dependencies:
+    domelementtype "^2.3.0"
+
 domino@^2.1.6:
   version "2.1.6"
   resolved "https://registry.npmjs.org/domino/-/domino-2.1.6.tgz"
   integrity sha512-3VdM/SXBZX2omc9JF9nOPCtDaYQ67BGp5CoLpIQlO2KCAPETs8TcDHacF26jXadGbvUteZzRTeos2fhID5+ucQ==
+
+domutils@^3.0.1:
+  version "3.2.2"
+  resolved "https://registry.npmjs.org/domutils/-/domutils-3.2.2.tgz"
+  integrity sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==
+  dependencies:
+    dom-serializer "^2.0.0"
+    domelementtype "^2.3.0"
+    domhandler "^5.0.3"
 
 dotenv-expand@~11.0.6:
   version "11.0.7"
@@ -4061,6 +4250,11 @@ end-of-stream@^1.1.0:
   integrity sha512-ooEGc6HP26xXq/N+GCGOT0JKCLDGrq2bQUZrQ7gyrJiZANJ/8YDTxTpQBXGMn+WbIQXNVpyWymm7KYVICQnyOg==
   dependencies:
     once "^1.4.0"
+
+entities@^4.2.0:
+  version "4.5.0"
+  resolved "https://registry.npmjs.org/entities/-/entities-4.5.0.tgz"
+  integrity sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==
 
 env-editor@^0.4.1:
   version "0.4.2"
@@ -5431,6 +5625,8 @@ jsesc@^3.0.2, jsesc@~3.1.0:
 
 json-buffer@3.0.1:
   version "3.0.1"
+  resolved "https://registry.npmjs.org/json-buffer/-/json-buffer-3.0.1.tgz"
+  integrity sha512-4bV5BfR2mqfQTJm+V5tPPdf+ZpuhiIvTuAB5g8kcrXOZpTT/QwwVRWBywX1ozr6lEuPdbHxwaJlm9G6mI2sfSQ==
 
 json-parse-better-errors@^1.0.1:
   version "1.0.2"
@@ -5492,6 +5688,8 @@ keychain@1.5.0:
 
 keyv@^4.0.0, keyv@^4.5.4:
   version "4.5.4"
+  resolved "https://registry.npmjs.org/keyv/-/keyv-4.5.4.tgz"
+  integrity sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==
   dependencies:
     json-buffer "3.0.1"
 
@@ -5738,6 +5936,11 @@ md5@^2.2.1:
     charenc "0.0.2"
     crypt "0.0.2"
     is-buffer "~1.1.6"
+
+mdn-data@2.0.14:
+  version "2.0.14"
+  resolved "https://registry.npmjs.org/mdn-data/-/mdn-data-2.0.14.tgz"
+  integrity sha512-dn6wd0uw5GsdswPFfsgMp5NSB0/aDe6fK94YJV/AJDYXL6HVLWBsxeq7js7Ad+mU2K9LAlwpk6kN2D5mwCPVow==
 
 memoize-one@^5.0.0:
   version "5.2.1"
@@ -6414,6 +6617,13 @@ npm-package-arg@^11.0.0:
     semver "^7.3.5"
     validate-npm-package-name "^5.0.0"
 
+nth-check@^2.0.1:
+  version "2.1.1"
+  resolved "https://registry.npmjs.org/nth-check/-/nth-check-2.1.1.tgz"
+  integrity sha512-lqjrjmaOoAnWfMmBPL+XNnynZh2+swxiX3WUE0s4yEHI6m+AwrK2UZOimIRl3X/4QctVqS8AiZjFqyOGrMXb/w==
+  dependencies:
+    boolbase "^1.0.0"
+
 nullthrows@^1.1.1, nullthrows@1.1.1:
   version "1.1.1"
   resolved "https://registry.npmjs.org/nullthrows/-/nullthrows-1.1.1.tgz"
@@ -6904,6 +7114,11 @@ react-is@^18.0.0:
   resolved "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz"
   integrity sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==
 
+react-native-clarity@^4.8.0:
+  version "4.8.0"
+  resolved "https://registry.npmjs.org/react-native-clarity/-/react-native-clarity-4.8.0.tgz"
+  integrity sha512-2kwLtvfLMomFZ+Wo8lX5OkUOzUmL2qQo/ChXzh+W5fZShlywCLOFvI77ABdC7SEtChd5XcIjPMV0JREO5XD7Lg==
+
 react-native-device-info@^15.0.1:
   version "15.0.1"
   resolved "https://registry.npmjs.org/react-native-device-info/-/react-native-device-info-15.0.1.tgz"
@@ -6951,6 +7166,15 @@ react-native-siren@^0.0.7:
   dependencies:
     apisauce "^3.1.0"
     react-native-device-info "^8.7.0"
+
+react-native-svg@>=14.0.0, react-native-svg@15.12.1:
+  version "15.12.1"
+  resolved "https://registry.npmjs.org/react-native-svg/-/react-native-svg-15.12.1.tgz"
+  integrity sha512-vCuZJDf8a5aNC2dlMovEv4Z0jjEUET53lm/iILFnFewa15b4atjVxU6Wirm6O9y6dEsdjDZVD7Q3QM4T1wlI8g==
+  dependencies:
+    css-select "^5.1.0"
+    css-tree "^1.1.3"
+    warn-once "0.1.1"
 
 react-native-webview@*, react-native-webview@^13.15.0:
   version "13.15.0"
@@ -7415,6 +7639,11 @@ source-map@^0.5.6:
   integrity sha512-LbrmJOMUSdEVxIKvdcJzQC+nQhe8FUZQTXQy6+I75skNgn3OoQ0DZA8YnFa7gp8tqtL3KPf1kmo0R5DoApeSGQ==
 
 source-map@^0.6.0:
+  version "0.6.1"
+  resolved "https://registry.npmjs.org/source-map/-/source-map-0.6.1.tgz"
+  integrity sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==
+
+source-map@^0.6.1:
   version "0.6.1"
   resolved "https://registry.npmjs.org/source-map/-/source-map-0.6.1.tgz"
   integrity sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==
@@ -8003,6 +8232,11 @@ walker@^1.0.7, walker@^1.0.8:
   integrity sha512-ts/8E8l5b7kY0vlWLewOkDXMmPdLcVV4GmOQLyxuSswIJsweeFZtAsMF7k1Nszz+TYBQrlYRmzOnr398y1JemQ==
   dependencies:
     makeerror "1.0.12"
+
+warn-once@0.1.1:
+  version "0.1.1"
+  resolved "https://registry.npmjs.org/warn-once/-/warn-once-0.1.1.tgz"
+  integrity sha512-VkQZJbO8zVImzYFteBXvBOZEl1qL175WH8VmZcxF2fZAoudNhNDvHi+doCaAEdU2l2vtcIwa2zn0QK5+I1HQ3Q==
 
 wcwidth@^1.0.1:
   version "1.0.1"

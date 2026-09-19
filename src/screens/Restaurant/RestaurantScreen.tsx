@@ -26,6 +26,7 @@ import { Shimmer } from '@/components/Shimmer';
 import { OptimizedImage } from '@/components/OptimizedImage';
 import { CustomizationModal } from '@/components/CustomizationModal';
 import { AppFooter } from '@/components/AppFooter';
+import { ViewCartBar } from '@/components/ViewCartBar';
 import { CustomisationsReviewModal } from '@/components/CustomisationsReviewModal';
 import { FoodItemDetailModal } from '@/components/FoodItemDetailModal';
 import { FilterState } from '@/components/FilterModal';
@@ -35,9 +36,12 @@ import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { favoritesService } from '@/services/favorites.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { useHideOnScroll } from '@/hooks/useHideOnScroll';
 import { ItemTiming as ImportedItemTiming, isItemAvailable } from '@/utils/timing.utils';
 import { MAX_ITEM_QUANTITY } from '@/constants/cart.constants';
 import { analyticsService, AnalyticsEvents, AnalyticsScreens } from '@/services/analytics.service';
+import { reelService, Reel } from '@/services/reel.service';
+import { ReelsPager } from './components/ReelsPager';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -298,6 +302,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, reloadCart, flushPendingQuantityUpdate, checkRestaurantConflict, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName, restaurantLogo: cartRestaurantLogo } = useCart();
   const { vegMode, setVegMode } = useVegMode();
   const { showConfirmation } = useConfirmation();
+  const { hidden: cartBarHidden, onScroll: hideCartBarOnScroll } = useHideOnScroll();
+
+  // Reels tab. Loaded alongside the menu; the toggle only appears once a
+  // store actually has live reels, so nothing changes for stores without them.
+  const [reels, setReels] = useState<Reel[]>([]);
+  const [activeView, setActiveView] = useState<'menu' | 'reels'>('menu');
 
   // Helper function to handle addToCart errors
   const handleAddToCartError = (error: any) => {
@@ -1081,17 +1091,22 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           return true;
         });
 
-        // Sort items within category: enabled items first, then disabled items
+        // Order items within category: enabled items first, then disabled items.
+        // Within each availability group we preserve the exact order the API
+        // returned (backend `display_rank` / menu drag order) — do NOT sort by
+        // name or price. Array.prototype.sort is stable, so returning 0 for
+        // same-availability items keeps the API order intact.
         filteredItems = [...filteredItems].sort((a, b) => {
           const aAvailable = isItemFullyAvailable(a);
           const bAvailable = isItemFullyAvailable(b);
 
-          // Primary sort: availability (enabled items come first)
+          // Primary grouping: availability (enabled items come first)
           if (aAvailable !== bAvailable) {
             return aAvailable ? -1 : 1; // true (available) comes before false (disabled)
           }
 
-          // Secondary sort: price (if filter is active and both have same availability)
+          // Optional price sort — only when the user has actively selected one.
+          // Otherwise fall through to API (display_rank) order.
           if (filters.sortBy) {
             if (filters.sortBy === 'lowToHigh') {
               return a.price - b.price;
@@ -1100,6 +1115,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             }
           }
 
+          // Same availability, no explicit price sort → keep API order.
           return 0;
         });
 
@@ -1315,9 +1331,16 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
       // Only fetch restaurant details if we have coordinates (either from default address or fallback)
       // This ensures we use the correct coordinates
       fetchRestaurantDetails();
+
+      // Reels load in parallel and never block the menu: the service swallows
+      // its own errors and returns [], so a reel outage cannot stop a buyer
+      // ordering.
+      reelService.getStoreReels(restaurantId).then(setReels);
     } else if (!visible) {
       setRestaurantData(null);
       setMenuSections([]);
+      setReels([]);
+      setActiveView('menu');
       cartReloadedRef.current = false;
     }
   }, [visible, restaurantId, defaultAddressCoords]);
@@ -1519,12 +1542,16 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               return menuItem;
             });
 
-            // Sort items: available items first, unavailable items last
+            // Order items: available first, unavailable last. Within each
+            // availability group preserve the exact API order (backend
+            // `display_rank` / menu drag order) — do NOT sort by name or price.
+            // Array.prototype.sort is stable, so returning 0 for same-availability
+            // items keeps the API order intact.
             const sortedItems = items.sort((a, b) => {
               const aAvailable = isItemAvailable(a.timings);
               const bAvailable = isItemAvailable(b.timings);
 
-              if (aAvailable === bAvailable) return 0;
+              if (aAvailable === bAvailable) return 0; // keep API order
               return aAvailable ? -1 : 1; // Available items come first
             });
 
@@ -1577,6 +1604,9 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   // Handle scroll to detect current category
   const handleScroll = (event: any) => {
     const scrollY = event.nativeEvent.contentOffset.y;
+
+    // Cart pill gets out of the way while the menu is being read.
+    hideCartBarOnScroll(scrollY);
 
     // Find which section is currently visible
     let currentSection = null;
@@ -1660,6 +1690,43 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
                   <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
                 </TouchableOpacity>
+
+                {/* Menu / Reels toggle — only for stores that actually have
+                    live reels, so every other store page is untouched. */}
+                {reels.length > 0 && (
+                  <View style={styles.viewToggle}>
+                    <TouchableOpacity
+                      style={[styles.viewToggleTab, activeView === 'menu' && styles.viewToggleTabActive]}
+                      onPress={() => setActiveView('menu')}
+                      activeOpacity={0.8}
+                      testID="store-tab-menu"
+                    >
+                      <MaterialIcons
+                        name="menu"
+                        size={16}
+                        color={activeView === 'menu' ? '#001E1F' : 'rgba(255,255,255,0.9)'}
+                      />
+                      <Text style={[styles.viewToggleText, activeView === 'menu' && styles.viewToggleTextActive]}>
+                        Menu
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.viewToggleTab, activeView === 'reels' && styles.viewToggleTabActive]}
+                      onPress={() => setActiveView('reels')}
+                      activeOpacity={0.8}
+                      testID="store-tab-reels"
+                    >
+                      <MaterialIcons
+                        name="play-circle-outline"
+                        size={16}
+                        color={activeView === 'reels' ? '#001E1F' : 'rgba(255,255,255,0.9)'}
+                      />
+                      <Text style={[styles.viewToggleText, activeView === 'reels' && styles.viewToggleTextActive]}>
+                        Reels
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
 
                 {/* Restaurant Info Card with Shimmer */}
                 <View style={styles.restaurantCard}>
@@ -2225,12 +2292,12 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           {/* <AppFooter /> */}
         </ScrollView>
 
-        {/* Bottom Cart Bar */}
+        {/* Bottom Cart Bar - the shared floating pill. The handler still checks
+            the shop is open and flushes any pending quantity change first. */}
         {totalCartItems > 0 && (
-          <View style={[styles.cartBar, { bottom: 0, paddingBottom: insets.bottom + 10 }]}>
-            <TouchableOpacity
-              style={styles.cartButton}
-              onPress={async () => {
+          <ViewCartBar
+            hidden={cartBarHidden}
+            onPress={async () => {
                 if (!onNavigateToCheckout) return;
                 if (!ensureRestaurantOpen()) return;
 
@@ -2249,18 +2316,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   'Restaurant Address';
 
                 onNavigateToCheckout(restaurantId, restaurantName || '', restaurantAddress, 'restaurant');
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.cartItemCount}>
-                {totalCartItems} Item{totalCartItems > 1 ? 's' : ''} Added
-              </Text>
-              <View style={styles.viewCartButton}>
-                <Text style={styles.viewCartText}>View Cart</Text>
-                <MaterialIcons name="arrow-forward" size={16} color="#181C2E" />
-              </View>
-            </TouchableOpacity>
-          </View>
+            }}
+          />
         )}
 
         {/* Floating Menu Button - Toggle (only show when menu is closed) */}
@@ -2269,7 +2326,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             style={[
               styles.floatingMenuButton,
               totalCartItems > 0 && styles.floatingMenuButtonWithCart,
-              { bottom: totalCartItems > 0 ? 145 : 45 }
+              { bottom: totalCartItems > 0 ? insets.bottom + 96 : 45 }
             ]}
             onPress={() => setShowQuickMenu(true)}
           >
@@ -2343,6 +2400,55 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
           </View>
         )}
       </Animated.View>
+
+      {/* Reels view.
+          Rendered as a full-screen overlay rather than swapping the menu out
+          of the ScrollView: the menu keeps its scroll position and nothing
+          about the existing 3.5k-line layout has to be restructured. */}
+      {activeView === 'reels' && reels.length > 0 && (
+        <View style={[StyleSheet.absoluteFill, styles.reelsContainer]}>
+          <ReelsPager
+            reels={reels}
+            onAddToCart={(itemId) => {
+              // Reuse the menu's own add path so cart rules, customisation and
+              // restaurant-conflict checks behave identically from a reel.
+              const menuItem = menuSections
+                .flatMap((section: any) => section?.data ?? section?.items ?? [])
+                .find((entry: any) => Number(entry?.id) === Number(itemId));
+              if (menuItem) {
+                addToCart(menuItem);
+              }
+            }}
+            isOutOfStock={(itemId) => {
+              const menuItem = menuSections
+                .flatMap((section: any) => section?.data ?? section?.items ?? [])
+                .find((entry: any) => Number(entry?.id) === Number(itemId));
+              // Unknown dish is treated as unavailable rather than letting a
+              // buyer add something the menu has no record of.
+              if (!menuItem) return true;
+              return menuItem?.is_available === false || menuItem?.status === false;
+            }}
+            priceFor={(itemId) => {
+              const menuItem = menuSections
+                .flatMap((section: any) => section?.data ?? section?.items ?? [])
+                .find((entry: any) => Number(entry?.id) === Number(itemId));
+              return menuItem?.price != null ? String(menuItem.price) : undefined;
+            }}
+          />
+
+          <View style={[styles.reelsTopBar, { paddingTop: insets.top + 8 }]}>
+            <TouchableOpacity
+              style={styles.reelsBackButton}
+              onPress={() => setActiveView('menu')}
+              activeOpacity={0.8}
+              testID="reels-back-to-menu"
+            >
+              <MaterialIcons name="chevron-left" size={22} color="#FFFFFF" />
+              <Text style={styles.reelsBackText}>Menu</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Customization Modal */}
       <CustomizationModal
@@ -2490,6 +2596,60 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  // Sits over the hero, mirroring the app's existing pill controls.
+  viewToggle: {
+    position: 'absolute',
+    top: 0,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 24,
+    padding: 3,
+    zIndex: 20,
+  },
+  viewToggleTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  viewToggleTabActive: { backgroundColor: '#FFFFFF' },
+  viewToggleText: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 13,
+    letterSpacing: 0.2,
+    color: 'rgba(255,255,255,0.9)',
+  },
+  viewToggleTextActive: { color: '#001E1F' },
+  reelsContainer: { flex: 1, backgroundColor: '#000' },
+  reelsTopBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  reelsBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 20,
+    paddingLeft: 6,
+    paddingRight: 14,
+    paddingVertical: 7,
+  },
+  reelsBackText: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 13,
+    letterSpacing: 0.2,
+    color: '#FFFFFF',
+  },
   container: {
     flex: 1,
     backgroundColor: '#000000',

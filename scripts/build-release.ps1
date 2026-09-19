@@ -65,8 +65,12 @@ $safeAppName = $appName -replace ' ', '_'
 $envSuffix = if ($Environment -eq 'prod') { 'prod' } else { 'dev' }
 $apkSrc = Join-Path $outputDir "apk/$envSuffix/release/app-$envSuffix-release.apk"
 $apkDest = Join-Path $outputDir "apk/$envSuffix/release/$safeAppName-$version-$envSuffix.apk"
-$aabSrc = Join-Path $outputDir "bundle/$envSuffix/release/app-$envSuffix-release.aab"
-$aabDest = Join-Path $outputDir "bundle/$envSuffix/release/$safeAppName-$version-$envSuffix.aab"
+# Gradle writes bundles to bundle/<flavor><BuildType>, e.g. bundle/prodRelease -
+# not bundle/prod/release the way it does for APKs. Looking in the APK-shaped
+# path is why every AAB build ended with "AAB not found" and no renamed file.
+$aabDir = Join-Path $outputDir "bundle/${envSuffix}Release"
+$aabSrc = Join-Path $aabDir "app-$envSuffix-release.aab"
+$aabDest = Join-Path $aabDir "$safeAppName-$version-$envSuffix.aab"
 
 Write-Host ""
 Write-Host "[INFO] Renaming files..." -ForegroundColor Cyan
@@ -96,7 +100,7 @@ if ($Artifact -eq 'apk') {
   Write-Host "   APK: android/app/build/outputs/apk/$envSuffix/release/$safeAppName-$version-$envSuffix.apk"
 }
 if ($Artifact -eq 'bundle') {
-  Write-Host "   AAB: android/app/build/outputs/bundle/$envSuffix/release/$safeAppName-$version-$envSuffix.aab"
+  Write-Host "   AAB: android/app/build/outputs/bundle/${envSuffix}Release/$safeAppName-$version-$envSuffix.aab"
 }
 Write-Host ""
 Write-Host "[SUCCESS] Ready for distribution!" -ForegroundColor Green

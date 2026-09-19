@@ -27,6 +27,9 @@ import { HelpScreen } from '@/screens/Help/HelpScreen';
 import { ContactUsScreen } from '@/screens/Help/ContactUsScreen';
 import { ChatScreen } from '@/screens/Help/ChatScreen';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
+import { Kalam_700Bold } from '@expo-google-fonts/kalam';
+import { BANNER_FONT_MODULES } from './src/constants/bannerFonts';
+import { initClarity, claritySetScreen } from '@/services/clarity.service';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { authService } from '@/services/auth.service';
@@ -49,6 +52,7 @@ import { crashlyticsService } from '@/services/crashlytics.service';
 import { ForcedUpdateModal } from '@/components/ForcedUpdateModal';
 import { ManagedAppGate } from '@/components/ManagedAppGate';
 import { OfferDetailScreen } from '@/screens/Offer/OfferDetailScreen';
+import { StoreScreen } from '@/screens/Store/StoreScreen';
 import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 // import { initMeta } from '@/analytics/metaInit';
 // import { trackCheckout, trackViewRestaurant } from '@/analytics/metaEvents';
@@ -80,7 +84,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const { showConfirmation } = useConfirmation();
 
   // Default to login so we never flash location overlays before auth resolves; logged-in startup sets home/orders explicitly.
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat' | 'offerDetail'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat' | 'offerDetail' | 'storeDeals'>('login');
   /** Offer being viewed on the offerDetail screen. */
   const [selectedOfferId, setSelectedOfferId] = React.useState<number | null>(null);
   const [phoneNumber, setPhoneNumber] = React.useState('');
@@ -114,6 +118,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const [locationSelectionCameFrom, setLocationSelectionCameFrom] = React.useState<'home' | 'addressSelection' | 'myAddresses'>('home');
   const [orderTrackingCameFrom, setOrderTrackingCameFrom] = React.useState<'orders' | 'checkout' | 'orderDetail'>('orders');
   const [ordersCameFrom, setOrdersCameFrom] = React.useState<'profile' | 'orderDetail' | 'notification'>('profile');
+  /** Set when TRACK ORDER was pressed on the live order notification. */
+  const [autoOpenOrderTracking, setAutoOpenOrderTracking] = React.useState(false);
   const [orderDetailCameFrom, setOrderDetailCameFrom] = React.useState<'orders' | 'checkout'>('orders');
   const [editingAddress, setEditingAddress] = React.useState<any>(null);
   const [helpOrderData, setHelpOrderData] = React.useState<OrderListItem | null>(null);
@@ -365,11 +371,35 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
   const [fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
+    // The ₹99 Store price is handwritten, and this face carries the ₹ glyph
+    // so the rupee sign never falls back to a system font mid-number.
+    'Kalam_700Bold': Kalam_700Bold,
     'Poppins_400Regular': Poppins_400Regular,
     'Poppins_500Medium': Poppins_500Medium,
     'Poppins_600SemiBold': Poppins_600SemiBold,
     'Poppins_700Bold': Poppins_700Bold,
+    // Only the organizational banner uses these, but they load here with the
+    // rest: a face fetched later would pop in after the banner had already
+    // drawn, at the very top of the first screen anyone sees.
+    ...BANNER_FONT_MODULES,
   });
+
+  // Started before the first screen draws: a session that begins recording
+  // later is missing exactly the part worth watching - how someone lands and
+  // what they do first.
+  React.useEffect(() => {
+    initClarity();
+  }, []);
+
+  /**
+   * The app navigates with the hand-rolled switcher below rather than
+   * react-navigation, so Clarity has no router to observe. Feeding it the
+   * screen name keeps replays and heatmaps grouped per screen - without it
+   * the entire session records as one endless page.
+   */
+  React.useEffect(() => {
+    claritySetScreen(currentScreen);
+  }, [currentScreen]);
 
   const handleDeepLinkNavigation = React.useCallback((incomingUrl: string): boolean => {
     try {
@@ -524,6 +554,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       orderHelp: 'Order Help',
       chat: 'Chat',
       offerDetail: 'Offer Detail',
+      storeDeals: '₹99 Store',
     };
 
     const screenName = screenNameMap[currentScreen];
@@ -559,9 +590,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
     // Set navigation callback to handle notification taps
     // Route all notification taps to My Orders.
-    fcmNotificationService.setNavigationCallback(({ orderId }) => {
+    fcmNotificationService.setNavigationCallback(({ orderId, target }) => {
       startupNotificationNavigationRef.current = true;
-      console.log('📱 FCM: Notification tapped, navigating to My Orders:', orderId);
+      console.log(`📱 FCM: Notification tapped, target ${target}:`, orderId);
       onNotificationNavigateToOrders?.();
       // Force fresh fetch when arriving from notification tap.
       resetOrdersPersistence();
@@ -583,6 +614,17 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       checkoutScreenSlide.setValue(SCREEN_WIDTH);
       setEditingAddress(null);
       setSelectedOrderData(null);
+
+      // TRACK ORDER on the live notification: open that order with its map
+      // already showing, so the rider is on screen in one tap.
+      if (target === 'track' && orderId) {
+        setOrderDetailCameFrom('orders');
+        setSelectedOrderId(orderId.toString());
+        setAutoOpenOrderTracking(true);
+        setCurrentScreen('orderDetail');
+        orderDetailScreenSlide.setValue(0);
+        return;
+      }
 
       // Keep existing back behavior: Orders -> Profile for notification entry.
       setOrdersCameFrom('notification');
@@ -1034,6 +1076,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         // which tells React Native the back press was NOT handled — Android
         // then ran its default action and closed the app.
         setSelectedOfferId(null);
+        setCurrentScreen('home');
+        return true;
+      case 'storeDeals':
         setCurrentScreen('home');
         return true;
       case 'chat':
@@ -3003,6 +3048,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               isGuest={!isAuthenticatedRef.current}
               onNavigateToLogin={transitionGuestToLogin}
               onNavigateToOffer={handleNavigateToOffer}
+              onNavigateToStore={() => setCurrentScreen('storeDeals')}
               />
             </Animated.View>
 
@@ -3132,6 +3178,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               onRateOrder={handleNavigateToRateOrder}
               onReorder={() => handleReorder(selectedOrderId)}
               onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId, 'orderDetail')}
+              autoOpenTracking={autoOpenOrderTracking}
+              onAutoTrackingHandled={() => setAutoOpenOrderTracking(false)}
               onDownloadInvoice={() => {}}
               onContactUs={() => handleNavigateToContactUs('orderDetail')}
               onHelp={handleNavigateToOrderHelp}
@@ -3147,6 +3195,31 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                 helpOptionId={chatHelpOptionId}
                 helpOptionTitle={chatHelpOptionTitle}
                 orderId={selectedOrderId}
+              />
+            </View>
+          )}
+
+          {/* ₹99 Store — reached from the home banner or "See all". */}
+          {currentScreen === 'storeDeals' && (
+            <View style={styles.chatOverlay}>
+              <StoreScreen
+                onBack={() => setCurrentScreen('home')}
+                latitude={selectedLocation?.latitude}
+                longitude={selectedLocation?.longitude}
+                onRequireLogin={() => {
+                  // A deal is counted per customer, so a guest has to sign in.
+                  setCurrentScreen('login');
+                }}
+                onNavigateToCheckout={() => {
+                  if (cartRestaurantId) {
+                    handleNavigateToCheckout(
+                      cartRestaurantId,
+                      cartRestaurantName || '',
+                      undefined,
+                      'home',
+                    );
+                  }
+                }}
               />
             </View>
           )}
@@ -3172,6 +3245,12 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                     undefined,
                     'home',
                   );
+                }}
+                onRequireLogin={() => {
+                  // Drop the offer so returning from login lands on home
+                  // rather than a screen the guest could not act on.
+                  setSelectedOfferId(null);
+                  setCurrentScreen('login');
                 }}
               />
             </View>

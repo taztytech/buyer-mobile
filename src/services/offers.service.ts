@@ -21,6 +21,8 @@ export type DeliveryChargeMode = 'standard' | 'per_km' | 'free';
 export type BuyerState =
   | 'not_open_yet'
   | 'bookable'
+  /** This user is holding an unpaid slot — they can go back and finish. */
+  | 'pending_payment'
   | 'sold_out'
   | 'already_claimed'
   | 'closed';
@@ -52,6 +54,8 @@ export interface Offer {
   cancellation_allowed: boolean;
   delivery_charge_mode: DeliveryChargeMode;
   delivery_charge_value?: number;
+  /** null = normal per-item tax rules · 0 = no tax · 5 = 5% of the subtotal. */
+  tax_percent?: number | null;
   status: string;
   items: OfferItem[];
 
@@ -221,9 +225,26 @@ class OffersService {
    * the cart so the payment layer does not have to thread it through checkout.
    */
   private pendingOfferId: number | null = null;
+  /** Payment terms of the offer currently in the cart, for the checkout UI. */
+  private pendingPaymentMode: PaymentMode | null = null;
 
-  setPendingClaim(offerId: number) {
+  setPendingClaim(offerId: number, paymentMode?: PaymentMode) {
     this.pendingOfferId = offerId;
+    this.pendingPaymentMode = paymentMode ?? null;
+  }
+
+  /**
+   * True when the cart holds an offer that only accepts online payment, so
+   * checkout can hide COD rather than let the customer pick it and be refused
+   * by the server after they have committed.
+   */
+  /** True when the cart currently holds an offer. Offer orders are standalone. */
+  hasPendingOffer(): boolean {
+    return this.pendingOfferId !== null;
+  }
+
+  isPendingOfferOnlineOnly(): boolean {
+    return this.pendingPaymentMode === 'online_only';
   }
 
   async getPendingClaimOfferId(): Promise<number | null> {
@@ -232,33 +253,109 @@ class OffersService {
 
   async clearPendingClaim(): Promise<void> {
     this.pendingOfferId = null;
+    this.pendingPaymentMode = null;
   }
 
-  /** Total the customer pays, e.g. 79 + 20 = 99. */
+  /**
+   * Delivery fee this screen can state with certainty.
+   *
+   * per_km is deliberately 0: the rate is per kilometre and the distance is
+   * not known until an address is chosen, so treating the rate as a flat fee
+   * would understate or overstate the bill.
+   */
+  private getKnownDeliveryFee(offer: Offer): number {
+    switch (offer.delivery_charge_mode) {
+      case 'free':
+      case 'per_km':
+        return 0;
+      default:
+        return Number(offer.delivery_charge_value ?? 0);
+    }
+  }
+
+  /**
+   * Total the customer pays, e.g. 79 + 20 = 99.
+   *
+   * Includes tax when the offer sets its own percentage. A null tax_percent
+   * means "use the normal tax rules", which depend on per-item rates the app
+   * does not have — so it is excluded here and disclosed by
+   * getTotalQualifier() instead of being silently omitted.
+   */
   getTotalPayable(offer: Offer): number {
-    if (offer.delivery_charge_mode === 'free') return Number(offer.offer_price);
-    return Number(offer.offer_price) + Number(offer.delivery_charge_value ?? 0);
+    const subtotal = Number(offer.offer_price) + this.getKnownDeliveryFee(offer);
+    const pct =
+      offer.tax_percent === null || offer.tax_percent === undefined
+        ? 0
+        : Number(offer.tax_percent);
+    const total = subtotal + (subtotal * pct) / 100;
+    return Math.round(total * 100) / 100;
   }
 
-  /** CTA label for the current state. */
+  /**
+   * True when getTotalPayable() is the exact amount charged. False when a
+   * per-km fee or default tax rules are still to be added at checkout.
+   */
+  isTotalExact(offer: Offer): boolean {
+    if (offer.delivery_charge_mode === 'per_km') return false;
+    return offer.tax_percent !== null && offer.tax_percent !== undefined;
+  }
+
+  /**
+   * What is still to be added, for display next to the total. Null when the
+   * total is exact. Showing one price and charging another is the specific
+   * failure this exists to prevent.
+   */
+  getTotalQualifier(offer: Offer): string | null {
+    const parts: string[] = [];
+    if (offer.delivery_charge_mode === 'per_km') {
+      parts.push(`+ ₹${Number(offer.delivery_charge_value ?? 0)}/km delivery`);
+    }
+    if (offer.tax_percent === null || offer.tax_percent === undefined) {
+      parts.push('+ taxes');
+    }
+    return parts.length ? parts.join(' · ') : null;
+  }
+
+  /**
+   * CTA label for the current state.
+   *
+   * A direct offer is ordinary shopping — the next screen is the cart, so the
+   * button says so. Pre-booking keeps "Book Now": the customer is holding a
+   * slot for a future delivery, and calling that "add to cart" understates
+   * what they are committing to.
+   */
   getCtaLabel(offer: Offer): string {
+    const isPrebooking = offer.fulfilment_mode === 'prebooking';
+    // Only put a price on the button when it is the real one. A button that
+    // promises ₹20 and charges more is worse than a button with no price.
+    const amount = this.isTotalExact(offer)
+      ? ` — ₹${this.getTotalPayable(offer)}`
+      : '';
+
     switch (offer.buyer_state) {
       case 'not_open_yet':
         return 'Not open yet';
       case 'sold_out':
         return 'SOLD OUT';
       case 'already_claimed':
-        return 'Already booked';
+        return isPrebooking ? 'Already booked' : 'Already ordered';
+      case 'pending_payment':
+        // They hold an unpaid slot — invite them to finish, not block them.
+        return `Complete ${isPrebooking ? 'booking' : 'order'}${amount}`;
       case 'closed':
         return 'Booking closed';
       case 'bookable':
       default:
-        return `Book Now — ₹${this.getTotalPayable(offer)}`;
+        return isPrebooking ? `Book Now${amount}` : `Add to Cart${amount}`;
     }
   }
 
   isBookable(offer: Offer): boolean {
-    return offer.buyer_state === 'bookable';
+    // pending_payment is actionable: the slot is already held by this user.
+    return (
+      offer.buyer_state === 'bookable' ||
+      offer.buyer_state === 'pending_payment'
+    );
   }
 }
 

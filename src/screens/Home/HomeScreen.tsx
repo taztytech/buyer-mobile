@@ -1,11 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ScrollView, FlatList, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking, useWindowDimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { resolveBannerFont } from '../../constants/bannerFonts';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme';
 import { authService } from '@/services/auth.service';
 import { homeService, BannerItem, CategoryItem, Restaurant, OrganizationBanner } from '@/services/home.service';
 import { OfferBannerSection } from '@/components/OfferBannerSection';
+import { StoreDealsSection } from '@/components/StoreDealsSection';
+import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
+import storeDealService, { type StoreDeal } from '@/services/storeDeal.service';
 import type { Offer } from '@/services/offers.service';
 import { paymentConfigService } from '@/services/payment-config.service';
 import { appConfigService } from '@/services/app-config.service';
@@ -16,11 +21,13 @@ import { OptimizedImage } from '@/components/OptimizedImage';
 import { AppFooter } from '@/components/AppFooter';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Video, ResizeMode } from 'expo-av';
 import { ViewCartBar } from '@/components/ViewCartBar';
 import { CategoryModal } from '@/components/CategoryModal';
 import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { useHideOnScroll } from '@/hooks/useHideOnScroll';
 import { restaurantService } from '@/services/restaurant.service';
 import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from '@/services/analytics.service';
 
@@ -54,6 +61,8 @@ interface HomeScreenProps {
   onForcedUpdateRequired?: (message?: string) => void; // Callback when API indicates forced update is required
   isGuest?: boolean;
   onNavigateToLogin?: () => void;
+  /** Open the ₹99 Store page (hero tap or "See all"). */
+  onNavigateToStore?: () => void;
 }
 
 interface CarouselItem {
@@ -104,6 +113,14 @@ const DEFAULT_LOCATION = {
 
 
 
+/**
+ * Which language the organizational banner is showing.
+ *
+ * Deliberately banner-scoped: the app itself is not translated, so this must
+ * not read as an app-wide language setting.
+ */
+const BANNER_LANGUAGE_STORAGE_KEY = 'tazty.banner.language';
+
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onLogout,
   onNavigateToProfile,
@@ -121,17 +138,97 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   addressRefreshTrigger,
   isFocused = true,
   onForcedUpdateRequired,
+  onNavigateToStore,
 }) => {
-  const { restaurantId, restaurantName, restaurantLogo, getTotalItems, flushPendingQuantityUpdate } = useCart();
+  const {
+    restaurantId,
+    restaurantName,
+    restaurantLogo,
+    getTotalItems,
+    flushPendingQuantityUpdate,
+    reloadCart,
+    setRestaurantInfo,
+  } = useCart();
   const { vegMode, setVegMode, isVegModeEnabled } = useVegMode();
   const { showConfirmation } = useConfirmation();
+  const { hidden: cartBarHidden, onScroll: hideCartBarOnScroll } = useHideOnScroll();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const bannerWidth = Math.max(0, windowWidth - 40);
   const [searchSectionBottomY, setSearchSectionBottomY] = React.useState<number>(0);
+  const { add: addStoreDeal, addingDealId } = useStoreDealAdd();
+
+  /**
+   * ADD on a ₹99 Store card.
+   *
+   * The deal price, its daily budget and this customer's daily limit are all
+   * enforced by the API, so whatever it refuses is shown as it came back. A
+   * deal cart is standalone, so an existing cart is cleared only after the
+   * customer says so.
+   */
+  const handleStoreDealAdd = React.useCallback(
+    async (deal: StoreDeal, forceClearCart = false) => {
+      const outcome = await addStoreDeal(deal, { forceClearCart });
+
+      if (outcome.status === 'needs_login') {
+        onNavigateToLogin?.();
+        return;
+      }
+
+      if (outcome.status === 'needs_cart_clear') {
+        showConfirmation({
+          title: 'Start a new cart?',
+          message:
+            '₹99 Store deals are ordered on their own. Your current cart will be cleared.',
+          confirmText: 'Clear and add',
+          cancelText: 'Keep my cart',
+          confirmButtonColor: '#E8501C',
+          onConfirm: () => {
+            handleStoreDealAdd(deal, true);
+          },
+        });
+        return;
+      }
+
+      if (outcome.status === 'unavailable') {
+        showConfirmation({
+          title: '₹99 Store',
+          message: outcome.message,
+          confirmText: 'OK',
+          cancelText: '',
+          confirmButtonColor: '#E8501C',
+          onConfirm: () => { },
+        });
+        // Whatever it was, this card's state has moved on.
+        const fresh = await storeDealService.getDeals(
+          externalSelectedLocation?.latitude,
+          externalSelectedLocation?.longitude,
+        );
+        if (fresh.length) setStoreDeals(fresh);
+        return;
+      }
+
+      if (outcome.status === 'in_cart') {
+        setRestaurantInfo(deal.restaurant_id, deal.restaurant?.name || '');
+        await reloadCart();
+      }
+    },
+    [
+      addStoreDeal,
+      externalSelectedLocation?.latitude,
+      externalSelectedLocation?.longitude,
+      onNavigateToLogin,
+      reloadCart,
+      setRestaurantInfo,
+      showConfirmation,
+    ],
+  );
 
   const [organizationBanners, setOrganizationBanners] = React.useState<OrganizationBanner[]>([]);
   const [offerBanners, setOfferBanners] = React.useState<Offer[]>([]);
+  // ₹99 Store deals. Arrive with the home payload already carrying their
+  // state, so the row renders without a request of its own.
+  const [storeDeals, setStoreDeals] = React.useState<StoreDeal[]>([]);
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
 
   // Auto-slide for organization banner
@@ -210,14 +307,121 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   /** Remote URL for home header background from API; null = use bundled default */
   const [homeBackgroundImageUrl, setHomeBackgroundImageUrl] = React.useState<string | null>(null);
   const [headerBackgroundLoadFailed, setHeaderBackgroundLoadFailed] = React.useState(false);
+  const [bannerLanguage, setBannerLanguage] = React.useState<'en' | 'ta'>('en');
+
+  // Remembered so the choice survives leaving the screen. A read failure is
+  // ignored on purpose: no stored preference simply means English.
+  React.useEffect(() => {
+    AsyncStorage.getItem(BANNER_LANGUAGE_STORAGE_KEY)
+      .then((stored) => {
+        if (stored === 'ta' || stored === 'en') {
+          setBannerLanguage(stored);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleToggleBannerLanguage = React.useCallback(() => {
+    setBannerLanguage((current) => {
+      const next = current === 'ta' ? 'en' : 'ta';
+      AsyncStorage.setItem(BANNER_LANGUAGE_STORAGE_KEY, next).catch(() => {});
+      return next;
+    });
+  }, []);
 
   // Derived state for the header display
   const activeOrganizationBanner = organizationBanners.length > 0 ? organizationBanners[activeBannerIndex] : null;
   const homeTopBackgroundColor = activeOrganizationBanner?.background_color || '#FFFFFF';
   const displayBackgroundImageUrl = activeOrganizationBanner?.image_url || '';
-  const promoTitle = activeOrganizationBanner?.title || (isLoadingBanners ? '' : '');
-  const promoSubtitle = activeOrganizationBanner?.subtitle || (isLoadingBanners ? '' : '');
   const hasExistingBannerVisual = Boolean(activeOrganizationBanner?.image_url || activeOrganizationBanner?.background_color);
+
+  /**
+   * Banner language.
+   *
+   * The toggle is offered only when the admin actually filled Tamil in - a
+   * banner with no Tamil title has nothing to switch to, and a dead control at
+   * the very top of the first screen is worse than no control.
+   */
+  const bannerHasTamil = Boolean(activeOrganizationBanner?.title_ta);
+  const bannerIsTamil = bannerHasTamil && bannerLanguage === 'ta';
+
+  const promoTitle = bannerIsTamil
+    ? activeOrganizationBanner?.title_ta || ''
+    : activeOrganizationBanner?.title || '';
+  // Falls back to the English subtitle rather than showing nothing: the admin
+  // may have translated the headline and left the line beneath it alone.
+  const promoSubtitle = bannerIsTamil
+    ? activeOrganizationBanner?.subtitle_ta || activeOrganizationBanner?.subtitle || ''
+    : activeOrganizationBanner?.subtitle || '';
+
+  /**
+   * Banner appearance, all optional.
+   *
+   * Every value falls back to what the screen used before these fields
+   * existed, so a banner created without them looks exactly as it always did.
+   */
+  const bannerIsVideo =
+    activeOrganizationBanner?.media_type === 'video' &&
+    Boolean(activeOrganizationBanner?.video_url);
+  // The poster fills this space until the first frame is ready. Without it the
+  // top of the home screen would be blank while the video downloads.
+  const bannerPosterUrl =
+    activeOrganizationBanner?.poster_url || displayBackgroundImageUrl;
+  const bannerGradientFrom = activeOrganizationBanner?.gradient_from || null;
+  const bannerGradientTo = activeOrganizationBanner?.gradient_to || null;
+  const bannerHasGradient = Boolean(bannerGradientFrom && bannerGradientTo);
+  const bannerGradientDirection =
+    activeOrganizationBanner?.gradient_direction || 'vertical';
+  // expo-linear-gradient takes start/end points rather than an angle.
+  const bannerGradientStart =
+    bannerGradientDirection === 'horizontal'
+      ? { x: 0, y: 0.5 }
+      : bannerGradientDirection === 'diagonal'
+        ? { x: 0, y: 0 }
+        : { x: 0.5, y: 0 };
+  const bannerGradientEnd =
+    bannerGradientDirection === 'horizontal'
+      ? { x: 1, y: 0.5 }
+      : bannerGradientDirection === 'diagonal'
+        ? { x: 1, y: 1 }
+        : { x: 0.5, y: 1 };
+  /**
+   * Typography follows the language, because the families are not
+   * interchangeable: none of the Latin ones carry Tamil glyphs.
+   *
+   * resolveBannerFont translates the family the panel stored into the key the
+   * face was actually loaded under, and returns undefined for anything not
+   * bundled - React Native does not error on an unknown family, it silently
+   * drops to the system font, so passing the raw name through would quietly
+   * undo the app's typography instead of showing a problem.
+   */
+  const bannerFontFamily = bannerIsTamil
+    ? activeOrganizationBanner?.font_family_ta
+    : activeOrganizationBanner?.font_family;
+  const bannerTitleFont = resolveBannerFont(bannerFontFamily, 'bold');
+  const bannerSubtitleFont = resolveBannerFont(bannerFontFamily, 'regular');
+  // Tamil sizes are optional; unset means reuse whatever English uses.
+  const bannerTitleSize = bannerIsTamil
+    ? activeOrganizationBanner?.title_font_size_ta ?? activeOrganizationBanner?.title_font_size
+    : activeOrganizationBanner?.title_font_size;
+  const bannerSubtitleSize = bannerIsTamil
+    ? activeOrganizationBanner?.subtitle_font_size_ta ?? activeOrganizationBanner?.subtitle_font_size
+    : activeOrganizationBanner?.subtitle_font_size;
+
+  const bannerTitleStyle = {
+    ...(bannerTitleFont ? { fontFamily: bannerTitleFont } : {}),
+    ...(bannerTitleSize ? { fontSize: Number(bannerTitleSize) } : {}),
+    ...(activeOrganizationBanner?.title_color
+      ? { color: activeOrganizationBanner.title_color }
+      : {}),
+  };
+  const bannerSubtitleStyle = {
+    ...(bannerSubtitleFont ? { fontFamily: bannerSubtitleFont } : {}),
+    ...(bannerSubtitleSize ? { fontSize: Number(bannerSubtitleSize) } : {}),
+    ...(activeOrganizationBanner?.subtitle_color
+      ? { color: activeOrganizationBanner.subtitle_color }
+      : {}),
+  };
 
   const shouldShowBadgesRow =
     appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0);
@@ -882,6 +1086,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           Array.isArray(offerBannerRaw) ? (offerBannerRaw as Offer[]) : [],
         );
 
+        // ₹99 Store deals, already filtered and state-stamped server-side.
+        const storeDealsRaw = (actualData as any).store_deals;
+        setStoreDeals(
+          Array.isArray(storeDealsRaw) ? (storeDealsRaw as StoreDeal[]) : [],
+        );
+
         // Handle promotional banners
         if (promotionalBanner) {
           // Handle if it's a single object or array
@@ -1492,6 +1702,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Handle scroll to detect when category section becomes sticky and load more restaurants
   const handleScroll = React.useCallback((event: any) => {
     const scrollY = event.nativeEvent.contentOffset.y;
+
+    // Cart pill gets out of the way while the customer browses.
+    hideCartBarOnScroll(scrollY);
     const layoutHeight = event.nativeEvent.layoutMeasurement.height;
     const contentHeight = event.nativeEvent.contentSize.height;
 
@@ -1801,6 +2014,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }]}>
                     <ActivityIndicator size="large" color={colors.primary} />
                   </View>
+                ) : bannerIsVideo && !headerBackgroundLoadFailed ? (
+                  <Video
+                    source={{ uri: activeOrganizationBanner!.video_url! }}
+                    posterSource={bannerPosterUrl ? { uri: bannerPosterUrl } : undefined}
+                    usePoster={Boolean(bannerPosterUrl)}
+                    posterStyle={{ resizeMode: 'cover' }}
+                    style={StyleSheet.absoluteFill}
+                    resizeMode={ResizeMode.COVER}
+                    shouldPlay
+                    isLooping
+                    // Muted is not a preference: iOS refuses to autoplay with
+                    // sound, and a banner that starts talking is hostile.
+                    isMuted
+                    useNativeControls={false}
+                    onError={() => setHeaderBackgroundLoadFailed(true)}
+                    testID="home-header-video-section-remote"
+                  />
                 ) : displayBackgroundImageUrl && !headerBackgroundLoadFailed ? (
                   <OptimizedImage
                     source={displayBackgroundImageUrl}
@@ -1818,10 +2048,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 {(!isLoadingBanners || hasExistingBannerVisual) && (
                   <>
                     <LinearGradient
-                      colors={[homeTopBackgroundColor, homeTopBackgroundColor, 'rgba(0,0,0,0)']}
+                      colors={
+                        bannerHasGradient
+                          ? [bannerGradientFrom!, bannerGradientTo!, 'rgba(0,0,0,0)']
+                          : [homeTopBackgroundColor, homeTopBackgroundColor, 'rgba(0,0,0,0)']
+                      }
                       locations={[0, 0.6, 1]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
+                      start={bannerHasGradient ? bannerGradientStart : { x: 0, y: 0 }}
+                      end={bannerHasGradient ? bannerGradientEnd : { x: 0, y: 1 }}
                       style={styles.headerImageSectionTopFade}
                     />
 
@@ -1838,12 +2072,50 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
                 {!isLoadingLocation && (
                   <View style={styles.headerImageInnerContent}>
+                    {/* Sibling of the promo block rather than inside it: that
+                        block is pointerEvents="none" so the banner stays
+                        tappable as a whole. */}
+                    {bannerHasTamil && (
+                      <TouchableOpacity
+                        style={styles.bannerLanguageToggle}
+                        onPress={handleToggleBannerLanguage}
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          bannerIsTamil ? 'Show banner in English' : 'Show banner in Tamil'
+                        }
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        testID="home-banner-language-toggle"
+                      >
+                        <Text
+                          style={[
+                            styles.bannerLanguageText,
+                            !bannerIsTamil && styles.bannerLanguageTextActive,
+                          ]}
+                        >
+                          EN
+                        </Text>
+                        <Text style={styles.bannerLanguageDivider}>|</Text>
+                        <Text
+                          style={[
+                            styles.bannerLanguageText,
+                            styles.bannerLanguageTamilText,
+                            bannerIsTamil && styles.bannerLanguageTextActive,
+                          ]}
+                        >
+                          த
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                     <View
                       style={[styles.homePromoBlockInImageSection, !isLocationServiceable && styles.homePromoBlockDisabled]}
                       pointerEvents="none"
                     >
-                      <Text style={styles.homePromoHeadline}>{promoTitle}</Text>
-                      <Text style={styles.homePromoSubline}>
+                      {/* Banner overrides come second so they win, and are
+                          empty objects when the banner sets nothing. */}
+                      <Text style={[styles.homePromoHeadline, bannerTitleStyle]}>
+                        {promoTitle}
+                      </Text>
+                      <Text style={[styles.homePromoSubline, bannerSubtitleStyle]}>
                         {promoSubtitle}
                       </Text>
                     </View>
@@ -1913,6 +2185,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   </>
                 )}
 
+                {/* The reason the app is closed. Everything below this is
+                    hidden while closed, so without it a buyer just sees an
+                    emptier home screen and no explanation - the message only
+                    reached them if they got as far as trying to order. */}
+                {appOperationStatus?.is_open === false && !!appOperationStatus?.message && (
+                  <View style={styles.appClosedNotice} testID="home-app-closed-notice">
+                    <Text style={styles.appClosedTitle}>Currently closed</Text>
+                    <Text style={styles.appClosedMessage}>
+                      {appOperationStatus.message}
+                    </Text>
+                  </View>
+                )}
+
                 {(showBannerShimmer || carouselData.length > 0) && appOperationStatus?.is_open !== false && (
                   <View
                     style={[
@@ -1971,6 +2256,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <OfferBannerSection
                   offers={offerBanners}
                   onOfferPress={offer => onNavigateToOffer?.(offer.id)}
+                />
+
+                {/* ₹99 Store: the banner and today's deals. Renders nothing
+                    when there are no live deals. */}
+                <StoreDealsSection
+                  deals={storeDeals}
+                  addingDealId={addingDealId}
+                  onAdd={deal => handleStoreDealAdd(deal)}
+                  onSeeAll={() => onNavigateToStore?.()}
                 />
 
                 {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
@@ -2281,6 +2575,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* View Cart Bar - shows when cart has items and location is serviceable */}
       {isLocationServiceable && (
         <ViewCartBar
+          hidden={cartBarHidden}
           onPress={handleCartPress}
           onViewMenu={() => {
             // Navigate to restaurant menu
@@ -2579,6 +2874,32 @@ const styles = StyleSheet.create({
     // No additional styles needed, alignment handled by parent
   },
   // Carousel Container
+  appClosedNotice: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: '#FFF4E5',
+    borderWidth: 1,
+    borderColor: '#F5C983',
+  },
+  appClosedTitle: {
+    fontFamily: 'Poppins',
+    fontSize: 15,
+    fontWeight: 600,
+    letterSpacing: 0.1,
+    color: '#8A5200',
+    marginBottom: 4,
+  },
+  appClosedMessage: {
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    fontWeight: 400,
+    letterSpacing: 0.1,
+    lineHeight: 19,
+    color: '#6B4A15',
+  },
   carouselContainer: {
     marginTop: 0,
     marginBottom: 16,
@@ -2597,6 +2918,41 @@ const styles = StyleSheet.create({
   },
   headerImageOverlaySpacer: {
     height: HOME_HEADER_IMAGE_HEIGHT,
+  },
+  bannerLanguageToggle: {
+    position: 'absolute',
+    top: 8,
+    right: 16,
+    zIndex: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+  },
+  bannerLanguageText: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    fontWeight: 600,
+    letterSpacing: 0.2,
+    color: 'rgba(255, 255, 255, 0.65)',
+  },
+  bannerLanguageTamilText: {
+    // Poppins has no Tamil glyphs, so even this one-letter label needs a
+    // Tamil face or the phone substitutes one of its own.
+    fontFamily: 'NotoSansTamil_400Regular',
+  },
+  bannerLanguageTextActive: {
+    color: '#FFFFFF',
+  },
+  bannerLanguageDivider: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    fontWeight: 400,
+    letterSpacing: 0.2,
+    color: 'rgba(255, 255, 255, 0.45)',
+    marginHorizontal: 6,
   },
   headerImageInnerContent: {
     flex: 1,

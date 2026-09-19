@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Alert,
+  StatusBar,
+  Platform,
 } from 'react-native';
 import offersService, { Offer } from '@/services/offers.service';
 import { useOfferClaim } from '@/hooks/useOfferClaim';
@@ -18,6 +20,12 @@ interface OfferDetailScreenProps {
   onBack: () => void;
   /** Hand off to checkout once the offer is reserved AND in the cart. */
   onProceedToPayment: (offer: Offer) => void;
+  /**
+   * Send a signed-out customer to login. A claim is tied to a user id, so a
+   * guest cannot book — and telling them that without offering a way in is a
+   * dead end on the one screen the campaign is driving traffic to.
+   */
+  onRequireLogin: () => void;
 }
 
 const formatWhen = (iso?: string): string => {
@@ -43,6 +51,7 @@ export const OfferDetailScreen: React.FC<OfferDetailScreenProps> = ({
   offerId,
   onBack,
   onProceedToPayment,
+  onRequireLogin,
 }) => {
   const [offer, setOffer] = React.useState<Offer | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -94,7 +103,14 @@ export const OfferDetailScreen: React.FC<OfferDetailScreenProps> = ({
         return;
 
       case 'needs_login':
-        setError('Please log in to book this offer.');
+        Alert.alert(
+          'Log in to book',
+          'This offer is limited to one per customer, so we need to know who you are.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Log in', onPress: onRequireLogin },
+          ],
+        );
         return;
 
       case 'sold_out':
@@ -145,6 +161,7 @@ export const OfferDetailScreen: React.FC<OfferDetailScreenProps> = ({
   }
 
   const total = offersService.getTotalPayable(offer);
+  const totalQualifier = offersService.getTotalQualifier(offer);
   const bookable = offersService.isBookable(offer);
 
   const deliveryLabel =
@@ -155,16 +172,27 @@ export const OfferDetailScreen: React.FC<OfferDetailScreenProps> = ({
         : `₹${offer.delivery_charge_value} delivery`;
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <View style={styles.screen}>
+      {/* Green app header, matching the rest of the app. The previous plain
+          SafeAreaView + text link did not inset the status bar on Android, so
+          the clock and call banner overlapped the back control. */}
+      <View style={styles.header}>
+        <StatusBar barStyle="light-content" backgroundColor="#1a9656" />
         <TouchableOpacity
           testID="offer-detail-back"
           onPress={onBack}
-          style={styles.backBtn}
+          style={styles.headerBackBtn}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={styles.headerBackIcon}>‹</Text>
         </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {offer.name}
+        </Text>
+      </View>
 
+      <ScrollView contentContainerStyle={styles.content}>
         {!!offer.banner_image_url && (
           <Image
             source={{ uri: offer.banner_image_url }}
@@ -202,13 +230,23 @@ export const OfferDetailScreen: React.FC<OfferDetailScreenProps> = ({
           <Text style={styles.priceValue}>
             {offer.delivery_charge_mode === 'free'
               ? '₹0'
-              : `₹${offer.delivery_charge_value ?? 0}`}
+              : offer.delivery_charge_mode === 'per_km'
+                ? // A rate, not a fee — rendering it bare reads as a flat ₹X.
+                  `₹${offer.delivery_charge_value ?? 0}/km`
+                : `₹${offer.delivery_charge_value ?? 0}`}
           </Text>
         </View>
         <View style={[styles.priceRow, styles.totalRow]}>
           <Text style={styles.totalLabel}>Total</Text>
           <Text style={styles.totalValue}>₹{total}</Text>
         </View>
+        {/* A per-km fee or the normal tax rules cannot be resolved until
+            checkout. Disclose them rather than let the total read as final. */}
+        {!!totalQualifier && (
+          <Text style={styles.totalQualifier} testID="offer-total-qualifier">
+            {totalQualifier}
+          </Text>
+        )}
 
         {offer.fulfilment_mode === 'prebooking' && (
           <>
@@ -248,12 +286,47 @@ export const OfferDetailScreen: React.FC<OfferDetailScreenProps> = ({
           )}
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FFFFFF' },
+  header: {
+    backgroundColor: '#1a9656',
+    flexDirection: 'row',
+    alignItems: 'center',
+    // Android does not inset SafeAreaView for the status bar, so pad by the
+    // measured status-bar height instead of guessing.
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) + 8 : 12,
+    paddingBottom: 12,
+    paddingHorizontal: 12,
+  },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  headerBackIcon: {
+    fontFamily: 'Poppins',
+    fontWeight: 600,
+    fontSize: 22,
+    lineHeight: 26,
+    letterSpacing: 0,
+    color: '#1a9656',
+  },
+  headerTitle: {
+    flex: 1,
+    fontFamily: 'Poppins',
+    fontWeight: 700,
+    fontSize: 18,
+    letterSpacing: 0,
+    color: '#FFFFFF',
+  },
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -359,6 +432,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: 0,
     color: '#1a9656',
+  },
+  totalQualifier: {
+    fontFamily: 'Poppins',
+    fontWeight: 400,
+    fontSize: 12,
+    letterSpacing: 0.1,
+    color: '#6B7280',
+    textAlign: 'right',
+    marginTop: 4,
   },
   deliveryNote: {
     fontFamily: 'Poppins',

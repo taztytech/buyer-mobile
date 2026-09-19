@@ -78,13 +78,35 @@ export const useOfferClaim = () => {
           };
         }
 
+        // Without a real item id the cart add is guaranteed to be rejected, so
+        // fail before taking the slot rather than after.
+        const comboItemId = offer.items?.[0]?.item_id;
+        if (!comboItemId) {
+          await offersService.releaseReservation(offer.id);
+          return {
+            status: 'unavailable',
+            message: 'This offer is not set up correctly. Please try again later.',
+          };
+        }
+
         try {
-          await cartService.addToCart({
+          const added = await cartService.addToCart({
             restaurant_id: offer.store_id,
-            item_id: offer.items?.[0]?.item_id ?? 0,
+            item_id: comboItemId,
             quantity: 1,
             promo_offer_id: offer.id,
           });
+
+          // addToCart only THROWS on transport errors; an API rejection comes
+          // back as {success:false}. Treating that as success is what sent
+          // customers to a checkout with an empty cart and a ₹0.00 bill while
+          // the slot stayed held, since neither the release below nor any
+          // error message ever ran.
+          if (!added?.success) {
+            throw new Error(
+              added?.message || 'Could not add this offer to your cart.',
+            );
+          }
         } catch (cartError: any) {
           // Give the slot back immediately rather than holding it for 10
           // minutes over a cart failure the customer never caused.
@@ -97,7 +119,7 @@ export const useOfferClaim = () => {
 
         // Remember which offer this cart is claiming, so the payment layer can
         // confirm it after checkout without threading the id through.
-        offersService.setPendingClaim(offer.id);
+        offersService.setPendingClaim(offer.id, offer.payment_mode);
 
         return { status: 'in_cart', offer };
       } finally {

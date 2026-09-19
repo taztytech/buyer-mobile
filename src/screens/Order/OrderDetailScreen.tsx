@@ -144,6 +144,9 @@ const shouldFetchDeliveryTrackStatus = (status: string | null | undefined): bool
     'on-the-way',
     'en-route',
     'in-transit',
+    // Rider is at the door: keep the live map running right up to delivery.
+    'agent-nearby',
+    'reached-delivery',
   ];
   const excludedStatuses = [
     'pending',
@@ -210,6 +213,10 @@ interface OrderDetailScreenProps {
   onTrackOrder?: () => void;
   onContactUs?: () => void;
   onHelp?: () => void;
+  /** Open the live map straight away — set by TRACK ORDER on the notification. */
+  autoOpenTracking?: boolean;
+  /** Cleared once the map has been opened, so it happens only once. */
+  onAutoTrackingHandled?: () => void;
 }
 
 export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
@@ -223,6 +230,8 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   
   onContactUs: _onContactUs,
   onHelp: _onHelp,
+  autoOpenTracking = false,
+  onAutoTrackingHandled,
 }) => {
   const { getOrderById, state, dispatch } = useOrders();
   const { showConfirmation } = useConfirmation();
@@ -235,6 +244,32 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [selectedOrderIdForTracking, setSelectedOrderIdForTracking] = useState<string | null>(null);
   const [trackingOrderData, setTrackingOrderData] = useState<any>(null);
   const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
+
+  /**
+   * TRACK ORDER on the live order notification lands here and expects the map,
+   * not another button to press. It opens once the order has actually loaded
+   * and only while the order is still trackable, so a stale notification for a
+   * delivered order cannot open an empty map.
+   */
+  useEffect(() => {
+    if (!autoOpenTracking || !visible || !orderId) return;
+    if (!orderData || showTrackingWebView) return;
+    if (!shouldFetchDeliveryTrackStatus(orderData.status)) {
+      onAutoTrackingHandled?.();
+      return;
+    }
+    setSelectedOrderIdForTracking(orderId);
+    setTrackingOrderData((prev: any) => prev ?? orderData);
+    setShowTrackingWebView(true);
+    onAutoTrackingHandled?.();
+  }, [
+    autoOpenTracking,
+    visible,
+    orderId,
+    orderData,
+    showTrackingWebView,
+    onAutoTrackingHandled,
+  ]);
   const lastFetchedStatusRef = useRef<string | null>(null);
   const [showTaxTooltip, setShowTaxTooltip] = useState(false);
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
@@ -261,6 +296,13 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
   const canShowCancelForOrder = useMemo(() => {
     if (!orderData) return false;
+
+    // Orders placed from an offer configured as non-cancellable must not offer
+    // the button at all. The API refuses the request regardless, but showing a
+    // control that always errors is worse than not showing it. Defaults to
+    // true, so ordinary orders are unaffected if the field is absent.
+    if ((orderData as any).cancellation_allowed === false) return false;
+
     const paymentMethod = String(orderData.payment_method || '').toLowerCase();
     if (paymentMethod !== 'cod') return false;
 
@@ -323,6 +365,8 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       'in-transit',
       'out-for-delivery',
       'on-the-way',
+      'agent-nearby',
+      'reached-delivery',
       'delivered',
       'completed',
     ]);
@@ -1532,6 +1576,14 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         title: 'Your order has been picked up by the delivery partner.',
         color: '#3B82F6'
       },
+      'agent_nearby': {
+        title: 'Your delivery partner is arriving. Please be reachable.',
+        color: '#F59E0B'
+      },
+      'agent-nearby': {
+        title: 'Your delivery partner is arriving. Please be reachable.',
+        color: '#F59E0B'
+      },
       'out_for_delivery': {
         title: 'Your order is on the way to your location.',
         color: '#F59E0B'
@@ -1877,6 +1929,9 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                       'out_for_delivery',
                       'on-the-way',
                       'on_the_way',
+                      'agent-nearby',
+                      'agent_nearby',
+                      'reached-delivery',
                       'delivered',
                       'completed'
                     ];
@@ -2490,7 +2545,8 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                     normalizedStatus === 'agent-arrived-restaurant' ||
                     normalizedStatus === 'picked' ||
                     normalizedStatus === 'out-for-delivery' ||
-                    normalizedStatus === 'on-the-way';
+                    normalizedStatus === 'on-the-way' ||
+                    normalizedStatus === 'agent-nearby';
 
                   let agentDisplayName = agentName;
                   if (!agentDisplayName && isAgentAssignedish) {

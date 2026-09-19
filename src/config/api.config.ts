@@ -58,6 +58,8 @@ export const API_CONFIG = {
       OFFER_RESERVE: (id: number | string) => `/api/buyer/offers/${id}/reserve`,
       OFFER_CONFIRM: (id: number | string) => `/api/buyer/offers/${id}/confirm`,
       OFFER_CANCEL: (id: number | string) => `/api/buyer/offers/${id}/cancel`,
+      // 99 Store deals (Tazty-funded prices on real menu items)
+      STORE_DEALS: '/api/buyer/store-deals',
       // Dish endpoint
       DISH: '/dish',
     },
