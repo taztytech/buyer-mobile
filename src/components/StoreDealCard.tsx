@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { OfferPrice } from './OfferPrice';
 import {
   dealStateLabel,
@@ -15,6 +16,91 @@ import {
 } from '@/services/storeDeal.service';
 
 const ORANGE = '#E8501C';
+
+/**
+ * The deal's photo, and — when the deal has a promo video — a clip that plays
+ * inside the same box: hold the photo `photoSeconds`, play the video once, then
+ * loop (unless `loop` is off). The image always renders underneath, so the card
+ * looks right before the clip loads and if it fails. Muted by default: many of
+ * these scroll in a row and must not all blast audio.
+ */
+const DealMedia: React.FC<{
+  imageUrl: string | null;
+  videoUrl: string | null;
+  name: string;
+  photoSeconds: number;
+  muted: boolean;
+  loop: boolean;
+}> = ({ imageUrl, videoUrl, name, photoSeconds, muted, loop }) => {
+  const [phase, setPhase] = useState<'photo' | 'video'>('photo');
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [stopped, setStopped] = useState(false);
+  const videoRef = useRef<Video>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const hasVideo = !!videoUrl && !videoFailed;
+
+  // Restart the cycle whenever the media changes.
+  useEffect(() => {
+    setPhase('photo');
+    setVideoFailed(false);
+    setStopped(false);
+  }, [videoUrl, imageUrl]);
+
+  // Drive photo → video. The video → photo hand-back happens in onStatus.
+  useEffect(() => {
+    if (!hasVideo || stopped || phase !== 'photo') return;
+    const holdMs = Math.max(0, photoSeconds ?? 2) * 1000;
+    timerRef.current = setTimeout(() => setPhase('video'), holdMs);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [phase, hasVideo, stopped, photoSeconds]);
+
+  // Always start the clip from the top when it becomes visible.
+  useEffect(() => {
+    if (phase === 'video') {
+      videoRef.current?.setPositionAsync(0).catch(() => {});
+    }
+  }, [phase]);
+
+  const onStatus = (status: AVPlaybackStatus) => {
+    if (!('isLoaded' in status) || !status.isLoaded) return;
+    if (status.didJustFinish) {
+      setPhase('photo');
+      if (!loop) setStopped(true);
+    }
+  };
+
+  const base = imageUrl ? (
+    <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
+  ) : (
+    <View style={[styles.image, styles.imageFallback]}>
+      <Text style={styles.imageFallbackText}>
+        {(name || '?').trim().charAt(0).toUpperCase()}
+      </Text>
+    </View>
+  );
+
+  return (
+    <>
+      {base}
+      {hasVideo ? (
+        <Video
+          ref={videoRef}
+          source={{ uri: videoUrl as string }}
+          style={[StyleSheet.absoluteFill, { opacity: phase === 'video' ? 1 : 0 }]}
+          resizeMode={ResizeMode.COVER}
+          isMuted={muted}
+          isLooping={false}
+          shouldPlay={phase === 'video' && !stopped}
+          onPlaybackStatusUpdate={onStatus}
+          onError={() => setVideoFailed(true)}
+        />
+      ) : null}
+    </>
+  );
+};
 
 interface StoreDealCardProps {
   deal: StoreDeal;
@@ -50,19 +136,14 @@ export const StoreDealCard: React.FC<StoreDealCardProps> = ({
       testID={`store-deal-card-${deal.id}`}
     >
       <View style={[styles.imageWrap, isHome ? styles.imageHome : styles.imageStore]}>
-        {deal.image_url ? (
-          <Image
-            source={{ uri: deal.image_url }}
-            style={styles.image}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={[styles.image, styles.imageFallback]}>
-            <Text style={styles.imageFallbackText}>
-              {(deal.name || '?').trim().charAt(0).toUpperCase()}
-            </Text>
-          </View>
-        )}
+        <DealMedia
+          imageUrl={deal.image_url}
+          videoUrl={deal.video_url}
+          name={deal.name}
+          photoSeconds={deal.media_photo_seconds ?? 2}
+          muted={deal.media_muted ?? true}
+          loop={deal.media_loop ?? true}
+        />
 
         {/* A "1% OFF" badge on a ₹99-from-₹100 deal reads as a joke, so the
             badge appears only when the saving is worth shouting about. */}

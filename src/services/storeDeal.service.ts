@@ -25,6 +25,12 @@ export interface StoreDeal {
   name: string;
   short_desc: string;
   image_url: string | null;
+  /** Optional promo clip; when set the card plays photo→video→loop. */
+  video_url: string | null;
+  /** Seconds the photo is held before the video plays each loop. */
+  media_photo_seconds: number;
+  media_muted: boolean;
+  media_loop: boolean;
   dietary_preference: string | null;
   restaurant: { id: number; name: string; logo_url: string | null };
   deal_price: number;
