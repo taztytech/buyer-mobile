@@ -16,6 +16,10 @@ interface StoreDealsSectionProps {
   onAdd: (deal: StoreDeal) => void;
   onSeeAll: () => void;
   addingDealId?: number | null;
+  /** Editable labels from the server; fall back to the ₹99 wording. */
+  sectionName?: string;
+  tagline?: string;
+  homeTitle?: string;
 }
 
 /**
@@ -30,6 +34,9 @@ export const StoreDealsSection: React.FC<StoreDealsSectionProps> = ({
   onAdd,
   onSeeAll,
   addingDealId = null,
+  sectionName = '₹99 Store',
+  tagline = 'Great Food. Just ₹99!',
+  homeTitle = "Today's deals",
 }) => {
   if (!deals?.length) return null;
 
@@ -45,8 +52,8 @@ export const StoreDealsSection: React.FC<StoreDealsSectionProps> = ({
       >
         <View style={styles.heroTextWrap}>
           <Text style={styles.heroKicker}>TAZTY</Text>
-          <Text style={styles.heroTitle}>₹99 STORE</Text>
-          <Text style={styles.heroSubtitle}>Great Food. Just ₹99!</Text>
+          <Text style={styles.heroTitle}>{sectionName.toUpperCase()}</Text>
+          <Text style={styles.heroSubtitle}>{tagline}</Text>
         </View>
         <View style={styles.heroButton}>
           <Text style={styles.heroButtonText}>Explore →</Text>
@@ -54,7 +61,7 @@ export const StoreDealsSection: React.FC<StoreDealsSectionProps> = ({
       </TouchableOpacity>
 
       <View style={styles.headerRow}>
-        <Text style={styles.sectionTitle}>Today's ₹99 deals</Text>
+        <Text style={styles.sectionTitle}>{homeTitle}</Text>
         <TouchableOpacity
           onPress={onSeeAll}
           accessibilityRole="button"

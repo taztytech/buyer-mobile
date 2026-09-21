@@ -48,6 +48,19 @@ export interface StoreDeal {
   sequence: number;
 }
 
+/** Editable ₹99 Store labels, served by the buyer API. */
+export interface StoreDealSection {
+  name: string;
+  tagline: string;
+  home_title: string;
+}
+
+export const DEFAULT_STORE_DEAL_SECTION: StoreDealSection = {
+  name: '₹99 Store',
+  tagline: 'Great Food. Just ₹99!',
+  home_title: "Today's deals",
+};
+
 const unwrap = <T>(response: any): T => {
   // The buyer API wraps responses as { success, statusCode, message, data }.
   let payload = response?.data ?? response;
@@ -94,6 +107,32 @@ class StoreDealService {
       console.warn('[StoreDealService] getDeals failed:', error?.message);
       return [];
     }
+  }
+
+  /**
+   * The editable section labels (name/tagline/home title). Served alongside the
+   * deals; falls back to the ₹99 wording so a screen never renders blank.
+   */
+  async getSection(): Promise<StoreDealSection> {
+    try {
+      const response: any = await apiService.get(
+        API_CONFIG.ENDPOINTS.BUYER.STORE_DEALS,
+      );
+      const s =
+        response?.section ??
+        response?.data?.section ??
+        response?.data?.data?.section;
+      if (s && typeof s === 'object') {
+        return {
+          name: s.name || DEFAULT_STORE_DEAL_SECTION.name,
+          tagline: s.tagline || DEFAULT_STORE_DEAL_SECTION.tagline,
+          home_title: s.home_title || DEFAULT_STORE_DEAL_SECTION.home_title,
+        };
+      }
+    } catch (error: any) {
+      console.warn('[StoreDealService] getSection failed:', error?.message);
+    }
+    return DEFAULT_STORE_DEAL_SECTION;
   }
 }
 

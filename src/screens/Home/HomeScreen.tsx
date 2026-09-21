@@ -10,7 +10,11 @@ import { homeService, BannerItem, CategoryItem, Restaurant, OrganizationBanner }
 import { OfferBannerSection } from '@/components/OfferBannerSection';
 import { StoreDealsSection } from '@/components/StoreDealsSection';
 import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
-import storeDealService, { type StoreDeal } from '@/services/storeDeal.service';
+import storeDealService, {
+  type StoreDeal,
+  type StoreDealSection,
+  DEFAULT_STORE_DEAL_SECTION,
+} from '@/services/storeDeal.service';
 import type { Offer } from '@/services/offers.service';
 import { paymentConfigService } from '@/services/payment-config.service';
 import { appConfigService } from '@/services/app-config.service';
@@ -229,6 +233,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // ₹99 Store deals. Arrive with the home payload already carrying their
   // state, so the row renders without a request of its own.
   const [storeDeals, setStoreDeals] = React.useState<StoreDeal[]>([]);
+  const [dealSection, setDealSection] = React.useState<StoreDealSection>(
+    DEFAULT_STORE_DEAL_SECTION,
+  );
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
 
   // Auto-slide for organization banner
@@ -1091,6 +1098,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setStoreDeals(
           Array.isArray(storeDealsRaw) ? (storeDealsRaw as StoreDeal[]) : [],
         );
+
+        // Editable ₹99 Store labels (name/tagline/row title).
+        const sectionRaw = (actualData as any).store_deal_section;
+        if (sectionRaw && typeof sectionRaw === 'object') {
+          setDealSection({
+            name: sectionRaw.name || DEFAULT_STORE_DEAL_SECTION.name,
+            tagline: sectionRaw.tagline || DEFAULT_STORE_DEAL_SECTION.tagline,
+            home_title:
+              sectionRaw.home_title || DEFAULT_STORE_DEAL_SECTION.home_title,
+          });
+        }
 
         // Handle promotional banners
         if (promotionalBanner) {
@@ -2265,6 +2283,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   addingDealId={addingDealId}
                   onAdd={deal => handleStoreDealAdd(deal)}
                   onSeeAll={() => onNavigateToStore?.()}
+                  sectionName={dealSection.name}
+                  tagline={dealSection.tagline}
+                  homeTitle={dealSection.home_title}
                 />
 
                 {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}

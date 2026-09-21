@@ -19,7 +19,11 @@ import { useCart } from '@/context/CartContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { useHideOnScroll } from '@/hooks/useHideOnScroll';
 import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
-import storeDealService, { StoreDeal } from '@/services/storeDeal.service';
+import storeDealService, {
+  StoreDeal,
+  StoreDealSection,
+  DEFAULT_STORE_DEAL_SECTION,
+} from '@/services/storeDeal.service';
 
 const ORANGE = '#E8501C';
 
@@ -48,6 +52,9 @@ export const StoreScreen: React.FC<StoreScreenProps> = ({
   longitude,
 }) => {
   const [deals, setDeals] = React.useState<StoreDeal[]>([]);
+  const [section, setSection] = React.useState<StoreDealSection>(
+    DEFAULT_STORE_DEAL_SECTION,
+  );
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const { reloadCart, setRestaurantInfo } = useCart();
@@ -56,8 +63,12 @@ export const StoreScreen: React.FC<StoreScreenProps> = ({
   const { hidden: cartBarHidden, onScroll: hideCartBarOnScroll } = useHideOnScroll();
 
   const load = React.useCallback(async () => {
-    const list = await storeDealService.getDeals(latitude, longitude);
+    const [list, sec] = await Promise.all([
+      storeDealService.getDeals(latitude, longitude),
+      storeDealService.getSection(),
+    ]);
     setDeals(list);
+    setSection(sec);
   }, [latitude, longitude]);
 
   React.useEffect(() => {
@@ -136,7 +147,7 @@ export const StoreScreen: React.FC<StoreScreenProps> = ({
           <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle}>₹99 Store</Text>
+          <Text style={styles.headerTitle}>{section.name}</Text>
           <Text style={styles.headerSubtitle}>Great Food. Just ₹99!</Text>
         </View>
       </View>
