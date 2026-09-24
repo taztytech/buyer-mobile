@@ -60,6 +60,15 @@ export const API_CONFIG = {
       OFFER_CANCEL: (id: number | string) => `/api/buyer/offers/${id}/cancel`,
       // 99 Store deals (Tazty-funded prices on real menu items)
       STORE_DEALS: '/api/buyer/store-deals',
+      // Tazty Wallet (balance + history)
+      WALLET: '/api/buyer/wallet',
+      WALLET_TRANSACTIONS: '/api/buyer/wallet/transactions',
+      WALLET_TOPUPS: '/api/buyer/wallet/topups',
+      WALLET_TOPUP_LIMITS: '/api/buyer/wallet/topups/limits',
+      WALLET_TOPUP_VERIFY: (id: number | string) => `/api/buyer/wallet/topups/${id}/verify`,
+      WALLET_REDEEM: '/api/buyer/wallet/redeem',
+      WALLET_REFERRAL: '/api/buyer/wallet/referral',
+      WALLET_REFERRAL_APPLY: '/api/buyer/wallet/referral/apply',
       // Dish endpoint
       DISH: '/dish',
     },

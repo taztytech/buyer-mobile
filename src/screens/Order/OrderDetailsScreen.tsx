@@ -24,6 +24,12 @@ import { paymentService, PaymentErrorType } from '@/services/payment.service';
 import { homeService } from '@/services/home.service';
 import { cartService, CartSummary, CartResponse } from '@/services/cart.service';
 import offersService from '@/services/offers.service';
+import {
+  formatRupees,
+  usableWalletBalance,
+  walletService,
+  WalletSummary,
+} from '@/services/wallet.service';
 import { restaurantService } from '@/services/restaurant.service';
 import { paymentConfigService } from '@/services/payment-config.service';
 import { useCart } from '@/context/CartContext';
@@ -152,6 +158,11 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [selectedTip, setSelectedTip] = useState<number | null>(null);
   const [customTipAmount, setCustomTipAmount] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'online' | 'cod'>('online');
+  // Tazty Wallet at checkout: on by default when there is a balance; the
+  // customer can switch it off. Never with COD.
+  const [walletSummary, setWalletSummary] = useState<WalletSummary | null>(null);
+  const [walletCanPay, setWalletCanPay] = useState(false);
+  const [useWallet, setUseWallet] = useState(true);
   const [selfPickup, setSelfPickup] = useState(false);
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
@@ -195,6 +206,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const includePlatformFee = (cartSummary as any)?.include_platform_fee ?? false;
   const backendTipAmount = (cartSummary as any)?.tip_amount ?? 0;
   const totalAmount = cartSummary?.final_amount ?? 0;
+  // The server holds exactly this much when the order is placed: promo credit
+  // with a minimum order above this total cannot be spent, so it is left out.
+  const walletBalance = usableWalletBalance(walletSummary, totalAmount);
+  const walletApplied =
+    walletCanPay && useWallet && selectedPaymentMethod === 'online'
+      ? Math.min(walletBalance, totalAmount)
+      : 0;
+  const amountToPay = Math.max(0, Math.round((totalAmount - walletApplied) * 100) / 100);
   const estimatedDeliveryTimeRaw = (cartSummary as any)?.estimated_delivery_time ?? null;
   const deliveryFeeTax = (cartSummary as any)?.delivery_fee_tax ?? 0;
   const platformFeeTax = (cartSummary as any)?.platform_fee_tax ?? 0;
@@ -277,6 +296,22 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
     !offerIsOnlineOnly &&
     totalAmount >= codMinAmount &&
     totalAmount <= codMaxAmount;
+
+  // Wallet balance for checkout, fresh every time the screen is shown. A
+  // failure just means no wallet option - checkout works exactly as before.
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    walletService.getSummary().then(summary => {
+      if (cancelled) return;
+      setWalletCanPay(!!summary?.enabled && !!summary?.can_pay);
+      setWalletSummary(summary);
+      setUseWallet(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible]);
 
   useEffect(() => {
     // If COD is no longer allowed (e.g. amount changed), force switch back to online
@@ -788,6 +823,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
         delivery_address_id: parseInt(selectedAddressId),
         payment_method: selectedPaymentMethod,
         notes: notes || undefined,
+        ...(walletApplied > 0 ? { use_wallet: true } : {}),
       };
 
       console.log(
@@ -814,6 +850,42 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
             cancelText: '',
             confirmButtonColor: '#DC2626',
             onConfirm: () => {
+              if (onOrderCancel) {
+                onOrderCancel();
+              }
+            },
+          });
+          return;
+        }
+
+        // Paid fully from the Tazty Wallet: no Razorpay step. Same success
+        // path as a paid online order (the offer booking is confirmed the way
+        // paymentService does after Razorpay).
+        if (responseData.paid_with_wallet === true) {
+          await offersService.confirmForOrder(orderId, 'online');
+          clearCart(false);
+          setNotes('');
+          setSelectedTip(null);
+          setCustomTipAmount('');
+          setPromoCode('');
+          setPromoError('');
+          setIsPlacingOrder(false);
+          showConfirmation({
+            title: 'Order Successful! 🎉',
+            message: `Paid ${formatRupees(responseData.wallet_amount)} from your Tazty Wallet.`,
+            confirmText: 'View Order Details',
+            cancelText: '',
+            confirmButtonColor: '#00B14F',
+            showRibbon: false,
+            onConfirm: () => {
+              const numericOrderId = typeof orderId === 'number' ? orderId : parseInt(orderId, 10);
+              if (onOrderSuccess && numericOrderId && !isNaN(numericOrderId)) {
+                onOrderSuccess(numericOrderId);
+              } else if (onPlaceOrder) {
+                onPlaceOrder();
+              }
+            },
+            onCancel: () => {
               if (onOrderCancel) {
                 onOrderCancel();
               }
@@ -2178,10 +2250,20 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                         </Text>
                       </View>
                     )}
+                    {walletApplied > 0 && (
+                      <View style={styles.billRow} testID="checkout-wallet-row">
+                        <Text style={styles.billLabel}>Tazty Wallet</Text>
+                        <Text style={[styles.billValue, { color: '#00B14F' }]}>
+                          -₹{walletApplied.toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
                     <View style={styles.billDivider} />
                     <View style={styles.billTotalRow}>
                       <Text style={styles.billTotalLabel}>To Pay</Text>
-                      <Text style={styles.billTotalValue}>₹{totalAmount.toFixed(2)}</Text>
+                      <Text style={styles.billTotalValue} testID="checkout-to-pay">
+                        ₹{amountToPay.toFixed(2)}
+                      </Text>
                     </View>
                   </View>
                 )}
@@ -2194,6 +2276,45 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 </View>
 
                 <View style={[styles.sectionContent, styles.paymentSectionContent]}>
+                  {/* Tazty Wallet: on by default when there is a balance */}
+                  {walletCanPay && walletBalance > 0 && (
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentOption,
+                        walletApplied > 0 && styles.paymentOptionSelected,
+                        selectedPaymentMethod === 'cod' && styles.paymentOptionDisabled,
+                      ]}
+                      onPress={() => setUseWallet(v => !v)}
+                      disabled={selectedPaymentMethod === 'cod'}
+                      activeOpacity={0.8}
+                      testID="checkout-use-wallet"
+                    >
+                      <View style={styles.paymentOptionContent}>
+                        <View style={styles.paymentOptionTopRow}>
+                          <View style={styles.paymentOptionLeft}>
+                            <MaterialIcons name="account-balance-wallet" size={24} color="#00B14F" />
+                            <Text style={styles.paymentOptionText}>
+                              Use Tazty Wallet ({formatRupees(walletBalance)})
+                            </Text>
+                          </View>
+                          <MaterialIcons
+                            name={walletApplied > 0 ? 'check-box' : 'check-box-outline-blank'}
+                            size={24}
+                            color={walletApplied > 0 ? '#00B14F' : 'rgba(0, 0, 0, 0.25)'}
+                          />
+                        </View>
+                        <Text style={styles.paymentOptionHelperText}>
+                          {selectedPaymentMethod === 'cod'
+                            ? "Tazty Wallet can't be used with Cash on Delivery."
+                            : walletApplied > 0 && amountToPay === 0
+                              ? 'Your wallet covers this whole order.'
+                              : walletApplied > 0
+                                ? `${formatRupees(walletApplied)} from your wallet, the rest online.`
+                                : 'Tap to use your wallet balance.'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
                     style={[
                       styles.paymentOption,

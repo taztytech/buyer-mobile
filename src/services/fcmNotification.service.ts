@@ -53,7 +53,7 @@ type BackgroundMessageHandler = (remoteMessage: any) => Promise<void>;
 // Navigation callback type for handling notification taps
 export interface NotificationNavigationTarget {
   orderId: string;
-  target: 'orders' | 'track';
+  target: 'orders' | 'track' | 'wallet';
 }
 
 export type NotificationNavigationCallback = (payload: NotificationNavigationTarget) => void;
@@ -737,6 +737,17 @@ class FCMNotificationService {
    * Route ALL order notification taps to My Orders.
    */
   private handleNotificationNavigation(data: NotificationData): void {
+    // Wallet credits ("₹100 added to your Tazty Wallet") open the wallet.
+    if ((data.screen || '').toString().trim().toLowerCase() === 'wallet') {
+      const walletPayload: NotificationNavigationTarget = { orderId: '', target: 'wallet' };
+      if (this.navigationCallback) {
+        this.navigationCallback(walletPayload);
+      } else {
+        this.pendingNavigationPayload = walletPayload;
+      }
+      return;
+    }
+
     const isOrderNotification =
       (data.type || '').toString().trim().toLowerCase() === 'order' ||
       !!(data.orderId || data.order_id || data.orderID || data['order-id'] || data.order_number || data.orderNumber || data['order-number']);

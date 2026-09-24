@@ -217,6 +217,8 @@ interface OrderDetailScreenProps {
   autoOpenTracking?: boolean;
   /** Cleared once the map has been opened, so it happens only once. */
   onAutoTrackingHandled?: () => void;
+  /** Opens the Tazty Wallet (from the refund line of a wallet refund). */
+  onViewWallet?: () => void;
 }
 
 export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
@@ -232,6 +234,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   onHelp: _onHelp,
   autoOpenTracking = false,
   onAutoTrackingHandled,
+  onViewWallet,
 }) => {
   const { getOrderById, state, dispatch } = useOrders();
   const { showConfirmation } = useConfirmation();
@@ -1849,6 +1852,10 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   <View style={styles.orderHeaderRow}>
                     <Text style={styles.restaurantName}>{orderData.restaurant.name}</Text>
                     <Text style={styles.orderAmount}>₹{(() => {
+                      // After a partial acceptance the order costs less.
+                      if (orderData.summary?.payable_amount != null) {
+                        return Number(orderData.summary.payable_amount).toFixed(2);
+                      }
                       const bill = calculateBillFromItems(orderData);
                       return bill.total_amount.toFixed(2);
                     })()}</Text>
@@ -2043,10 +2050,24 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                             ]} />
                           </View> */}
                             {/* Product Name and Quantity */}
-                            <Text style={styles.itemDetailName}>
+                            <Text
+                              style={[
+                                styles.itemDetailName,
+                                Number(item.cancelled_quantity || 0) >= Number(item.quantity) &&
+                                  styles.itemUnavailableName,
+                              ]}
+                            >
                               {item.item_name} × {item.quantity}
                             </Text>
                           </View>
+                          {/* The store could not supply some of this line */}
+                          {Number(item.cancelled_quantity || 0) > 0 && (
+                            <Text style={styles.itemUnavailableText} testID={`order-item-unavailable-${item.id}`}>
+                              {Number(item.cancelled_quantity) >= Number(item.quantity)
+                                ? 'Unavailable'
+                                : `${item.cancelled_quantity} unavailable`}
+                            </Text>
+                          )}
                           {item.customizations && item.customizations.length > 0 && (
                             <View style={styles.customizationsContainer}>
                               {item.customizations.map((customization: any, idx: number) => (
@@ -2233,13 +2254,89 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                     <View style={styles.dashedDivider} />
 
                     <View style={styles.totalRow}>
-                      <Text style={styles.totalLabel}>Total</Text>
-                      <Text style={styles.totalValue}>₹{bill.total_amount.toFixed(2)}</Text>
+                      <Text
+                        style={[
+                          styles.totalLabel,
+                          orderData.summary?.payable_amount != null && styles.totalStruck,
+                        ]}
+                      >
+                        Total
+                      </Text>
+                      <Text
+                        style={[
+                          styles.totalValue,
+                          orderData.summary?.payable_amount != null && styles.totalStruck,
+                        ]}
+                      >
+                        ₹{bill.total_amount.toFixed(2)}
+                      </Text>
                     </View>
+                    {/* After the store accepted only some items */}
+                    {orderData.summary?.payable_amount != null && (
+                      <View style={styles.totalRow} testID="order-payable-row">
+                        <Text style={styles.totalLabel}>New total</Text>
+                        <Text style={styles.totalValue}>
+                          ₹{Number(orderData.summary.payable_amount).toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
                   </>
                 );
               })()}
             </View>
+
+            {/* Refund line: where the money went (wallet or original payment) */}
+            {!!orderData.refund && Number(orderData.refund.amount) > 0 && (() => {
+              const refund = orderData.refund;
+              const amount = `₹${Number(refund.amount).toFixed(2)}`;
+              const toWallet = refund.destination === 'wallet';
+              const pending = refund.status === 'pending';
+              const held = refund.status === 'processing';
+              const forItems = refund.refund_type === 'partial';
+              const title = held
+                ? `${amount} refund being processed`
+                : toWallet
+                ? `${amount} refunded to your Tazty Wallet`
+                : pending
+                  ? `${amount} refund on its way to your original payment method`
+                  : `${amount} refunded to your original payment method`;
+              const subtitle = held
+                ? "For the items that were unavailable. We'll let you know as soon as it's done."
+                : forItems && toWallet
+                ? 'For the unavailable items. Available now in your wallet.'
+                : toWallet
+                ? 'Available now. Use it on your next Tazty order.'
+                : pending
+                  ? refund.speed === 'optimum'
+                    ? 'It should reach you within minutes.'
+                    : 'It usually takes 5–7 working days to reach you.'
+                  : 'It may take a little while to show in your bank or UPI app.';
+              return (
+                <View style={[styles.card, styles.refundCard]} testID="order-refund-card">
+                  <View style={styles.refundRow}>
+                    <MaterialIcons
+                      name={toWallet ? 'account-balance-wallet' : 'replay'}
+                      size={22}
+                      color="#00B14F"
+                    />
+                    <View style={styles.refundTextWrap}>
+                      <Text style={styles.refundTitle}>{title}</Text>
+                      <Text style={styles.refundSubtitle}>{subtitle}</Text>
+                    </View>
+                  </View>
+                  {toWallet && !!onViewWallet && (
+                    <TouchableOpacity
+                      onPress={onViewWallet}
+                      style={styles.refundLink}
+                      testID="order-refund-view-wallet"
+                    >
+                      <Text style={styles.refundLinkText}>View wallet</Text>
+                      <MaterialIcons name="chevron-right" size={18} color="#00B14F" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })()}
 
             {/* Payment Method Card */}
             <View style={styles.card}>
@@ -2260,6 +2357,22 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   {orderData.payment_status && ` (${orderData.payment_status})`}
                 </Text>
               </View>
+              {/* Part (or all) of the order paid from the Tazty Wallet */}
+              {Number(orderData.summary?.wallet_amount || 0) > 0 && (
+                <Text style={styles.walletPaidText} testID="order-wallet-paid">
+                  ₹{Number(orderData.summary.wallet_amount).toFixed(2)} paid from Tazty Wallet
+                  {Number(orderData.summary.wallet_amount) < Number(orderData.summary?.total_amount || 0)
+                    ? ` · ₹${(Number(orderData.summary.total_amount) - Number(orderData.summary.wallet_amount)).toFixed(2)} online`
+                    : ''}
+                </Text>
+              )}
+              {/* Cashback promised for this order, not yet in the wallet */}
+              {Number(orderData.summary?.pending_cashback || 0) > 0 && (
+                <Text style={styles.cashbackPendingText} testID="order-pending-cashback">
+                  ₹{Number(orderData.summary.pending_cashback).toFixed(2)} cashback on the way -
+                  it lands in your Tazty Wallet after delivery
+                </Text>
+              )}
             </View>
           </ScrollView>
         )}
@@ -3132,6 +3245,81 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  walletPaidText: {
+    fontFamily: 'Poppins',
+    fontWeight: 500,
+    fontSize: 13,
+    letterSpacing: 0.1,
+    color: '#00B14F',
+    marginTop: 8,
+    marginLeft: 52,
+  },
+  cashbackPendingText: {
+    fontFamily: 'Poppins',
+    fontWeight: 500,
+    fontSize: 12,
+    letterSpacing: 0.1,
+    color: '#00B14F',
+    marginTop: 6,
+  },
+  itemUnavailableName: {
+    textDecorationLine: 'line-through',
+    color: '#9CA3AF',
+  },
+  itemUnavailableText: {
+    fontFamily: 'Poppins',
+    fontWeight: 500,
+    fontSize: 12,
+    letterSpacing: 0.1,
+    color: '#DC2626',
+    marginTop: 2,
+  },
+  totalStruck: {
+    textDecorationLine: 'line-through',
+    color: '#9CA3AF',
+  },
+  refundCard: {
+    borderWidth: 1,
+    borderColor: '#CDEFDC',
+    backgroundColor: '#F3FFF8',
+  },
+  refundRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  refundTextWrap: {
+    flex: 1,
+  },
+  refundTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: 600,
+    fontSize: 14,
+    letterSpacing: 0,
+    color: '#001E1F',
+  },
+  refundSubtitle: {
+    fontFamily: 'Poppins',
+    fontWeight: 400,
+    fontSize: 12,
+    letterSpacing: 0.1,
+    color: '#4B5563',
+    marginTop: 2,
+  },
+  refundLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    marginLeft: 34,
+  },
+  refundLinkText: {
+    fontFamily: 'Poppins',
+    fontWeight: 600,
+    fontSize: 13,
+    letterSpacing: 0.2,
+    color: '#00B14F',
   },
   paymentIcon: {
     width: 40,

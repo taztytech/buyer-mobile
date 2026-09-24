@@ -14,12 +14,15 @@ import { APP_VERSION_NAME, APP_VERSION_CODE } from '@/config/appVersion.generate
 import { storageService } from '@/services/storage.service';
 import { authService } from '@/services/auth.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { formatRupees, walletService } from '@/services/wallet.service';
 
 interface ProfileScreenProps {
   visible?: boolean;
   onBack?: () => void;
   onEditProfile?: () => void;
   onMyOrders?: () => void;
+  /** Tazty Wallet. The entry only shows when the server says it is on. */
+  onWallet?: () => void;
   onMyAddresses?: () => void;
   onFavorites?: () => void;
   onContactUs?: () => void;
@@ -34,6 +37,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onBack,
   onEditProfile,
   onMyOrders,
+  onWallet,
   onMyAddresses,
   onFavorites,
   onContactUs,
@@ -46,6 +50,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const { showConfirmation } = useConfirmation();
   const [userName, setUserName] = useState('User');
   const [userPhone, setUserPhone] = useState('');
+  // null = hidden. Filled only when the wallet is switched on for this customer.
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!visible || !onWallet) return;
+    let cancelled = false;
+    walletService.getSummary().then(summary => {
+      if (cancelled) return;
+      setWalletBalance(summary?.enabled ? Number(summary.balance || 0) : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, onWallet]);
   // Fetch user data from API whenever screen becomes visible
   useEffect(() => {
     if (visible) {
@@ -144,12 +162,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     onPress,
     showArrow = true,
     showDivider = true,
+    rightText,
+    testID,
   }: {
     label: string;
     icon?: string;
     onPress?: () => void;
     showArrow?: boolean;
     showDivider?: boolean;
+    rightText?: string;
+    testID?: string;
   }) => (
     <>
       <TouchableOpacity
@@ -157,6 +179,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         onPress={onPress}
         activeOpacity={0.7}
         hitSlop={{ top: 16, bottom: 16, left: 0, right: 0 }}
+        testID={testID}
       >
         <View style={styles.menuItemLeft}>
           {icon && (
@@ -164,9 +187,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           )}
           <Text style={styles.menuItemText}>{label}</Text>
         </View>
-        {showArrow && (
-          <MaterialIcons name="chevron-right" size={14} color="#000000" />
-        )}
+        <View style={styles.menuItemRight}>
+          {!!rightText && <Text style={styles.menuItemRightText}>{rightText}</Text>}
+          {showArrow && (
+            <MaterialIcons name="chevron-right" size={14} color="#000000" />
+          )}
+        </View>
       </TouchableOpacity>
       {showDivider && (
         <View style={styles.divider} />
@@ -237,6 +263,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             {/* Menu Container */}
             <View style={styles.menuContainer}>
               <MenuItem label="My Orders" icon="receipt-long" onPress={onMyOrders} />
+              {walletBalance !== null && (
+                <MenuItem
+                  label="Tazty Wallet"
+                  icon="account-balance-wallet"
+                  onPress={onWallet}
+                  rightText={formatRupees(walletBalance)}
+                  testID="profile-wallet"
+                />
+              )}
               <MenuItem label="My Addresses" icon="location-on" onPress={onMyAddresses} />
               <MenuItem label="Favorites" icon="favorite" onPress={onFavorites} />
               <MenuItem label="Contact Us" icon="chat" onPress={onContactUs} />
@@ -454,6 +489,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     color: '#000000',
+  },
+  menuItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  menuItemRightText: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 13,
+    letterSpacing: 0,
+    color: '#00B14F',
   },
   switchContainer: {
     transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],

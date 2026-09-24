@@ -53,6 +53,7 @@ import { ForcedUpdateModal } from '@/components/ForcedUpdateModal';
 import { ManagedAppGate } from '@/components/ManagedAppGate';
 import { OfferDetailScreen } from '@/screens/Offer/OfferDetailScreen';
 import { StoreScreen } from '@/screens/Store/StoreScreen';
+import { WalletScreen } from '@/screens/Wallet/WalletScreen';
 import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 // import { initMeta } from '@/analytics/metaInit';
 // import { trackCheckout, trackViewRestaurant } from '@/analytics/metaEvents';
@@ -84,7 +85,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const { showConfirmation } = useConfirmation();
 
   // Default to login so we never flash location overlays before auth resolves; logged-in startup sets home/orders explicitly.
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat' | 'offerDetail' | 'storeDeals'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat' | 'offerDetail' | 'storeDeals' | 'wallet'>('login');
   /** Offer being viewed on the offerDetail screen. */
   const [selectedOfferId, setSelectedOfferId] = React.useState<number | null>(null);
   const [phoneNumber, setPhoneNumber] = React.useState('');
@@ -111,6 +112,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const [hasCheckoutMounted, setHasCheckoutMounted] = React.useState(false);
   const [hasSearchMounted, setHasSearchMounted] = React.useState(false);
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
+  // Wallet opens from Profile or from an order's refund line; back returns there.
+  const [walletCameFrom, setWalletCameFrom] = React.useState<'profile' | 'orderDetail'>('profile');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
   const [selectedOrderData, setSelectedOrderData] = React.useState<any>(null);
   const [highlightOrderId, setHighlightOrderId] = React.useState<string | null>(null);
@@ -555,6 +558,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       chat: 'Chat',
       offerDetail: 'Offer Detail',
       storeDeals: '₹99 Store',
+      wallet: 'Wallet',
     };
 
     const screenName = screenNameMap[currentScreen];
@@ -614,6 +618,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       checkoutScreenSlide.setValue(SCREEN_WIDTH);
       setEditingAddress(null);
       setSelectedOrderData(null);
+
+      // A wallet credit push opens the wallet; back from there lands on Profile.
+      if (target === 'wallet') {
+        profileScreenSlide.setValue(0);
+        setWalletCameFrom('profile');
+        setCurrentScreen('wallet');
+        return;
+      }
 
       // TRACK ORDER on the live notification: open that order with its map
       // already showing, so the rider is on screen in one tap.
@@ -1080,6 +1092,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         return true;
       case 'storeDeals':
         setCurrentScreen('home');
+        return true;
+      case 'wallet':
+        handleBackFromWallet();
         return true;
       case 'chat':
         handleBackFromChat();
@@ -2256,6 +2271,25 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     });
   };
 
+  // Tazty Wallet — opened from Profile (or a wallet push) and always returns
+  // to Profile. The profile overlay is put back on screen explicitly because a
+  // push tap slides it away before opening the wallet.
+  const handleNavigateToWallet = (from: 'profile' | 'orderDetail' = 'profile') => {
+    setWalletCameFrom(from);
+    setCurrentScreen('wallet');
+  };
+
+  const handleBackFromWallet = () => {
+    // From an order's refund line: straight back to that order.
+    if (walletCameFrom === 'orderDetail') {
+      setWalletCameFrom('profile');
+      setCurrentScreen('orderDetail');
+      return;
+    }
+    profileScreenSlide.setValue(0);
+    setCurrentScreen('profile');
+  };
+
   // My Addresses Navigation
   const handleNavigateToMyAddresses = () => {
     setCurrentScreen('myAddresses');
@@ -3068,6 +3102,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               onLogout={handleLogout}
               onEditProfile={handleNavigateToEditProfile}
               onMyOrders={handleNavigateToOrders}
+              onWallet={() => handleNavigateToWallet('profile')}
               onMyAddresses={handleNavigateToMyAddresses}
               onFavorites={handleNavigateToExploreDishes}
               onContactUs={() => handleNavigateToContactUs('profile')}
@@ -3180,6 +3215,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               onTrackOrder={() => handleNavigateToOrderTracking(selectedOrderId, 'orderDetail')}
               autoOpenTracking={autoOpenOrderTracking}
               onAutoTrackingHandled={() => setAutoOpenOrderTracking(false)}
+              onViewWallet={() => handleNavigateToWallet('orderDetail')}
               onDownloadInvoice={() => {}}
               onContactUs={() => handleNavigateToContactUs('orderDetail')}
               onHelp={handleNavigateToOrderHelp}
@@ -3196,6 +3232,13 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                 helpOptionTitle={chatHelpOptionTitle}
                 orderId={selectedOrderId}
               />
+            </View>
+          )}
+
+          {/* Tazty Wallet — reached from Profile or a wallet credit push. */}
+          {currentScreen === 'wallet' && (
+            <View style={styles.chatOverlay}>
+              <WalletScreen onBack={handleBackFromWallet} />
             </View>
           )}
 

@@ -64,6 +64,8 @@ export interface CreateOrderRequest {
   payment_method: 'cod' | 'online' | 'wallet' | 'upi';
   notes?: string;
   offer_code?: string;
+  /** Pay what the Tazty Wallet covers; the rest by UPI/card (online only). */
+  use_wallet?: boolean;
 }
 
 export interface Order {
