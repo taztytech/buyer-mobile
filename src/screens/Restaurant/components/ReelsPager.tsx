@@ -4,6 +4,9 @@ import {
   Dimensions,
   FlatList,
   Image,
+  LayoutChangeEvent,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   StyleSheet,
   Text,
@@ -11,6 +14,7 @@ import {
   ViewToken,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Reel, reelService } from '@/services/reel.service';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -36,13 +40,32 @@ interface ReelsPagerProps {
  */
 export const ReelsPager: React.FC<ReelsPagerProps> = ({
   reels,
-  height = SCREEN_HEIGHT,
+  height: heightProp,
   onAddToCart,
   isOutOfStock,
   priceFor,
 }) => {
+  // Each page is exactly the pager's own height, measured on layout. Using the
+  // window height instead left pages slightly taller/shorter than the space
+  // they sit in, so a swipe could settle between two reels.
+  const [measuredHeight, setMeasuredHeight] = useState(0);
+  const height = heightProp ?? (measuredHeight || SCREEN_HEIGHT);
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const h = Math.round(e.nativeEvent.layout.height);
+    if (h > 0) setMeasuredHeight((prev) => (prev === h ? prev : h));
+  }, []);
+
+  // Looping: a copy of the first reel is appended after the last. Swiping past
+  // the last reel lands on the copy, which is then swapped for the real first
+  // reel without animation - a seamless wrap. (The old version jumped to the
+  // first reel from onEndReached, which fires as soon as the LAST reel comes
+  // into view, so with two reels the second one could never be watched.)
+  const loops = reels.length > 1;
+  const pages = loops ? [...reels, reels[0]] : reels;
+
   const [activeIndex, setActiveIndex] = useState(0);
   const [muted, setMuted] = useState(true);
+  const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList<Reel>>(null);
   const viewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const counted = useRef<Set<number>>(new Set());
@@ -78,12 +101,18 @@ export const ReelsPager: React.FC<ReelsPagerProps> = ({
     };
   }, [activeIndex, reels]);
 
-  /** Loop rather than dead-ending on the last reel. */
-  const handleEndReached = useCallback(() => {
-    if (reels.length > 1) {
-      listRef.current?.scrollToIndex({ index: 0, animated: false });
-    }
-  }, [reels.length]);
+  /** Landed on the copy of the first reel: swap to the real one, invisibly. */
+  const handleMomentumEnd = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!loops || height <= 0) return;
+      const index = Math.round(e.nativeEvent.contentOffset.y / height);
+      if (index >= reels.length) {
+        listRef.current?.scrollToOffset({ offset: 0, animated: false });
+        setActiveIndex(0);
+      }
+    },
+    [loops, height, reels.length],
+  );
 
   const renderReel = useCallback(
     ({ item, index }: { item: Reel; index: number }) => {
@@ -124,78 +153,87 @@ export const ReelsPager: React.FC<ReelsPagerProps> = ({
               </View>
             ) : null}
 
-            <Text style={styles.name} numberOfLines={1}>
-              {item.item?.name || 'Dish'}
-            </Text>
+            {/* Dish name and Add on one line, Add on the right. */}
+            <View style={styles.titleRow}>
+              <Text style={styles.name} numberOfLines={1}>
+                {item.item?.name || 'Dish'}
+              </Text>
+              <Pressable
+                style={[styles.addButton, outOfStock && styles.addButtonDisabled]}
+                disabled={outOfStock}
+                onPress={() => onAddToCart?.(itemId)}
+                hitSlop={8}
+                testID={`reel-add-${itemId}`}
+              >
+                <Text style={styles.addButtonText}>
+                  {outOfStock ? 'Unavailable' : '+ Add'}
+                </Text>
+              </Pressable>
+            </View>
             {price ? <Text style={styles.price}>₹{price}</Text> : null}
             {item.caption ? (
               <Text style={styles.caption} numberOfLines={2}>
                 {item.caption}
               </Text>
             ) : null}
-
-            <Pressable
-              style={[styles.addButton, outOfStock && styles.addButtonDisabled]}
-              disabled={outOfStock}
-              onPress={() => onAddToCart?.(itemId)}
-              testID={`reel-add-${itemId}`}
-            >
-              <Text style={styles.addButtonText}>
-                {outOfStock ? 'Unavailable' : '+ Add'}
-              </Text>
-            </Pressable>
           </View>
 
           {muted ? (
-            <View style={styles.mutedHint} pointerEvents="none">
+            <View style={[styles.mutedHint, { top: insets.top + 14 }]} pointerEvents="none">
               <Text style={styles.mutedHintText}>Tap for sound</Text>
             </View>
           ) : null}
         </View>
       );
     },
-    [activeIndex, height, muted, onAddToCart, isOutOfStock, priceFor],
+    [activeIndex, height, muted, onAddToCart, isOutOfStock, priceFor, insets.top],
   );
 
   if (reels.length === 0) {
     return (
-      <View style={[styles.empty, { height }]}>
+      <View style={[styles.empty, { height: heightProp ?? SCREEN_HEIGHT }]}>
         <ActivityIndicator color="#fff" />
       </View>
     );
   }
 
   return (
-    <FlatList
-      ref={listRef}
-      data={reels}
-      keyExtractor={(reel) => String(reel.id)}
-      renderItem={renderReel}
-      pagingEnabled
-      showsVerticalScrollIndicator={false}
-      snapToInterval={height}
-      snapToAlignment="start"
-      decelerationRate="fast"
-      onViewableItemsChanged={onViewableItemsChanged}
-      viewabilityConfig={viewabilityConfig}
-      onEndReached={handleEndReached}
-      onEndReachedThreshold={0.1}
-      // Keeping only a couple of pages mounted stops memory climbing as a
-      // buyer swipes through a long menu.
-      windowSize={3}
-      maxToRenderPerBatch={2}
-      initialNumToRender={1}
-      removeClippedSubviews
-      getItemLayout={(_, index) => ({
-        length: height,
-        offset: height * index,
-        index,
-      })}
-    />
+    <View style={styles.fill} onLayout={onLayout}>
+      {heightProp != null || measuredHeight > 0 ? (
+        <FlatList
+          ref={listRef}
+          data={pages}
+          // The appended copy shares the first reel's id, so key by position.
+          keyExtractor={(reel, index) => `${reel.id}-${index}`}
+          renderItem={renderReel}
+          pagingEnabled
+          showsVerticalScrollIndicator={false}
+          snapToInterval={height}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          disableIntervalMomentum
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          onMomentumScrollEnd={handleMomentumEnd}
+          // Keeping only a couple of pages mounted stops memory climbing as a
+          // buyer swipes through a long menu.
+          windowSize={3}
+          maxToRenderPerBatch={2}
+          initialNumToRender={1}
+          removeClippedSubviews
+          getItemLayout={(_, index) => ({
+            length: height,
+            offset: height * index,
+            index,
+          })}
+        />
+      ) : null}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  fill: { flex: 1, backgroundColor: '#000' },
   page: { width: SCREEN_WIDTH, backgroundColor: '#000' },
   empty: {
     width: SCREEN_WIDTH,
@@ -229,7 +267,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.4,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   name: {
+    flex: 1,
     color: '#fff',
     fontFamily: 'Poppins',
     fontWeight: '700',
@@ -253,8 +297,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   addButton: {
-    marginTop: 14,
-    alignSelf: 'flex-start',
     backgroundColor: '#1DA84E',
     borderRadius: 24,
     paddingHorizontal: 20,
