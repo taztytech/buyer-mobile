@@ -57,10 +57,10 @@ export const StoreScreen: React.FC<StoreScreenProps> = ({
   );
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
-  const { reloadCart, setRestaurantInfo } = useCart();
+  const { reloadCart, setRestaurantInfo, getTotalItems } = useCart();
   const { showConfirmation } = useConfirmation();
   const { add, addingDealId } = useStoreDealAdd();
-  const { hidden: cartBarHidden, onScroll: hideCartBarOnScroll } = useHideOnScroll();
+  const { hidden: cartBarHidden, onScroll: hideCartBarOnScroll } = useHideOnScroll(getTotalItems());
 
   const load = React.useCallback(async () => {
     const [list, sec] = await Promise.all([

@@ -299,10 +299,10 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
   isGuest = false,
   onNavigateToLogin,
 }) => {
-  const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, reloadCart, flushPendingQuantityUpdate, checkRestaurantConflict, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName, restaurantLogo: cartRestaurantLogo } = useCart();
+  const { cart, addToCart: addToCartContext, removeFromCart, updateQuantity, setRestaurantInfo, clearCart, reloadCart, flushPendingQuantityUpdate, checkRestaurantConflict, restaurantId: cartRestaurantId, restaurantName: cartRestaurantName, restaurantLogo: cartRestaurantLogo, getTotalItems } = useCart();
   const { vegMode, setVegMode } = useVegMode();
   const { showConfirmation } = useConfirmation();
-  const { hidden: cartBarHidden, onScroll: hideCartBarOnScroll } = useHideOnScroll();
+  const { hidden: cartBarHidden, onScroll: hideCartBarOnScroll } = useHideOnScroll(getTotalItems());
 
   // Reels tab. Loaded alongside the menu; the toggle only appears once a
   // store actually has live reels, so nothing changes for stores without them.

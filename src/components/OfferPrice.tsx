@@ -15,8 +15,11 @@ import Svg, { Path } from 'react-native-svg';
  * Cart, checkout and bill lines keep plain Poppins prices.
  */
 
+// A hand-drawn ring centred in its 100x50 box: once round clockwise from the
+// top, overshooting the start a little like a pen stroke. It stays inside the
+// box on every side, so it never gets clipped off-centre.
 const CIRCLE_PATH =
-  'M60 4 C 90 2, 99 18, 96 30 C 92 46, 30 50, 10 40 C -4 32, 2 10, 26 5 C 40 2, 58 3, 70 7';
+  'M 56 4 C 82 3, 97 12, 97 25 C 97 39, 77 47, 50 47 C 23 47, 3 39, 3 25 C 3 11, 22 3, 46 3.5 C 56 3.5, 66 4.5, 75 7.5';
 
 const COLORS = {
   price: '#E8501C',
@@ -95,12 +98,20 @@ export const OfferPrice: React.FC<OfferPriceProps> = ({
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', minHeight: 36 },
   circleWrap: {
-    paddingHorizontal: 10,
-    paddingTop: 6,
-    paddingBottom: 2,
-    marginLeft: -2,
+    // Kalam's digits lean right past their measured width, so a little more
+    // room on the right keeps the number optically centred in the ring.
+    paddingLeft: 10,
+    paddingRight: 14,
+    paddingVertical: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   price: {
+    textAlign: 'center',
+    // Android pads text for accents by default, which pushed the price below
+    // the middle of the ring.
+    includeFontPadding: false,
+    textAlignVertical: 'center',
     // Kalam is loaded in App.tsx alongside Poppins; its ₹ glyph is present, so
     // the rupee sign never falls back to a system face.
     fontFamily: 'Kalam_700Bold',

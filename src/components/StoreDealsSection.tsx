@@ -62,13 +62,6 @@ export const StoreDealsSection: React.FC<StoreDealsSectionProps> = ({
 
       <View style={styles.headerRow}>
         <Text style={styles.sectionTitle}>{homeTitle}</Text>
-        <TouchableOpacity
-          onPress={onSeeAll}
-          accessibilityRole="button"
-          testID="store-deals-see-all"
-        >
-          <Text style={styles.seeAll}>See all</Text>
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -151,13 +144,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: 0,
     color: '#1A1A1A',
-  },
-  seeAll: {
-    fontFamily: 'Poppins',
-    fontWeight: 600,
-    fontSize: 12,
-    letterSpacing: 0.2,
-    color: ORANGE,
   },
   scrollContent: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 },
   cardWrapper: { marginRight: 12 },

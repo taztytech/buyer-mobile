@@ -10,6 +10,7 @@ import {
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { OfferPrice } from './OfferPrice';
+import { useCart } from '@/context/CartContext';
 import {
   dealStateLabel,
   isDealOrderable,
@@ -131,6 +132,89 @@ export const StoreDealCard: React.FC<StoreDealCardProps> = ({
   const isVeg = (deal.dietary_preference || '').toLowerCase().includes('veg')
     && !(deal.dietary_preference || '').toLowerCase().includes('non');
 
+  // Once the deal is in the cart the button becomes a − qty + stepper. A deal
+  // cart holds only deal lines, so the line is found by the menu item id.
+  const { cart, updateQuantity } = useCart();
+  const cartEntry = Object.entries(cart).find(
+    ([, item]) => Number(item.itemId) === Number(deal.item_id),
+  );
+  const cartKey = cartEntry?.[0];
+  const quantityInCart = cartEntry?.[1]?.quantity ?? 0;
+  const inCart = quantityInCart > 0 && !!cartKey;
+
+  // "+" goes through the normal add, so the server re-checks the daily limit and
+  // keeps the deal price; "−" is always allowed (0 takes it out of the cart).
+  const increment = () => onAdd(deal);
+  const decrement = () => {
+    if (cartKey) updateQuantity(cartKey, quantityInCart - 1);
+  };
+
+  const addControl = inCart ? (
+    <View
+      style={[styles.stepper, isHome && styles.controlFullWidth]}
+      testID={`store-deal-stepper-${deal.id}`}
+    >
+      <TouchableOpacity
+        style={styles.stepperButton}
+        onPress={decrement}
+        disabled={adding}
+        accessibilityRole="button"
+        accessibilityLabel={`Remove one ${deal.name}`}
+        testID={`store-deal-decrement-${deal.id}`}
+      >
+        <Text style={styles.stepperSymbol}>−</Text>
+      </TouchableOpacity>
+      {adding ? (
+        <ActivityIndicator size="small" color="#FFFFFF" />
+      ) : (
+        <Text style={styles.stepperQty} testID={`store-deal-qty-${deal.id}`}>
+          {quantityInCart}
+        </Text>
+      )}
+      <TouchableOpacity
+        style={styles.stepperButton}
+        onPress={increment}
+        disabled={!orderable || adding}
+        accessibilityRole="button"
+        accessibilityLabel={`Add one more ${deal.name}`}
+        testID={`store-deal-increment-${deal.id}`}
+      >
+        <Text style={[styles.stepperSymbol, !orderable && styles.stepperSymbolDisabled]}>+</Text>
+      </TouchableOpacity>
+    </View>
+  ) : (
+    <TouchableOpacity
+      style={[
+        styles.addButton,
+        isHome && styles.controlFullWidth,
+        !orderable && styles.addButtonDisabled,
+      ]}
+      onPress={() => onAdd(deal)}
+      disabled={!orderable || adding}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel={orderable ? `Add ${deal.name}` : label || 'Unavailable'}
+      testID={`store-deal-add-${deal.id}`}
+    >
+      {adding ? (
+        <ActivityIndicator size="small" color="#FFFFFF" />
+      ) : (
+        <Text
+          style={[styles.addButtonText, !orderable && styles.addButtonTextDisabled]}
+          numberOfLines={1}
+        >
+          {orderable
+            ? 'ADD +'
+            : label === 'SOLD OUT'
+              ? 'SOLD OUT'
+              : label === 'Limit reached today'
+                ? 'LIMIT'
+                : 'N/A'}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+
   return (
     <View
       style={[styles.card, isHome ? styles.cardHome : styles.cardStore]}
@@ -200,33 +284,12 @@ export const StoreDealCard: React.FC<StoreDealCardProps> = ({
             />
           </View>
 
-          <TouchableOpacity
-            style={[styles.addButton, !orderable && styles.addButtonDisabled]}
-            onPress={() => onAdd(deal)}
-            disabled={!orderable || adding}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={orderable ? `Add ${deal.name}` : label || 'Unavailable'}
-            testID={`store-deal-add-${deal.id}`}
-          >
-            {adding ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text
-                style={[styles.addButtonText, !orderable && styles.addButtonTextDisabled]}
-                numberOfLines={1}
-              >
-                {orderable
-                  ? 'ADD +'
-                  : label === 'SOLD OUT'
-                    ? 'SOLD OUT'
-                    : label === 'Limit reached today'
-                      ? 'LIMIT'
-                      : 'N/A'}
-              </Text>
-            )}
-          </TouchableOpacity>
+          {/* The wide ₹99 Store card has room beside the price; the narrow
+              Home card puts the control on its own row below. */}
+          {isHome ? null : addControl}
         </View>
+
+        {isHome ? <View style={styles.controlRow}>{addControl}</View> : null}
       </View>
 
       {/* Sold out / unavailable dims the whole card. */}
@@ -251,7 +314,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
-  cardHome: { width: 168, height: 214 },
+  cardHome: { width: 168, height: 236 },
   cardStore: { width: '100%', height: 220 },
   // Used by DealMedia — the media fills the whole card.
   image: { width: '100%', height: '100%' },
@@ -374,12 +437,47 @@ const styles = StyleSheet.create({
   addButton: {
     backgroundColor: ORANGE,
     borderRadius: 10,
-    paddingVertical: 8,
+    height: 34,
     paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addButtonDisabled: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  controlRow: { marginTop: 8 },
+  controlFullWidth: { alignSelf: 'stretch' },
+  stepper: {
+    height: 34,
+    minWidth: 96,
+    backgroundColor: ORANGE,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  stepperButton: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperSymbol: {
+    fontFamily: 'Poppins',
+    fontWeight: 700,
+    fontSize: 18,
+    lineHeight: 22,
+    letterSpacing: 0,
+    color: '#FFFFFF',
+  },
+  stepperSymbolDisabled: { color: 'rgba(255,255,255,0.45)' },
+  stepperQty: {
+    minWidth: 20,
+    textAlign: 'center',
+    fontFamily: 'Poppins',
+    fontWeight: 700,
+    fontSize: 14,
+    letterSpacing: 0,
+    color: '#FFFFFF',
+  },
   addButtonText: {
     fontFamily: 'Poppins',
     fontWeight: 700,

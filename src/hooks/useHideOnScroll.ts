@@ -13,9 +13,11 @@ import React from 'react';
 const THRESHOLD = 12;
 const ALWAYS_VISIBLE_ABOVE = 80;
 
-export const useHideOnScroll = () => {
+export const useHideOnScroll = (cartItemCount?: number) => {
   const [hidden, setHidden] = React.useState(false);
   const lastOffset = React.useRef(0);
+  // Where the list is right now, so a reveal can restart the hide measurement from here.
+  const currentOffset = React.useRef(0);
   // Tracked in a ref as well so the comparison never reads a stale render.
   const hiddenRef = React.useRef(false);
 
@@ -27,6 +29,7 @@ export const useHideOnScroll = () => {
 
   const onScroll = React.useCallback(
     (offsetY: number) => {
+      currentOffset.current = offsetY;
       const previous = lastOffset.current;
       const delta = offsetY - previous;
 
@@ -44,6 +47,19 @@ export const useHideOnScroll = () => {
     },
     [setHiddenState],
   );
+
+  // Adding to the cart brings the bar straight back, wherever the customer is
+  // in the list - they should see what they just added. Scrolling further down
+  // after that hides it again as usual.
+  const previousCount = React.useRef(cartItemCount ?? 0);
+  React.useEffect(() => {
+    const count = cartItemCount ?? 0;
+    if (count > previousCount.current) {
+      lastOffset.current = currentOffset.current;
+      setHiddenState(false);
+    }
+    previousCount.current = count;
+  }, [cartItemCount, setHiddenState]);
 
   /** Call when the list content is replaced, so the bar cannot stay stuck away. */
   const reset = React.useCallback(() => {
