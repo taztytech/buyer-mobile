@@ -1055,6 +1055,27 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
               shouldMarkAsFailed = false;
           }
 
+          // Wallet money reserved for this order goes straight back when the
+          // customer leaves the payment screen. Without this call it stayed
+          // held (history "Paid for order", balance ₹0) until the server's
+          // sweep. Not on a network error: that payment may still land, and
+          // the server returns the hold itself if it does not.
+          const walletUsed = Number(responseData?.wallet_amount || 0);
+          if (
+            !shouldMarkAsFailed &&
+            walletUsed > 0 &&
+            errorType !== PaymentErrorType.NETWORK_ERROR
+          ) {
+            try {
+              await paymentService.handlePaymentFailure(orderId, {
+                reason: 'Payment cancelled by customer',
+              });
+              message = `Payment was cancelled. Your ₹${walletUsed} Tazty Wallet money is back in your wallet. You can try again placing the order.`;
+            } catch (releaseError) {
+              console.error('Failed to release wallet hold after cancel:', releaseError);
+            }
+          }
+
           // Only mark as payment failed if it's not a user cancellation or network error
           if (shouldMarkAsFailed) {
             try {

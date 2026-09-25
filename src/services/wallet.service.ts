@@ -25,6 +25,8 @@ export interface WalletSummary {
   status?: 'active' | 'frozen';
   balance?: number;
   buckets?: WalletBuckets;
+  /** Reserved for orders still waiting for payment; not included in balance. */
+  on_hold?: number;
   /** Promo and cashback money that runs out, soonest first. */
   expiring?: ExpiringCredit[];
 }

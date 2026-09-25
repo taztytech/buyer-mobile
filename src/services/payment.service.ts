@@ -302,7 +302,10 @@ class PaymentService {
         description: paymentDetails.description,
         currency: paymentDetails.currency,
         key: paymentDetails.key,
-        amount: paymentDetails.amount,
+        // The server sends paise; openCheckout takes rupees (it converts to
+        // paise itself). Passing paise here sent Razorpay 100x the order's
+        // amount, which must match the Razorpay order.
+        amount: Number(paymentDetails.amount) / 100,
         name: paymentDetails.name,
         order_id: paymentDetails.razorpay_order_id,
         prefill: {

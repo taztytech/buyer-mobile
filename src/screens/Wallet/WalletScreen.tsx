@@ -193,6 +193,12 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack }) => {
         <Text style={styles.balanceHint}>
           Use it on any Tazty order. Wallet balance can't be moved to a bank account.
         </Text>
+        {Number(summary?.on_hold || 0) > 0 ? (
+          <Text style={styles.onHoldHint} testID="wallet-on-hold">
+            {formatRupees(summary?.on_hold)} on hold for an order waiting for payment. It comes
+            back automatically if the payment isn't completed.
+          </Text>
+        ) : null}
 
         {limits?.enabled && (
           <TouchableOpacity
@@ -377,6 +383,11 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack }) => {
 
   const renderItem = ({ item }: { item: WalletTransaction }) => {
     const credit = item.direction === 'credit';
+    // An order hold is not final: amber while held, grey once returned.
+    const held = item.status === 'held';
+    const returned = item.status === 'released';
+    const iconColor = returned ? '#6B7280' : held ? '#B45309' : credit ? GREEN : '#DC2626';
+    const iconName = returned ? 'undo' : held ? 'schedule' : credit ? 'south-west' : 'north-east';
     const subtitle =
       item.note || (item.order_number ? `Order #${item.order_number}` : WALLET_BUCKET_LABELS[item.bucket]);
     return (
@@ -386,12 +397,13 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack }) => {
         activeOpacity={0.7}
         testID={`wallet-txn-${item.txn_ref}`}
       >
-        <View style={[styles.txnIcon, credit ? styles.txnIconCredit : styles.txnIconDebit]}>
-          <MaterialIcons
-            name={credit ? 'south-west' : 'north-east'}
-            size={18}
-            color={credit ? GREEN : '#DC2626'}
-          />
+        <View
+          style={[
+            styles.txnIcon,
+            returned ? styles.txnIconNeutral : held ? styles.txnIconHeld : credit ? styles.txnIconCredit : styles.txnIconDebit,
+          ]}
+        >
+          <MaterialIcons name={iconName as any} size={18} color={iconColor} />
         </View>
         <View style={styles.txnBody}>
           <Text style={styles.txnTitle} numberOfLines={1}>
@@ -402,8 +414,13 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack }) => {
           </Text>
           <Text style={styles.txnDate}>{formatDate(item.created_at)}</Text>
         </View>
-        <Text style={[styles.txnAmount, credit ? styles.amountCredit : styles.amountDebit]}>
-          {credit ? '+' : '-'}
+        <Text
+          style={[
+            styles.txnAmount,
+            returned ? styles.amountNeutral : held ? styles.amountHeld : credit ? styles.amountCredit : styles.amountDebit,
+          ]}
+        >
+          {returned || held ? '' : credit ? '+' : '-'}
           {formatRupees(item.amount)}
         </Text>
       </TouchableOpacity>
@@ -764,6 +781,18 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginTop: 6,
   },
+  onHoldHint: {
+    marginTop: 8,
+    fontFamily: 'Poppins',
+    fontWeight: 500,
+    fontSize: 12,
+    letterSpacing: 0.1,
+    color: '#B45309',
+  },
+  txnIconHeld: { backgroundColor: '#FEF3C7' },
+  txnIconNeutral: { backgroundColor: '#F3F4F6' },
+  amountHeld: { color: '#B45309' },
+  amountNeutral: { color: '#6B7280', textDecorationLine: 'line-through' },
   balanceHint: {
     fontFamily: 'Poppins',
     fontWeight: 400,
