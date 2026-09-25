@@ -245,14 +245,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   );
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
 
-  // Auto-slide for organization banner
+  // Auto-slide for organization banner. A video banner stays up long enough to
+  // play its clip (the panel caps clips at 10 s); image banners every 4 s.
   React.useEffect(() => {
     if (!organizationBanners || organizationBanners.length <= 1) return;
-    const interval = setInterval(() => {
+    const current = organizationBanners[activeBannerIndex];
+    const isVideo = current?.media_type === 'video' && Boolean(current?.video_url);
+    const timeout = setTimeout(() => {
       setActiveBannerIndex(prev => (prev + 1) % organizationBanners.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [organizationBanners]);
+    }, isVideo ? 10000 : 4000);
+    return () => clearTimeout(timeout);
+  }, [organizationBanners, activeBannerIndex]);
   const totalCartItems = getTotalItems();
   const [showLocationPopup, setShowLocationPopup] = React.useState(false);
   const [hasShownLocationModal, setHasShownLocationModal] = React.useState(false);
@@ -320,6 +323,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   /** Remote URL for home header background from API; null = use bundled default */
   const [homeBackgroundImageUrl, setHomeBackgroundImageUrl] = React.useState<string | null>(null);
+  // Tracked separately: a video that fails falls back to the banner image, and
+  // only a failed image leaves the plain colour.
+  const [headerVideoFailed, setHeaderVideoFailed] = React.useState(false);
   const [headerBackgroundLoadFailed, setHeaderBackgroundLoadFailed] = React.useState(false);
   const [bannerLanguage, setBannerLanguage] = React.useState<'en' | 'ta'>('en');
 
@@ -440,9 +446,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const shouldShowBadgesRow =
     appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0);
 
+  // Every banner gets a fresh try. This used to reset only when the legacy
+  // background URL changed, so one failed load (a video, or a single image on
+  // a weak connection) blanked the media of every banner until the app was
+  // restarted.
   React.useEffect(() => {
     setHeaderBackgroundLoadFailed(false);
-  }, [homeBackgroundImageUrl]);
+    setHeaderVideoFailed(false);
+  }, [homeBackgroundImageUrl, activeBannerIndex, displayBackgroundImageUrl, activeOrganizationBanner?.video_url]);
 
   // Refresh trigger - increments to force data reload
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -2063,7 +2074,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }]}>
                     <ActivityIndicator size="large" color={colors.primary} />
                   </View>
-                ) : bannerIsVideo && !headerBackgroundLoadFailed ? (
+                ) : bannerIsVideo && !headerVideoFailed ? (
                   <Video
                     source={{ uri: activeOrganizationBanner!.video_url! }}
                     posterSource={bannerPosterUrl ? { uri: bannerPosterUrl } : undefined}
@@ -2077,7 +2088,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     // sound, and a banner that starts talking is hostile.
                     isMuted
                     useNativeControls={false}
-                    onError={() => setHeaderBackgroundLoadFailed(true)}
+                    onError={() => setHeaderVideoFailed(true)}
                     testID="home-header-video-section-remote"
                   />
                 ) : displayBackgroundImageUrl && !headerBackgroundLoadFailed ? (
