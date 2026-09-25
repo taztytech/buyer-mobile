@@ -26,6 +26,10 @@ export interface BannerItem {
   // published; promotion_link carries the offer id.
   promotion_type?: 'restaurant_id' | 'category_id' | 'url' | 'organization' | 'promo_offer';
   promotion_link?: string;
+  /** 'video' plays video_url on the slide (muted, looping); poster until it loads. */
+  media_type?: string;
+  video_url?: string;
+  poster_url?: string;
 }
 
 export interface CategoryItem {

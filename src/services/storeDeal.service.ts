@@ -53,13 +53,22 @@ export interface StoreDealSection {
   name: string;
   tagline: string;
   home_title: string;
+  /** Photo/video played inside the orange ₹99 Store card; null = plain orange. */
+  hero_image_url?: string | null;
+  hero_video_url?: string | null;
 }
 
 export const DEFAULT_STORE_DEAL_SECTION: StoreDealSection = {
   name: '₹99 Store',
   tagline: 'Great Food. Just ₹99!',
   home_title: "Today's deals",
+  hero_image_url: null,
+  hero_video_url: null,
 };
+
+/** Only a real http(s) URL counts as banner media. */
+export const heroMediaUrl = (value: unknown): string | null =>
+  typeof value === 'string' && /^https?:\/\//i.test(value.trim()) ? value.trim() : null;
 
 const unwrap = <T>(response: any): T => {
   // The buyer API wraps responses as { success, statusCode, message, data }.
@@ -127,6 +136,8 @@ class StoreDealService {
           name: s.name || DEFAULT_STORE_DEAL_SECTION.name,
           tagline: s.tagline || DEFAULT_STORE_DEAL_SECTION.tagline,
           home_title: s.home_title || DEFAULT_STORE_DEAL_SECTION.home_title,
+          hero_image_url: heroMediaUrl(s.hero_image_url),
+          hero_video_url: heroMediaUrl(s.hero_video_url),
         };
       }
     } catch (error: any) {

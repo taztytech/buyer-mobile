@@ -14,6 +14,7 @@ import storeDealService, {
   type StoreDeal,
   type StoreDealSection,
   DEFAULT_STORE_DEAL_SECTION,
+  heroMediaUrl,
 } from '@/services/storeDeal.service';
 import type { Offer } from '@/services/offers.service';
 import { paymentConfigService } from '@/services/payment-config.service';
@@ -83,7 +84,13 @@ interface CarouselItem {
   promotionType?: 'restaurant_id' | 'category_id' | 'url' | 'organization' | 'promo_offer';
   promotionLink?: string;
   backgroundColor?: string;
+  /** Set when the banner is a video banner; plays only while its slide is on screen. */
+  videoUrl?: string;
 }
+
+/** A video slide stays up this long (the panel caps clips at 10 s) before auto-advancing. */
+const VIDEO_SLIDE_MS = 10000;
+const IMAGE_SLIDE_MS = 3000;
 
 interface AppOperationStatus {
   is_open: boolean;
@@ -1107,6 +1114,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             tagline: sectionRaw.tagline || DEFAULT_STORE_DEAL_SECTION.tagline,
             home_title:
               sectionRaw.home_title || DEFAULT_STORE_DEAL_SECTION.home_title,
+            hero_image_url: heroMediaUrl(sectionRaw.hero_image_url),
+            hero_video_url: heroMediaUrl(sectionRaw.hero_video_url),
           });
         }
 
@@ -1121,7 +1130,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             description: banner.subtitle || banner.description || '',
             buttonText: banner.cta_button || banner.button_text || '',
             buttonColor: banner.button_color,
-            imageUrl: banner.image_url || banner.banner_url,
+            // The poster doubles as the slide image, so a video banner never
+            // shows an empty slide while its clip loads (or if it fails).
+            imageUrl: banner.image_url || banner.poster_url || banner.banner_url,
+            videoUrl:
+              banner.media_type === 'video' && banner.video_url ? banner.video_url : undefined,
             sequence: banner.sequence !== undefined ? banner.sequence : index,
             promotionType: banner.promotion_type,
             promotionLink: banner.promotion_link,
@@ -1481,7 +1494,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       clearInterval(autoSlideTimerRef.current);
     }
 
-    // Set up auto-slide
+    // Set up auto-slide. Re-armed on every slide change (currentSlide is a
+    // dependency), so a video slide gets time to play its clip.
+    const slideMs = carouselData[currentSlide]?.videoUrl ? VIDEO_SLIDE_MS : IMAGE_SLIDE_MS;
     autoSlideTimerRef.current = setInterval(() => {
       if (flatListRef.current) {
         const nextIndex = (currentSlide + 1) % carouselData.length;
@@ -1491,7 +1506,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         });
         setCurrentSlide(nextIndex);
       }
-    }, 3000);
+    }, slideMs);
 
     // Cleanup on unmount or when dependencies change
     return () => {
@@ -1500,7 +1515,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         autoSlideTimerRef.current = null;
       }
     };
-  }, [carouselData.length, currentSlide]);
+  }, [carouselData, currentSlide]);
 
   // Handle manual navigation
   const handleCarouselNavigation = React.useCallback((direction: 'prev' | 'next') => {
@@ -1592,7 +1607,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [onNavigateToRestaurant, onNavigateToCategory, onNavigateToOffer, showConfirmation]);
 
-  const renderCarouselItem = React.useCallback(({ item }: { item: CarouselItem }) => {
+  const renderCarouselItem = React.useCallback(({ item, index }: { item: CarouselItem; index: number }) => {
+    // Only the slide on screen plays; the rest show their image/poster, so a
+    // row of video banners never decodes several clips at once.
+    const playVideo = !!item.videoUrl && index === currentSlide;
     return (
       <View style={[styles.carouselSlide, { width: windowWidth }]} testID={`carousel-slide-${item.id}`}>
         <TouchableOpacity
@@ -1614,6 +1632,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               cachePolicy="memory-disk"
             />
           )}
+
+          {playVideo ? (
+            <Video
+              source={{ uri: item.videoUrl as string }}
+              style={[styles.adBannerImage, { width: bannerWidth }]}
+              resizeMode={ResizeMode.COVER}
+              shouldPlay
+              isLooping
+              isMuted
+              useNativeControls={false}
+              testID={`banner-video-${item.id}`}
+            />
+          ) : null}
 
           {/* Black overlay for text readability */}
           <View style={styles.adOverlay} />
@@ -1654,7 +1685,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </TouchableOpacity>
       </View>
     );
-  }, [handleBannerCTAClick, windowWidth, bannerWidth]);
+  }, [handleBannerCTAClick, windowWidth, bannerWidth, currentSlide]);
 
   const renderCategoryItem = React.useCallback(({ item }: { item: CategoryItem }) => {
     const imageSource = typeof item.icon === 'string' ? { uri: item.icon } : item.icon;
@@ -2235,6 +2266,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                             data={carouselData}
                             renderItem={renderCarouselItem}
                             keyExtractor={(item) => item.id}
+                            extraData={currentSlide}
                             horizontal
                             pagingEnabled
                             showsHorizontalScrollIndicator={false}
@@ -2286,6 +2318,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   sectionName={dealSection.name}
                   tagline={dealSection.tagline}
                   homeTitle={dealSection.home_title}
+                  heroImageUrl={dealSection.hero_image_url ?? null}
+                  heroVideoUrl={dealSection.hero_video_url ?? null}
                 />
 
                 {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}

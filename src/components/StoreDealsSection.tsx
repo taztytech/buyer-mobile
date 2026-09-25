@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import { StoreDealCard } from './StoreDealCard';
+import { DealMedia } from './DealMedia';
 import type { StoreDeal } from '@/services/storeDeal.service';
 
 const ORANGE = '#E8501C';
@@ -20,6 +21,9 @@ interface StoreDealsSectionProps {
   sectionName?: string;
   tagline?: string;
   homeTitle?: string;
+  /** Optional photo/video played inside the orange hero card (set in the panel). */
+  heroImageUrl?: string | null;
+  heroVideoUrl?: string | null;
 }
 
 /**
@@ -37,8 +41,12 @@ export const StoreDealsSection: React.FC<StoreDealsSectionProps> = ({
   sectionName = '₹99 Store',
   tagline = 'Great Food. Just ₹99!',
   homeTitle = "Today's deals",
+  heroImageUrl = null,
+  heroVideoUrl = null,
 }) => {
   if (!deals?.length) return null;
+
+  const hasHeroMedia = !!heroImageUrl || !!heroVideoUrl;
 
   return (
     <View style={styles.container} testID="store-deals-section">
@@ -50,6 +58,24 @@ export const StoreDealsSection: React.FC<StoreDealsSectionProps> = ({
         accessibilityLabel="Explore the 99 rupees store"
         testID="store-deals-hero"
       >
+        {hasHeroMedia ? (
+          <>
+            {/* Photo → video → loop behind the text; an orange tint on top keeps
+                the white text and the Explore button readable on any clip. */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <DealMedia
+                imageUrl={heroImageUrl}
+                videoUrl={heroVideoUrl}
+                name={sectionName}
+                photoSeconds={heroImageUrl ? 2 : 0}
+                muted
+                loop
+                fallback="none"
+              />
+            </View>
+            <View style={styles.heroTint} pointerEvents="none" />
+          </>
+        ) : null}
         <View style={styles.heroTextWrap}>
           <Text style={styles.heroKicker}>TAZTY</Text>
           <Text style={styles.heroTitle}>{sectionName.toUpperCase()}</Text>
@@ -89,12 +115,17 @@ const styles = StyleSheet.create({
   hero: {
     marginHorizontal: 16,
     borderRadius: 16,
+    overflow: 'hidden',
     backgroundColor: ORANGE,
     paddingVertical: 14,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  heroTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(232, 80, 28, 0.55)',
   },
   heroTextWrap: { flex: 1 },
   heroKicker: {

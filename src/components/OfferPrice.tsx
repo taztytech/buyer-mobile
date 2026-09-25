@@ -26,6 +26,8 @@ const COLORS = {
   priceDisabled: '#AAAAAA',
   circleDisabled: '#C8C8C8',
   original: '#9A948E',
+  priceOnDark: '#FFFFFF',
+  originalOnDark: 'rgba(255,255,255,0.78)',
 };
 
 interface OfferPriceProps {
@@ -36,6 +38,11 @@ interface OfferPriceProps {
   size?: number;
   /** Sold out, limit reached or unavailable. */
   disabled?: boolean;
+  /**
+   * Drawn straight on a photo (deal cards): white price and a light struck
+   * price, both with a shadow, instead of orange/grey on a white background.
+   */
+  onDark?: boolean;
   testID?: string;
 }
 
@@ -44,9 +51,14 @@ export const OfferPrice: React.FC<OfferPriceProps> = ({
   originalPrice,
   size = 25,
   disabled = false,
+  onDark = false,
   testID = 'offer-price',
 }) => {
-  const priceColor = disabled ? COLORS.priceDisabled : COLORS.price;
+  const priceColor = disabled
+    ? COLORS.priceDisabled
+    : onDark
+      ? COLORS.priceOnDark
+      : COLORS.price;
   const circleColor = disabled ? COLORS.circleDisabled : COLORS.price;
   const showOriginal = originalPrice != null && originalPrice > dealPrice;
 
@@ -77,6 +89,7 @@ export const OfferPrice: React.FC<OfferPriceProps> = ({
         <Text
           style={[
             styles.price,
+            onDark && styles.shadowOnDark,
             { fontSize: size, lineHeight: size * 1.15, color: priceColor },
           ]}
         >
@@ -87,7 +100,14 @@ export const OfferPrice: React.FC<OfferPriceProps> = ({
       </View>
 
       {showOriginal ? (
-        <Text style={styles.original} importantForAccessibility="no">
+        <Text
+          style={[
+            styles.original,
+            onDark && styles.shadowOnDark,
+            onDark && { color: COLORS.originalOnDark },
+          ]}
+          importantForAccessibility="no"
+        >
           ₹{originalPrice}
         </Text>
       ) : null}
@@ -125,5 +145,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
     color: COLORS.original,
     textDecorationLine: 'line-through',
+  },
+  shadowOnDark: {
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
 });
