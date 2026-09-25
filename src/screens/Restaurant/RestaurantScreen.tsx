@@ -1629,6 +1629,46 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
     });
   };
 
+  // Menu / Reels switch — only for stores that actually have live reels, so
+  // every other store page is untouched. Shown in both the loading and the
+  // loaded header (it used to exist only in the loading one, so it vanished
+  // the moment the page finished loading), level with the back button.
+  const viewToggle =
+    reels.length > 0 ? (
+      <View style={[styles.viewToggle, { top: insets.top + 10 }]}>
+        <TouchableOpacity
+          style={[styles.viewToggleTab, activeView === 'menu' && styles.viewToggleTabActive]}
+          onPress={() => setActiveView('menu')}
+          activeOpacity={0.8}
+          testID="store-tab-menu"
+        >
+          <MaterialIcons
+            name="menu"
+            size={16}
+            color={activeView === 'menu' ? '#001E1F' : 'rgba(255,255,255,0.9)'}
+          />
+          <Text style={[styles.viewToggleText, activeView === 'menu' && styles.viewToggleTextActive]}>
+            Menu
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.viewToggleTab, activeView === 'reels' && styles.viewToggleTabActive]}
+          onPress={() => setActiveView('reels')}
+          activeOpacity={0.8}
+          testID="store-tab-reels"
+        >
+          <MaterialIcons
+            name="play-circle-outline"
+            size={16}
+            color={activeView === 'reels' ? '#001E1F' : 'rgba(255,255,255,0.9)'}
+          />
+          <Text style={[styles.viewToggleText, activeView === 'reels' && styles.viewToggleTextActive]}>
+            Reels
+          </Text>
+        </TouchableOpacity>
+      </View>
+    ) : null;
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -1691,42 +1731,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                   <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
                 </TouchableOpacity>
 
-                {/* Menu / Reels toggle — only for stores that actually have
-                    live reels, so every other store page is untouched. */}
-                {reels.length > 0 && (
-                  <View style={styles.viewToggle}>
-                    <TouchableOpacity
-                      style={[styles.viewToggleTab, activeView === 'menu' && styles.viewToggleTabActive]}
-                      onPress={() => setActiveView('menu')}
-                      activeOpacity={0.8}
-                      testID="store-tab-menu"
-                    >
-                      <MaterialIcons
-                        name="menu"
-                        size={16}
-                        color={activeView === 'menu' ? '#001E1F' : 'rgba(255,255,255,0.9)'}
-                      />
-                      <Text style={[styles.viewToggleText, activeView === 'menu' && styles.viewToggleTextActive]}>
-                        Menu
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.viewToggleTab, activeView === 'reels' && styles.viewToggleTabActive]}
-                      onPress={() => setActiveView('reels')}
-                      activeOpacity={0.8}
-                      testID="store-tab-reels"
-                    >
-                      <MaterialIcons
-                        name="play-circle-outline"
-                        size={16}
-                        color={activeView === 'reels' ? '#001E1F' : 'rgba(255,255,255,0.9)'}
-                      />
-                      <Text style={[styles.viewToggleText, activeView === 'reels' && styles.viewToggleTextActive]}>
-                        Reels
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                {viewToggle}
 
                 {/* Restaurant Info Card with Shimmer */}
                 <View style={styles.restaurantCard}>
@@ -1768,6 +1773,8 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
                 <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
                   <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
                 </TouchableOpacity>
+
+                {viewToggle}
 
                 {/* Restaurant Info Card */}
                 <View style={styles.restaurantCard}>
