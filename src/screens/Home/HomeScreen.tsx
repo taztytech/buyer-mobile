@@ -18,6 +18,7 @@ import storeDealService, {
 } from '@/services/storeDeal.service';
 import type { Offer } from '@/services/offers.service';
 import { paymentConfigService } from '@/services/payment-config.service';
+import { walletService, formatRupees } from '@/services/wallet.service';
 import { appConfigService } from '@/services/app-config.service';
 import { addressService } from '@/services/address.service';
 import { RestaurantCard } from '@/components/RestaurantCard';
@@ -28,10 +29,13 @@ import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
 import { ViewCartBar } from '@/components/ViewCartBar';
+import { BottomNav } from '@/components/BottomNav';
+import { ordersService } from '@/services/orders.service';
 import { CategoryModal } from '@/components/CategoryModal';
 import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
+import { useSnackbar } from '@/context/SnackbarContext';
 import { useHideOnScroll } from '@/hooks/useHideOnScroll';
 import { restaurantService } from '@/services/restaurant.service';
 import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from '@/services/analytics.service';
@@ -66,6 +70,14 @@ interface HomeScreenProps {
   onForcedUpdateRequired?: (message?: string) => void; // Callback when API indicates forced update is required
   isGuest?: boolean;
   onNavigateToLogin?: () => void;
+  /** Open the Tazty Wallet; pass true to jump straight into Add-money. */
+  onNavigateToWallet?: (openAddMoney?: boolean) => void;
+  /** Bottom-nav targets. */
+  onNavigateToFlix?: () => void;
+  onNavigateToOrders?: () => void;
+  /** Report Flix availability up so the pager can block the swipe when off. */
+  onFlixEnabledChange?: (enabled: boolean) => void;
+  onFlixIntroEnabledChange?: (enabled: boolean) => void;
   /** Open the ₹99 Store page (hero tap or "See all"). */
   onNavigateToStore?: () => void;
 }
@@ -145,6 +157,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   selectedLocation: externalSelectedLocation,
   isGuest = false,
   onNavigateToLogin,
+  onNavigateToWallet,
+  onNavigateToFlix,
+  onNavigateToOrders,
+  onFlixEnabledChange,
+  onFlixIntroEnabledChange,
   onCategoriesLoaded,
   addressRefreshTrigger,
   isFocused = true,
@@ -162,7 +179,51 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   } = useCart();
   const { vegMode, setVegMode, isVegModeEnabled } = useVegMode();
   const { showConfirmation } = useConfirmation();
-  const { hidden: cartBarHidden, onScroll: hideCartBarOnScroll } = useHideOnScroll(getTotalItems());
+  const { onScroll: hideCartBarOnScroll } = useHideOnScroll(getTotalItems());
+  // Bottom nav (Crave · Flix) + Active-orders pill: visible only at the very top.
+  const [navAtTop, setNavAtTop] = React.useState(true);
+  const navAtTopRef = React.useRef(true);
+  const [activeOrderCount, setActiveOrderCount] = React.useState(0);
+  // Flix availability (server flag from the home payload); off => grey + toast.
+  const [flixEnabled, setFlixEnabled] = React.useState(true);
+  const { showSnackbar } = useSnackbar();
+
+  // Live count of the customer's in-progress orders for the "Active orders" pill.
+  React.useEffect(() => {
+    if (isGuest) {
+      setActiveOrderCount(0);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const res: any = await ordersService.getOrders();
+        const raw = res?.data;
+        const arr: any[] = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.orders)
+            ? raw.orders
+            : Array.isArray(raw?.data)
+              ? raw.data
+              : Array.isArray(raw?.data?.orders)
+                ? raw.data.orders
+                : [];
+        const done = ['delivered', 'completed', 'cancelled', 'canceled', 'rejected'];
+        const active = arr.filter((o) => {
+          const s = String(o?.status ?? o?.order_status ?? '')
+            .toLowerCase()
+            .replace(/[\s-]+/g, '_');
+          return s !== '' && !done.includes(s);
+        }).length;
+        if (alive) setActiveOrderCount(active);
+      } catch {
+        /* a failed count must never block home */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [isGuest, isFocused]);
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const bannerWidth = Math.max(0, windowWidth - 40);
@@ -243,6 +304,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [dealSection, setDealSection] = React.useState<StoreDealSection>(
     DEFAULT_STORE_DEAL_SECTION,
   );
+  // Wallet balance for the header pill. null = wallet off / not loaded (pill
+  // still shows for guests, who are sent to login on tap).
+  const [walletBalance, setWalletBalance] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (isGuest) {
+      setWalletBalance(null);
+      return;
+    }
+    let alive = true;
+    walletService
+      .getSummary()
+      .then(s => {
+        if (alive && s) setWalletBalance(s.balance ?? 0);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // Refetch when returning to Home so the balance reflects a just-added top-up.
+  }, [isGuest, isFocused]);
+
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
 
   // Auto-slide for organization banner. A video banner stays up long enough to
@@ -635,25 +718,47 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               [AnalyticsUserProperties.PINCODE]: defaultAddress.pincode ? String(defaultAddress.pincode) : null,
             });
 
-            // Fetch home data with default address coordinates
+            // Fetch home data. Prefer an explicitly selected location's
+            // coordinates (e.g. the current GPS location resolved at launch) so
+            // the restaurants shown match the displayed location; otherwise use
+            // the saved default address's coordinates. On an explicit override
+            // (address delete/edit) always use the saved default.
+            const useExternalCoords =
+              !options?.overrideSelectedLocation &&
+              typeof externalSelectedLocation?.latitude === 'number' &&
+              typeof externalSelectedLocation?.longitude === 'number';
             // Clear data first to prevent showing stale cached data
             setRestaurantData([]);
             setCarouselData([]);
             setCategoryData([]);
-            await fetchHomeData(defaultAddress.latitude, defaultAddress.longitude);
+            await fetchHomeData(
+              useExternalCoords ? externalSelectedLocation!.latitude! : defaultAddress.latitude,
+              useExternalCoords ? externalSelectedLocation!.longitude! : defaultAddress.longitude,
+            );
           } else {
-            // No default address, use fallback location
+            // No default address. Prefer an explicitly selected location (e.g.
+            // the current GPS location resolved at launch); otherwise fall back
+            // to the default Madurai location.
             setHasDefaultAddress(false);
-            setSelectedLocation({
-              name: DEFAULT_LOCATION.name,
-              address: DEFAULT_LOCATION.address,
-            });
+            const hasExternalCoords =
+              typeof externalSelectedLocation?.latitude === 'number' &&
+              typeof externalSelectedLocation?.longitude === 'number';
+            if (externalSelectedLocation?.name && externalSelectedLocation?.address) {
+              setSelectedLocation(externalSelectedLocation);
+            } else {
+              setSelectedLocation({
+                name: DEFAULT_LOCATION.name,
+                address: DEFAULT_LOCATION.address,
+              });
+            }
 
-            // Fetch home data with default Madurai coordinates
             setRestaurantData([]);
             setCarouselData([]);
             setCategoryData([]);
-            await fetchHomeData(undefined, undefined);
+            await fetchHomeData(
+              hasExternalCoords ? externalSelectedLocation!.latitude! : undefined,
+              hasExternalCoords ? externalSelectedLocation!.longitude! : undefined,
+            );
           }
         } else {
           // API failed - preserve guest/external selection if we have one
@@ -1116,6 +1221,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setStoreDeals(
           Array.isArray(storeDealsRaw) ? (storeDealsRaw as StoreDeal[]) : [],
         );
+
+        // Flix availability flag (server-controlled). Absent → default on.
+        const flix = (actualData as any).flix;
+        if (flix && typeof flix.enabled === 'boolean') {
+          setFlixEnabled(flix.enabled);
+          onFlixEnabledChange?.(flix.enabled);
+        }
+        if (flix && typeof flix.intro_enabled === 'boolean') {
+          onFlixIntroEnabledChange?.(flix.intro_enabled);
+        }
 
         // Editable ₹99 Store labels (name/tagline/row title).
         const sectionRaw = (actualData as any).store_deal_section;
@@ -1765,6 +1880,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
     // Cart pill gets out of the way while the customer browses.
     hideCartBarOnScroll(scrollY);
+
+    // Bottom nav + active-orders pill show ONLY at the very top; the instant the
+    // list moves they slide away (nav down, pill right) and return only here.
+    const atTop = scrollY < 24;
+    if (navAtTopRef.current !== atTop) {
+      navAtTopRef.current = atTop;
+      setNavAtTop(atTop);
+    }
     const layoutHeight = event.nativeEvent.layoutMeasurement.height;
     const contentHeight = event.nativeEvent.contentSize.height;
 
@@ -1936,6 +2059,44 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   </View>
                 </TouchableOpacity>
               )} */}
+
+                    {/* Wallet balance pill with a quick + to add money. */}
+                    <View style={styles.walletPill}>
+                      <TouchableOpacity
+                        style={styles.walletPillMain}
+                        onPress={() =>
+                          isGuest
+                            ? onNavigateToLogin?.()
+                            : onNavigateToWallet?.(false)
+                        }
+                        activeOpacity={0.8}
+                        disabled={!isLocationServiceable}
+                        testID="home-wallet-pill"
+                      >
+                        <MaterialIcons
+                          name="account-balance-wallet"
+                          size={13}
+                          color="#00B14F"
+                        />
+                        <Text style={styles.walletPillText} numberOfLines={1}>
+                          {isGuest ? 'Wallet' : formatRupees(walletBalance ?? 0)}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.walletPillAdd}
+                        onPress={() =>
+                          isGuest
+                            ? onNavigateToLogin?.()
+                            : onNavigateToWallet?.(true)
+                        }
+                        activeOpacity={0.8}
+                        disabled={!isLocationServiceable}
+                        testID="home-wallet-add"
+                        accessibilityLabel="Add money to wallet"
+                      >
+                        <MaterialIcons name="add" size={14} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </View>
 
                     {/* Profile Avatar */}
                     <TouchableOpacity
@@ -2325,6 +2486,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   deals={storeDeals}
                   addingDealId={addingDealId}
                   onAdd={deal => handleStoreDealAdd(deal)}
+                  onOpenStore={deal =>
+                    onNavigateToRestaurant?.(
+                      deal.restaurant_id,
+                      deal.restaurant?.name ?? '',
+                    )
+                  }
                   onSeeAll={() => onNavigateToStore?.()}
                   sectionName={dealSection.name}
                   tagline={dealSection.tagline}
@@ -2438,8 +2605,31 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         <MaterialIcons name="cloud-off" size={64} color="rgba(0, 0, 0, 0.2)" />
                         <Text style={styles.networkErrorTitle}>Network Error</Text>
                         <Text style={styles.networkErrorMessage}>
-                          Unable to load restaurants. Please check your connection and try again.
+                          Unable to load restaurants. Please try these steps:
                         </Text>
+                        {/* Hardcoded self-help guidance before contacting support. */}
+                        <View style={styles.networkErrorSteps}>
+                          <Text style={styles.networkErrorStep}>
+                            1. Check your network connection
+                          </Text>
+                          <Text style={styles.networkErrorStep}>
+                            2. Once try logout and login
+                          </Text>
+                          <Text style={styles.networkErrorStep}>
+                            3. If the above two don't work, contact Tazty support
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.supportPhoneRow}
+                            onPress={() => Linking.openURL('tel:9952520699')}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel="Call Tazty support"
+                            testID="network-error-support-phone"
+                          >
+                            <MaterialIcons name="call" size={16} color="#00B14F" />
+                            <Text style={styles.supportPhoneText}>9952520699</Text>
+                          </TouchableOpacity>
+                        </View>
                         <TouchableOpacity
                           style={styles.retryButton}
                           onPress={handleRefresh}
@@ -2641,7 +2831,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* View Cart Bar - shows when cart has items and location is serviceable */}
       {isLocationServiceable && (
         <ViewCartBar
-          hidden={cartBarHidden}
+          // Keep the cart pinned on Home so it's always reachable; it goes broad
+          // when scrolled. Compact + lifted above the Crave/Flix pills at the top
+          // so it never collides with them.
+          hidden={false}
+          compact={navAtTop}
           onPress={handleCartPress}
           onViewMenu={() => {
             // Navigate to restaurant menu
@@ -2653,6 +2847,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           deliveryLocation={selectedLocation.name}
         />
       )}
+
+      {/* Floating bottom overlay: Crave·Active-orders pill + Flix pill (top-only). */}
+      <BottomNav
+        atTop={navAtTop}
+        activeOrderCount={activeOrderCount}
+        onActiveOrders={() => onNavigateToOrders?.()}
+        flixEnabled={flixEnabled}
+        onFlix={() => onNavigateToFlix?.()}
+        onFlixSuspended={() =>
+          showSnackbar({ message: 'Flix is suspended right now', type: 'info' })
+        }
+      />
 
       {/* Category Modal */}
       <CategoryModal
@@ -2820,6 +3026,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 10,
+  },
+  walletPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E9F9F0',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#BdEBD1',
+    paddingLeft: 8,
+    paddingRight: 3,
+    height: 30,
+  },
+  walletPillMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingRight: 5,
+  },
+  walletPillText: {
+    fontFamily: 'Poppins',
+    fontWeight: 600,
+    fontSize: 12,
+    letterSpacing: 0.2,
+    color: '#0B7A3B',
+    maxWidth: 62,
+  },
+  walletPillAdd: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#00B14F',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cartButton: {
     width: 50,
@@ -3714,7 +3953,37 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: 'rgba(0, 0, 0, 0.5)',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 14,
+  },
+  networkErrorSteps: {
+    alignSelf: 'stretch',
+    backgroundColor: '#F7F7F7',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 20,
+    gap: 6,
+  },
+  networkErrorStep: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 13,
+    lineHeight: 20,
+    letterSpacing: 0.1,
+    color: 'rgba(0, 0, 0, 0.65)',
+  },
+  supportPhoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+    paddingLeft: 16,
+  },
+  supportPhoneText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    letterSpacing: 0.2,
+    color: '#00B14F',
   },
   retryButton: {
     flexDirection: 'row',

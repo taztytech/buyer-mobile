@@ -32,6 +32,8 @@ interface StoreScreenProps {
   /** A deal is counted per customer, so a guest is sent to sign in first. */
   onRequireLogin: () => void;
   onNavigateToCheckout: () => void;
+  /** Tap a deal card → open its store. */
+  onOpenStore?: (storeId: number, name: string) => void;
   latitude?: number;
   longitude?: number;
 }
@@ -47,6 +49,7 @@ interface StoreScreenProps {
 export const StoreScreen: React.FC<StoreScreenProps> = ({
   onBack,
   onRequireLogin,
+  onOpenStore,
   onNavigateToCheckout,
   latitude,
   longitude,
@@ -175,6 +178,9 @@ export const StoreScreen: React.FC<StoreScreenProps> = ({
                 deal={item}
                 variant="store"
                 onAdd={deal => handleAdd(deal)}
+                onOpenStore={deal =>
+                  onOpenStore?.(deal.restaurant_id, deal.restaurant?.name ?? '')
+                }
                 adding={addingDealId === item.id}
               />
             </View>

@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -23,6 +24,8 @@ interface StoreDealCardProps {
   /** 'home' is the 156px card in the Home row; 'store' is the wider page card. */
   variant?: 'home' | 'store';
   onAdd: (deal: StoreDeal) => void;
+  /** Tapping the card body (not the ADD/stepper) opens the deal's store. */
+  onOpenStore?: (deal: StoreDeal) => void;
   adding?: boolean;
 }
 
@@ -38,6 +41,7 @@ export const StoreDealCard: React.FC<StoreDealCardProps> = ({
   deal,
   variant = 'home',
   onAdd,
+  onOpenStore,
   adding = false,
 }) => {
   const orderable = isDealOrderable(deal);
@@ -130,8 +134,12 @@ export const StoreDealCard: React.FC<StoreDealCardProps> = ({
   );
 
   return (
-    <View
+    <Pressable
       style={[styles.card, isHome ? styles.cardHome : styles.cardStore]}
+      onPress={onOpenStore ? () => onOpenStore(deal) : undefined}
+      disabled={!onOpenStore}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${deal.restaurant?.name ?? 'store'}`}
       testID={`store-deal-card-${deal.id}`}
     >
       {/* Full-bleed image / video fills the whole card. */}
@@ -211,7 +219,7 @@ export const StoreDealCard: React.FC<StoreDealCardProps> = ({
           <Text style={styles.stateOverlayText}>{label}</Text>
         </View>
       ) : null}
-    </View>
+    </Pressable>
   );
 };
 

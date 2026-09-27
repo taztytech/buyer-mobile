@@ -17,6 +17,7 @@ import {
   AppState,
   NativeModules,
   Platform,
+  TextInput,
 } from 'react-native';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -42,6 +43,7 @@ import { resolveTrackingDisplayOrder, resolveAgentPhoneForExotel } from './track
 import { computeShowStoreToAgentRoute } from './orderTrackingRouteVisibility';
 import { CancelReasonModal } from '@/components/CancelReasonModal';
 import { appConfigService } from '@/services/app-config.service';
+import { resolveCurrentLocation } from '@/services/currentLocation.service';
 
 const toRadians = (deg: number): number => (deg * Math.PI) / 180;
 const routeDistanceMeters = (
@@ -283,6 +285,10 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const webViewLoadedRef = useRef<boolean>(false);
   const appStateRef = useRef(AppState.currentState);
   const [roadRouteCoordinates, setRoadRouteCoordinates] = useState<Array<{ latitude: number; longitude: number }> | null>(null);
+  // True once the server (fleet) supplies a road-route polyline, so the legacy
+  // client-side Google Directions fetch (whose key has no routing API enabled)
+  // stops trying and never overwrites the real route with a straight line.
+  const serverPolylineActiveRef = useRef(false);
   const [storeToAgentRouteCoordinates, setStoreToAgentRouteCoordinates] = useState<Array<{ latitude: number; longitude: number }> | null>(null);
   const [trackingMapRefreshKey, setTrackingMapRefreshKey] = useState(0);
   const lastRouteFetchRef = useRef<{
@@ -833,6 +839,15 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           },
           track_status: trackData,
         }));
+        // Server-computed road route (fleet Routes API) → draw the real path.
+        const encodedRoute = (trackData as any)?.route_polyline;
+        if (typeof encodedRoute === 'string' && encodedRoute.length > 0) {
+          const decodedRoute = decodeRoutePolyline(encodedRoute);
+          if (decodedRoute.length > 1) {
+            serverPolylineActiveRef.current = true;
+            setRoadRouteCoordinates(decodedRoute);
+          }
+        }
       }
     } catch (error) {
       console.warn('Track status API failed:', error);
@@ -1091,6 +1106,11 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   useEffect(() => {
     if (!showTrackingWebView || !fallbackMapCoords) return;
 
+    // The server (fleet) now supplies the road route; once it has, never let the
+    // legacy client Directions call (its key has no routing API enabled) run or
+    // reset the route to a straight line.
+    if (serverPolylineActiveRef.current) return;
+
     const mapsApiKey = (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '').trim();
     if (!mapsApiKey) {
       setRoadRouteCoordinates(null);
@@ -1287,6 +1307,15 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             },
             track_status: trackData,
           }));
+          // Server-computed road route (fleet Routes API) → draw the real path.
+          const encodedRoute = (trackData as any)?.route_polyline;
+          if (typeof encodedRoute === 'string' && encodedRoute.length > 0) {
+            const decodedRoute = decodeRoutePolyline(encodedRoute);
+            if (decodedRoute.length > 1) {
+              serverPolylineActiveRef.current = true;
+              setRoadRouteCoordinates(decodedRoute);
+            }
+          }
         }
       }).catch((error) => {
         console.warn('Tracking status refresh failed:', error);
@@ -1465,6 +1494,126 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const deliveryTimeValue = hasPreorderItems
     ? preorderDeliveryTime
     : normalEstimatedDeliveryTime;
+
+  // ── Blinkit-style header: status line + live, adaptive "Arriving in N min" ──
+  // Ticks locally every 30s and counts down to the absolute
+  // estimated_delivery_time. The backend re-pushes that timestamp as the rider
+  // moves / hits traffic, so the target shifts and the countdown follows it
+  // (extends on delay). A range string ("11-17 minutes") is shown as-is.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const s = (orderData?.status || '').toLowerCase();
+    if (!orderData || s === 'delivered' || s === 'cancelled' || s === 'canceled' || s === 'rejected') {
+      return;
+    }
+    const id = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, [orderData?.status]);
+
+  const headerStatusLine = useMemo(() => {
+    const s = (orderData?.status || '').toLowerCase();
+    if (!s) return 'Order';
+    if (s === 'delivered') return 'Order delivered';
+    if (s === 'cancelled' || s === 'canceled' || s === 'rejected') return 'Order cancelled';
+    if (['out-for-delivery', 'agent-nearby', 'picked'].includes(s)) return 'Out for delivery';
+    if (['packed', 'agent-assigned', 'agent-arrived-restaurant'].includes(s)) return 'Order is being prepared';
+    return 'Order is confirmed';
+  }, [orderData?.status]);
+
+  const headerArrivingLine = useMemo(() => {
+    const s = (orderData?.status || '').toLowerCase();
+    if (s === 'delivered') return 'Delivered';
+    if (s === 'cancelled' || s === 'canceled' || s === 'rejected') return '';
+    const eta = orderData?.estimated_delivery_time || orderData?.preorder_delivery_date;
+    if (!eta) return 'Arriving soon';
+    const raw = String(eta).trim();
+    if (/^\d+\s*-\s*\d+\s*(mins?|minutes?)$/i.test(raw)) {
+      return `Arriving in ${raw.replace(/mins?|minutes?/i, 'minutes')}`;
+    }
+    const t = Date.parse(raw);
+    if (Number.isNaN(t)) return `Arriving in ${raw}`;
+    const diffMin = Math.round((t - nowTick) / 60000);
+    if (diffMin <= 0) return 'Arriving soon';
+    if (diffMin === 1) return 'Arriving in 1 minute';
+    return `Arriving in ${diffMin} minutes`;
+  }, [orderData?.status, orderData?.estimated_delivery_time, orderData?.preorder_delivery_date, nowTick]);
+
+  // Only surface the tip / share-location actions while the order is live.
+  const isActiveOrder = useMemo(() => {
+    const s = (orderData?.status || '').toLowerCase();
+    return !!s && !['delivered', 'cancelled', 'canceled', 'rejected', 'payment_failed', 'failed'].includes(s);
+  }, [orderData?.status]);
+
+  // ── Post-order tip (Blinkit-style) ──
+  const [tipBusy, setTipBusy] = useState(false);
+  const [tipLocal, setTipLocal] = useState<number | null>(null);
+  const [showTipCustom, setShowTipCustom] = useState(false);
+  const [tipCustomText, setTipCustomText] = useState('');
+  const currentTip =
+    tipLocal !== null
+      ? tipLocal
+      : Number(orderData?.tip_amount ?? orderData?.summary?.tip_amount ?? 0) || 0;
+
+  const applyTip = useCallback(
+    async (amount: number) => {
+      if (!orderId || tipBusy) return;
+      const next = currentTip === amount ? 0 : Math.min(Math.max(amount, 0), 450);
+      setTipBusy(true);
+      setTipLocal(next); // optimistic
+      const pm = String(orderData?.payment_method || '').toLowerCase();
+      const source: 'wallet' | 'cod' | 'online' = pm === 'cod' ? 'cod' : 'wallet';
+      const res = await ordersService.updateOrderTip(Number(orderId), next, source);
+      setTipBusy(false);
+      if (!res.success) {
+        setTipLocal(null); // revert to server value
+        showConfirmation({
+          title: 'Could not add tip',
+          message: res.error || 'Please try again in a moment.',
+          confirmText: 'OK',
+          onConfirm: () => {},
+        });
+      } else {
+        fetchOrderDetails();
+      }
+    },
+    [orderId, tipBusy, currentTip, orderData?.payment_method, showConfirmation, fetchOrderDetails],
+  );
+
+  // ── Share live location with the rider ──
+  const [shareLocBusy, setShareLocBusy] = useState(false);
+  const [shareLocDone, setShareLocDone] = useState(false);
+  const handleShareLocation = useCallback(async () => {
+    if (!orderId || shareLocBusy) return;
+    setShareLocBusy(true);
+    try {
+      const loc = await resolveCurrentLocation(8000);
+      if (!loc) {
+        showConfirmation({
+          title: 'Location unavailable',
+          message: 'Enable location permission to share your live location with the delivery partner.',
+          confirmText: 'OK',
+          onConfirm: () => {},
+        });
+        return;
+      }
+      const res = await ordersService.shareCustomerLocation(Number(orderId), {
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+      });
+      if (res.success) {
+        setShareLocDone(true);
+      } else {
+        showConfirmation({
+          title: 'Could not share location',
+          message: res.error || 'Please try again in a moment.',
+          confirmText: 'OK',
+          onConfirm: () => {},
+        });
+      }
+    } finally {
+      setShareLocBusy(false);
+    }
+  }, [orderId, shareLocBusy, showConfirmation]);
 
   // Calculate bill details from items if summary is missing or zero
   const calculateBillFromItems = (orderData: any) => {
@@ -1664,32 +1813,23 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
       </SafeAreaView>
 
-      {/* Header */}
+      {/* Header — Blinkit-style: status line + live "Arriving in N minutes" */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <MaterialIcons name="chevron-left" size={24} color="#000000" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order Details</Text>
-        <View style={styles.headerButtons}>
-          {_onHelp && (
-            <TouchableOpacity
-              style={styles.helpButton}
-              onPress={_onHelp}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="help-outline" size={20} color="#FFFFFF" />
-              <Text style={styles.helpButtonText}>Help</Text>
-            </TouchableOpacity>
-          )}
-          {/* <TouchableOpacity
-            style={styles.chatButton}
-            onPress={handleCallSupport}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="phone" size={20} color="#FFFFFF" />
-            <Text style={styles.chatButtonText}>Support</Text>
-          </TouchableOpacity> */}
+        <View style={styles.headerCenter} pointerEvents="none">
+          <Text style={styles.headerStatusLine} numberOfLines={1}>
+            {headerStatusLine}
+          </Text>
+          {headerArrivingLine ? (
+            <Text style={styles.headerArrivingLine} numberOfLines={1}>
+              {headerArrivingLine}
+            </Text>
+          ) : null}
         </View>
+        {/* Spacer balances the back button so the title stays centered */}
+        <View style={styles.headerSpacer} />
       </View>
 
       <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -1821,6 +1961,121 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   </>
                 )}
             </View>
+
+            {/* Tip the delivery partner — post-order (Blinkit-style) */}
+            {isActiveOrder && (
+              <View style={styles.card}>
+                <View style={styles.actionHeaderRow}>
+                  <View style={styles.actionIconWrap}>
+                    <MaterialIcons name="volunteer-activism" size={20} color="#00B14F" />
+                  </View>
+                  <View style={styles.actionHeaderText}>
+                    <Text style={styles.actionTitle}>Add a tip for your delivery partner</Text>
+                    <Text style={styles.actionSubtitle}>A little kindness can make their day</Text>
+                  </View>
+                </View>
+                <View style={styles.tipRow}>
+                  {[20, 30, 50].map((amt) => {
+                    const active = currentTip === amt;
+                    return (
+                      <TouchableOpacity
+                        key={amt}
+                        style={[styles.tipChip, active && styles.tipChipActive]}
+                        onPress={() => applyTip(amt)}
+                        disabled={tipBusy}
+                        activeOpacity={0.85}
+                        testID={`order-tip-${amt}`}
+                      >
+                        <Text style={[styles.tipChipText, active && styles.tipChipTextActive]}>
+                          ₹{amt}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  <TouchableOpacity
+                    style={[styles.tipChip, showTipCustom && styles.tipChipActive]}
+                    onPress={() => setShowTipCustom((v) => !v)}
+                    disabled={tipBusy}
+                    activeOpacity={0.85}
+                    testID="order-tip-custom"
+                  >
+                    <Text style={[styles.tipChipText, showTipCustom && styles.tipChipTextActive]}>
+                      Custom
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {showTipCustom && (
+                  <View style={styles.tipCustomRow}>
+                    <Text style={styles.tipCustomPrefix}>₹</Text>
+                    <TextInput
+                      style={styles.tipCustomInput}
+                      keyboardType="number-pad"
+                      placeholder="Enter amount"
+                      placeholderTextColor="#9AA0A6"
+                      value={tipCustomText}
+                      onChangeText={setTipCustomText}
+                      maxLength={4}
+                    />
+                    <TouchableOpacity
+                      style={styles.tipCustomBtn}
+                      onPress={() => {
+                        const v = parseInt(tipCustomText, 10);
+                        if (v > 0) {
+                          applyTip(Math.min(v, 450));
+                          setShowTipCustom(false);
+                          setTipCustomText('');
+                        }
+                      }}
+                      disabled={tipBusy}
+                    >
+                      <Text style={styles.tipCustomBtnText}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                {currentTip > 0 && (
+                  <Text style={styles.tipAppliedText}>
+                    You're tipping ₹{currentTip} — 100% goes to your delivery partner.
+                  </Text>
+                )}
+              </View>
+            )}
+
+            {/* Share live location with the rider */}
+            {isActiveOrder && (
+              <View style={styles.card}>
+                <View style={styles.actionHeaderRow}>
+                  <View style={styles.actionIconWrap}>
+                    <MaterialIcons name="my-location" size={20} color="#00B14F" />
+                  </View>
+                  <View style={styles.actionHeaderText}>
+                    <Text style={styles.actionTitle}>Share your live location</Text>
+                    <Text style={styles.actionSubtitle}>Help your delivery partner reach you faster</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[styles.shareLocBtn, shareLocDone && styles.shareLocBtnDone]}
+                  onPress={handleShareLocation}
+                  disabled={shareLocBusy}
+                  activeOpacity={0.85}
+                  testID="order-share-location"
+                >
+                  {shareLocBusy ? (
+                    <ActivityIndicator size="small" color="#00B14F" />
+                  ) : (
+                    <>
+                      <MaterialIcons
+                        name={shareLocDone ? 'check-circle' : 'near-me'}
+                        size={18}
+                        color={shareLocDone ? '#00B14F' : '#FFFFFF'}
+                      />
+                      <Text style={[styles.shareLocBtnText, shareLocDone && styles.shareLocBtnTextDone]}>
+                        {shareLocDone ? 'Location shared' : 'Share current location'}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Cancellation Reason Card - only show for cancelled orders */}
             {orderData.status === 'cancelled' && orderData.cancel_reason && (
@@ -2866,12 +3121,39 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#00B14F',
-    paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 76,
+    height: 88,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  headerStatusLine: {
+    fontFamily: 'Poppins',
+    fontWeight: 500,
+    fontSize: 13,
+    letterSpacing: 0.2,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'center',
+  },
+  headerArrivingLine: {
+    fontFamily: 'Poppins',
+    fontWeight: 700,
+    fontSize: 19,
+    letterSpacing: 0.2,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  headerSpacer: {
+    width: 40,
+    height: 40,
   },
   backButton: {
     width: 40,
@@ -3131,6 +3413,136 @@ const styles = StyleSheet.create({
     color: '#001E1F',
     lineHeight: 27,
     marginBottom: 12,
+  },
+  // ── Tip + Share-location cards ──
+  actionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(0, 177, 79, 0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionHeaderText: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  actionTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15,
+    color: '#001E1F',
+    letterSpacing: 0.1,
+    lineHeight: 21,
+  },
+  actionSubtitle: {
+    fontFamily: 'Poppins',
+    fontWeight: 400,
+    fontSize: 12.5,
+    color: 'rgba(0, 30, 31, 0.55)',
+    letterSpacing: 0.1,
+    marginTop: 2,
+  },
+  tipRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  tipChip: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1.4,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tipChipActive: {
+    borderColor: '#00B14F',
+    backgroundColor: 'rgba(0, 177, 79, 0.08)',
+  },
+  tipChipText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#3A3A3A',
+    letterSpacing: 0.2,
+  },
+  tipChipTextActive: {
+    color: '#00B14F',
+  },
+  tipCustomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    borderWidth: 1.4,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingLeft: 14,
+    paddingRight: 6,
+    height: 46,
+  },
+  tipCustomPrefix: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15,
+    color: '#3A3A3A',
+    marginRight: 4,
+  },
+  tipCustomInput: {
+    flex: 1,
+    fontFamily: 'Poppins',
+    fontWeight: 500,
+    fontSize: 15,
+    color: '#001E1F',
+    paddingVertical: 0,
+    letterSpacing: 0.2,
+  },
+  tipCustomBtn: {
+    backgroundColor: '#00B14F',
+    borderRadius: 9,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+  },
+  tipCustomBtnText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 13,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  tipAppliedText: {
+    fontFamily: 'Poppins',
+    fontWeight: 500,
+    fontSize: 12.5,
+    color: '#00B14F',
+    letterSpacing: 0.1,
+    marginTop: 12,
+  },
+  shareLocBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#00B14F',
+    borderRadius: 12,
+    paddingVertical: 13,
+    marginTop: 14,
+  },
+  shareLocBtnDone: {
+    backgroundColor: 'rgba(0, 177, 79, 0.10)',
+    borderWidth: 1.4,
+    borderColor: '#00B14F',
+  },
+  shareLocBtnText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  shareLocBtnTextDone: {
+    color: '#00B14F',
   },
   notesContainer: {
     flexDirection: 'row',

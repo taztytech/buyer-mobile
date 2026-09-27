@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState, InteractionManager, Platform, Linking } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, BackHandler, Easing, Text, AppState, InteractionManager, Platform, Linking, PanResponder } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
@@ -8,10 +8,18 @@ import { WelcomeScreen } from '@/screens/Auth/WelcomeScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
+import { BecomeCreatorScreen } from '@/screens/Creator/BecomeCreatorScreen';
+import { CreatorProfileScreen } from '@/screens/Creator/CreatorProfileScreen';
+import { SettingsScreen } from '@/screens/Creator/SettingsScreen';
+import { VideoUploadScreen } from '@/screens/Creator/VideoUploadScreen';
+import { VCFeedScreen } from '@/screens/Creator/VCFeedScreen';
+import { vcService } from '@/services/vc.service';
+import { Snackbar } from '@/components/Snackbar';
 import { OrdersScreen, resetOrdersPersistence } from '@/screens/Order/OrdersScreen';
 import { OrderDetailScreen } from '@/screens/Order/OrderDetailScreen';
 import { RateOrderScreen } from '@/screens/Order/RateOrderScreen';
 import { OrderTrackingScreen } from '@/screens/Order/OrderTrackingScreen';
+import { OrderPlacedScreen } from '@/screens/Order/OrderPlacedScreen';
 import { SearchScreen } from '@/screens/Search/SearchScreen';
 import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
@@ -36,6 +44,7 @@ import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
 import { storageService, GUEST_SELECTED_LOCATION_KEY } from '@/services/storage.service';
 import { homeService } from '@/services/home.service';
+import { resolveCurrentLocation } from '@/services/currentLocation.service';
 import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
 import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
@@ -44,6 +53,7 @@ import { OrdersProvider, useOrders } from '@/context/OrdersContext';
 import { ordersService, OrderListItem } from '@/services/orders.service';
 import { SearchSuggestion } from '@/services/search.service';
 import CustomSplashScreen from '@/components/CustomSplashScreen';
+import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { fcmNotificationService } from '@/services/fcmNotification.service';
 import { NetworkStatusScreen } from '@/components/NetworkStatusScreen';
 import { analyticsService, AnalyticsEvents, AnalyticsScreens, AnalyticsUserProperties } from '@/services/analytics.service';
@@ -85,11 +95,71 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const { showConfirmation } = useConfirmation();
 
   // Default to login so we never flash location overlays before auth resolves; logged-in startup sets home/orders explicitly.
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat' | 'offerDetail' | 'storeDeals' | 'wallet'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat' | 'offerDetail' | 'storeDeals' | 'wallet' | 'becomeCreator' | 'creatorProfile' | 'settings' | 'uploadVideo' | 'vcFeed'>('login');
+
+  // Right-edge left-swipe on Home opens the Flix feed (Instagram-style) - but
+  // only when there is something to watch; otherwise a toast, never a blank
+  // feed. Whether Flix has videos is checked quietly while Home is shown, so the
+  // swipe itself never waits.
+  const vcHasVideosRef = React.useRef<boolean | null>(null);
+  // Flix master switch from the home payload (FLIX_ENABLED). When off, Flix is
+  // suspended: the swipe/pill are blocked with a toast and the pill greys out.
+  const flixEnabledRef = React.useRef<boolean>(true);
+  // FLIX_INTRO_ENABLED from the home payload — when true the feed plays the
+  // bundled branded intro reel first. Default off.
+  const flixIntroEnabledRef = React.useRef<boolean>(false);
+  const [vcToast, setVcToast] = React.useState<string | null>(null);
+  const openVcFeedRef = React.useRef<() => void>(() => {});
+  openVcFeedRef.current = () => {
+    if (flixEnabledRef.current === false) {
+      setVcToast('Flix is suspended right now.');
+      return;
+    }
+    if (!isAuthenticatedRef.current) {
+      setVcToast('Log in to watch Flix videos.');
+      return;
+    }
+    if (vcHasVideosRef.current) {
+      setCurrentScreen('vcFeed');
+    } else {
+      setVcToast('No videos yet – check back soon!');
+    }
+  };
+  // Instagram-style home → Flix swipe. Attached to the whole Home container via
+  // CAPTURE so a right-to-left drag anywhere over the content (e.g. the
+  // restaurants list) opens Flix — while vertical scrolls (dy-dominant) fall
+  // through to the list, taps have no movement, and the horizontal carousels
+  // claim their own smaller swipes first (so only a deliberate long left-drag
+  // over the cards / open space triggers it).
+  const vcSwipePanResponder = React.useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_evt, g) =>
+        g.dx < -24 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+      onPanResponderRelease: (_evt, g) => {
+        if (g.dx < -60 || g.vx < -0.35) openVcFeedRef.current();
+      },
+      onPanResponderTerminationRequest: () => false,
+    }),
+  ).current;
   /** Offer being viewed on the offerDetail screen. */
   const [selectedOfferId, setSelectedOfferId] = React.useState<number | null>(null);
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
+  React.useEffect(() => {
+    if (currentScreen !== 'home' || !isAuthenticatedRef.current) return;
+    let alive = true;
+    vcService
+      .getFeed()
+      .then(page => {
+        if (alive) vcHasVideosRef.current = (page?.items?.length ?? 0) > 0;
+      })
+      .catch(() => {
+        if (alive) vcHasVideosRef.current = false;
+      });
+    return () => {
+      alive = false;
+    };
+  }, [currentScreen]);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchResults, setSearchResults] = React.useState<SearchSuggestion[]>([]);
   const [locationSearchQuery, setLocationSearchQuery] = React.useState('');
@@ -102,6 +172,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     longitude?: number;
     type?: 'home' | 'work' | 'other';
   } | undefined>(undefined);
+  // Full-screen "Order Placed" celebration shown right after an order is created.
+  const [orderPlacedInfo, setOrderPlacedInfo] = React.useState<{
+    label: string;
+    address: string;
+  } | null>(null);
   const [selectedCategory, setSelectedCategory] = React.useState('Briyani');
   const [categoryData, setCategoryData] = React.useState<any[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
@@ -113,7 +188,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const [hasSearchMounted, setHasSearchMounted] = React.useState(false);
   const [categoryCameFrom, setCategoryCameFrom] = React.useState<'home' | 'search' | 'favorites'>('home');
   // Wallet opens from Profile or from an order's refund line; back returns there.
-  const [walletCameFrom, setWalletCameFrom] = React.useState<'profile' | 'orderDetail'>('profile');
+  const [walletCameFrom, setWalletCameFrom] = React.useState<'profile' | 'orderDetail' | 'home' | 'checkout'>('profile');
+  // When the Home wallet pill's + is tapped, open the Add-money sheet on arrival.
+  const [walletInitialAddOpen, setWalletInitialAddOpen] = React.useState(false);
   const [selectedOrderId, setSelectedOrderId] = React.useState<string>('');
   const [selectedOrderData, setSelectedOrderData] = React.useState<any>(null);
   const [highlightOrderId, setHighlightOrderId] = React.useState<string | null>(null);
@@ -355,6 +432,21 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   }, []);
 
   const homeScreenSlide = React.useRef(new Animated.Value(0)).current;
+  // Drives the Flix feed sliding in from the right (0 = off-screen, 1 = full).
+  const flixSlide = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    if (currentScreen === 'vcFeed') {
+      flixSlide.setValue(0);
+      Animated.spring(flixSlide, {
+        toValue: 1,
+        useNativeDriver: true,
+        friction: 11,
+        tension: 70,
+      }).start();
+    } else {
+      flixSlide.setValue(0);
+    }
+  }, [currentScreen, flixSlide]);
   const profileScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const searchScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const privacyPolicyScreenSlide = React.useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -374,6 +466,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
 
   const [fontsLoaded] = useFonts({
     'Poppins': Poppins_400Regular,
+    // The Tazty brand wordmark face (Cooper Black), bundled locally — it is not
+    // a Google font. Used wherever the "TAZTY" wordmark appears as live text.
+    'CooperBlack': require('./assets/fonts/CooperBlack.ttf'),
     // The ₹99 Store price is handwritten, and this face carries the ₹ glyph
     // so the rupee sign never falls back to a system font mid-number.
     'Kalam_700Bold': Kalam_700Bold,
@@ -559,6 +654,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       offerDetail: 'Offer Detail',
       storeDeals: '₹99 Store',
       wallet: 'Wallet',
+      becomeCreator: 'Become a Creator',
+      creatorProfile: 'Creator Profile',
+      settings: 'Settings',
+      uploadVideo: 'Upload Video',
+      vcFeed: 'Video Commerce Feed',
     };
 
     const screenName = screenNameMap[currentScreen];
@@ -955,6 +1055,16 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         // Check if user is authenticated
         const isLoggedIn = await authService.isAuthenticated();
 
+        // During the launch splash, resolve the device's current GPS location so
+        // the home top bar defaults to where the user actually is. Bounded so a
+        // pending permission dialog or slow fix can never hang startup — on null
+        // we fall back to the saved/default address, and the user can still
+        // switch to any saved address from the location selector.
+        const currentLoc = await Promise.race([
+          resolveCurrentLocation(6000),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 6500)),
+        ]);
+
         if (isLoggedIn) {
           // Get current user and set analytics / crashlytics user ID
           const currentUser = await hydrateCurrentUserForAnalytics();
@@ -1003,6 +1113,14 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             sessionStartTimeRef.current = Date.now();
           }
 
+          // Default the delivery location to the resolved current location. It
+          // stays switchable to any saved address from the location selector;
+          // when null (denied/unavailable) the saved default address flow in
+          // HomeScreen takes over as before.
+          if (currentLoc) {
+            setSelectedLocation(currentLoc);
+          }
+
           // If app opened from an FCM tap during cold start, preserve orders navigation.
           if (!startupNotificationNavigationRef.current) {
             setCurrentScreen('home');
@@ -1016,10 +1134,17 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           setSearchQuery('');
           setInitialLocationCoords(null);
 
-          // Load persisted location for when user skips (needed for home screen after guest login)
-          const persistedGuestLocation = await loadPersistedGuestLocation();
-          if (persistedGuestLocation) {
-            setSelectedLocation(persistedGuestLocation);
+          // Prefer the resolved current location as the guest default (so home
+          // shows it after Skip); otherwise fall back to the persisted one.
+          if (currentLoc) {
+            setSelectedLocation(currentLoc);
+            saveGuestLocation(currentLoc);
+          } else {
+            // Load persisted location for when user skips (needed for home screen after guest login)
+            const persistedGuestLocation = await loadPersistedGuestLocation();
+            if (persistedGuestLocation) {
+              setSelectedLocation(persistedGuestLocation);
+            }
           }
           setCurrentScreen('login');
         }
@@ -1161,6 +1286,23 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         return true;
       case 'welcome':
         setCurrentScreen('otp');
+        return true;
+      // Flix (Video Commerce) screens — keep hardware back in step with each
+      // screen's on-screen back so it never falls through to Android's default.
+      case 'becomeCreator':
+        setCurrentScreen('profile');
+        return true;
+      case 'creatorProfile':
+        setCurrentScreen('profile');
+        return true;
+      case 'settings':
+        setCurrentScreen('creatorProfile');
+        return true;
+      case 'uploadVideo':
+        setCurrentScreen('creatorProfile');
+        return true;
+      case 'vcFeed':
+        setCurrentScreen('home');
         return true;
       default:
         return false;
@@ -2102,22 +2244,20 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     setSelectedOrderId(orderId.toString());
     // Reset order detail screen position to show it
     orderDetailScreenSlide.setValue(0);
-
-    // Close checkout screen with animation first, then navigate to order detail
     setOrderDetailCameFrom('checkout');
-    Animated.timing(checkoutScreenSlide, {
-      toValue: SCREEN_WIDTH,
-      duration: 200,
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: true,
-    }).start(() => {
-      // After checkout screen closes, navigate to order detail
-      // Use requestAnimationFrame to ensure state updates are processed
-      requestAnimationFrame(() => {
-        setCurrentScreen('orderDetail');
-      });
+
+    // Show the full-screen "Order Placed" celebration over a preloaded order
+    // details page: hide checkout instantly (it is covered by the overlay), mount
+    // orderDetail underneath, and reveal it when the animation finishes.
+    setOrderPlacedInfo({
+      label: selectedLocation?.name || '',
+      address: selectedLocation?.address || '',
     });
-  }, [checkoutScreenSlide, restaurantScreenSlide, orderDetailScreenSlide]);
+    checkoutScreenSlide.setValue(SCREEN_WIDTH);
+    requestAnimationFrame(() => {
+      setCurrentScreen('orderDetail');
+    });
+  }, [checkoutScreenSlide, restaurantScreenSlide, orderDetailScreenSlide, selectedLocation]);
 
   // Handle order cancel from checkout - OK button after payment failure
   const handleOrderCancelFromCheckout = useCallback(() => {
@@ -2280,10 +2420,26 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   const handleBackFromWallet = () => {
+    // "Open Add money on arrival" is for that one visit only - otherwise the next
+    // time the wallet is opened from Profile the sheet would pop up again.
+    setWalletInitialAddOpen(false);
+    // From checkout's "+ Add money": straight back to checkout, cart intact
+    // (checkout re-reads the balance when it is shown again).
+    if (walletCameFrom === 'checkout') {
+      setWalletCameFrom('profile');
+      setCurrentScreen('checkout');
+      return;
+    }
     // From an order's refund line: straight back to that order.
     if (walletCameFrom === 'orderDetail') {
       setWalletCameFrom('profile');
       setCurrentScreen('orderDetail');
+      return;
+    }
+    // From the Home wallet pill: straight back home.
+    if (walletCameFrom === 'home') {
+      setWalletCameFrom('profile');
+      setCurrentScreen('home');
       return;
     }
     profileScreenSlide.setValue(0);
@@ -3064,6 +3220,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                   transform: [{ translateX: homeScreenSlide }],
                 },
               ]}
+              {...vcSwipePanResponder.panHandlers}
             >
               <HomeScreen
               onLogout={handleLogout}
@@ -3083,8 +3240,32 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               onNavigateToLogin={transitionGuestToLogin}
               onNavigateToOffer={handleNavigateToOffer}
               onNavigateToStore={() => setCurrentScreen('storeDeals')}
+              onNavigateToWallet={(openAddMoney?: boolean) => {
+                setWalletCameFrom('home');
+                setWalletInitialAddOpen(!!openAddMoney);
+                setCurrentScreen('wallet');
+              }}
+              onNavigateToFlix={() => openVcFeedRef.current()}
+              onNavigateToOrders={handleNavigateToOrders}
+              onFlixEnabledChange={(enabled) => {
+                flixEnabledRef.current = enabled;
+              }}
+              onFlixIntroEnabledChange={(enabled) => {
+                flixIntroEnabledRef.current = enabled;
+              }}
               />
             </Animated.View>
+
+            {/* Flix entry from Home: a right-to-left swipe anywhere over the
+                content opens Flix (gesture lives on the Home container above). */}
+            {currentScreen === 'home' && (
+              <Snackbar
+                visible={vcToast !== null}
+                message={vcToast ?? ''}
+                type="info"
+                onDismiss={() => setVcToast(null)}
+              />
+            )}
 
             {/* Always render ProfileScreen, positioned off-screen initially */}
           <Animated.View
@@ -3109,8 +3290,85 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               onPrivacyPolicy={handleNavigateToPrivacyPolicy}
               onTermsConditions={handleNavigateToTermsConditions}
               onFaq={handleNavigateToFaq}
+              onBecomeCreator={() => setCurrentScreen('becomeCreator')}
+              onCreatorProfile={() => setCurrentScreen('creatorProfile')}
             />
           </Animated.View>
+
+          {/* Video Commerce — creator onboarding + creator profile + settings */}
+          {currentScreen === 'becomeCreator' && (
+            <View style={[StyleSheet.absoluteFill, styles.flixOverlay]}>
+              <BecomeCreatorScreen
+                onBack={() => setCurrentScreen('profile')}
+                onSubmitted={() => setCurrentScreen('profile')}
+              />
+            </View>
+          )}
+          {currentScreen === 'creatorProfile' && (
+            <View style={[StyleSheet.absoluteFill, styles.flixOverlay]}>
+              <CreatorProfileScreen
+                // The dashboard is opened from the profile's "View Creator
+                // Dashboard" row, so back returns to the profile. Safe now that
+                // ProfileScreen no longer auto-routes approved creators (that
+                // auto-route was the old flicker/loop).
+                onBack={() => setCurrentScreen('profile')}
+                onSettings={() => setCurrentScreen('settings')}
+                onCreateVideo={() => setCurrentScreen('uploadVideo')}
+              />
+            </View>
+          )}
+          {currentScreen === 'uploadVideo' && (
+            <View style={[StyleSheet.absoluteFill, styles.flixOverlay]}>
+              <VideoUploadScreen
+                onBack={() => setCurrentScreen('creatorProfile')}
+                onUploaded={() => setCurrentScreen('creatorProfile')}
+              />
+            </View>
+          )}
+          {currentScreen === 'vcFeed' && (
+            <Animated.View
+              style={[
+                StyleSheet.absoluteFill,
+                styles.flixOverlay,
+                {
+                  transform: [
+                    {
+                      translateX: flixSlide.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [Dimensions.get('window').width, 0],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <VCFeedScreen
+                onBack={() => setCurrentScreen('home')}
+                onOpenStore={(storeId) =>
+                  handleNavigateToRestaurantFromHome(storeId, '')
+                }
+                userLat={selectedLocation?.latitude ?? null}
+                userLng={selectedLocation?.longitude ?? null}
+                introEnabled={flixIntroEnabledRef.current}
+              />
+            </Animated.View>
+          )}
+          {currentScreen === 'settings' && (
+            <View style={[StyleSheet.absoluteFill, styles.flixOverlay]}>
+              <SettingsScreen
+                onBack={() => setCurrentScreen('creatorProfile')}
+                onLogout={handleLogout}
+                onMyOrders={handleNavigateToOrders}
+                onWallet={() => handleNavigateToWallet('profile')}
+                onMyAddresses={handleNavigateToMyAddresses}
+                onFavorites={handleNavigateToExploreDishes}
+                onContactUs={() => handleNavigateToContactUs('profile')}
+                onPrivacyPolicy={handleNavigateToPrivacyPolicy}
+                onTermsConditions={handleNavigateToTermsConditions}
+                onFaq={handleNavigateToFaq}
+              />
+            </View>
+          )}
 
           {/* Always render AddressSelectionScreen, positioned off-screen initially */}
           <Animated.View
@@ -3238,7 +3496,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           {/* Tazty Wallet — reached from Profile or a wallet credit push. */}
           {currentScreen === 'wallet' && (
             <View style={styles.chatOverlay}>
-              <WalletScreen onBack={handleBackFromWallet} />
+              <WalletScreen onBack={handleBackFromWallet} initialAddOpen={walletInitialAddOpen} />
             </View>
           )}
 
@@ -3249,6 +3507,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                 onBack={() => setCurrentScreen('home')}
                 latitude={selectedLocation?.latitude}
                 longitude={selectedLocation?.longitude}
+                onOpenStore={(storeId, name) =>
+                  handleNavigateToRestaurantFromHome(storeId, name)
+                }
                 onRequireLogin={() => {
                   // A deal is counted per customer, so a guest has to sign in.
                   setCurrentScreen('login');
@@ -3596,6 +3857,11 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                   visible={currentScreen === 'checkout'}
                   onBack={handleBackFromCheckout}
                   onAddMoreItems={handleAddMoreItemsFromCheckout}
+                  onAddMoneyToWallet={() => {
+                    setWalletCameFrom('checkout');
+                    setWalletInitialAddOpen(true);
+                    setCurrentScreen('wallet');
+                  }}
                   onPlaceOrder={handlePlaceOrderFromCheckout}
                   onOrderSuccess={handleOrderSuccessFromCheckout}
                   onOrderCancel={handleOrderCancelFromCheckout}
@@ -3687,6 +3953,15 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             }}
           />
         )}
+
+        {/* Full-screen "Order Placed" celebration — floats above every screen. */}
+        {orderPlacedInfo && (
+          <OrderPlacedScreen
+            deliveryLabel={orderPlacedInfo.label}
+            address={orderPlacedInfo.address}
+            onDone={() => setOrderPlacedInfo(null)}
+          />
+        )}
       </>
     </>
   );
@@ -3699,8 +3974,8 @@ export default function App() {
   return (
     <>
       {showCustomSplash && (
-        <CustomSplashScreen
-          onFinish={() => {
+        <AnimatedSplash
+          onAnimationEnd={() => {
             setShowCustomSplash(false);
           }}
         />
@@ -3735,6 +4010,21 @@ const styles = StyleSheet.create({
   },
   homeScreenContainer: {
     flex: 1,
+  },
+  // Flix full-screen overlays must sit above the always-rendered Home
+  // (zIndex 20) and Profile overlays, or they open behind a frozen screen.
+  flixOverlay: {
+    zIndex: 950,
+    elevation: 30,
+    backgroundColor: '#FFFFFF',
+  },
+  vcSwipeStrip: {
+    position: 'absolute',
+    top: 120,
+    bottom: 120,
+    right: 0,
+    width: 24,
+    zIndex: 20,
   },
   profileOverlay: {
     position: 'absolute',

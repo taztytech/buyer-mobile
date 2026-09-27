@@ -16,6 +16,8 @@ interface StoreDealsSectionProps {
   deals: StoreDeal[];
   onAdd: (deal: StoreDeal) => void;
   onSeeAll: () => void;
+  /** Tap a deal card → open its store. */
+  onOpenStore?: (deal: StoreDeal) => void;
   addingDealId?: number | null;
   /** Editable labels from the server; fall back to the ₹99 wording. */
   sectionName?: string;
@@ -37,6 +39,7 @@ export const StoreDealsSection: React.FC<StoreDealsSectionProps> = ({
   deals,
   onAdd,
   onSeeAll,
+  onOpenStore,
   addingDealId = null,
   sectionName = '₹99 Store',
   tagline = 'Great Food. Just ₹99!',
@@ -101,6 +104,7 @@ export const StoreDealsSection: React.FC<StoreDealsSectionProps> = ({
               deal={deal}
               variant="home"
               onAdd={onAdd}
+              onOpenStore={onOpenStore}
               adding={addingDealId === deal.id}
             />
           </View>
@@ -129,11 +133,11 @@ const styles = StyleSheet.create({
   },
   heroTextWrap: { flex: 1 },
   heroKicker: {
-    fontFamily: 'Poppins',
-    fontWeight: 600,
-    fontSize: 10,
-    letterSpacing: 1.6,
-    color: 'rgba(255, 255, 255, 0.85)',
+    // Tazty brand wordmark — Cooper Black (the actual brand face).
+    fontFamily: 'CooperBlack',
+    fontSize: 13,
+    letterSpacing: 1.2,
+    color: 'rgba(255, 255, 255, 0.9)',
   },
   heroTitle: {
     fontFamily: 'Kalam_700Bold',

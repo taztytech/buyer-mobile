@@ -1,0 +1,1209 @@
+﻿
+> tazty@1.0.5 build:android:all:release:prod
+> cross-env ENV_FILE=.env.prod node scripts/build-android.js prod apk all
+
+📦 Production (APK) build detected - bumping versionCode...
+✅ Android versionCode bumped successfully!
+   versionCode: 14 → 15
+
+🎉 VersionCode bump complete!
+
+🔧 Building for environment: prod
+📄 Loading environment file: .env.prod
+[INFO] Loading environment file: C:\tazty-main\tazty-buyer-app\.env.prod
+[BUILD] Building Android Release Files...
+[INFO] App: Tazty Buyer
+[INFO] Version: 1.0.5
+
+[BUILD] Building APK for prod environment...
+[INFO] Gradle task: assembleProdRelease
+Starting a Gradle Daemon, 2 busy Daemons could not be reused, use --status for details
+> Task :gradle-plugin:settings-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle-plugin:shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-gradle-plugin:expo-autolinking-plugin-shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:pluginDescriptors UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:pluginDescriptors UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:shared:compileKotlin UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin-shared:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:shared:compileJava NO-SOURCE
+> Task :expo-gradle-plugin:expo-autolinking-plugin-shared:compileJava NO-SOURCE
+> Task :gradle-plugin:shared:processResources NO-SOURCE
+> Task :expo-gradle-plugin:expo-autolinking-plugin-shared:processResources NO-SOURCE
+> Task :expo-gradle-plugin:expo-autolinking-plugin-shared:classes UP-TO-DATE
+> Task :gradle-plugin:shared:classes UP-TO-DATE
+> Task :gradle-plugin:shared:jar UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin-shared:jar UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:compileJava NO-SOURCE
+> Task :gradle-plugin:settings-plugin:classes UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:jar UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:compileKotlin UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:compileJava NO-SOURCE
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:classes UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:jar UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle-plugin:react-native-gradle-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-module-gradle-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-gradle-plugin:expo-autolinking-plugin:compileKotlin UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin:compileJava NO-SOURCE
+> Task :expo-gradle-plugin:expo-autolinking-plugin:pluginDescriptors UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin:processResources UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin:classes UP-TO-DATE
+> Task :expo-module-gradle-plugin:pluginDescriptors UP-TO-DATE
+> Task :expo-module-gradle-plugin:processResources UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin:jar UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:compileJava NO-SOURCE
+> Task :gradle-plugin:react-native-gradle-plugin:pluginDescriptors UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:classes UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:jar UP-TO-DATE
+> Task :expo-module-gradle-plugin:compileKotlin UP-TO-DATE
+> Task :expo-module-gradle-plugin:compileJava NO-SOURCE
+> Task :expo-module-gradle-plugin:classes UP-TO-DATE
+> Task :expo-module-gradle-plugin:jar UP-TO-DATE
+
+> Configure project :
+[32m[ExpoRootProject][0m Using the following versions:
+  - buildTools:  [32m36.0.0[0m
+  - minSdk:      [32m24[0m
+  - compileSdk:  [32m36[0m
+  - targetSdk:   [32m36[0m
+  - ndk:         [32m27.1.12297006[0m
+  - kotlin:      [32m2.1.20[0m
+  - ksp:         [32m2.1.20-2.0.1[0m
+
+> Configure project :expo
+
+Using expo modules
+  -> Copied/merged flavorDimensions: environment
+  -> Created flavor 'dev' (dimension='environment') in ::expo
+  -> Created flavor 'prod' (dimension='environment') in ::expo
+  - [32mexpo-constants[0m (18.0.10)
+  - [32mexpo-modules-core[0m (3.0.26)
+  - [33m[?][0m [32mexpo-application[0m (7.0.7)
+  - [33m[?][0m [32mexpo-asset[0m (12.0.10)
+  - [33m[?][0m [32mexpo-av[0m (16.0.8)
+  - [33m[?][0m [32mexpo-blur[0m (15.0.7)
+  - [33m[?][0m [32mexpo-device[0m (8.0.9)
+  - [33m[?][0m [32mexpo-file-system[0m (19.0.19)
+  - [33m[?][0m [32mexpo-font[0m (14.0.9)
+  - [33m[?][0m [32mexpo-image[0m (3.0.11)
+  - [33m[?][0m [32mexpo-image-loader[0m (6.0.0)
+  - [33m[?][0m [32mexpo-image-picker[0m (17.0.8)
+  - [33m[?][0m [32mexpo-keep-awake[0m (15.0.7)
+  - [33m[?][0m [32mexpo-linear-gradient[0m (15.0.7)
+  - [33m[?][0m [32mexpo-location[0m (19.0.7)
+  - [33m[?][0m [32mexpo-notifications[0m (0.32.13)
+  - [33m[?][0m [32mexpo-splash-screen[0m (31.0.11)
+
+
+> Configure project :react-native-firebase_analytics
+:react-native-firebase_analytics package.json found at C:\tazty-main\tazty-buyer-app\node_modules\@react-native-firebase\analytics\package.json
+:react-native-firebase_app package.json found at C:\tazty-main\tazty-buyer-app\node_modules\@react-native-firebase\app\package.json
+:react-native-firebase_analytics:firebase.bom using default value: 34.3.0
+:react-native-firebase_analytics package.json found at C:\tazty-main\tazty-buyer-app\node_modules\@react-native-firebase\analytics\package.json
+:react-native-firebase_analytics:version set from package.json: 23.4.0 (23,4,0 - 23004000)
+:react-native-firebase_analytics:android.compileSdk using custom value: 36
+:react-native-firebase_analytics:android.targetSdk using custom value: 36
+:react-native-firebase_analytics:android.minSdk using custom value: 24
+:react-native-firebase_analytics:reactNativeAndroidDir C:\tazty-main\tazty-buyer-app\node_modules\react-native
+
+> Configure project :react-native-firebase_app
+:react-native-firebase_app package.json found at C:\tazty-main\tazty-buyer-app\node_modules\@react-native-firebase\app\package.json
+:react-native-firebase_app:firebase.bom using default value: 34.3.0
+:react-native-firebase_app:play.play-services-auth using default value: 21.4.0
+:react-native-firebase_app package.json found at C:\tazty-main\tazty-buyer-app\node_modules\@react-native-firebase\app\package.json
+:react-native-firebase_app:version set from package.json: 23.4.0 (23,4,0 - 23004000)
+:react-native-firebase_app:android.compileSdk using custom value: 36
+:react-native-firebase_app:android.targetSdk using custom value: 36
+:react-native-firebase_app:android.minSdk using custom value: 24
+:react-native-firebase_app:reactNativeAndroidDir C:\tazty-main\tazty-buyer-app\node_modules\react-native
+
+> Configure project :react-native-firebase_crashlytics
+:react-native-firebase_crashlytics package.json found at C:\tazty-main\tazty-buyer-app\node_modules\@react-native-firebase\crashlytics\package.json
+:react-native-firebase_app package.json found at C:\tazty-main\tazty-buyer-app\node_modules\@react-native-firebase\app\package.json
+:react-native-firebase_crashlytics:firebase.bom using default value: 34.3.0
+:react-native-firebase_crashlytics package.json found at C:\tazty-main\tazty-buyer-app\node_modules\@react-native-firebase\crashlytics\package.json
+:react-native-firebase_crashlytics:version set from package.json: 23.4.0 (23,4,0 - 23004000)
+:react-native-firebase_crashlytics:android.compileSdk using custom value: 36
+:react-native-firebase_crashlytics:android.targetSdk using custom value: 36
+:react-native-firebase_crashlytics:android.minSdk using custom value: 24
+:react-native-firebase_crashlytics:reactNativeAndroidDir C:\tazty-main\tazty-buyer-app\node_modules\react-native
+
+> Configure project :react-native-firebase_messaging
+:react-native-firebase_messaging package.json found at C:\tazty-main\tazty-buyer-app\node_modules\@react-native-firebase\messaging\package.json
+:react-native-firebase_app package.json found at C:\tazty-main\tazty-buyer-app\node_modules\@react-native-firebase\app\package.json
+:react-native-firebase_messaging:firebase.bom using default value: 34.3.0
+:react-native-firebase_messaging package.json found at C:\tazty-main\tazty-buyer-app\node_modules\@react-native-firebase\messaging\package.json
+:react-native-firebase_messaging:version set from package.json: 23.4.0 (23,4,0 - 23004000)
+:react-native-firebase_messaging:android.compileSdk using custom value: 36
+:react-native-firebase_messaging:android.targetSdk using custom value: 36
+:react-native-firebase_messaging:android.minSdk using custom value: 24
+:react-native-firebase_messaging:reactNativeAndroidDir C:\tazty-main\tazty-buyer-app\node_modules\react-native
+
+> Task :react-native-device-info:preBuild UP-TO-DATE
+> Task :react-native-firebase_analytics:preBuild UP-TO-DATE
+> Task :react-native-firebase_messaging:preBuild UP-TO-DATE
+> Task :react-native-community_netinfo:preBuild UP-TO-DATE
+> Task :expo-modules-core:preBuild UP-TO-DATE
+> Task :react-native-firebase_crashlytics:preBuild UP-TO-DATE
+> Task :react-native-firebase_app:preBuild UP-TO-DATE
+> Task :expo-modules-core:preReleaseBuild UP-TO-DATE
+> Task :react-native-razorpay:preBuild UP-TO-DATE
+> Task :react-native-community_netinfo:preReleaseBuild UP-TO-DATE
+> Task :react-native-device-info:preReleaseBuild UP-TO-DATE
+> Task :react-native-pip-android:preBuild UP-TO-DATE
+> Task :react-native-firebase_analytics:preReleaseBuild UP-TO-DATE
+> Task :react-native-maps:generateCodegenSchemaFromJavaScript SKIPPED
+> Task :react-native-maps:generateCodegenArtifactsFromSchema SKIPPED
+> Task :sp-react-native-in-app-updates:preBuild UP-TO-DATE
+> Task :react-native-maps:preBuild UP-TO-DATE
+> Task :react-native-firebase_app:preReleaseBuild UP-TO-DATE
+> Task :react-native-firebase_crashlytics:preReleaseBuild UP-TO-DATE
+> Task :react-native-firebase_analytics:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :react-native-community_netinfo:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :react-native-device-info:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :react-native-firebase_app:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :react-native-firebase_crashlytics:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :react-native-firebase_analytics:mergeReleaseNativeLibs NO-SOURCE
+> Task :react-native-device-info:mergeReleaseNativeLibs NO-SOURCE
+> Task :react-native-safe-area-context:generateCodegenSchemaFromJavaScript UP-TO-DATE
+> Task :react-native-async-storage_async-storage:generateCodegenSchemaFromJavaScript UP-TO-DATE
+> Task :react-native-community_netinfo:mergeReleaseNativeLibs NO-SOURCE
+> Task :react-native-firebase_app:mergeReleaseNativeLibs NO-SOURCE
+> Task :react-native-firebase_crashlytics:mergeReleaseNativeLibs NO-SOURCE
+> Task :react-native-firebase_analytics:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-webview:generateCodegenSchemaFromJavaScript UP-TO-DATE
+> Task :react-native-firebase_messaging:preReleaseBuild UP-TO-DATE
+> Task :react-native-device-info:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-firebase_crashlytics:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-community_netinfo:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-firebase_app:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-maps:preReleaseBuild UP-TO-DATE
+> Task :react-native-pip-android:preReleaseBuild UP-TO-DATE
+> Task :react-native-razorpay:preReleaseBuild UP-TO-DATE
+> Task :sp-react-native-in-app-updates:preReleaseBuild UP-TO-DATE
+> Task :react-native-firebase_messaging:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :react-native-firebase_messaging:mergeReleaseNativeLibs NO-SOURCE
+> Task :react-native-razorpay:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :sp-react-native-in-app-updates:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :react-native-razorpay:mergeReleaseNativeLibs NO-SOURCE
+> Task :sp-react-native-in-app-updates:mergeReleaseNativeLibs NO-SOURCE
+> Task :react-native-firebase_messaging:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-async-storage_async-storage:generateCodegenArtifactsFromSchema UP-TO-DATE
+> Task :react-native-razorpay:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :sp-react-native-in-app-updates:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-async-storage_async-storage:preBuild UP-TO-DATE
+> Task :react-native-async-storage_async-storage:preReleaseBuild UP-TO-DATE
+> Task :react-native-webview:generateCodegenArtifactsFromSchema UP-TO-DATE
+> Task :react-native-safe-area-context:generateCodegenArtifactsFromSchema UP-TO-DATE
+> Task :react-native-webview:preBuild UP-TO-DATE
+> Task :react-native-safe-area-context:preBuild UP-TO-DATE
+> Task :react-native-community_netinfo:generateReleaseBuildConfig UP-TO-DATE
+> Task :react-native-safe-area-context:preReleaseBuild UP-TO-DATE
+> Task :react-native-webview:preReleaseBuild UP-TO-DATE
+> Task :react-native-async-storage_async-storage:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :react-native-community_netinfo:generateReleaseResValues UP-TO-DATE
+> Task :react-native-safe-area-context:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :react-native-firebase_app:generateReleaseBuildConfig UP-TO-DATE
+> Task :react-native-webview:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :react-native-async-storage_async-storage:mergeReleaseNativeLibs NO-SOURCE
+> Task :react-native-firebase_app:generateReleaseResValues UP-TO-DATE
+> Task :react-native-community_netinfo:generateReleaseResources UP-TO-DATE
+> Task :react-native-safe-area-context:mergeReleaseNativeLibs NO-SOURCE
+> Task :react-native-webview:mergeReleaseNativeLibs NO-SOURCE
+> Task :react-native-firebase_analytics:generateReleaseBuildConfig UP-TO-DATE
+> Task :react-native-async-storage_async-storage:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-webview:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-firebase_app:generateReleaseResources UP-TO-DATE
+> Task :react-native-webview:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :react-native-safe-area-context:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-safe-area-context:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :react-native-firebase_analytics:generateReleaseResValues UP-TO-DATE
+> Task :react-native-community_netinfo:packageReleaseResources UP-TO-DATE
+> Task :react-native-webview:generateReleaseBuildConfig UP-TO-DATE
+> Task :react-native-firebase_analytics:generateReleaseResources UP-TO-DATE
+> Task :react-native-safe-area-context:generateReleaseBuildConfig UP-TO-DATE
+> Task :react-native-firebase_app:packageReleaseResources UP-TO-DATE
+> Task :react-native-webview:generateReleaseResValues UP-TO-DATE
+> Task :react-native-safe-area-context:generateReleaseResValues UP-TO-DATE
+> Task :react-native-webview:generateReleaseResources UP-TO-DATE
+> Task :react-native-webview:packageReleaseResources UP-TO-DATE
+> Task :react-native-async-storage_async-storage:generateReleaseBuildConfig UP-TO-DATE
+> Task :react-native-async-storage_async-storage:generateReleaseResValues UP-TO-DATE
+> Task :react-native-async-storage_async-storage:generateReleaseResources UP-TO-DATE
+> Task :react-native-async-storage_async-storage:packageReleaseResources UP-TO-DATE
+> Task :react-native-pip-android:mergeReleaseJniLibFolders
+> Task :react-native-maps:mergeReleaseJniLibFolders
+> Task :react-native-maps:mergeReleaseNativeLibs NO-SOURCE
+> Task :react-native-pip-android:mergeReleaseNativeLibs NO-SOURCE
+> Task :react-native-maps:copyReleaseJniLibsProjectOnly
+> Task :react-native-maps:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :react-native-maps:generateReleaseBuildConfig
+> Task :react-native-maps:generateReleaseResValues
+> Task :react-native-maps:generateReleaseResources
+> Task :app:generateAutolinkingNewArchitectureFiles
+> Task :react-native-safe-area-context:generateReleaseResources UP-TO-DATE
+> Task :react-native-firebase_analytics:packageReleaseResources UP-TO-DATE
+> Task :react-native-safe-area-context:packageReleaseResources UP-TO-DATE
+> Task :app:generateAutolinkingPackageList
+> Task :app:generateCodegenSchemaFromJavaScript SKIPPED
+> Task :app:generateCodegenArtifactsFromSchema SKIPPED
+> Task :app:generateReactNativeEntryPoint
+> Task :react-native-firebase_crashlytics:generateReleaseBuildConfig UP-TO-DATE
+> Task :react-native-firebase_crashlytics:generateReleaseResValues UP-TO-DATE
+> Task :react-native-firebase_crashlytics:generateReleaseResources UP-TO-DATE
+> Task :react-native-firebase_crashlytics:packageReleaseResources UP-TO-DATE
+> Task :react-native-maps:packageReleaseResources
+
+> Task :expo-constants:createExpoConfig
+npm : The NODE_ENV environment variable is required but was not specified. Ensure the project is bundled with Expo CLI or NODE_ENV is set. Using only 
+.env.local and .env
+At line:1 char:302
++ ... ' } catch {} } }; npm run build:android:all:release:prod 2>&1 | Tee-O ...
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The NODE_ENV en....local and .env:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+> Task :react-native-pip-android:copyReleaseJniLibsProjectOnly
+
+> Task :expo-modules-core:configureCMakeRelWithDebInfo[arm64-v8a]
+[CXX5304] Observed package id 'emulator' in inconsistent location 'C:\Users\thami\AppData\Local\Android\Sdk\emulator.backup' (Expected 'C:\Users\thami\AppData\Local\Android\Sdk\emulator')
+[CXX5304] Observed package id 'emulator' in inconsistent location 'C:\Users\thami\AppData\Local\Android\Sdk\emulator.backup' (Expected 'C:\Users\thami\AppData\Local\Android\Sdk\emulator')
+[CXX5304] Already observed package id 'emulator' in 'C:\Users\thami\AppData\Local\Android\Sdk\emulator'. Skipping duplicate at 'C:\Users\thami\AppData\Local\Android\Sdk\emulator.backup'
+[CXX5304] Already observed package id 'emulator' in 'C:\Users\thami\AppData\Local\Android\Sdk\emulator'. Skipping duplicate at 'C:\Users\thami\AppData\Local\Android\Sdk\emulator.backup'
+
+> Task :react-native-maps:javaPreCompileRelease
+> Task :react-native-safe-area-context:javaPreCompileRelease UP-TO-DATE
+> Task :react-native-webview:javaPreCompileRelease UP-TO-DATE
+> Task :react-native-async-storage_async-storage:javaPreCompileRelease UP-TO-DATE
+> Task :react-native-community_netinfo:javaPreCompileRelease UP-TO-DATE
+> Task :react-native-firebase_analytics:javaPreCompileRelease UP-TO-DATE
+> Task :react-native-firebase_app:javaPreCompileRelease UP-TO-DATE
+> Task :react-native-firebase_crashlytics:javaPreCompileRelease UP-TO-DATE
+> Task :react-native-firebase_messaging:generateReleaseBuildConfig UP-TO-DATE
+> Task :react-native-safe-area-context:parseReleaseLocalResources
+> Task :react-native-firebase_messaging:generateReleaseResValues UP-TO-DATE
+> Task :react-native-firebase_messaging:generateReleaseResources UP-TO-DATE
+> Task :react-native-firebase_app:parseReleaseLocalResources
+> Task :react-native-firebase_messaging:packageReleaseResources UP-TO-DATE
+> Task :react-native-firebase_analytics:parseReleaseLocalResources
+> Task :react-native-maps:parseReleaseLocalResources
+> Task :react-native-firebase_crashlytics:parseReleaseLocalResources
+> Task :react-native-webview:parseReleaseLocalResources
+> Task :react-native-async-storage_async-storage:parseReleaseLocalResources
+> Task :react-native-community_netinfo:parseReleaseLocalResources
+> Task :react-native-firebase_messaging:parseReleaseLocalResources
+> Task :react-native-maps:generateReleaseRFile
+> Task :react-native-webview:generateReleaseRFile
+> Task :react-native-community_netinfo:generateReleaseRFile
+> Task :react-native-firebase_analytics:generateReleaseRFile
+> Task :react-native-firebase_messaging:javaPreCompileRelease UP-TO-DATE
+> Task :react-native-device-info:generateReleaseBuildConfig UP-TO-DATE
+> Task :react-native-device-info:generateReleaseResValues UP-TO-DATE
+> Task :react-native-device-info:generateReleaseResources UP-TO-DATE
+> Task :react-native-device-info:packageReleaseResources UP-TO-DATE
+> Task :react-native-safe-area-context:generateReleaseRFile
+> Task :react-native-firebase_app:generateReleaseRFile
+> Task :react-native-async-storage_async-storage:generateReleaseRFile
+> Task :react-native-firebase_crashlytics:generateReleaseRFile
+> Task :react-native-device-info:javaPreCompileRelease UP-TO-DATE
+> Task :react-native-maps:compileReleaseKotlin NO-SOURCE
+> Task :react-native-pip-android:generateReleaseBuildConfig
+> Task :react-native-pip-android:generateReleaseResValues
+> Task :react-native-pip-android:generateReleaseResources
+> Task :react-native-pip-android:packageReleaseResources
+> Task :react-native-pip-android:parseReleaseLocalResources
+> Task :react-native-firebase_messaging:generateReleaseRFile
+> Task :react-native-device-info:parseReleaseLocalResources
+> Task :react-native-pip-android:javaPreCompileRelease
+> Task :react-native-razorpay:generateReleaseBuildConfig UP-TO-DATE
+> Task :react-native-razorpay:generateReleaseResValues UP-TO-DATE
+> Task :react-native-razorpay:generateReleaseResources UP-TO-DATE
+> Task :react-native-razorpay:packageReleaseResources UP-TO-DATE
+> Task :react-native-razorpay:parseReleaseLocalResources
+> Task :react-native-pip-android:generateReleaseRFile
+> Task :react-native-razorpay:generateReleaseRFile
+> Task :react-native-razorpay:javaPreCompileRelease UP-TO-DATE
+> Task :react-native-device-info:generateReleaseRFile
+> Task :expo:generatePackagesList
+> Task :expo:preBuild
+> Task :expo:preProdReleaseBuild
+> Task :expo:mergeProdReleaseJniLibFolders UP-TO-DATE
+> Task :expo:mergeProdReleaseNativeLibs NO-SOURCE
+> Task :expo:copyProdReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :expo:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo:generateProdReleaseBuildConfig UP-TO-DATE
+> Task :expo:generateProdReleaseResValues UP-TO-DATE
+> Task :expo:generateProdReleaseResources UP-TO-DATE
+> Task :expo:packageProdReleaseResources UP-TO-DATE
+> Task :expo:parseProdReleaseLocalResources
+> Task :expo:generateProdReleaseRFile
+> Task :expo:javaPreCompileProdRelease UP-TO-DATE
+> Task :sp-react-native-in-app-updates:generateReleaseBuildConfig UP-TO-DATE
+> Task :sp-react-native-in-app-updates:generateReleaseResValues UP-TO-DATE
+> Task :sp-react-native-in-app-updates:generateReleaseResources UP-TO-DATE
+> Task :sp-react-native-in-app-updates:packageReleaseResources UP-TO-DATE
+> Task :expo-modules-core:buildCMakeRelWithDebInfo[arm64-v8a]
+> Task :sp-react-native-in-app-updates:parseReleaseLocalResources
+> Task :sp-react-native-in-app-updates:generateReleaseRFile
+> Task :sp-react-native-in-app-updates:javaPreCompileRelease UP-TO-DATE
+> Task :expo-modules-core:configureCMakeRelWithDebInfo[armeabi-v7a]
+> Task :expo-modules-core:buildCMakeRelWithDebInfo[armeabi-v7a]
+> Task :expo-modules-core:configureCMakeRelWithDebInfo[x86]
+> Task :expo-modules-core:buildCMakeRelWithDebInfo[x86]
+> Task :expo-modules-core:configureCMakeRelWithDebInfo[x86_64]
+> Task :expo-modules-core:buildCMakeRelWithDebInfo[x86_64]
+> Task :expo-modules-core:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :expo-modules-core:mergeReleaseNativeLibs
+> Task :expo-modules-core:copyReleaseJniLibsProjectOnly
+> Task :expo-modules-core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-modules-core:generateReleaseBuildConfig UP-TO-DATE
+> Task :expo-modules-core:generateReleaseResValues UP-TO-DATE
+> Task :expo-modules-core:generateReleaseResources UP-TO-DATE
+> Task :expo-modules-core:packageReleaseResources UP-TO-DATE
+> Task :expo-modules-core:parseReleaseLocalResources
+> Task :expo-modules-core:generateReleaseRFile
+
+> Task :react-native-pip-android:compileReleaseJavaWithJavac
+Note: C:\tazty-main\tazty-buyer-app\node_modules\react-native-pip-android\android\src\main\java\com\reactnativepipandroid\PipAndroidPackage.java uses or 
+overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :react-native-razorpay:compileReleaseJavaWithJavac
+
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+> Task :expo-modules-core:javaPreCompileRelease UP-TO-DATE
+> Task :react-native-razorpay:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-razorpay:exportReleaseConsumerProguardFiles UP-TO-DATE
+
+> Task :sp-react-native-in-app-updates:compileReleaseJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :react-native-community_netinfo:compileReleaseJavaWithJavac
+C:\tazty-main\tazty-buyer-app\node_modules\@react-native-community\netinfo\android\src\main\java\com\reactnativecommunity\netinfo\NetInfoModule.java:47: 
+warning: [removal] onCatalystInstanceDestroy() in NativeModule has been deprecated and marked for removal
+    public void onCatalystInstanceDestroy() {
+                ^
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :sp-react-native-in-app-updates:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :sp-react-native-in-app-updates:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-pip-android:mergeReleaseGeneratedProguardFiles
+> Task :expo:writeProdReleaseAarMetadata UP-TO-DATE
+> Task :expo-modules-core:writeReleaseAarMetadata UP-TO-DATE
+> Task :react-native-firebase_analytics:writeReleaseAarMetadata UP-TO-DATE
+> Task :react-native-firebase_crashlytics:writeReleaseAarMetadata UP-TO-DATE
+> Task :react-native-firebase_messaging:writeReleaseAarMetadata UP-TO-DATE
+> Task :react-native-razorpay:writeReleaseAarMetadata UP-TO-DATE
+
+> Task :react-native-device-info:compileReleaseJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :react-native-safe-area-context:writeReleaseAarMetadata UP-TO-DATE
+> Task :react-native-webview:writeReleaseAarMetadata UP-TO-DATE
+> Task :sp-react-native-in-app-updates:writeReleaseAarMetadata UP-TO-DATE
+> Task :expo:extractDeepLinksProdRelease UP-TO-DATE
+> Task :react-native-pip-android:exportReleaseConsumerProguardFiles
+> Task :expo:processProdReleaseManifest UP-TO-DATE
+> Task :expo-modules-core:extractDeepLinksRelease UP-TO-DATE
+> Task :expo-modules-core:processReleaseManifest UP-TO-DATE
+> Task :react-native-firebase_analytics:extractDeepLinksRelease UP-TO-DATE
+> Task :react-native-firebase_analytics:processReleaseManifest UP-TO-DATE
+> Task :react-native-firebase_crashlytics:extractDeepLinksRelease UP-TO-DATE
+> Task :react-native-firebase_crashlytics:processReleaseManifest UP-TO-DATE
+> Task :react-native-firebase_messaging:extractDeepLinksRelease UP-TO-DATE
+> Task :app:buildKotlinToolingMetadata UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+
+> Task :react-native-community_netinfo:compileReleaseJavaWithJavac
+
+> Task :react-native-community_netinfo:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+1 warning
+> Task :react-native-community_netinfo:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-pip-android:writeReleaseAarMetadata
+> Task :react-native-firebase_messaging:processReleaseManifest UP-TO-DATE
+> Task :react-native-community_netinfo:writeReleaseAarMetadata UP-TO-DATE
+> Task :react-native-razorpay:extractDeepLinksRelease UP-TO-DATE
+> Task :react-native-community_netinfo:extractDeepLinksRelease UP-TO-DATE
+> Task :react-native-pip-android:extractDeepLinksRelease
+> Task :react-native-community_netinfo:processReleaseManifest UP-TO-DATE
+> Task :react-native-razorpay:processReleaseManifest UP-TO-DATE
+> Task :react-native-safe-area-context:extractDeepLinksRelease UP-TO-DATE
+> Task :react-native-webview:extractDeepLinksRelease UP-TO-DATE
+> Task :react-native-safe-area-context:processReleaseManifest UP-TO-DATE
+> Task :sp-react-native-in-app-updates:extractDeepLinksRelease UP-TO-DATE
+> Task :sp-react-native-in-app-updates:processReleaseManifest UP-TO-DATE
+> Task :react-native-community_netinfo:bundleLibCompileToJarRelease UP-TO-DATE
+
+> Task :react-native-firebase_app:compileReleaseJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :react-native-razorpay:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :sp-react-native-in-app-updates:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :expo:prepareProdReleaseArtProfile UP-TO-DATE
+
+> Task :react-native-async-storage_async-storage:compileReleaseJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: C:\tazty-main\tazty-buyer-app\node_modules\@react-native-async-storage\async-storage\android\src\javaPackage\java\com\reactnativecommunity\asyncstora
+ge\AsyncStoragePackage.java uses unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :react-native-async-storage_async-storage:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-async-storage_async-storage:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-async-storage_async-storage:writeReleaseAarMetadata UP-TO-DATE
+> Task :react-native-async-storage_async-storage:extractDeepLinksRelease UP-TO-DATE
+> Task :expo-modules-core:prepareReleaseArtProfile UP-TO-DATE
+> Task :react-native-webview:processReleaseManifest UP-TO-DATE
+> Task :react-native-async-storage_async-storage:processReleaseManifest UP-TO-DATE
+> Task :react-native-async-storage_async-storage:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :react-native-community_netinfo:prepareReleaseArtProfile UP-TO-DATE
+
+> Task :react-native-pip-android:processReleaseManifest
+package="com.reactnativepipandroid" found in source AndroidManifest.xml: C:\tazty-main\tazty-buyer-app\node_modules\react-native-pip-android\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="com.reactnativepipandroid" from the source AndroidManifest.xml: C:\tazty-main\tazty-buyer-app\node_modules\react-native-pip-android\android\src\main\AndroidManifest.xml.
+
+> Task :react-native-firebase_analytics:prepareReleaseArtProfile UP-TO-DATE
+> Task :react-native-firebase_crashlytics:prepareReleaseArtProfile UP-TO-DATE
+> Task :react-native-async-storage_async-storage:prepareReleaseArtProfile UP-TO-DATE
+> Task :react-native-firebase_messaging:prepareReleaseArtProfile UP-TO-DATE
+> Task :react-native-razorpay:prepareReleaseArtProfile UP-TO-DATE
+> Task :react-native-safe-area-context:prepareReleaseArtProfile UP-TO-DATE
+> Task :sp-react-native-in-app-updates:prepareReleaseArtProfile UP-TO-DATE
+> Task :react-native-async-storage_async-storage:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :react-native-webview:prepareReleaseArtProfile UP-TO-DATE
+> Task :react-native-community_netinfo:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :sp-react-native-in-app-updates:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :react-native-razorpay:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :react-native-community_netinfo:processReleaseJavaRes NO-SOURCE
+> Task :react-native-async-storage_async-storage:processReleaseJavaRes NO-SOURCE
+> Task :react-native-firebase_crashlytics:processReleaseJavaRes NO-SOURCE
+> Task :react-native-firebase_messaging:processReleaseJavaRes NO-SOURCE
+> Task :react-native-razorpay:processReleaseJavaRes NO-SOURCE
+> Task :sp-react-native-in-app-updates:processReleaseJavaRes NO-SOURCE
+> Task :expo:mergeProdReleaseShaders UP-TO-DATE
+> Task :expo:compileProdReleaseShaders NO-SOURCE
+> Task :expo:generateProdReleaseAssets UP-TO-DATE
+> Task :expo:mergeProdReleaseAssets UP-TO-DATE
+> Task :expo-modules-core:mergeReleaseShaders UP-TO-DATE
+> Task :expo-modules-core:compileReleaseShaders NO-SOURCE
+> Task :expo-modules-core:generateReleaseAssets UP-TO-DATE
+> Task :expo-modules-core:mergeReleaseAssets UP-TO-DATE
+> Task :react-native-async-storage_async-storage:mergeReleaseShaders UP-TO-DATE
+> Task :react-native-async-storage_async-storage:compileReleaseShaders NO-SOURCE
+> Task :react-native-async-storage_async-storage:generateReleaseAssets UP-TO-DATE
+> Task :react-native-async-storage_async-storage:mergeReleaseAssets UP-TO-DATE
+> Task :react-native-community_netinfo:mergeReleaseShaders UP-TO-DATE
+> Task :react-native-community_netinfo:compileReleaseShaders NO-SOURCE
+> Task :react-native-community_netinfo:generateReleaseAssets UP-TO-DATE
+> Task :react-native-community_netinfo:mergeReleaseAssets UP-TO-DATE
+> Task :react-native-firebase_crashlytics:mergeReleaseShaders UP-TO-DATE
+> Task :react-native-firebase_crashlytics:compileReleaseShaders NO-SOURCE
+> Task :react-native-firebase_crashlytics:generateReleaseAssets UP-TO-DATE
+> Task :react-native-pip-android:bundleLibCompileToJarRelease
+> Task :react-native-firebase_messaging:mergeReleaseShaders UP-TO-DATE
+> Task :react-native-firebase_messaging:compileReleaseShaders NO-SOURCE
+> Task :react-native-firebase_messaging:generateReleaseAssets UP-TO-DATE
+> Task :react-native-firebase_messaging:mergeReleaseAssets UP-TO-DATE
+> Task :react-native-razorpay:mergeReleaseShaders UP-TO-DATE
+> Task :react-native-firebase_app:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :react-native-razorpay:compileReleaseShaders NO-SOURCE
+> Task :react-native-firebase_app:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-firebase_app:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-firebase_app:writeReleaseAarMetadata UP-TO-DATE
+> Task :react-native-firebase_app:extractDeepLinksRelease UP-TO-DATE
+> Task :react-native-firebase_app:processReleaseManifest UP-TO-DATE
+> Task :react-native-firebase_app:prepareReleaseArtProfile UP-TO-DATE
+> Task :react-native-firebase_app:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :react-native-firebase_app:processReleaseJavaRes NO-SOURCE
+> Task :react-native-firebase_app:mergeReleaseShaders UP-TO-DATE
+> Task :react-native-firebase_app:compileReleaseShaders NO-SOURCE
+> Task :react-native-firebase_app:generateReleaseAssets UP-TO-DATE
+> Task :react-native-firebase_app:mergeReleaseAssets UP-TO-DATE
+> Task :react-native-razorpay:generateReleaseAssets UP-TO-DATE
+> Task :react-native-razorpay:mergeReleaseAssets UP-TO-DATE
+> Task :react-native-safe-area-context:mergeReleaseShaders UP-TO-DATE
+> Task :react-native-safe-area-context:compileReleaseShaders NO-SOURCE
+> Task :react-native-safe-area-context:generateReleaseAssets UP-TO-DATE
+> Task :react-native-safe-area-context:mergeReleaseAssets UP-TO-DATE
+> Task :react-native-webview:mergeReleaseShaders UP-TO-DATE
+> Task :react-native-webview:compileReleaseShaders NO-SOURCE
+> Task :react-native-webview:generateReleaseAssets UP-TO-DATE
+> Task :react-native-webview:mergeReleaseAssets UP-TO-DATE
+> Task :sp-react-native-in-app-updates:mergeReleaseShaders UP-TO-DATE
+> Task :sp-react-native-in-app-updates:compileReleaseShaders NO-SOURCE
+> Task :sp-react-native-in-app-updates:generateReleaseAssets UP-TO-DATE
+> Task :sp-react-native-in-app-updates:mergeReleaseAssets UP-TO-DATE
+> Task :expo:extractProguardFiles UP-TO-DATE
+> Task :expo-modules-core:extractProguardFiles UP-TO-DATE
+> Task :expo-modules-core:prepareLintJarForPublish UP-TO-DATE
+> Task :expo:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-async-storage_async-storage:createFullJarRelease UP-TO-DATE
+> Task :react-native-async-storage_async-storage:extractProguardFiles UP-TO-DATE
+> Task :react-native-firebase_analytics:processReleaseJavaRes NO-SOURCE
+> Task :react-native-firebase_crashlytics:mergeReleaseAssets UP-TO-DATE
+> Task :react-native-device-info:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-pip-android:prepareReleaseArtProfile
+> Task :react-native-device-info:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-device-info:writeReleaseAarMetadata UP-TO-DATE
+> Task :react-native-device-info:extractDeepLinksRelease UP-TO-DATE
+> Task :react-native-device-info:processReleaseManifest UP-TO-DATE
+> Task :react-native-pip-android:bundleLibRuntimeToJarRelease
+> Task :react-native-device-info:prepareReleaseArtProfile UP-TO-DATE
+> Task :react-native-device-info:bundleLibCompileToJarRelease
+> Task :react-native-device-info:processReleaseJavaRes NO-SOURCE
+> Task :react-native-pip-android:processReleaseJavaRes NO-SOURCE
+> Task :react-native-device-info:mergeReleaseShaders UP-TO-DATE
+> Task :react-native-device-info:bundleLibRuntimeToJarRelease
+> Task :react-native-device-info:compileReleaseShaders NO-SOURCE
+> Task :react-native-device-info:generateReleaseAssets UP-TO-DATE
+> Task :react-native-device-info:mergeReleaseAssets UP-TO-DATE
+> Task :react-native-community_netinfo:createFullJarRelease UP-TO-DATE
+> Task :react-native-community_netinfo:extractProguardFiles UP-TO-DATE
+> Task :react-native-pip-android:mergeReleaseShaders
+> Task :react-native-pip-android:compileReleaseShaders NO-SOURCE
+> Task :react-native-pip-android:generateReleaseAssets UP-TO-DATE
+> Task :react-native-pip-android:mergeReleaseAssets
+> Task :react-native-device-info:createFullJarRelease
+> Task :react-native-device-info:extractProguardFiles UP-TO-DATE
+> Task :react-native-device-info:generateReleaseLintModel
+> Task :react-native-device-info:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-firebase_app:createFullJarRelease UP-TO-DATE
+> Task :react-native-firebase_app:extractProguardFiles UP-TO-DATE
+> Task :react-native-community_netinfo:generateReleaseLintModel
+> Task :react-native-community_netinfo:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-async-storage_async-storage:generateReleaseLintModel
+> Task :react-native-async-storage_async-storage:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-razorpay:createFullJarRelease UP-TO-DATE
+> Task :react-native-razorpay:extractProguardFiles UP-TO-DATE
+> Task :react-native-pip-android:createFullJarRelease
+
+> Task :react-native-maps:compileReleaseJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :react-native-pip-android:extractProguardFiles
+> Task :react-native-firebase_app:generateReleaseLintModel
+> Task :react-native-firebase_app:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-safe-area-context:extractProguardFiles UP-TO-DATE
+> Task :react-native-safe-area-context:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-webview:extractProguardFiles UP-TO-DATE
+> Task :react-native-webview:prepareLintJarForPublish UP-TO-DATE
+> Task :sp-react-native-in-app-updates:createFullJarRelease UP-TO-DATE
+> Task :sp-react-native-in-app-updates:extractProguardFiles UP-TO-DATE
+> Task :sp-react-native-in-app-updates:generateReleaseLintModel
+> Task :sp-react-native-in-app-updates:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-safe-area-context:stripReleaseDebugSymbols NO-SOURCE
+> Task :react-native-safe-area-context:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-safe-area-context:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :react-native-webview:stripReleaseDebugSymbols NO-SOURCE
+> Task :react-native-webview:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-webview:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :react-native-async-storage_async-storage:stripReleaseDebugSymbols NO-SOURCE
+> Task :react-native-async-storage_async-storage:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-async-storage_async-storage:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :react-native-maps:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-maps:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-maps:writeReleaseAarMetadata
+> Task :react-native-maps:extractDeepLinksRelease
+> Task :react-native-webview:compileReleaseKotlin
+> Task :react-native-async-storage_async-storage:extractReleaseAnnotations
+> Task :react-native-safe-area-context:compileReleaseKotlin
+> Task :react-native-maps:processReleaseManifest
+> Task :react-native-maps:prepareReleaseArtProfile UP-TO-DATE
+> Task :react-native-pip-android:generateReleaseLintModel
+> Task :react-native-maps:processReleaseJavaRes NO-SOURCE
+> Task :react-native-maps:mergeReleaseShaders
+> Task :react-native-maps:compileReleaseShaders NO-SOURCE
+> Task :react-native-maps:generateReleaseAssets UP-TO-DATE
+> Task :react-native-maps:mergeReleaseAssets
+> Task :react-native-maps:extractProguardFiles
+> Task :react-native-razorpay:generateReleaseLintModel
+> Task :react-native-pip-android:prepareLintJarForPublish
+> Task :react-native-razorpay:prepareLintJarForPublish UP-TO-DATE
+
+> Task :expo-constants:createExpoConfig
+[dotenv@17.2.3] injecting env (0) from .env.prod -- tip: 🛠�?  run anywhere with `dotenvx run -- yourcommand`
+✅ Loaded environment file: C:\tazty-main\tazty-buyer-app\.env.prod
+   EXPO_PUBLIC_API_BASE_URL: https://prodapi.tazty.in
+📦 Environment: production
+�? API Base URL: https://prodapi.tazty.in
+   (from EXPO_PUBLIC_API_BASE_URL in .env file)
+
+> Task :react-native-async-storage_async-storage:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-async-storage_async-storage:mergeReleaseJavaResource UP-TO-DATE
+> Task :react-native-async-storage_async-storage:syncReleaseLibJars UP-TO-DATE
+> Task :react-native-async-storage_async-storage:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :react-native-community_netinfo:stripReleaseDebugSymbols NO-SOURCE
+> Task :react-native-community_netinfo:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-community_netinfo:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :react-native-community_netinfo:extractReleaseAnnotations
+> Task :react-native-community_netinfo:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-community_netinfo:mergeReleaseJavaResource UP-TO-DATE
+> Task :react-native-community_netinfo:syncReleaseLibJars UP-TO-DATE
+> Task :react-native-community_netinfo:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :react-native-firebase_app:stripReleaseDebugSymbols NO-SOURCE
+> Task :react-native-firebase_app:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-firebase_app:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :react-native-maps:bundleLibCompileToJarRelease
+> Task :expo:stripProdReleaseDebugSymbols NO-SOURCE
+> Task :expo:copyProdReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :expo:extractDeepLinksForAarProdRelease UP-TO-DATE
+> Task :react-native-device-info:stripReleaseDebugSymbols NO-SOURCE
+> Task :react-native-device-info:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-device-info:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :react-native-device-info:extractReleaseAnnotations
+> Task :react-native-device-info:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-device-info:mergeReleaseJavaResource UP-TO-DATE
+> Task :react-native-device-info:syncReleaseLibJars
+> Task :react-native-device-info:bundleReleaseLocalLintAar
+> Task :react-native-firebase_app:extractReleaseAnnotations
+> Task :react-native-firebase_app:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-firebase_app:mergeReleaseJavaResource UP-TO-DATE
+> Task :react-native-pip-android:stripReleaseDebugSymbols NO-SOURCE
+> Task :react-native-firebase_app:syncReleaseLibJars UP-TO-DATE
+> Task :react-native-firebase_app:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :react-native-pip-android:copyReleaseJniLibsProjectAndLocalJars
+> Task :react-native-pip-android:extractDeepLinksForAarRelease
+> Task :react-native-pip-android:extractReleaseAnnotations
+> Task :react-native-pip-android:mergeReleaseConsumerProguardFiles
+> Task :react-native-razorpay:stripReleaseDebugSymbols NO-SOURCE
+> Task :react-native-razorpay:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-razorpay:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :react-native-razorpay:extractReleaseAnnotations
+> Task :react-native-razorpay:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-razorpay:mergeReleaseJavaResource UP-TO-DATE
+> Task :react-native-razorpay:syncReleaseLibJars UP-TO-DATE
+> Task :react-native-razorpay:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :sp-react-native-in-app-updates:stripReleaseDebugSymbols NO-SOURCE
+> Task :sp-react-native-in-app-updates:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :sp-react-native-in-app-updates:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :sp-react-native-in-app-updates:extractReleaseAnnotations
+> Task :sp-react-native-in-app-updates:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-pip-android:mergeReleaseJavaResource
+> Task :sp-react-native-in-app-updates:mergeReleaseJavaResource UP-TO-DATE
+> Task :sp-react-native-in-app-updates:syncReleaseLibJars UP-TO-DATE
+> Task :sp-react-native-in-app-updates:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :react-native-pip-android:syncReleaseLibJars
+
+> Task :react-native-firebase_messaging:compileReleaseJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :react-native-maps:generateReleaseLintModel
+> Task :react-native-maps:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-maps:stripReleaseDebugSymbols NO-SOURCE
+> Task :react-native-pip-android:bundleReleaseLocalLintAar
+> Task :react-native-maps:extractDeepLinksForAarRelease UP-TO-DATE
+
+> Task :react-native-firebase_analytics:compileReleaseJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :react-native-maps:copyReleaseJniLibsProjectAndLocalJars
+> Task :expo-modules-core:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :expo-modules-core:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :expo:writeProdReleaseLintModelMetadata UP-TO-DATE
+
+> Task :react-native-firebase_crashlytics:compileReleaseJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :react-native-firebase_crashlytics:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-firebase_messaging:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-firebase_messaging:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-firebase_messaging:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :react-native-firebase_messaging:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :react-native-firebase_messaging:createFullJarRelease UP-TO-DATE
+> Task :react-native-firebase_crashlytics:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-firebase_messaging:extractProguardFiles UP-TO-DATE
+> Task :react-native-firebase_crashlytics:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :react-native-firebase_crashlytics:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :react-native-firebase_analytics:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-firebase_crashlytics:createFullJarRelease UP-TO-DATE
+> Task :react-native-firebase_crashlytics:extractProguardFiles UP-TO-DATE
+> Task :react-native-firebase_analytics:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-firebase_analytics:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :react-native-firebase_analytics:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :react-native-firebase_analytics:mergeReleaseShaders UP-TO-DATE
+> Task :react-native-firebase_analytics:compileReleaseShaders NO-SOURCE
+> Task :react-native-firebase_analytics:generateReleaseAssets UP-TO-DATE
+> Task :react-native-firebase_analytics:mergeReleaseAssets UP-TO-DATE
+> Task :react-native-firebase_analytics:createFullJarRelease UP-TO-DATE
+> Task :react-native-firebase_analytics:extractProguardFiles UP-TO-DATE
+> Task :react-native-firebase_analytics:generateReleaseLintModel
+> Task :react-native-firebase_analytics:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-firebase_analytics:stripReleaseDebugSymbols NO-SOURCE
+> Task :react-native-firebase_analytics:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-firebase_messaging:generateReleaseLintModel
+> Task :react-native-firebase_analytics:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :react-native-firebase_messaging:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-firebase_messaging:stripReleaseDebugSymbols NO-SOURCE
+> Task :react-native-firebase_messaging:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-firebase_messaging:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :react-native-firebase_crashlytics:generateReleaseLintModel
+> Task :react-native-firebase_crashlytics:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-firebase_crashlytics:stripReleaseDebugSymbols NO-SOURCE
+> Task :react-native-firebase_crashlytics:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-firebase_crashlytics:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :react-native-firebase_messaging:extractReleaseAnnotations
+> Task :react-native-maps:bundleLibRuntimeToJarRelease
+> Task :react-native-async-storage_async-storage:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :react-native-firebase_messaging:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-firebase_messaging:mergeReleaseJavaResource UP-TO-DATE
+> Task :react-native-firebase_messaging:syncReleaseLibJars UP-TO-DATE
+> Task :react-native-firebase_messaging:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :react-native-firebase_analytics:extractReleaseAnnotations
+> Task :react-native-firebase_analytics:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-firebase_analytics:mergeReleaseJavaResource UP-TO-DATE
+> Task :react-native-firebase_analytics:syncReleaseLibJars UP-TO-DATE
+> Task :react-native-firebase_analytics:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :react-native-community_netinfo:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :react-native-device-info:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :react-native-firebase_app:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :react-native-firebase_analytics:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :react-native-firebase_messaging:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :react-native-pip-android:writeReleaseLintModelMetadata
+> Task :react-native-razorpay:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :react-native-firebase_crashlytics:extractReleaseAnnotations
+> Task :react-native-safe-area-context:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :react-native-firebase_crashlytics:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-webview:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :react-native-firebase_crashlytics:mergeReleaseJavaResource UP-TO-DATE
+> Task :sp-react-native-in-app-updates:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :react-native-firebase_crashlytics:syncReleaseLibJars UP-TO-DATE
+> Task :react-native-firebase_crashlytics:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :react-native-firebase_crashlytics:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :react-native-async-storage_async-storage:generateReleaseLintVitalModel
+> Task :react-native-device-info:generateReleaseLintVitalModel
+> Task :react-native-community_netinfo:generateReleaseLintVitalModel
+> Task :expo-modules-core:stripReleaseDebugSymbols
+> Task :react-native-firebase_analytics:generateReleaseLintVitalModel
+> Task :react-native-firebase_app:generateReleaseLintVitalModel
+> Task :react-native-maps:extractReleaseAnnotations
+> Task :react-native-maps:createFullJarRelease
+> Task :react-native-maps:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-maps:mergeReleaseJavaResource
+> Task :expo-modules-core:copyReleaseJniLibsProjectAndLocalJars
+> Task :react-native-firebase_messaging:generateReleaseLintVitalModel
+> Task :react-native-pip-android:generateReleaseLintVitalModel
+> Task :react-native-razorpay:generateReleaseLintVitalModel
+> Task :expo-modules-core:compileReleaseLibraryResources UP-TO-DATE
+> Task :react-native-firebase_crashlytics:generateReleaseLintVitalModel
+> Task :sp-react-native-in-app-updates:generateReleaseLintVitalModel
+> Task :expo-modules-core:compileReleaseKotlin
+> Task :react-native-maps:syncReleaseLibJars
+> Task :react-native-maps:bundleReleaseLocalLintAar
+> Task :react-native-maps:writeReleaseLintModelMetadata
+> Task :react-native-maps:generateReleaseLintVitalModel
+> Task :expo-constants:preBuild
+> Task :expo-constants:preReleaseBuild
+> Task :expo-constants:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :expo-constants:mergeReleaseNativeLibs NO-SOURCE
+> Task :expo-constants:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :expo-constants:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-constants:generateReleaseBuildConfig UP-TO-DATE
+> Task :expo-constants:generateReleaseResValues UP-TO-DATE
+> Task :expo-constants:generateReleaseResources UP-TO-DATE
+> Task :expo-constants:packageReleaseResources UP-TO-DATE
+> Task :expo-constants:javaPreCompileRelease UP-TO-DATE
+> Task :expo-constants:writeReleaseAarMetadata UP-TO-DATE
+> Task :expo-constants:extractDeepLinksRelease UP-TO-DATE
+> Task :expo-constants:processReleaseManifest UP-TO-DATE
+> Task :expo-constants:prepareReleaseArtProfile UP-TO-DATE
+> Task :expo-constants:mergeReleaseShaders UP-TO-DATE
+> Task :expo-constants:compileReleaseShaders NO-SOURCE
+> Task :expo-constants:generateReleaseAssets UP-TO-DATE
+> Task :app:createBundleProdReleaseJsAndAssets
+> Task :expo-constants:parseReleaseLocalResources
+> Task :expo-constants:mergeReleaseAssets
+> Task :expo-constants:extractProguardFiles UP-TO-DATE
+> Task :expo-constants:prepareLintJarForPublish UP-TO-DATE
+> Task :expo-constants:stripReleaseDebugSymbols NO-SOURCE
+> Task :expo-constants:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :expo-constants:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :expo-constants:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :expo-constants:compileReleaseLibraryResources UP-TO-DATE
+> Task :expo-constants:generateReleaseRFile
+> Task :expo:mapProdReleaseSourceSetPaths
+> Task :react-native-async-storage_async-storage:lintVitalAnalyzeRelease
+> Task :react-native-community_netinfo:lintVitalAnalyzeRelease
+> Task :react-native-device-info:lintVitalAnalyzeRelease
+
+> Task :react-native-webview:compileReleaseKotlin
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:22:8 'object MapBuilder : Any' is deprecated. Use Kotlin's built-in collections extensions.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:82:18 'var allowFileAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:83:18 'var allowUniversalAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:125:21 'fun allowScanningByMediaScanner(): Unit' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:162:36 'var systemUiVisibility: Int' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:301:14 'object MapBuilder : Any' is deprecated. Use Kotlin's built-in collections extensions.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:351:34 Condition is always 'true'.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:370:38 'var allowUniversalAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:431:51 Unchecked cast of 'Any?' to 'HashMap<String, String>'.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:487:23 'var savePassword: Boolean' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:488:23 'var saveFormData: Boolean' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:558:23 'var allowFileAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:603:52 'static field FORCE_DARK_ON: Int' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:603:89 'static field FORCE_DARK_OFF: Int' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:604:35 'static fun setForceDark(p0: @NonNull() WebSettings, p1: Int): Unit' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:613:35 'static fun setForceDarkStrategy(p0: @NonNull() WebSettings, p1: Int): Unit' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:615:39 'static field DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING: Int' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:659:65 Unchecked cast of 'ArrayList<Any?>' to 'List<Map<String, String>>'.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:680:23 'var saveFormData: Boolean' is deprecated. Deprecated in Java.
+
+> Task :expo:mergeProdReleaseResources
+> Task :react-native-firebase_app:lintVitalAnalyzeRelease
+> Task :react-native-firebase_analytics:lintVitalAnalyzeRelease
+> Task :react-native-firebase_crashlytics:lintVitalAnalyzeRelease
+
+> Task :react-native-safe-area-context:compileReleaseKotlin
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaView.kt:59:23 'val uiImplementation: UIImplementation!' is deprecated. Deprecated in Java.
+
+> Task :react-native-firebase_messaging:lintVitalAnalyzeRelease
+
+> Task :react-native-webview:compileReleaseJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :react-native-webview:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-webview:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-webview:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :react-native-webview:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :react-native-pip-android:lintVitalAnalyzeRelease
+> Task :react-native-webview:processReleaseJavaRes UP-TO-DATE
+> Task :react-native-webview:createFullJarRelease UP-TO-DATE
+> Task :react-native-webview:generateReleaseLintModel
+> Task :react-native-webview:extractReleaseAnnotations
+> Task :react-native-webview:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-webview:mergeReleaseJavaResource UP-TO-DATE
+> Task :react-native-razorpay:lintVitalAnalyzeRelease
+> Task :sp-react-native-in-app-updates:lintVitalAnalyzeRelease
+> Task :react-native-safe-area-context:compileReleaseJavaWithJavac
+> Task :react-native-safe-area-context:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-safe-area-context:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-safe-area-context:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :react-native-safe-area-context:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :react-native-safe-area-context:processReleaseJavaRes UP-TO-DATE
+> Task :react-native-safe-area-context:createFullJarRelease UP-TO-DATE
+> Task :react-native-safe-area-context:generateReleaseLintModel
+> Task :react-native-safe-area-context:extractReleaseAnnotations
+> Task :react-native-safe-area-context:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :react-native-safe-area-context:mergeReleaseJavaResource UP-TO-DATE
+> Task :react-native-safe-area-context:syncReleaseLibJars UP-TO-DATE
+> Task :react-native-safe-area-context:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :react-native-safe-area-context:generateReleaseLintVitalModel
+> Task :react-native-maps:lintVitalAnalyzeRelease
+> Task :react-native-webview:syncReleaseLibJars
+> Task :react-native-safe-area-context:lintVitalAnalyzeRelease
+> Task :react-native-webview:syncReleaseLibJars UP-TO-DATE
+> Task :react-native-webview:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :react-native-webview:generateReleaseLintVitalModel
+> Task :react-native-webview:lintVitalAnalyzeRelease
+
+> Task :app:createBundleProdReleaseJsAndAssets
+[dotenv@17.2.3] injecting env (0) from .env.prod -- tip: ⚙�?  specify custom .env file path with { path: '/custom/path/.env' }
+
+> Task :expo:verifyProdReleaseResources
+
+> Task :expo-modules-core:compileReleaseKotlin
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/apploader/RNHeadlessAppLoader.kt:48:87 'val reactNativeHost: ReactNativeHost' is deprecated. You should not use ReactNativeHost directly in the New Architecture. Use ReactHost instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/apploader/RNHeadlessAppLoader.kt:91:85 'val reactNativeHost: ReactNativeHost' is deprecated. You should not use ReactNativeHost directly in the New Architecture. Use ReactHost instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/apploader/RNHeadlessAppLoader.kt:120:83 'val reactNativeHost: ReactNativeHost' is deprecated. You should not use ReactNativeHost directly in the New Architecture. Use ReactHost instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/apploader/AppLoaderProvider.kt:34:52 Unchecked cast of 'Class<*>!' to 'Class<out HeadlessAppLoader>'.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/AppContext.kt:30:8 'typealias ErrorManagerModule = JSLoggerModule' is deprecated. Use JSLoggerModule instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/AppContext.kt:253:21 'typealias ErrorManagerModule = JSLoggerModule' is deprecated. Use JSLoggerModule instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/AppContext.kt:343:21 'val DEFAULT: Int' is deprecated. UIManagerType.DEFAULT will be deleted in the next release of React Native. Use [LEGACY] instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/views/ViewDefinitionBuilder.kt:464:16 'val errorManager: JSLoggerModule?' is deprecated. Use AppContext.jsLogger instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/views/ViewDefinitionBuilder.kt:464:30 'fun reportExceptionToLogBox(codedException: CodedException): Unit' is deprecated. Use appContext.jsLogger.error(...) instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/views/ViewManagerDefinition.kt:41:16 'val errorManager: JSLoggerModule?' is deprecated. Use AppContext.jsLogger instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/views/ViewManagerDefinition.kt:41:30 'fun reportExceptionToLogBox(codedException: CodedException): Unit' is deprecated. Use appContext.jsLogger.error(...) instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/apploader/RNHeadlessAppLoader.kt:48:87 'val reactNativeHost: ReactNativeHost' is deprecated. You should not use ReactNativeHost directly in the New Architecture. Use ReactHost instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/apploader/RNHeadlessAppLoader.kt:91:85 'val reactNativeHost: ReactNativeHost' is deprecated. You should not use ReactNativeHost directly in the New Architecture. Use ReactHost instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/apploader/RNHeadlessAppLoader.kt:120:83 'val reactNativeHost: ReactNativeHost' is deprecated. You should not use ReactNativeHost directly in the New Architecture. Use ReactHost instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/apploader/AppLoaderProvider.kt:34:52 Unchecked cast of 'Class<*>!' to 'Class<out HeadlessAppLoader>'.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/AppContext.kt:30:8 'typealias ErrorManagerModule = JSLoggerModule' is deprecated. Use JSLoggerModule instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/AppContext.kt:253:21 'typealias ErrorManagerModule = JSLoggerModule' is deprecated. Use JSLoggerModule instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/AppContext.kt:343:21 'val DEFAULT: Int' is deprecated. UIManagerType.DEFAULT will be deleted in the next release of React Native. Use [LEGACY] instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/defaultmodules/NativeModulesProxyModule.kt:16:5 'fun Constants(legacyConstantsProvider: () -> Map<String, Any?>): Unit' is deprecated. Use `Constant` or `Property` instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/views/ViewDefinitionBuilder.kt:464:16 'val errorManager: JSLoggerModule?' is deprecated. Use AppContext.jsLogger instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/views/ViewDefinitionBuilder.kt:464:30 'fun reportExceptionToLogBox(codedException: CodedException): Unit' is deprecated. Use appContext.jsLogger.error(...) instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/views/ViewManagerDefinition.kt:41:16 'val errorManager: JSLoggerModule?' is deprecated. Use AppContext.jsLogger instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/views/ViewManagerDefinition.kt:41:30 'fun reportExceptionToLogBox(codedException: CodedException): Unit' is deprecated. Use appContext.jsLogger.error(...) instead.
+
+> Task :expo-modules-core:compileReleaseJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :expo-modules-core:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :expo-modules-core:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :expo-modules-core:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :expo-modules-core:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :expo-modules-core:processReleaseJavaRes UP-TO-DATE
+> Task :expo-modules-core:createFullJarRelease UP-TO-DATE
+> Task :expo-modules-core:generateReleaseLintModel
+> Task :expo-modules-core:extractReleaseAnnotations
+> Task :expo-modules-core:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :expo-modules-core:mergeReleaseJavaResource UP-TO-DATE
+> Task :expo-modules-core:syncReleaseLibJars UP-TO-DATE
+> Task :expo-constants:compileReleaseKotlin
+> Task :expo-modules-core:bundleReleaseLocalLintAar
+> Task :expo-modules-core:generateReleaseLintVitalModel
+> Task :expo-constants:compileReleaseJavaWithJavac
+> Task :expo-constants:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :expo-constants:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :expo-constants:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :expo-constants:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :expo-constants:processReleaseJavaRes UP-TO-DATE
+> Task :expo-constants:createFullJarRelease UP-TO-DATE
+> Task :expo-constants:generateReleaseLintModel
+> Task :expo-constants:extractReleaseAnnotations
+> Task :expo-constants:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :expo-constants:mergeReleaseJavaResource UP-TO-DATE
+> Task :expo-constants:syncReleaseLibJars UP-TO-DATE
+> Task :expo-constants:bundleReleaseLocalLintAar
+> Task :expo-constants:generateReleaseLintVitalModel
+> Task :expo-constants:lintVitalAnalyzeRelease
+
+> Task :app:createBundleProdReleaseJsAndAssets
+✅ Loaded environment file: C:\tazty-main\tazty-buyer-app\.env.prod
+   EXPO_PUBLIC_API_BASE_URL: https://prodapi.tazty.in
+📦 Environment: production
+�? API Base URL: https://prodapi.tazty.in
+   (from EXPO_PUBLIC_API_BASE_URL in .env file)
+[dotenv@17.2.3] injecting env (0) from .env.prod -- tip: 🛠�?  run anywhere with `dotenvx run -- yourcommand`
+✅ Loaded environment file: C:\tazty-main\tazty-buyer-app\.env.prod
+   EXPO_PUBLIC_API_BASE_URL: https://prodapi.tazty.in
+📦 Environment: production
+�? API Base URL: https://prodapi.tazty.in
+   (from EXPO_PUBLIC_API_BASE_URL in .env file)
+
+> Task :expo-modules-core:lintVitalAnalyzeRelease
+> Task :expo:compileProdReleaseKotlin
+
+> Task :app:createBundleProdReleaseJsAndAssets
+Starting Metro Bundler
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+[dotenv@17.2.3] injecting env (0) from .env.prod -- tip: ⚙�?  suppress all logs with { quiet: true }
+✅ Loaded environment file: C:\tazty-main\tazty-buyer-app\.env.prod
+   EXPO_PUBLIC_API_BASE_URL: https://prodapi.tazty.in
+📦 Environment: production
+�? API Base URL: https://prodapi.tazty.in
+   (from EXPO_PUBLIC_API_BASE_URL in .env file)
+Android .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+
+> Task :expo:compileProdReleaseKotlin
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ExpoModulesPackage.kt:34:16 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ExpoReactHostFactory.kt:8:8 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ExpoReactHostFactory.kt:80:22 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:24:8 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:58:33 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:105:16 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:105:38 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:113:16 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:114:21 'val reactInstanceManager: ReactInstanceManager' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:168:36 'constructor(activity: Activity, reactNativeHost: ReactNativeHost?, appKey: String?, launchOptions: Bundle?, fabricEnabled: Boolean): ReactDelegate' is deprecated. Deprecated since 0.81.0, use one of the other constructors instead.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:279:77 'val reactInstanceManager: ReactInstanceManager' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:282:22 'val reactInstanceManager: ReactInstanceManager' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:286:54 'val reactInstanceManager: ReactInstanceManager' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactNativeHostWrapper.kt:6:8 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactNativeHostWrapper.kt:15:9 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactNativeHostWrapper.kt:47:60 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactNativeHostWrapperBase.kt:7:8 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactNativeHostWrapperBase.kt:16:23 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactNativeHostWrapperBase.kt:89:16 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/ReactNativeHostWrapperBase.kt:101:38 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/fetch/ExpoFetchModule.kt:30:39 'constructor(reactContext: ReactContext): ForwardingCookieHandler' is deprecated. Use the default constructor.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/fetch/NativeResponse.kt:42:16 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///C:/tazty-main/tazty-buyer-app/node_modules/expo/android/src/main/java/expo/modules/fetch/NativeResponse.kt:44:11 'fun deallocate(): Unit' is deprecated. Use sharedObjectDidRelease() instead.
+
+> Task :app:createBundleProdReleaseJsAndAssets
+| [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+Android .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+
+> Task :expo:compileProdReleaseJavaWithJavac
+> Task :expo:mergeProdReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :expo:exportProdReleaseConsumerProguardFiles UP-TO-DATE
+> Task :expo:processProdReleaseJavaRes UP-TO-DATE
+> Task :expo:bundleLibCompileToJarProdRelease
+> Task :expo:bundleLibRuntimeToJarProdRelease
+> Task :expo:generateProdReleaseLintModel
+> Task :expo:createFullJarProdRelease
+> Task :expo:extractProdReleaseAnnotations
+> Task :expo:mergeProdReleaseConsumerProguardFiles UP-TO-DATE
+> Task :expo:mergeProdReleaseJavaResource UP-TO-DATE
+> Task :expo:syncProdReleaseLibJars
+> Task :expo:bundleProdReleaseLocalLintAar
+> Task :expo:generateProdReleaseLintVitalModel
+> Task :expo:bundleProdReleaseAar
+> Task :expo:assembleProdRelease
+> Task :expo:lintVitalAnalyzeProdRelease
+
+> Task :app:createBundleProdReleaseJsAndAssets
+| (node:37768) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+Android .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+| [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+| [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+| [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+| [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+Android .\index.ts ▓▓░░░░░░░░░░░░░░ 13.2% (  9/109)
+| [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+| (node:14092) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+| (node:40032) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:23272) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:38896) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:27372) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:25008) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:39752) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+Android .\index.ts ▓▓░░░░░░░░░░░░░░ 13.2% ( 35/223)
+Android .\index.ts ▓▓░░░░░░░░░░░░░░ 13.2% ( 77/274)
+Android .\index.ts ▓▓░░░░░░░░░░░░░░ 18.1% (141/332)
+Android .\index.ts ▓▓░░░░░░░░░░░░░░ 18.6% (163/383)
+Android .\index.ts ▓▓▓░░░░░░░░░░░░░ 24.6% (220/444)
+Android .\index.ts ▓▓▓▓░░░░░░░░░░░░ 27.7% (257/488)
+Android .\index.ts ▓▓▓▓░░░░░░░░░░░░ 30.8% (299/541)
+Android .\index.ts ▓▓▓▓▓▓░░░░░░░░░░ 37.6% (388/633)
+Android .\index.ts ▓▓▓▓▓▓░░░░░░░░░░ 39.5% (408/680)
+Android .\index.ts ▓▓▓▓▓▓▓░░░░░░░░░ 49.4% (511/727)
+Android .\index.ts ▓▓▓▓▓▓▓▓▓░░░░░░░ 59.7% (634/821)
+Android .\index.ts ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.6% (736/864)
+Android .\index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 84.8% (829/900)
+Android .\index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 86.7% (871/941)
+Android .\index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 87.7% (930/997)
+Android .\index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 97.6% (1018/1039)
+Android .\index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 97.6% (1036/1092)
+Android .\index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 97.6% (1088/1131)
+Android .\index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (1142/1142)
+Android Bundled 123967ms index.ts (1142 modules)
+Writing bundle output to: android\app\build\generated\assets\createBundleProdReleaseJsAndAssets\index.android.bundle
+Writing sourcemap output to: android\app\build\intermediates\sourcemaps\react\prodRelease\index.android.bundle.packager.map
+Copying 52 asset files
+Done writing bundle output
+Done writing sourcemap output
+
+> Task :app:preBuild
+> Task :app:preProdReleaseBuild
+> Task :app:configureCMakeRelWithDebInfo[arm64-v8a]
+> Task :app:buildCMakeRelWithDebInfo[arm64-v8a]
+> Task :app:configureCMakeRelWithDebInfo[armeabi-v7a]
+> Task :app:buildCMakeRelWithDebInfo[armeabi-v7a]
+> Task :app:configureCMakeRelWithDebInfo[x86]
+> Task :app:buildCMakeRelWithDebInfo[x86]
+> Task :app:configureCMakeRelWithDebInfo[x86_64]
+> Task :app:buildCMakeRelWithDebInfo[x86_64]
+> Task :app:mergeProdReleaseJniLibFolders UP-TO-DATE
+> Task :app:generateProdReleaseBuildConfig
+> Task :app:generateProdReleaseResValues UP-TO-DATE
+> Task :app:injectCrashlyticsMappingFileIdProdRelease
+> Task :app:processProdReleaseGoogleServices
+> Task :app:checkProdReleaseDuplicateClasses
+> Task :app:mapProdReleaseSourceSetPaths
+> Task :app:generateProdReleaseResources UP-TO-DATE
+> Task :app:checkProdReleaseAarMetadata
+> Task :app:mergeProdReleaseNativeLibs
+> Task :app:packageProdReleaseResources
+> Task :app:createProdReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksProdRelease
+> Task :app:parseProdReleaseLocalResources
+> Task :app:stripProdReleaseDebugSymbols
+
+> Task :app:processProdReleaseMainManifest
+[com.razorpay:standard-core:1.7.1] C:\Users\thami\.gradle\caches\8.14.3\transforms\20a457b50735eacfb5dda93db45faf80\transformed\standard-core-1.7.1\AndroidManifest.xml Warning:
+	Namespace 'com.razorpay' is used in multiple modules and/or libraries: com.razorpay:standard-core:1.7.1, com.razorpay:core:1.0.1. Please ensure that all modules and libraries have a unique namespace. For more information, See https://developer.android.com/studio/build/configure-app-module#set-namespace
+C:\tazty-main\tazty-buyer-app\android\app\src\main\AndroidManifest.xml Warning:
+	provider#expo.modules.filesystem.FileSystemFileProvider@android:authorities was tagged at AndroidManifest.xml:0 to replace other declarations but no other declaration present
+C:\tazty-main\tazty-buyer-app\android\app\src\main\AndroidManifest.xml Warning:
+	activity#expo.modules.imagepicker.ExpoCropImageActivity@android:exported was tagged at AndroidManifest.xml:0 to replace other declarations but no other declaration present
+
+> Task :app:processProdReleaseManifest
+> Task :app:javaPreCompileProdRelease UP-TO-DATE
+> Task :app:mergeProdReleaseArtProfile UP-TO-DATE
+> Task :app:extractProguardFiles UP-TO-DATE
+> Task :app:mergeProdReleaseStartupProfile UP-TO-DATE
+> Task :app:mergeProdReleaseShaders UP-TO-DATE
+> Task :app:compileProdReleaseShaders NO-SOURCE
+> Task :app:generateProdReleaseAssets UP-TO-DATE
+> Task :app:mergeProdReleaseAssets
+> Task :app:extractProdReleaseVersionControlInfo UP-TO-DATE
+> Task :app:compressProdReleaseAssets
+> Task :app:extractProdReleaseNativeSymbolTables
+> Task :app:collectProdReleaseDependencies
+> Task :app:sdkProdReleaseDependencyData
+> Task :app:validateSigningProdRelease UP-TO-DATE
+> Task :app:writeProdReleaseAppMetadata UP-TO-DATE
+> Task :app:writeProdReleaseSigningConfigVersions UP-TO-DATE
+> Task :app:processProdReleaseManifestForPackage
+> Task :app:mergeProdReleaseNativeDebugMetadata
+> Task :app:mergeProdReleaseResources
+> Task :app:processProdReleaseResources
+
+> Task :app:compileProdReleaseKotlin
+w: file:///C:/tazty-main/tazty-buyer-app/android/app/src/main/java/in/tazty/buyer/FCMEventEmitterModule.kt:98:36 'fun get(p0: String!): Any?' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/android/app/src/main/java/in/tazty/buyer/FCMEventEmitterPackage.kt:9:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///C:/tazty-main/tazty-buyer-app/android/app/src/main/java/in/tazty/buyer/MainApplication.kt:9:8 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/android/app/src/main/java/in/tazty/buyer/MainApplication.kt:21:16 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///C:/tazty-main/tazty-buyer-app/android/app/src/main/java/in/tazty/buyer/MainApplication.kt:21:33 'class ReactNativeHost : Any' is deprecated. Deprecated in Java.
+w: file:///C:/tazty-main/tazty-buyer-app/android/app/src/main/java/in/tazty/buyer/PipPackage.kt:9:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+
+> Task :app:compileProdReleaseJavaWithJavac
+> Task :app:mergeProdReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :app:processProdReleaseJavaRes UP-TO-DATE
+> Task :app:generateProdReleaseLintVitalReportModel
+> Task :app:expandProdReleaseArtProfileWildcards
+> Task :app:lintVitalAnalyzeProdRelease
+> Task :app:mergeProdReleaseJavaResource
+> Task :app:lintVitalReportProdRelease
+> Task :app:lintVitalProdRelease
+> Task :app:minifyProdReleaseWithR8
+WARNING: C:\Users\thami\.gradle\caches\8.14.3\transforms\65aa2079dde2a659f74afad48a2555eb\transformed\play-services-location-21.3.0-runtime.jar: R8: The companion object Companion could not be found in class com.google.android.gms.internal.location.zze
+
+> Task :app:compileProdReleaseArtProfile
+> Task :app:uploadCrashlyticsMappingFileProdRelease
+> Task :app:convertShrunkResourcesToBinaryProdRelease
+> Task :app:optimizeProdReleaseResources
+> Task :app:packageProdRelease
+> Task :app:createProdReleaseApkListingFileRedirect
+> Task :app:assembleProdRelease
+
+[Incubating] Problems report is available at: file:///C:/tazty-main/tazty-buyer-app/android/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 16m 54s
+667 actionable tasks: 246 executed, 421 up-to-date
+
+[INFO] Renaming files...
+[SUCCESS] APK: Tazty_Buyer-1.0.5-prod.apk
+
+[SUCCESS] Build completed successfully!
+[INFO] Generated files:
+   APK: android/app/build/outputs/apk/prod/release/Tazty_Buyer-1.0.5-prod.apk
+
+[SUCCESS] Ready for distribution!

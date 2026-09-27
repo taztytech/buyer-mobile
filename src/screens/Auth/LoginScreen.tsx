@@ -13,9 +13,10 @@ interface LoginScreenProps {
   initialPhoneNumber?: string;
 }
 
+// `onBack` stays in the props type (callers still pass it) but the Skip button
+// that used it was removed — login is the only way forward from this screen.
 export const LoginScreen: React.FC<LoginScreenProps> = ({
   onLoginSuccess,
-  onBack,
   onOpenTerms,
   onOpenPrivacy,
   initialPhoneNumber,
@@ -112,23 +113,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <View style={styles.mainContainer}>
               {/* Green Background Section */}
               <View style={styles.greenSection}>
-                {/* Skip at top-right */}
-                {onBack ? (
-                  <View style={styles.skipTopRow}>
-                    <View style={styles.skipSpacer} />
-                    <TouchableOpacity
-                      style={styles.skipButton}
-                      onPress={onBack}
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-                      accessible
-                      accessibilityRole="button"
-                      accessibilityLabel="Skip login"
-                    >
-                      <Text style={styles.skipButtonText}>Skip</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : null}
                 {/* Header: Title + Subtitle */}
                 <View style={styles.headerRow}>
                   <View>
@@ -250,17 +234,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 24,
   },
-  skipTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 8,
-    zIndex: 10,
-    elevation: 10,
-  },
-  skipSpacer: {
-    flex: 1,
-  },
   headerRow: {
     paddingBottom: 8,
   },
@@ -268,18 +241,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_700Bold',
     fontSize: 30,
     lineHeight: 45,
-    color: '#FFFFFF',
-  },
-  skipButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-    borderRadius: 20,
-  },
-  skipButtonText: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 16,
     color: '#FFFFFF',
   },
   subtitle: {

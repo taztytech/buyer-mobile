@@ -29,11 +29,24 @@ interface ViewCartBarProps {
    * list. It keeps its place in the cart - only the bar moves.
    */
   hidden?: boolean;
+  /**
+   * Compact mode: used on Home while the Crave/Flix pills are showing (at the
+   * top). The bar shrinks to a one-line pill and lifts ABOVE the pill row so it
+   * never collides with them. When the pills slide away on scroll it goes back
+   * to the broad two-line bar at the bottom.
+   */
+  compact?: boolean;
 }
 
 const THUMB_SIZE = 48;
 const THUMB_STEP = 30; // horizontal distance between overlapping photos
 const MAX_THUMBS = 3;
+// Compact mode sits BETWEEN the Crave/Flix pills, so it stays tiny: one small
+// photo, a short label that truncates, and a small chevron. Clearances below
+// keep it clear of the edge-pinned pills on every screen width.
+const COMPACT_THUMB_SIZE = 30;
+const COMPACT_LEFT_CLEAR = 126; // ~ Crave pill width
+const COMPACT_RIGHT_CLEAR = 112; // ~ Flix pill width
 const BRAND_GREEN = '#00B14F';
 
 /**
@@ -96,12 +109,15 @@ export const ViewCartBar: React.FC<ViewCartBarProps> = ({
   onPress,
   bottomOffset = 0,
   hidden = false,
+  compact = false,
 }) => {
   const { cart, getTotalItems } = useCart();
   const insets = useSafeAreaInsets();
   const totalCartItems = getTotalItems();
 
-  const thumbnails = React.useMemo(() => pickThumbnails(cart), [cart]);
+  const allThumbnails = React.useMemo(() => pickThumbnails(cart), [cart]);
+  // Just one photo in compact mode so the pill fits between the pills.
+  const thumbnails = compact ? allThumbnails.slice(-1) : allThumbnails;
 
   // Slides down and fades rather than vanishing, so the eye follows it.
   const hideAnim = React.useRef(new Animated.Value(0)).current;
@@ -142,14 +158,28 @@ export const ViewCartBar: React.FC<ViewCartBarProps> = ({
     return null;
   }
 
-  const thumbsWidth =
-    THUMB_SIZE + Math.max(thumbnails.length - 1, 0) * THUMB_STEP;
+  const thumbSize = compact ? COMPACT_THUMB_SIZE : THUMB_SIZE;
+  const thumbsWidth = compact
+    ? COMPACT_THUMB_SIZE
+    : THUMB_SIZE + Math.max(thumbnails.length - 1, 0) * THUMB_STEP;
   const itemLabel = totalCartItems === 1 ? 'item' : 'items';
 
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.wrapper, { bottom: insets.bottom + 16 + bottomOffset }]}
+      style={[
+        styles.wrapper,
+        compact
+          ? {
+              // Sit on the pills' row (same safe-area baseline), filling the gap
+              // between Crave and Flix — clear of the system nav bar.
+              bottom: insets.bottom + 12,
+              left: COMPACT_LEFT_CLEAR,
+              right: COMPACT_RIGHT_CLEAR,
+              alignItems: 'stretch',
+            }
+          : { bottom: insets.bottom + 16 + bottomOffset, left: 0, right: 0 },
+      ]}
     >
       <Animated.View
         style={{ opacity, transform: [{ translateY }, { scale }] }}
@@ -158,20 +188,29 @@ export const ViewCartBar: React.FC<ViewCartBarProps> = ({
         pointerEvents={hidden ? 'none' : 'auto'}
       >
         <TouchableOpacity
-          style={styles.pill}
+          style={[styles.pill, compact && styles.pillCompact]}
           onPress={onPress}
           activeOpacity={0.9}
           accessibilityRole="button"
           accessibilityLabel={`View cart, ${totalCartItems} ${itemLabel}`}
           testID="view-cart-bar"
         >
-          <View style={[styles.thumbs, { width: thumbsWidth }]}>
+          <View style={[styles.thumbs, { width: thumbsWidth, height: thumbSize }]}>
             {thumbnails.map((item, index) => {
               const imageSource = toImageSource(item.image);
               return (
               <View
                 key={item.id}
-                style={[styles.thumb, { left: index * THUMB_STEP, zIndex: index + 1 }]}
+                style={[
+                  styles.thumb,
+                  {
+                    left: index * THUMB_STEP,
+                    zIndex: index + 1,
+                    width: thumbSize,
+                    height: thumbSize,
+                    borderRadius: thumbSize / 2,
+                  },
+                ]}
                 testID={`view-cart-thumb-${index}`}
               >
                 {imageSource ? (
@@ -191,15 +230,27 @@ export const ViewCartBar: React.FC<ViewCartBarProps> = ({
             })}
           </View>
 
-          <View style={styles.label}>
-            <Text style={styles.title}>View cart</Text>
-            <Text style={styles.subtitle}>
-              {totalCartItems} {itemLabel}
-            </Text>
-          </View>
+          {compact ? (
+            <View style={styles.labelCompact}>
+              <Text style={styles.compactText} numberOfLines={1}>
+                View cart · {totalCartItems} {itemLabel}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.label}>
+              <Text style={styles.title}>View cart</Text>
+              <Text style={styles.subtitle}>
+                {totalCartItems} {itemLabel}
+              </Text>
+            </View>
+          )}
 
-          <View style={styles.chevron}>
-            <MaterialIcons name="chevron-right" size={28} color="#FFFFFF" />
+          <View style={[styles.chevron, compact && styles.chevronCompact]}>
+            <MaterialIcons
+              name="chevron-right"
+              size={compact ? 22 : 28}
+              color="#FFFFFF"
+            />
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -227,6 +278,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 12,
     elevation: 12,
+  },
+  pillCompact: {
+    paddingVertical: 6,
+    paddingLeft: 6,
+    paddingRight: 6,
   },
   thumbs: {
     height: THUMB_SIZE,
@@ -259,6 +315,18 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     marginRight: 18,
   },
+  labelCompact: {
+    flex: 1,
+    marginLeft: 10,
+    marginRight: 10,
+  },
+  compactText: {
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    fontWeight: 600,
+    letterSpacing: 0.1,
+    color: '#FFFFFF',
+  },
   title: {
     fontFamily: 'Poppins',
     fontSize: 16,
@@ -282,5 +350,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  chevronCompact: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
 });

@@ -2,7 +2,9 @@ import React from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   Share,
@@ -35,6 +37,8 @@ const PAGE_SIZE = 20;
 
 interface WalletScreenProps {
   onBack: () => void;
+  /** Open the Add-money sheet straight away (e.g. from the Home wallet pill's +). */
+  initialAddOpen?: boolean;
 }
 
 const formatDate = (iso: string): string => {
@@ -55,7 +59,7 @@ const formatDate = (iso: string): string => {
  * Balance can only be spent on Tazty - it is never paid out to a bank, which
  * is said on the card so nobody expects a withdraw button.
  */
-export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack }) => {
+export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack, initialAddOpen }) => {
   const [summary, setSummary] = React.useState<WalletSummary | null>(null);
   const [transactions, setTransactions] = React.useState<WalletTransaction[]>([]);
   const [page, setPage] = React.useState(1);
@@ -79,6 +83,18 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack }) => {
   const [codeMode, setCodeMode] = React.useState<'promo' | 'referral'>('promo');
   const [codeBusy, setCodeBusy] = React.useState(false);
   const [codeError, setCodeError] = React.useState<string | null>(null);
+
+  // Opened straight into Add-money (e.g. the Home wallet pill's +). Wait for the
+  // top-up limits so the sheet has its suggestions, and only fire once.
+  const autoOpenedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (initialAddOpen && limits?.enabled && !autoOpenedRef.current) {
+      autoOpenedRef.current = true;
+      setAmountText('');
+      setAddError(null);
+      setAddOpen(true);
+    }
+  }, [initialAddOpen, limits?.enabled]);
 
   const load = React.useCallback(async () => {
     const [s, h] = await Promise.all([
@@ -509,8 +525,14 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack }) => {
         visible={addOpen}
         transparent
         animationType="slide"
+        statusBarTranslucent
+        hardwareAccelerated
         onRequestClose={() => !adding && setAddOpen(false)}
       >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.kav}
+        >
         <Pressable style={styles.backdrop} onPress={() => !adding && setAddOpen(false)} testID="wallet-add-backdrop">
           <Pressable style={styles.detailSheet} onPress={() => {}}>
             <View style={styles.detailHandle} />
@@ -525,6 +547,7 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack }) => {
                   setAddError(null);
                 }}
                 keyboardType="decimal-pad"
+                autoFocus
                 placeholder="0"
                 placeholderTextColor="#9CA3AF"
                 maxLength={8}
@@ -595,14 +618,21 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack }) => {
             </Text>
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
         visible={codeOpen}
         transparent
         animationType="slide"
+        statusBarTranslucent
+        hardwareAccelerated
         onRequestClose={() => !codeBusy && setCodeOpen(false)}
       >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.kav}
+        >
         <Pressable
           style={styles.backdrop}
           onPress={() => !codeBusy && setCodeOpen(false)}
@@ -677,12 +707,15 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack }) => {
             </Text>
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
         visible={!!selected}
         transparent
         animationType="slide"
+        statusBarTranslucent
+        hardwareAccelerated
         onRequestClose={() => setSelected(null)}
       >
         <Pressable style={styles.backdrop} onPress={() => setSelected(null)} testID="wallet-detail-backdrop">
@@ -1234,6 +1267,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   footerLoader: { marginVertical: 12 },
+  kav: { flex: 1 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   detailSheet: {
     backgroundColor: '#FFFFFF',

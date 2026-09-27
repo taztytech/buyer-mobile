@@ -15,6 +15,7 @@ import { storageService } from '@/services/storage.service';
 import { authService } from '@/services/auth.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { formatRupees, walletService } from '@/services/wallet.service';
+import { vcService, VcCreatorState } from '@/services/vc.service';
 
 interface ProfileScreenProps {
   visible?: boolean;
@@ -30,6 +31,10 @@ interface ProfileScreenProps {
   onTermsConditions?: () => void;
   onFaq?: () => void;
   onLogout?: () => void;
+  /** Open creator onboarding (email → OTP → socials). */
+  onBecomeCreator?: () => void;
+  /** Open the Instagram-style creator profile (approved creators). */
+  onCreatorProfile?: () => void;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
@@ -45,11 +50,30 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onTermsConditions,
   onFaq,
   onLogout,
+  onBecomeCreator,
+  onCreatorProfile,
 }) => {
   const DELETE_ACCOUNT_URL = 'https://www.tazty.in/delete-account';
   const { showConfirmation } = useConfirmation();
   const [userName, setUserName] = useState('User');
   const [userPhone, setUserPhone] = useState('');
+  const [creatorState, setCreatorState] = useState<VcCreatorState>('none');
+
+  // Check creator status when the profile opens. We only use it to decide what
+  // the creator row shows — the normal profile stays put. An approved creator
+  // gets a "View Creator Dashboard" row here and opens the dashboard on tap;
+  // auto-routing them was what caused the old-profile → creator flicker/loop.
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    vcService.me().then((me) => {
+      if (!active) return;
+      setCreatorState(me.state);
+    });
+    return () => {
+      active = false;
+    };
+  }, [visible]);
   // null = hidden. Filled only when the wallet is switched on for this customer.
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
@@ -262,6 +286,49 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
             {/* Menu Container */}
             <View style={styles.menuContainer}>
+              {/* Video Commerce (Flix): normal buyers can apply; pending/rejected/
+                  paused show status; an APPROVED creator gets a "View Creator
+                  Dashboard" row that opens their dashboard on tap. The normal
+                  profile always stays here — no auto-routing. */}
+              {creatorState === 'none' && (
+                <MenuItem
+                  label="To be a creator on Tazty"
+                  icon="video-call"
+                  onPress={onBecomeCreator}
+                  testID="become-creator-entry"
+                />
+              )}
+              {creatorState === 'pending' && (
+                <MenuItem
+                  label="Creator application under review"
+                  icon="hourglass-empty"
+                  showArrow={false}
+                  onPress={undefined}
+                />
+              )}
+              {creatorState === 'rejected' && (
+                <MenuItem
+                  label="Creator application — reapply"
+                  icon="refresh"
+                  onPress={onBecomeCreator}
+                />
+              )}
+              {creatorState === 'paused' && (
+                <MenuItem
+                  label="Creator id paused — contact admin"
+                  icon="pause-circle-outline"
+                  showArrow={false}
+                  onPress={undefined}
+                />
+              )}
+              {creatorState === 'approved' && (
+                <MenuItem
+                  label="View Creator Dashboard"
+                  icon="dashboard"
+                  onPress={onCreatorProfile}
+                  testID="creator-dashboard-entry"
+                />
+              )}
               <MenuItem label="My Orders" icon="receipt-long" onPress={onMyOrders} />
               {walletBalance !== null && (
                 <MenuItem

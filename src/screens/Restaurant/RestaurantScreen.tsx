@@ -1663,7 +1663,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
             color={activeView === 'reels' ? '#001E1F' : 'rgba(255,255,255,0.9)'}
           />
           <Text style={[styles.viewToggleText, activeView === 'reels' && styles.viewToggleTextActive]}>
-            Reels
+            Tuck
           </Text>
         </TouchableOpacity>
       </View>

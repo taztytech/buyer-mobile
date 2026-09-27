@@ -244,6 +244,47 @@ class OrdersService {
   }
 
   /**
+   * Add / change the delivery-partner tip AFTER an order is placed (Blinkit-style
+   * tip on the tracking page). The backend charges the delta (wallet / COD due /
+   * online) and re-syncs the new tip down to the seller + fleet so it reaches the
+   * rider's payout. `payment_source` lets the app hint how to charge the delta.
+   */
+  async updateOrderTip(
+    orderId: number,
+    tip_amount: number,
+    payment_source?: 'wallet' | 'cod' | 'online',
+  ): Promise<ApiResponse<any>> {
+    try {
+      return await apiService.put<any>(`/api/buyer/orders/${orderId}/tip`, {
+        tip_amount,
+        ...(payment_source ? { payment_source } : {}),
+      });
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to update tip' };
+    }
+  }
+
+  /**
+   * Share the buyer's current GPS location with the assigned rider for an active
+   * order (replaces free-text delivery instructions). The backend stores it and
+   * forwards it to the fleet so the rider sees the live pin.
+   */
+  async shareCustomerLocation(
+    orderId: number,
+    coords: { latitude: number; longitude: number; accuracy?: number },
+  ): Promise<ApiResponse<any>> {
+    try {
+      return await apiService.put<any>(`/api/buyer/orders/${orderId}/customer-location`, {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        ...(typeof coords.accuracy === 'number' ? { accuracy: coords.accuracy } : {}),
+      });
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to share location' };
+    }
+  }
+
+  /**
    * Get all orders
    */
   async getOrders(

@@ -62,6 +62,8 @@ interface OrderDetailsScreenProps {
   visible?: boolean;
   onBack?: () => void;
   onAddMoreItems?: () => void;
+  /** Open the Tazty Wallet's Add-money sheet; checkout is shown again on return. */
+  onAddMoneyToWallet?: () => void;
   onEditCustomization?: (itemId: string, variantId: string, currentAddOnIds: string[], currentQuantity?: number) => void;
   onPlaceOrder?: () => void;
   onOrderSuccess?: (orderId: number) => void;
@@ -81,6 +83,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   visible = true,
   onBack,
   onAddMoreItems,
+  onAddMoneyToWallet,
   onEditCustomization,
   onPlaceOrder,
   onOrderSuccess,
@@ -163,6 +166,8 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
   const [walletSummary, setWalletSummary] = useState<WalletSummary | null>(null);
   const [walletCanPay, setWalletCanPay] = useState(false);
   const [useWallet, setUseWallet] = useState(true);
+  // Whether this customer may add money right now (top-up on, or a test user).
+  const [walletTopupAllowed, setWalletTopupAllowed] = useState(false);
   const [selfPickup, setSelfPickup] = useState(false);
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
@@ -308,6 +313,14 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
       setWalletSummary(summary);
       setUseWallet(true);
     });
+    walletService
+      .getTopupLimits()
+      .then(limits => {
+        if (!cancelled) setWalletTopupAllowed(!!limits?.enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setWalletTopupAllowed(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -2297,6 +2310,47 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                 </View>
 
                 <View style={[styles.sectionContent, styles.paymentSectionContent]}>
+                  {/* Tazty Wallet at ₹0: still shown, so customers know it is
+                      there and can top it up without leaving checkout. */}
+                  {walletCanPay && walletBalance <= 0 && (
+                    <View
+                      style={[
+                        styles.paymentOption,
+                        selectedPaymentMethod === 'cod' && styles.paymentOptionDisabled,
+                      ]}
+                      testID="checkout-wallet-empty"
+                    >
+                      <View style={styles.paymentOptionContent}>
+                        <View style={styles.paymentOptionTopRow}>
+                          <View style={styles.paymentOptionLeft}>
+                            <MaterialIcons name="account-balance-wallet" size={24} color="#00B14F" />
+                            <Text style={styles.paymentOptionText}>
+                              Tazty Wallet ({formatRupees(0)})
+                            </Text>
+                          </View>
+                          {walletTopupAllowed && onAddMoneyToWallet ? (
+                            <TouchableOpacity
+                              style={styles.walletAddButton}
+                              onPress={onAddMoneyToWallet}
+                              activeOpacity={0.8}
+                              testID="checkout-wallet-add-money"
+                            >
+                              <MaterialIcons name="add" size={16} color="#FFFFFF" />
+                              <Text style={styles.walletAddButtonText}>Add money</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+                        <Text style={styles.paymentOptionHelperText}>
+                          {selectedPaymentMethod === 'cod'
+                            ? "Tazty Wallet can't be used with Cash on Delivery."
+                            : walletTopupAllowed && onAddMoneyToWallet
+                              ? 'Add money to pay with your wallet.'
+                              : 'Your wallet balance will show here.'}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
                   {/* Tazty Wallet: on by default when there is a balance */}
                   {walletCanPay && walletBalance > 0 && (
                     <TouchableOpacity
@@ -2318,11 +2372,25 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
                               Use Tazty Wallet ({formatRupees(walletBalance)})
                             </Text>
                           </View>
-                          <MaterialIcons
-                            name={walletApplied > 0 ? 'check-box' : 'check-box-outline-blank'}
-                            size={24}
-                            color={walletApplied > 0 ? '#00B14F' : 'rgba(0, 0, 0, 0.25)'}
-                          />
+                          <View style={styles.walletRowRight}>
+                            {walletTopupAllowed && onAddMoneyToWallet ? (
+                              <TouchableOpacity
+                                style={styles.walletAddChip}
+                                onPress={onAddMoneyToWallet}
+                                activeOpacity={0.8}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                testID="checkout-wallet-add-more"
+                              >
+                                <MaterialIcons name="add" size={14} color="#00B14F" />
+                                <Text style={styles.walletAddChipText}>Add</Text>
+                              </TouchableOpacity>
+                            ) : null}
+                            <MaterialIcons
+                              name={walletApplied > 0 ? 'check-box' : 'check-box-outline-blank'}
+                              size={24}
+                              color={walletApplied > 0 ? '#00B14F' : 'rgba(0, 0, 0, 0.25)'}
+                            />
+                          </View>
                         </View>
                         <Text style={styles.paymentOptionHelperText}>
                           {selectedPaymentMethod === 'cod'
@@ -2634,6 +2702,44 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  walletAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#00B14F',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  walletAddButtonText: {
+    fontFamily: 'Poppins',
+    fontWeight: 600,
+    fontSize: 12,
+    letterSpacing: 0.2,
+    color: '#FFFFFF',
+  },
+  walletRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  walletAddChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    borderWidth: 1,
+    borderColor: '#00B14F',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  walletAddChipText: {
+    fontFamily: 'Poppins',
+    fontWeight: 600,
+    fontSize: 11,
+    letterSpacing: 0.2,
+    color: '#00B14F',
+  },
   container: {
     flex: 1,
     backgroundColor: '#000000',

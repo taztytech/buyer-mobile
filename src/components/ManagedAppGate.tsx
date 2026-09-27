@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  ActivityIndicator,
   AppState,
   Linking,
   Platform,
@@ -11,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import DeviceInfo from 'react-native-device-info';
 
 type Policy = {
@@ -37,32 +37,55 @@ const CONTROL_PLANE_URL = String(
     'https://api.godfather.tazty.in',
 ).replace(/\/$/, '');
 
+/** How long the policy request may take before the app carries on without it. */
+const POLICY_TIMEOUT_MS = 4000;
+/** The last answer is reused at the next open, but not once it is this old. */
+const POLICY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+/** Per build, so an update the customer already installed is never replayed. */
+const policyCacheKey = (build: number) => `managed_app_policy_v1:${build}`;
+
 export function ManagedAppGate({ children }: React.PropsWithChildren) {
+  // The app opens straight away; the policy is checked in the background and
+  // only a maintenance window or a required update ever covers the app.
   const [policy, setPolicy] = React.useState<Policy | null>(null);
-  const [checking, setChecking] = React.useState(true);
   const [dismissedBuild, setDismissedBuild] = React.useState<number | null>(null);
+  const build = Number(DeviceInfo.getBuildNumber()) || 0;
 
   const refresh = React.useCallback(async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), POLICY_TIMEOUT_MS);
     try {
       const platform = Platform.OS === 'ios' ? 'ios' : 'android';
       const version = DeviceInfo.getVersion();
-      const build = Number(DeviceInfo.getBuildNumber()) || 0;
       const installationId = await DeviceInfo.getUniqueId();
       const response = await fetch(
         `${CONTROL_PLANE_URL}/public/v1/applications/buyer-mobile/policy?platform=${platform}&version_name=${encodeURIComponent(version)}&build_number=${build}&installation_id=${encodeURIComponent(installationId)}`,
-        { headers: { Accept: 'application/json' } },
+        { headers: { Accept: 'application/json' }, signal: controller.signal },
       );
       if (!response.ok) throw new Error(`Policy returned ${response.status}`);
       const body = await response.json();
-      setPolicy(body.data as Policy);
+      const next = body.data as Policy;
+      setPolicy(next);
+      AsyncStorage.setItem(policyCacheKey(build), JSON.stringify({ at: Date.now(), policy: next })).catch(() => {});
     } catch (error) {
+      // Slow or no network: keep whatever we have and let the customer in.
       console.warn('Buyer availability policy unavailable; allowing app access', error);
     } finally {
-      setChecking(false);
+      clearTimeout(timer);
     }
-  }, []);
+  }, [build]);
 
   React.useEffect(() => {
+    // Last known answer first, so a maintenance window shows even offline.
+    AsyncStorage.getItem(policyCacheKey(build))
+      .then(raw => {
+        if (!raw) return;
+        const cached = JSON.parse(raw) as { at: number; policy: Policy };
+        if (cached?.policy && Date.now() - Number(cached.at) < POLICY_CACHE_MAX_AGE_MS) {
+          setPolicy(current => current ?? cached.policy);
+        }
+      })
+      .catch(() => {});
     void refresh();
     const timer = setInterval(() => void refresh(), 60_000);
     const subscription = AppState.addEventListener('change', state => {
@@ -72,17 +95,7 @@ export function ManagedAppGate({ children }: React.PropsWithChildren) {
       clearInterval(timer);
       subscription.remove();
     };
-  }, [refresh]);
-
-  if (checking && !policy) {
-    return (
-      <SafeAreaView style={styles.screen}>
-        <ActivityIndicator color="#12B76A" size="large" />
-        <Text style={styles.eyebrow}>TAZTY CONTROL</Text>
-        <Text style={styles.loading}>Checking service availability</Text>
-      </SafeAreaView>
-    );
-  }
+  }, [refresh, build]);
 
   if (policy?.maintenance.active) {
     const end = policy.maintenance.ends_at
@@ -170,7 +183,6 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 22 },
   dot: { width: 8, height: 8, backgroundColor: '#37E59A' },
   eyebrow: { color: '#37E59A', fontSize: 12, fontWeight: '700', letterSpacing: 0, marginTop: 14 },
-  loading: { color: '#DDEBE5', fontSize: 15, marginTop: 12 },
   title: { color: '#F3FFF9', fontSize: 30, lineHeight: 38, fontWeight: '700', marginBottom: 14 },
   message: { color: '#ACC3B9', fontSize: 16, lineHeight: 25, marginBottom: 24 },
   detailBox: { borderWidth: 1, borderColor: '#24473A', backgroundColor: '#091510', padding: 16, marginBottom: 20 },

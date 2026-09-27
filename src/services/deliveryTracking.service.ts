@@ -17,6 +17,8 @@ export interface DeliveryTrackStatusResponse {
     } | null;
   } | null;
   status?: string | null;
+  /** Server-computed encoded road-route polyline (fleet Routes API). */
+  route_polyline?: string | null;
   [key: string]: any;
 }
 

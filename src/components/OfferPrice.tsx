@@ -118,11 +118,13 @@ export const OfferPrice: React.FC<OfferPriceProps> = ({
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', minHeight: 36 },
   circleWrap: {
-    // Kalam's digits lean right past their measured width, so a little more
-    // room on the right keeps the number optically centred in the ring.
-    paddingLeft: 10,
-    paddingRight: 14,
-    paddingVertical: 5,
+    // The ring is an absoluteFill SVG over this box, so more padding grows the
+    // ring OUTWARD from the number — giving the price clear margin inside it.
+    // Kalam's digits lean right past their measured width, so a little extra on
+    // the right keeps the number optically centred in the ring.
+    paddingLeft: 16,
+    paddingRight: 21,
+    paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
   },
