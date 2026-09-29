@@ -264,6 +264,98 @@ class PaymentService {
   }
 
   /**
+   * Start an online payment for an already-placed COD order.
+   */
+  async initiateOrderPayment(
+    orderId: number,
+    request: InitiatePaymentRequest,
+  ): Promise<ApiResponse<InitiatePaymentResponse>> {
+    try {
+      return await apiService.post<InitiatePaymentResponse>(
+        `/api/buyer/orders/${orderId}/pay-online/initiate`,
+        request,
+      );
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to start payment' };
+    }
+  }
+
+  /**
+   * Verify an online payment made against an active COD order.
+   */
+  async verifyOrderPayment(
+    orderId: number,
+    request: VerifyPaymentRequest,
+  ): Promise<ApiResponse<any>> {
+    try {
+      return await apiService.post<any>(
+        `/api/buyer/orders/${orderId}/pay-online/verify`,
+        request,
+      );
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to verify payment' };
+    }
+  }
+
+  /**
+   * Full flow: pay an already-placed COD order online. Initiates a Razorpay
+   * order, opens checkout, and verifies — marking the order paid server-side.
+   */
+  async payExistingCodOrder(
+    orderId: number,
+    customerDetails: InitiatePaymentRequest,
+  ): Promise<PaymentResult> {
+    const initiate = await this.initiateOrderPayment(orderId, customerDetails);
+    const paymentDetails = (initiate.data as any)?.payment_details;
+    if (!initiate.success || !paymentDetails) {
+      return {
+        success: false,
+        error: initiate.error || 'Could not start the payment. Please try again.',
+        errorType: PaymentErrorType.USER_CANCELLED,
+      };
+    }
+
+    const checkout = await this.openCheckout({
+      description: paymentDetails.description,
+      currency: paymentDetails.currency,
+      key: paymentDetails.key,
+      amount: Number(paymentDetails.amount) / 100,
+      name: paymentDetails.name,
+      order_id: paymentDetails.razorpay_order_id,
+      prefill: {
+        email: paymentDetails.prefill?.email,
+        contact: paymentDetails.prefill?.contact,
+        name: paymentDetails.prefill?.name,
+      },
+      theme: { color: '#00B14F' },
+    });
+    if (!checkout.success) return checkout;
+
+    const verify = await this.verifyOrderPayment(orderId, {
+      razorpay_payment_id: checkout.razorpay_payment_id!,
+      razorpay_order_id: checkout.razorpay_order_id!,
+      razorpay_signature: checkout.razorpay_signature!,
+    });
+    if (!verify.success) {
+      return {
+        success: false,
+        error:
+          verify.error ||
+          'Payment could not be confirmed. If money was deducted, please contact support.',
+        errorType: PaymentErrorType.PAYMENT_FAILED,
+        errorCode: 'VERIFICATION_FAILED',
+      };
+    }
+
+    return {
+      success: true,
+      razorpay_payment_id: checkout.razorpay_payment_id,
+      razorpay_order_id: checkout.razorpay_order_id,
+      razorpay_signature: checkout.razorpay_signature,
+    };
+  }
+
+  /**
    * Handle payment failure
    */
   async handlePaymentFailure(orderId: number, request: PaymentFailureRequest): Promise<ApiResponse<any>> {

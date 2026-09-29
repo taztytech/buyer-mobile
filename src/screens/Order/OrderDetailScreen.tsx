@@ -31,6 +31,11 @@ import { SponsoredAdSlot } from '@/components/order/SponsoredAdSlot';
 import { RateTaztyCard } from '@/components/order/RateTaztyCard';
 import { DeliveryPartnerCard } from '@/components/order/DeliveryPartnerCard';
 import { NeedHelpCard } from '@/components/order/NeedHelpCard';
+import { PayOnlineCard } from '@/components/order/PayOnlineCard';
+import { CancelledHero } from '@/components/order/CancelledHero';
+import { RefundCard } from '@/components/order/RefundCard';
+import { OrderBillSheet } from '@/components/order/OrderBillSheet';
+import { paymentService, PaymentErrorType } from '@/services/payment.service';
 import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
 import { useOrders } from '@/context/OrdersContext';
@@ -257,6 +262,8 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
   // Admin-managed sponsored ads for the live order screen (placement=order_tracking)
   const [orderAds, setOrderAds] = useState<any[]>([]);
+  // Full order & bill bottom sheet
+  const [showBillSheet, setShowBillSheet] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -1640,6 +1647,38 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     }
   }, [orderId, shareLocBusy, showConfirmation]);
 
+  // Pay an active COD order online (real Razorpay flow). On success the order
+  // is refreshed; its payment_status flips to 'paid', which hides this card.
+  const [payingOnline, setPayingOnline] = useState(false);
+  const handlePayOnline = useCallback(async () => {
+    if (!orderId || payingOnline) return;
+    setPayingOnline(true);
+    try {
+      const result = await paymentService.payExistingCodOrder(Number(orderId), {
+        name: (orderData?.delivery_address?.name as string) || 'Customer',
+        phone: userPhoneNumber || (orderData?.delivery_address?.phone_number as string) || '',
+      });
+      if (result.success) {
+        showConfirmation({
+          title: 'Payment successful',
+          message: 'Your payment has been received. Thank you!',
+          confirmText: 'OK',
+          onConfirm: () => {},
+        });
+        await fetchOrderDetails();
+      } else if (result.errorType !== PaymentErrorType.USER_CANCELLED) {
+        showConfirmation({
+          title: 'Payment not completed',
+          message: result.error || 'Please try again in a moment.',
+          confirmText: 'OK',
+          onConfirm: () => {},
+        });
+      }
+    } finally {
+      setPayingOnline(false);
+    }
+  }, [orderId, payingOnline, userPhoneNumber, orderData, showConfirmation, fetchOrderDetails]);
+
   // Open the full-screen tracking overlay (also used by the inline map's
   // expand button). Mirrors the "Track Order" button's open logic.
   const openTrackingOverlay = useCallback(() => {
@@ -1861,6 +1900,9 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     return { fraction: 0.28, label: 'Preparing' };
   }, [orderData?.status]);
 
+  const isCancelled =
+    String(orderData?.status || '').toLowerCase().trim() === 'cancelled';
+
   return (
     <View style={styles.outerContainer}>
       <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
@@ -1998,7 +2040,41 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               </View>
             )}
 
+            {/* Cancelled: hero + dynamic refund replace the delivery illustration */}
+            {isCancelled && (
+              <>
+                <CancelledHero
+                  cancelledAt={orderData.cancelled_at || orderData.updated_at}
+                  reason={
+                    orderData.cancel_reason?.reason ||
+                    (typeof orderData.cancel_reason === 'string'
+                      ? orderData.cancel_reason
+                      : null)
+                  }
+                />
+                <RefundCard refund={orderData.refund} />
+                <View style={styles.cancelActionsRow}>
+                  <TouchableOpacity
+                    style={styles.cancelGhostBtn}
+                    onPress={_onHelp}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.cancelGhostBtnText}>Need help</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.cancelPrimaryBtn}
+                    onPress={_onReorder}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialIcons name="refresh" size={18} color="#FFFFFF" />
+                    <Text style={styles.cancelPrimaryBtnText}>Reorder</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+
             {/* Delivery Status Card - Illustration + Banner */}
+            {!isCancelled && (
             <View style={[styles.card, styles.statusCard]}>
               <View style={styles.statusIllustrationContainer}>
                 <Image
@@ -2088,6 +2164,26 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   </>
                 )}
             </View>
+            )}
+
+            {/* Pay online — COD orders that are still unpaid and active */}
+            {(() => {
+              const method = String(orderData.payment_method || '').toLowerCase();
+              const paid = String(orderData.payment_status || '').toLowerCase() === 'paid';
+              const s = String(orderData.status || '').toLowerCase().trim().replace(/[_\s]+/g, '-');
+              const active = !['cancelled', 'delivered', 'completed', 'created', 'payment-failed', 'payment_failed'].includes(s);
+              if (method !== 'cod' || paid || !active) return null;
+              const amount =
+                orderData.summary?.total_amount || orderData.total_amount || 0;
+              return (
+                <PayOnlineCard
+                  amount={Number(amount)}
+                  paid={false}
+                  loading={payingOnline}
+                  onPay={handlePayOnline}
+                />
+              );
+            })()}
 
             {/* Delivery partner + store distance (merged, Blinkit-style) */}
             {(() => {
@@ -2531,6 +2627,17 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               </View>
             )}
 
+            {/* View full order & bill → opens the bottom sheet */}
+            <TouchableOpacity
+              style={styles.viewBillBtn}
+              onPress={() => setShowBillSheet(true)}
+              activeOpacity={0.8}
+              testID="order-view-full-bill"
+            >
+              <Text style={styles.viewBillText}>View full order &amp; bill</Text>
+              <MaterialIcons name="arrow-forward" size={16} color="#0A6B36" />
+            </TouchableOpacity>
+
             {/* Delivery Address Card */}
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Delivery Address</Text>
@@ -2804,6 +2911,15 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           </ScrollView>
         )}
       </SafeAreaView>
+
+      {/* Full order & bill bottom sheet */}
+      {orderData && (
+        <OrderBillSheet
+          visible={showBillSheet}
+          onClose={() => setShowBillSheet(false)}
+          orderData={orderData}
+        />
+      )}
 
       {/* Click outside overlay to close tooltip */}
       {showTaxTooltip && (
@@ -3389,6 +3505,60 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 20,
+  },
+  viewBillBtn: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingVertical: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  viewBillText: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 13.5,
+    letterSpacing: 0.1,
+    color: '#0A6B36',
+  },
+  cancelActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  cancelGhostBtn: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: '#E3E7EB',
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelGhostBtnText: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 0.1,
+    color: '#14181B',
+  },
+  cancelPrimaryBtn: {
+    flex: 1,
+    backgroundColor: '#00B14F',
+    borderRadius: 13,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  cancelPrimaryBtnText: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 0.1,
+    color: '#FFFFFF',
   },
   inlineMapWrap: {
     height: 232,

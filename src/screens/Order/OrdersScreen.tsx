@@ -2093,25 +2093,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   <Text style={styles.rateButtonText}>Rate Order</Text>
                 </TouchableOpacity>
               )}
-              {/* Reorder button - shown for all non-ongoing orders except payment_failed */}
-              {/* {statusToMap !== 'payment_failed' && (
-                <TouchableOpacity
-                  style={styles.reorderButton}
-                  onPress={() => handleReorder(order.id.toString())}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name="visibility" size={18} color="#FFFFFF" />
-                  <Text style={styles.reorderButtonText}>Reorder</Text>
-                </TouchableOpacity>
-              )} */}
               {!isPaymentFailed && (
                 <TouchableOpacity
                   style={styles.reorderButton}
-                  onPress={() => handleOrderPress(order.id.toString())}
+                  onPress={() => _onReorder?.(order.id.toString())}
                   activeOpacity={0.8}
                 >
-                  <MaterialIcons name="visibility" size={18} color="#FFFFFF" />
-                  <Text style={styles.reorderButtonText}>View Order</Text>
+                  <MaterialIcons name="refresh" size={18} color="#FFFFFF" />
+                  <Text style={styles.reorderButtonText}>Reorder</Text>
                 </TouchableOpacity>
               )}
             </>
