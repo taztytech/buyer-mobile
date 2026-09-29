@@ -29,6 +29,8 @@ import { BackButton } from '@/components/BackButton';
 import { OrderProgressBar } from '@/components/order/OrderProgressBar';
 import { SponsoredAdSlot } from '@/components/order/SponsoredAdSlot';
 import { RateTaztyCard } from '@/components/order/RateTaztyCard';
+import { DeliveryPartnerCard } from '@/components/order/DeliveryPartnerCard';
+import { NeedHelpCard } from '@/components/order/NeedHelpCard';
 import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
 import { useOrders } from '@/context/OrdersContext';
@@ -1638,6 +1640,20 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     }
   }, [orderId, shareLocBusy, showConfirmation]);
 
+  // Open the full-screen tracking overlay (also used by the inline map's
+  // expand button). Mirrors the "Track Order" button's open logic.
+  const openTrackingOverlay = useCallback(() => {
+    if (!orderId || showTrackingWebView || isClosingTracking) return;
+    const effectiveStatus = orderData?.status;
+    setSelectedOrderIdForTracking(orderId);
+    setTrackingOrderData((prev: any) => prev ?? orderData);
+    setShowTrackingWebView(true);
+    fetchDeliveryTrackStatus(orderId, effectiveStatus, [orderData]).catch(() => {
+      fetchTrackingOrderData(orderId, true);
+    });
+    fetchTrackingOrderData(orderId, true);
+  }, [orderId, showTrackingWebView, isClosingTracking, orderData]);
+
   // Calculate bill details from items if summary is missing or zero
   const calculateBillFromItems = (orderData: any) => {
 
@@ -1918,6 +1934,70 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               />
             }
           >
+            {/* Inline live map — for active/trackable orders, the tracker lives
+                on the page (expand opens the full-screen map). */}
+            {fallbackMapCoords && isActiveOrder && (
+              <View style={styles.inlineMapWrap}>
+                <OrderRouteMapView
+                  restaurantCoordinate={fallbackMapCoords.restaurantCoordinate}
+                  customerCoordinate={fallbackMapCoords.customerCoordinate}
+                  agentLocationUpdate={
+                    fallbackMapCoords.latestAgentLocationUpdate
+                      ? {
+                          lat: fallbackMapCoords.latestAgentLocationUpdate.latitude,
+                          lng: fallbackMapCoords.latestAgentLocationUpdate.longitude,
+                          timestamp: fallbackMapCoords.latestAgentLocationUpdate.timestamp,
+                          heading: fallbackMapCoords.latestAgentLocationUpdate.heading,
+                          speed: fallbackMapCoords.latestAgentLocationUpdate.speed,
+                          accuracy: fallbackMapCoords.latestAgentLocationUpdate.accuracy,
+                        }
+                      : fallbackMapCoords.agentCoordinate
+                        ? {
+                            lat: fallbackMapCoords.agentCoordinate.latitude,
+                            lng: fallbackMapCoords.agentCoordinate.longitude,
+                            timestamp: Date.now(),
+                          }
+                        : null
+                  }
+                  routeCoordinates={
+                    roadRouteCoordinates && roadRouteCoordinates.length > 1
+                      ? roadRouteCoordinates
+                      : fallbackMapCoords.routeCoordinates
+                  }
+                  storeToAgentRouteCoordinates={storeToAgentRouteCoordinates}
+                  showStoreToAgentRoute={fallbackMapCoords.showStoreToAgentRoute}
+                  mode={fallbackMapCoords.mode}
+                  restaurantName={fallbackMapCoords.restaurantName}
+                  customerAddress={fallbackMapCoords.customerAddress}
+                  style={styles.inlineMap}
+                />
+                <TouchableOpacity
+                  style={styles.mapExpandBtn}
+                  onPress={openTrackingOverlay}
+                  activeOpacity={0.85}
+                  testID="order-map-expand"
+                >
+                  <MaterialIcons name="open-in-full" size={16} color="#FFFFFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.mapShareBtn}
+                  onPress={handleShareLocation}
+                  disabled={shareLocBusy}
+                  activeOpacity={0.85}
+                  testID="order-map-share"
+                >
+                  <MaterialIcons
+                    name={shareLocDone ? 'check-circle' : 'near-me'}
+                    size={14}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.mapShareText}>
+                    {shareLocDone ? 'Location shared' : 'Share my location'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Delivery Status Card - Illustration + Banner */}
             <View style={[styles.card, styles.statusCard]}>
               <View style={styles.statusIllustrationContainer}>
@@ -2008,6 +2088,42 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                   </>
                 )}
             </View>
+
+            {/* Delivery partner + store distance (merged, Blinkit-style) */}
+            {(() => {
+              const s = String(orderData.status || '').toLowerCase().trim().replace(/[_\s]+/g, '-');
+              if (['cancelled', 'payment_failed', 'payment-failed'].includes(s)) return null;
+              const delivered = ['delivered', 'completed'].includes(s);
+              if (!isActiveOrder && !delivered) return null;
+              const partnerName =
+                orderData.live_tracking?.agent_name ||
+                (Array.isArray(orderData.tracking)
+                  ? [...orderData.tracking].reverse().find((t: any) => t?.agent_name)?.agent_name
+                  : null) ||
+                null;
+              const distanceKm =
+                fallbackMapCoords?.restaurantCoordinate && fallbackMapCoords?.customerCoordinate
+                  ? routeDistanceMeters(
+                      fallbackMapCoords.restaurantCoordinate,
+                      fallbackMapCoords.customerCoordinate,
+                    ) / 1000
+                  : null;
+              return (
+                <DeliveryPartnerCard
+                  name={partnerName}
+                  delivered={delivered}
+                  restaurantName={orderData.restaurant?.name || 'Restaurant'}
+                  distanceKm={distanceKm}
+                  showCall={isActiveOrder && !!partnerName}
+                  onCall={() => {
+                    const phone = resolveAgentPhoneForExotel(orderData);
+                    if (phone && orderData.order_number) {
+                      handleCallDeliveryAgent(String(orderData.order_number), phone);
+                    }
+                  }}
+                />
+              );
+            })()}
 
             {/* Tip the delivery partner — post-order (Blinkit-style) */}
             {isActiveOrder && (
@@ -2677,6 +2793,9 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
               )}
             </View>
 
+            {/* Need help? — support entry for this order */}
+            <NeedHelpCard onPress={_onHelp} />
+
             {/* Sponsored slot — admin-managed order-tracking ads */}
             <SponsoredAdSlot ads={orderAds} />
 
@@ -3270,6 +3389,46 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 20,
+  },
+  inlineMapWrap: {
+    height: 232,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: '#1D2530',
+    position: 'relative',
+  },
+  inlineMap: {
+    flex: 1,
+  },
+  mapExpandBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(15,20,26,0.82)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapShareBtn: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: 'rgba(15,20,26,0.82)',
+    borderRadius: 999,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+  },
+  mapShareText: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 12,
+    letterSpacing: 0.1,
+    color: '#FFFFFF',
   },
   statusHeader: {
     flexDirection: 'row',
