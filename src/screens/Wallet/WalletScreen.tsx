@@ -443,11 +443,28 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack, initialAddOp
     );
   };
 
+  // Faint placeholder rows shown while transactions load or when the list is
+  // empty, so the history area never looks blank.
+  const renderSkeletonRows = (count: number) => (
+    <View style={styles.skelWrap} pointerEvents="none">
+      {Array.from({ length: count }).map((_, i) => (
+        <View key={`skel-${i}`} style={styles.skelCard}>
+          <View style={styles.skelIcon} />
+          <View style={styles.skelLines}>
+            <View style={styles.skelLineShort} />
+            <View style={styles.skelLineLong} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+
   const renderBody = () => {
     if (loading) {
       return (
-        <View style={[styles.sheet, styles.centre]}>
-          <ActivityIndicator size="large" color={GREEN} />
+        <View style={styles.sheet}>
+          <Text style={styles.skelHistoryTitle}>TRANSACTION HISTORY</Text>
+          {renderSkeletonRows(4)}
         </View>
       );
     }
@@ -481,8 +498,9 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onBack, initialAddOp
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
           <View style={styles.emptyWrap} testID="wallet-empty">
+            {renderSkeletonRows(3)}
             <Text style={styles.emptyText}>
-              No wallet activity yet. Refunds and Tazty credits will show up here.
+              Your transactions will appear here
             </Text>
           </View>
         }
@@ -1234,7 +1252,7 @@ const styles = StyleSheet.create({
   },
   amountCredit: { color: GREEN },
   amountDebit: { color: '#DC2626' },
-  emptyWrap: { paddingVertical: 32, alignItems: 'center' },
+  emptyWrap: { paddingVertical: 24, alignItems: 'center' },
   emptyText: {
     fontFamily: 'Poppins',
     fontWeight: 400,
@@ -1242,7 +1260,32 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
     color: '#6B7280',
     textAlign: 'center',
+    marginTop: 16,
   },
+  skelHistoryTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: 700,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    color: '#9CA3AF',
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  skelWrap: { alignSelf: 'stretch', paddingHorizontal: 4, gap: 10 },
+  skelCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EEF0F3',
+    borderRadius: 12,
+    padding: 14,
+  },
+  skelIcon: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#E7EAEE' },
+  skelLines: { flex: 1, gap: 7 },
+  skelLineShort: { width: '35%', height: 9, borderRadius: 5, backgroundColor: '#E7EAEE' },
+  skelLineLong: { width: '70%', height: 9, borderRadius: 5, backgroundColor: '#EEF0F3' },
   emptyTitle: {
     fontFamily: 'Poppins',
     fontWeight: 500,

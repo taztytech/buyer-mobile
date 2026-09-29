@@ -24,7 +24,8 @@ import { SearchScreen } from '@/screens/Search/SearchScreen';
 import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { MyAddressesScreen } from '@/screens/Location/MyAddressesScreen';
-import { addressService } from '@/services/address.service';
+import { addressService, AddressResponse } from '@/services/address.service';
+import { AddressSelectionModal } from '@/components/AddressSelectionModal';
 import { CategoryResultsScreen } from '@/screens/Category/CategoryResultsScreen';
 import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
 import { RestaurantDetailsScreen } from '@/screens/Restaurant/RestaurantDetailsScreen';
@@ -36,6 +37,7 @@ import { ContactUsScreen } from '@/screens/Help/ContactUsScreen';
 import { ChatScreen } from '@/screens/Help/ChatScreen';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import { Kalam_700Bold } from '@expo-google-fonts/kalam';
+import { BalooThambi2_800ExtraBold } from '@expo-google-fonts/baloo-thambi-2';
 import { BANNER_FONT_MODULES } from './src/constants/bannerFonts';
 import { initClarity, claritySetScreen } from '@/services/clarity.service';
 import * as SplashScreen from 'expo-splash-screen';
@@ -172,6 +174,10 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     longitude?: number;
     type?: 'home' | 'work' | 'other';
   } | undefined>(undefined);
+  // App-level "Select delivery location" bottom sheet, opened from the home
+  // location chip and Profile → My Addresses (replaces the separate screens).
+  const [showAddressModal, setShowAddressModal] = React.useState(false);
+  const [addressModalList, setAddressModalList] = React.useState<AddressResponse[]>([]);
   // Full-screen "Order Placed" celebration shown right after an order is created.
   const [orderPlacedInfo, setOrderPlacedInfo] = React.useState<{
     label: string;
@@ -472,6 +478,9 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     // The ₹99 Store price is handwritten, and this face carries the ₹ glyph
     // so the rupee sign never falls back to a system font mid-number.
     'Kalam_700Bold': Kalam_700Bold,
+    // Rounded, chunky display face for the "Coming soon" empty state headline
+    // (also carries Tamil glyphs, fitting for Madurai).
+    'BalooThambi2_800ExtraBold': BalooThambi2_800ExtraBold,
     'Poppins_400Regular': Poppins_400Regular,
     'Poppins_500Medium': Poppins_500Medium,
     'Poppins_600SemiBold': Poppins_600SemiBold,
@@ -1732,6 +1741,62 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       }),
     ]).start();
   };
+
+  // ── App-level "Select delivery location" bottom sheet ──
+  const openAddressModal = React.useCallback(async () => {
+    setShowAddressModal(true);
+    try {
+      const res = await addressService.getAddresses();
+      if (res.success && Array.isArray(res.data)) setAddressModalList(res.data);
+    } catch {
+      // The modal still shows Add-new / current-location options on failure.
+    }
+  }, []);
+
+  const handleAddressModalSelect = React.useCallback(
+    async (addressId: string) => {
+      const addr = addressModalList.find((a) => a.id.toString() === addressId);
+      if (addr) {
+        const name =
+          addr.type === 'work'
+            ? 'Work'
+            : addr.type === 'home'
+              ? 'Home'
+              : String(addr.address1 || '').split(',')[0] || 'Address';
+        const full = [addr.address1, addr.address2, addr.address3, addr.city]
+          .filter(Boolean)
+          .map((s) => String(s).trim())
+          .join(', ');
+        setSelectedLocation({
+          name,
+          address: full,
+          latitude: addr.latitude,
+          longitude: addr.longitude,
+          type: addr.type,
+        });
+        try {
+          await addressService.updateAddress(String(addr.id), { is_default: true } as any);
+        } catch {
+          // Selection still applies locally even if persisting default fails.
+        }
+      }
+      setShowAddressModal(false);
+    },
+    [addressModalList],
+  );
+
+  const handleAddressModalSetDefault = React.useCallback(async (addressId: string) => {
+    try {
+      await addressService.updateAddress(addressId, { is_default: true } as any);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleAddressModalAddNew = React.useCallback(() => {
+    setShowAddressModal(false);
+    handleNavigateToAddressSelection();
+  }, []);
 
   const handleBackFromAddressSelection = () => {
     // Guest without location: go back to login with smooth transition
@@ -3225,7 +3290,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               <HomeScreen
               onLogout={handleLogout}
               onNavigateToProfile={handleNavigateToProfile}
-              onNavigateToAddressSelection={handleNavigateToAddressSelection}
+              onNavigateToAddressSelection={openAddressModal}
               onNavigateToCategory={handleNavigateToCategoryResults}
               onNavigateToRestaurant={handleNavigateToRestaurantFromHome}
               onNavigateToCheckout={handleNavigateToCheckout}
@@ -3284,7 +3349,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               onEditProfile={handleNavigateToEditProfile}
               onMyOrders={handleNavigateToOrders}
               onWallet={() => handleNavigateToWallet('profile')}
-              onMyAddresses={handleNavigateToMyAddresses}
+              onMyAddresses={openAddressModal}
               onFavorites={handleNavigateToExploreDishes}
               onContactUs={() => handleNavigateToContactUs('profile')}
               onPrivacyPolicy={handleNavigateToPrivacyPolicy}
@@ -3360,7 +3425,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                 onLogout={handleLogout}
                 onMyOrders={handleNavigateToOrders}
                 onWallet={() => handleNavigateToWallet('profile')}
-                onMyAddresses={handleNavigateToMyAddresses}
+                onMyAddresses={openAddressModal}
                 onFavorites={handleNavigateToExploreDishes}
                 onContactUs={() => handleNavigateToContactUs('profile')}
                 onPrivacyPolicy={handleNavigateToPrivacyPolicy}
@@ -3932,6 +3997,16 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           title="Update Available"
           message={forcedUpdateMessage || "A new version of the app is available. Please update to continue using the app."}
           updateButtonText="Update Now"
+        />
+
+        {/* App-level Select delivery location bottom sheet */}
+        <AddressSelectionModal
+          visible={showAddressModal}
+          onClose={() => setShowAddressModal(false)}
+          addresses={addressModalList}
+          onSelectAddress={handleAddressModalSelect}
+          onAddNewAddress={handleAddressModalAddNew}
+          onSetDefaultAddress={handleAddressModalSetDefault}
         />
         {isIosSwipeBackEnabled && (
           <View
