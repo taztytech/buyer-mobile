@@ -324,6 +324,25 @@ class OrdersService {
   }
 
   /**
+   * Get sponsored ads for the live order screen. Admin-managed via Banner
+   * Management (placement = order_tracking). Each carries an image, a CTA
+   * label (cta_button) and a CTA target (promotion_type + promotion_link).
+   */
+  async getOrderTrackingAds(): Promise<ApiResponse<any[]>> {
+    try {
+      const response = await apiService.get<any[]>(
+        '/banner/active?placement=order_tracking'
+      );
+      return response;
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch order ads',
+      };
+    }
+  }
+
+  /**
    * Get cancel reasons
    */
   async getCancelReasons(): Promise<ApiResponse<CancelReason[]>> {

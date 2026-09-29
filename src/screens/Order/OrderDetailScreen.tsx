@@ -25,6 +25,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { OrderRouteMapView } from '@/components/OrderRouteMapView';
 import OrderDeliveredOverlay from '@/components/OrderDeliveredOverlay';
+import { BackButton } from '@/components/BackButton';
+import { OrderProgressBar } from '@/components/order/OrderProgressBar';
+import { SponsoredAdSlot } from '@/components/order/SponsoredAdSlot';
+import { RateTaztyCard } from '@/components/order/RateTaztyCard';
 import { ordersService } from '@/services/orders.service';
 import { authService } from '@/services/auth.service';
 import { useOrders } from '@/context/OrdersContext';
@@ -249,6 +253,25 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [selectedOrderIdForTracking, setSelectedOrderIdForTracking] = useState<string | null>(null);
   const [trackingOrderData, setTrackingOrderData] = useState<any>(null);
   const [isLoadingTrackingData, setIsLoadingTrackingData] = useState(false);
+  // Admin-managed sponsored ads for the live order screen (placement=order_tracking)
+  const [orderAds, setOrderAds] = useState<any[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    ordersService
+      .getOrderTrackingAds()
+      .then((res) => {
+        if (mounted && res.success && Array.isArray(res.data)) {
+          setOrderAds(res.data);
+        }
+      })
+      .catch(() => {
+        // Ads are non-essential; a fetch failure must not affect the order UI.
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   /**
    * TRACK ORDER on the live order notification lands here and expects the map,
@@ -1807,6 +1830,21 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
   const statusConfig = orderData ? mapOrderStatusToUI(getStatusForColorMapping(orderData.status, orderData)) : null;
 
+  // Progress fraction + short label for the bike strip, derived from status.
+  const orderProgress = useMemo(() => {
+    const s = String(orderData?.status || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[_\s]+/g, '-');
+    if (['delivered', 'completed'].includes(s)) return { fraction: 1, label: 'Delivered' };
+    if (['agent-nearby', 'reached-delivery'].includes(s)) return { fraction: 0.85, label: 'Almost there' };
+    if (['picked', 'picked-up', 'out-for-delivery', 'on-the-way', 'in-transit'].includes(s))
+      return { fraction: 0.68, label: 'On the way' };
+    if (['agent-assigned', 'assigned', 'agent-arrived-restaurant', 'accepted'].includes(s))
+      return { fraction: 0.48, label: 'Partner assigned' };
+    return { fraction: 0.28, label: 'Preparing' };
+  }, [orderData?.status]);
+
   return (
     <View style={styles.outerContainer}>
       <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
@@ -1815,9 +1853,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
       {/* Header — Blinkit-style: status line + live "Arriving in N minutes" */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <MaterialIcons name="chevron-left" size={24} color="#000000" />
-        </TouchableOpacity>
+        <BackButton onPress={onBack} color="#FFFFFF" />
         <View style={styles.headerCenter} pointerEvents="none">
           <Text style={styles.headerStatusLine} numberOfLines={1}>
             {headerStatusLine}
@@ -1831,6 +1867,17 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         {/* Spacer balances the back button so the title stays centered */}
         <View style={styles.headerSpacer} />
       </View>
+
+      {/* Progress strip with the riding bike — hidden for cancelled/failed orders */}
+      {orderData &&
+        !['cancelled', 'payment_failed'].includes(
+          String(orderData.status || '').toLowerCase().trim().replace(/[_\s]+/g, '-')
+        ) && (
+          <OrderProgressBar
+            progress={orderProgress.fraction}
+            label={orderProgress.label}
+          />
+        )}
 
       <SafeAreaView style={styles.container} edges={['bottom']}>
         {isLoading ? (
@@ -2629,6 +2676,12 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 </Text>
               )}
             </View>
+
+            {/* Sponsored slot — admin-managed order-tracking ads */}
+            <SponsoredAdSlot ads={orderAds} />
+
+            {/* Rate Tazty — pinned near the bottom */}
+            <RateTaztyCard />
           </ScrollView>
         )}
       </SafeAreaView>
