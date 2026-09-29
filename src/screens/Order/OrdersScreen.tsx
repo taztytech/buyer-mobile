@@ -42,6 +42,7 @@ import {
 } from './orderTrackingLocationUtils';
 import { resolveTrackingDisplayOrder, resolveAgentPhoneForExotel } from './trackingDisplayUtils';
 import { computeShowStoreToAgentRoute } from './orderTrackingRouteVisibility';
+import { BackButton } from '@/components/BackButton';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -746,6 +747,17 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
   const [isClosingTracking, setIsClosingTracking] = useState(false);
   const [showDeliveredOverlay, setShowDeliveredOverlay] = useState(false);
+  // Active / Past filter for the order list.
+  const [ordersTab, setOrdersTab] = useState<'active' | 'past'>('active');
+  const isPastOrder = (order: OrderListItem) => {
+    const s = String(order.status || '').toLowerCase().trim().replace(/[_\s]+/g, '-');
+    const ps = String(order.payment_status || '').toLowerCase();
+    return (
+      ['delivered', 'completed', 'cancelled'].includes(s) ||
+      ps === 'failed' ||
+      ps === 'payment_failed'
+    );
+  };
 
   const trackingOrderDataRef = useRef<any>(null);
   const ordersByIdRef = useRef<Record<string, any>>({});
@@ -2109,6 +2121,10 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     );
   };
 
+  const visibleOrders = orders.filter((o) =>
+    ordersTab === 'past' ? isPastOrder(o) : !isPastOrder(o),
+  );
+
   return (
     <View style={styles.outerContainer}>
       <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
@@ -2117,10 +2133,32 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
-        </TouchableOpacity>
+        <BackButton onPress={onBack} color="#FFFFFF" />
         <Text style={styles.headerTitle}>My Orders</Text>
+      </View>
+
+      {/* Active / Past tabs */}
+      <View style={styles.ordersTabs}>
+        <TouchableOpacity
+          style={[styles.ordersTab, ordersTab === 'active' && styles.ordersTabActive]}
+          onPress={() => setOrdersTab('active')}
+          activeOpacity={0.8}
+          testID="orders-tab-active"
+        >
+          <Text style={[styles.ordersTabText, ordersTab === 'active' && styles.ordersTabTextActive]}>
+            Active
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.ordersTab, ordersTab === 'past' && styles.ordersTabActive]}
+          onPress={() => setOrdersTab('past')}
+          activeOpacity={0.8}
+          testID="orders-tab-past"
+        >
+          <Text style={[styles.ordersTabText, ordersTab === 'past' && styles.ordersTabTextActive]}>
+            Past orders
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -2188,18 +2226,22 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
             </View>
-          ) : orders.length === 0 ? (
+          ) : visibleOrders.length === 0 ? (
             // Empty state
             <View style={styles.emptyState}>
               <MaterialIcons name="receipt-long" size={64} color="rgba(0, 0, 0, 0.2)" />
-              <Text style={styles.emptyTitle}>No Orders Yet</Text>
+              <Text style={styles.emptyTitle}>
+                {ordersTab === 'active' ? 'No active orders' : 'No past orders yet'}
+              </Text>
               <Text style={styles.emptyText}>
-                Your order history will appear here once you place an order
+                {ordersTab === 'active'
+                  ? 'Your live orders will show up here while they’re on the way'
+                  : 'Your delivered and cancelled orders will appear here'}
               </Text>
             </View>
           ) : (
             <>
-              {orders.map((order, index) => (
+              {visibleOrders.map((order, index) => (
                 <React.Fragment key={`order-${order.id}-${index}`}>
                   {renderOrderCard(order)}
                 </React.Fragment>
@@ -2673,6 +2715,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     height: 76,
+  },
+  ordersTabs: {
+    flexDirection: 'row',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EDF0F3',
+  },
+  ordersTab: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ordersTabActive: {
+    backgroundColor: '#00B14F',
+  },
+  ordersTabText: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 13,
+    letterSpacing: 0.1,
+    color: '#566068',
+  },
+  ordersTabTextActive: {
+    color: '#FFFFFF',
   },
   backButton: {
     width: 40,
