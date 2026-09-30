@@ -2026,7 +2026,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* Top background filler for pull-to-refresh overscroll - Layer 1 (Back) */}
       <View
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_BACKGROUND_HEIGHT, backgroundColor: isLocationServiceable ? homeTopBackgroundColor : '#8FC4EE' }}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_BACKGROUND_HEIGHT, backgroundColor: isLocationServiceable ? '#00B14F' : '#8FC4EE' }}
         pointerEvents="none"
       />
 
@@ -2064,7 +2064,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           {/* Header Content Wrapper */}
           <View style={styles.headerStack} testID="header-stack">
             <View
-              style={[styles.headerBackground, { paddingTop: insets.top + 10, backgroundColor: isLocationServiceable ? homeTopBackgroundColor : '#BFE0F5' }]}
+              style={[styles.headerBackground, { paddingTop: insets.top + 10, backgroundColor: isLocationServiceable ? '#00B14F' : '#BFE0F5' }]}
               testID="header-background"
             >
               {/* Unserviceable area → soft clouds sky behind the header */}
@@ -2218,6 +2218,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   </View>
                 )}
               </View>
+
+              {/* Green dash row: "Food" pill, then compact ads in the space
+                  where other service tabs would be. */}
+              {isLocationServiceable && (
+                <View style={styles.foodAdsRow} testID="food-ads-row">
+                  <View style={styles.foodPill}>
+                    <Text style={styles.foodPillEmoji}>🍔</Text>
+                    <Text style={styles.foodPillText}>Food</Text>
+                  </View>
+                  <View style={styles.foodAdsScroll}>
+                    <CompactAds
+                      mini
+                      ads={carouselData as any}
+                      onPress={(ad) =>
+                        handleBannerCTAClick({
+                          promotionType: (ad as any).promotionType,
+                          promotionLink: (ad as any).promotionLink,
+                        } as any)
+                      }
+                    />
+                  </View>
+                </View>
+              )}
 
               {/* Search Bar and VEG Mode Toggle */}
               <View
@@ -2459,25 +2482,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {/* Ad Banner Carousel or Closed Banner */}
             {isLocationServiceable && (
               <>
-                {/* Compact restaurant/promo ad cards — horizontal carousel under the org hero */}
-                {(showBannerShimmer || carouselData.length > 0) && appOperationStatus?.is_open !== false && (
-                  showBannerShimmer ? (
-                    <View style={[styles.loadingContainer, { marginTop: 8 }]}>
-                      <Shimmer width={172} height={116} borderRadius={16} />
-                    </View>
-                  ) : (
-                    <CompactAds
-                      ads={carouselData as any}
-                      onPress={(ad) =>
-                        handleBannerCTAClick({
-                          promotionType: (ad as any).promotionType,
-                          promotionLink: (ad as any).promotionLink,
-                        } as any)
-                      }
-                    />
-                  )
-                )}
-
                 {/* Categories: large circular food images with a label below,
                     under a "What's on your mind?" title; View All opens the grid. */}
                 {shouldShowBadgesRow && (
@@ -3168,6 +3172,35 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   // Search section
+  foodAdsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 2,
+  },
+  foodPill: {
+    width: 72,
+    height: 72,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  foodPillEmoji: { fontSize: 28 },
+  foodPillText: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 12,
+    letterSpacing: 0.1,
+    color: '#0A7A3C',
+    marginTop: 1,
+  },
+  foodAdsScroll: { flex: 1, minWidth: 0 },
   searchSection: {
     flexDirection: 'row',
     alignItems: 'center',

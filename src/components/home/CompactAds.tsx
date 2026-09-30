@@ -21,13 +21,15 @@ interface CompactAd {
 interface CompactAdsProps {
   ads: CompactAd[];
   onPress: (ad: CompactAd) => void;
+  /** Smaller image-only cards for the green header "Food" row. */
+  mini?: boolean;
 }
 
 /**
  * Restaurant/promo banners rendered as compact cards in a horizontal carousel
  * (multiple visible at once), gently auto-rolling. Sits under the org hero.
  */
-export const CompactAds: React.FC<CompactAdsProps> = ({ ads, onPress }) => {
+export const CompactAds: React.FC<CompactAdsProps> = ({ ads, onPress, mini = false }) => {
   const scrollRef = useRef<ScrollView>(null);
   const offsetRef = useRef(0);
   const pausedRef = useRef(false);
@@ -55,7 +57,7 @@ export const CompactAds: React.FC<CompactAdsProps> = ({ ads, onPress }) => {
       ref={scrollRef}
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={mini ? styles.contentMini : styles.content}
       onLayout={(e) => setViewW(e.nativeEvent.layout.width)}
       onContentSizeChange={(w) => setContentW(w)}
       onScroll={(e) => { offsetRef.current = e.nativeEvent.contentOffset.x; }}
@@ -67,17 +69,17 @@ export const CompactAds: React.FC<CompactAdsProps> = ({ ads, onPress }) => {
       {ads.map((ad) => (
         <TouchableOpacity
           key={ad.id}
-          style={styles.card}
+          style={mini ? styles.cardMini : styles.card}
           activeOpacity={0.9}
           onPress={() => onPress(ad)}
           testID={`compact-ad-${ad.id}`}
         >
           <ImageBackground
             source={ad.imageUrl ? { uri: ad.imageUrl } : undefined}
-            style={[styles.img, { backgroundColor: ad.backgroundColor || '#0A7A3C' }]}
-            imageStyle={styles.imgRadius}
+            style={[mini ? styles.imgMini : styles.img, { backgroundColor: ad.backgroundColor || '#0A7A3C' }]}
+            imageStyle={mini ? styles.imgRadiusMini : styles.imgRadius}
           >
-            {!!ad.title && (
+            {!mini && !!ad.title && (
               <View style={styles.titleWrap}>
                 <Text style={styles.title} numberOfLines={2}>{ad.title}</Text>
               </View>
@@ -100,6 +102,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   imgRadius: { borderRadius: 16 },
+  contentMini: { paddingLeft: 10, paddingRight: 14, alignItems: 'center' },
+  cardMini: { marginRight: 10 },
+  imgMini: {
+    width: 104,
+    height: 70,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  imgRadiusMini: { borderRadius: 13 },
   titleWrap: {
     paddingHorizontal: 10,
     paddingVertical: 8,
