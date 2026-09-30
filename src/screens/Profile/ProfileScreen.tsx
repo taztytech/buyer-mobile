@@ -273,9 +273,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           >
             {/* Identity */}
             <View style={styles.identity}>
-              <View style={styles.avatarBig}>
+              <TouchableOpacity
+                style={styles.avatarBig}
+                onPress={onEditProfile}
+                activeOpacity={0.8}
+                testID="account-avatar"
+              >
                 <Text style={styles.avatarBigText}>{initial}</Text>
-              </View>
+              </TouchableOpacity>
               <View style={styles.identityText}>
                 <Text style={styles.name} numberOfLines={1}>{userName}</Text>
                 <Text style={styles.sub} numberOfLines={1}>
@@ -310,16 +315,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <Text style={styles.tileLabel}>Help &amp;{'\n'}Support</Text>
               </TouchableOpacity>
             </View>
-
-            {/* Referral banner */}
-            <TouchableOpacity style={styles.refBanner} onPress={onEditProfile} activeOpacity={0.9}>
-              <View style={styles.refLeft}>
-                <Text style={styles.refTitle}>Invite friends &amp; earn</Text>
-                <Text style={styles.refSub}>Share Tazty · get wallet credits</Text>
-              </View>
-              <Text style={styles.refBig}>🎁</Text>
-              <View style={styles.refArrow}><MaterialIcons name="chevron-right" size={18} color="#FFFFFF" /></View>
-            </TouchableOpacity>
 
             {/* Menu Container */}
             <View style={styles.menuContainer}>
@@ -377,13 +372,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   testID="profile-wallet"
                 />
               )}
-              <MenuItem
-                label="Notifications"
-                icon="notifications-none"
-                onPress={() => Linking.openSettings().catch(() => {})}
-              />
-              <MenuItem label="Suggest a dish" icon="lightbulb-outline" onPress={onContactUs} />
-              <MenuItem label="Help & Support" icon="chat-bubble-outline" onPress={onContactUs} />
               <MenuItem label="Privacy Policy" icon="shield" onPress={onPrivacyPolicy} />
               <MenuItem label="Terms & Conditions" icon="description" onPress={onTermsConditions} />
               <MenuItem label="FAQ" icon="help-outline" onPress={onFaq} />
