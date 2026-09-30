@@ -11,6 +11,7 @@ import { OfferBannerSection } from '@/components/OfferBannerSection';
 import { StoreDealsSection } from '@/components/StoreDealsSection';
 import { RotatingTitle } from '@/components/home/RotatingTitle';
 import { CloudsSky } from '@/components/home/CloudsSky';
+import { CompactAds } from '@/components/home/CompactAds';
 import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
 import storeDealService, {
   type StoreDeal,
@@ -922,6 +923,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       setShowCategoryShimmer(false);
     }
   }, [isLoadingCategories]);
+
+  // Safety: never leave the category shimmer (empty grey circles) stuck on if a
+  // load path forgets to clear it — after 8s force it off so the section either
+  // shows its data or hides cleanly.
+  React.useEffect(() => {
+    if (!showCategoryShimmer) return;
+    const t = setTimeout(() => setShowCategoryShimmer(false), 8000);
+    return () => clearTimeout(t);
+  }, [showCategoryShimmer]);
 
   // Hide restaurant shimmer immediately when API data loads
   React.useEffect(() => {
@@ -2449,49 +2459,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {/* Ad Banner Carousel or Closed Banner */}
             {isLocationServiceable && (
               <>
-                {/* Restaurant/promo banner carousel — right under the org hero */}
+                {/* Compact restaurant/promo ad cards — horizontal carousel under the org hero */}
                 {(showBannerShimmer || carouselData.length > 0) && appOperationStatus?.is_open !== false && (
-                  <View style={[styles.carouselContainer, { marginTop: 8 }]}>
-                    {showBannerShimmer ? (
-                      <View style={styles.loadingContainer}>
-                        <Shimmer width="100%" height={STORE_BANNER_HEIGHT} borderRadius={20} />
-                      </View>
-                    ) : (
-                      <View style={styles.carouselWrapper}>
-                        <FlatList
-                          ref={flatListRef}
-                          data={carouselData}
-                          renderItem={renderCarouselItem}
-                          keyExtractor={(item) => item.id}
-                          extraData={currentSlide}
-                          horizontal
-                          pagingEnabled
-                          showsHorizontalScrollIndicator={false}
-                          onViewableItemsChanged={onViewRef.current}
-                          viewabilityConfig={viewConfigRef.current}
-                          decelerationRate="fast"
-                          snapToAlignment="start"
-                          snapToInterval={windowWidth}
-                          disableIntervalMomentum={true}
-                          removeClippedSubviews={false}
-                          bounces={false}
-                          overScrollMode="never"
-                          scrollEventThrottle={16}
-                          getItemLayout={(_data, index) => ({
-                            length: windowWidth,
-                            offset: windowWidth * index,
-                            index,
-                          })}
-                          onScrollToIndexFailed={(info) => {
-                            const wait = new Promise(resolve => setTimeout(resolve, 500));
-                            wait.then(() => {
-                              flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
-                            });
-                          }}
-                        />
-                      </View>
-                    )}
-                  </View>
+                  showBannerShimmer ? (
+                    <View style={[styles.loadingContainer, { marginTop: 8 }]}>
+                      <Shimmer width={172} height={116} borderRadius={16} />
+                    </View>
+                  ) : (
+                    <CompactAds
+                      ads={carouselData as any}
+                      onPress={(ad) =>
+                        handleBannerCTAClick({
+                          promotionType: (ad as any).promotionType,
+                          promotionLink: (ad as any).promotionLink,
+                        } as any)
+                      }
+                    />
+                  )
                 )}
 
                 {/* Categories: large circular food images with a label below,
