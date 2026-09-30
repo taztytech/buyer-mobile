@@ -1885,7 +1885,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       >
         <View style={[styles.categoryBadgeImageWrap, isViewAll && styles.categoryBadgeImageWrapViewAll]}>
           {isViewAll ? (
-            <MaterialIcons name="apps" size={20} color="#111827" testID={`category-image-${item.id}`} />
+            <MaterialIcons name="apps" size={30} color="#00B14F" testID={`category-image-${item.id}`} />
           ) : (
             <Image
               source={imageSource}
@@ -2420,9 +2420,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {/* Ad Banner Carousel or Closed Banner */}
             {isLocationServiceable && (
               <>
-                {/* Categories: horizontal badges on home; View All opens CategoryModal (grid unchanged) */}
+                {/* Categories: large circular food images with a label below,
+                    under a "What's on your mind?" title; View All opens the grid. */}
                 {shouldShowBadgesRow && (
                   <>
+                    {!isCategorySectionSticky && (
+                      <Text style={styles.whatsOnTitle}>What's on your mind?</Text>
+                    )}
                     <View style={[
                       styles.categoryListContainer,
                       isCategorySectionSticky && styles.categoryListContainerSticky
@@ -2435,8 +2439,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         >
                           {[1, 2, 3, 4, 5, 6].map((item) => (
                             <View key={item} style={styles.categoryBadgeShimmer}>
-                              <Shimmer width={32} height={32} borderRadius={16} backgroundColor="#E8E8E8" />
-                              <Shimmer width={58} height={12} borderRadius={6} backgroundColor="#E8E8E8" style={styles.categoryBadgeShimmerText} />
+                              <Shimmer width={66} height={66} borderRadius={33} backgroundColor="#ECECEC" />
+                              <Shimmer width={52} height={11} borderRadius={6} backgroundColor="#ECECEC" style={styles.categoryBadgeShimmerText} />
                             </View>
                           ))}
                         </ScrollView>
@@ -3504,14 +3508,25 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   // Category List (home row: horizontal badges)
+  whatsOnTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 17,
+    letterSpacing: -0.2,
+    color: '#14181B',
+    backgroundColor: '#FFFFFF',
+    paddingLeft: 20,
+    paddingTop: 12,
+    paddingBottom: 2,
+  },
   categoryListContainer: {
     width: '100%',
-    minHeight: 48,
+    minHeight: 96,
     paddingLeft: 20,
     marginBottom: 0,
     backgroundColor: '#FFFFFF',
-    paddingTop: 8,
-    paddingBottom: 8,
+    paddingTop: 10,
+    paddingBottom: 10,
   },
   categoryListContainerSticky: {
     borderBottomWidth: 1,
@@ -3528,58 +3543,53 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   categoryBadge: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.06)',
-    paddingVertical: 4,
-    paddingLeft: 4,
-    paddingRight: 10,
-    marginRight: 8,
-    maxWidth: 200,
+    width: 78,
+    marginRight: 6,
   },
   categoryBadgeImageWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 66,
+    height: 66,
+    borderRadius: 33,
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   categoryBadgeImageWrapViewAll: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#E7F7EE',
+    borderColor: '#CDEBD6',
   },
   categoryBadgeImage: {
     width: '100%',
     height: '100%',
   },
   categoryBadgeLabel: {
-    marginLeft: 8,
-    flexShrink: 1,
+    marginTop: 8,
     fontFamily: 'Poppins',
     fontWeight: '600',
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 15,
-    color: '#111827',
-    maxWidth: 120,
+    color: '#14181B',
+    textAlign: 'center',
+    maxWidth: 78,
   },
   categoryBadgeShimmer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    marginRight: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 4,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.04)',
+    width: 78,
+    marginRight: 6,
   },
   categoryBadgeShimmerText: {
-    marginLeft: 8,
+    marginTop: 8,
   },
   // Restaurants Near You Section
   restaurantsSectionTitleContainer: {
