@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { StoreDealCard } from './StoreDealCard';
 import { DealMedia } from './DealMedia';
@@ -23,17 +25,21 @@ interface StoreDealsSectionProps {
   sectionName?: string;
   tagline?: string;
   homeTitle?: string;
-  /** Optional photo/video played inside the orange hero card (set in the panel). */
+  /** Optional photo/video played inside the hero card (set in the panel). */
   heroImageUrl?: string | null;
   heroVideoUrl?: string | null;
+  /** Admin-configurable look & motion (from store_deal_section). */
+  bgColor?: string | null;
+  accentColor?: string | null;
+  /** 'auto-scroll' (default) rolls the cards; 'none' disables motion. */
+  animStyle?: string | null;
+  /** Auto-scroll speed in px/sec (default 40). */
+  animSpeed?: number | null;
 }
 
 /**
- * Home: the ₹99 Store banner and the "Today's ₹99 deals" row.
- *
- * Fed by the `store_deals` field of /api/buyer/home, so it renders real state
- * without a request of its own. Renders nothing when there are no deals - no
- * empty header, no gap.
+ * Home: the ₹99 Store banner and the deals row. Colours and the auto-rolling
+ * motion are admin-configurable; renders nothing when there are no deals.
  */
 export const StoreDealsSection: React.FC<StoreDealsSectionProps> = ({
   deals,
@@ -46,25 +52,56 @@ export const StoreDealsSection: React.FC<StoreDealsSectionProps> = ({
   homeTitle = "Today's deals",
   heroImageUrl = null,
   heroVideoUrl = null,
+  bgColor = null,
+  accentColor = null,
+  animStyle = 'auto-scroll',
+  animSpeed = null,
 }) => {
+  const scrollRef = useRef<ScrollView>(null);
+  const offsetRef = useRef(0);
+  const pausedRef = useRef(false);
+  const [contentW, setContentW] = useState(0);
+  const [viewW, setViewW] = useState(0);
+
+  const autoScroll = (animStyle || 'auto-scroll') !== 'none' && (deals?.length || 0) > 2;
+
+  useEffect(() => {
+    if (!autoScroll) return;
+    const pxPerSec = animSpeed && animSpeed > 0 ? animSpeed : 40;
+    const stepMs = 30;
+    const stepPx = (pxPerSec * stepMs) / 1000;
+    const maxScroll = Math.max(0, contentW - viewW);
+    const timer = setInterval(() => {
+      if (pausedRef.current || maxScroll <= 0) return;
+      offsetRef.current += stepPx;
+      if (offsetRef.current >= maxScroll) offsetRef.current = 0;
+      scrollRef.current?.scrollTo({ x: offsetRef.current, animated: false });
+    }, stepMs);
+    return () => clearInterval(timer);
+  }, [autoScroll, animSpeed, contentW, viewW]);
+
   if (!deals?.length) return null;
 
+  const bg = bgColor || ORANGE;
+  const accent = accentColor || bg;
   const hasHeroMedia = !!heroImageUrl || !!heroVideoUrl;
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    offsetRef.current = e.nativeEvent.contentOffset.x;
+  };
 
   return (
     <View style={styles.container} testID="store-deals-section">
       <TouchableOpacity
-        style={styles.hero}
+        style={[styles.hero, { backgroundColor: bg }]}
         onPress={onSeeAll}
         activeOpacity={0.9}
         accessibilityRole="button"
-        accessibilityLabel="Explore the 99 rupees store"
+        accessibilityLabel="Explore the deals store"
         testID="store-deals-hero"
       >
         {hasHeroMedia ? (
           <>
-            {/* Photo → video → loop behind the text; an orange tint on top keeps
-                the white text and the Explore button readable on any clip. */}
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
               <DealMedia
                 imageUrl={heroImageUrl}
@@ -76,7 +113,7 @@ export const StoreDealsSection: React.FC<StoreDealsSectionProps> = ({
                 fallback="none"
               />
             </View>
-            <View style={styles.heroTint} pointerEvents="none" />
+            <View style={[styles.heroTint, { backgroundColor: bg, opacity: 0.55 }]} pointerEvents="none" />
           </>
         ) : null}
         <View style={styles.heroTextWrap}>
@@ -85,7 +122,7 @@ export const StoreDealsSection: React.FC<StoreDealsSectionProps> = ({
           <Text style={styles.heroSubtitle}>{tagline}</Text>
         </View>
         <View style={styles.heroButton}>
-          <Text style={styles.heroButtonText}>Explore →</Text>
+          <Text style={[styles.heroButtonText, { color: accent }]}>Explore →</Text>
         </View>
       </TouchableOpacity>
 
@@ -94,11 +131,19 @@ export const StoreDealsSection: React.FC<StoreDealsSectionProps> = ({
       </View>
 
       <ScrollView
+        ref={scrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        onLayout={(e) => setViewW(e.nativeEvent.layout.width)}
+        onContentSizeChange={(w) => setContentW(w)}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        onScrollBeginDrag={() => { pausedRef.current = true; }}
+        onScrollEndDrag={() => { pausedRef.current = false; }}
+        onMomentumScrollEnd={() => { pausedRef.current = false; }}
       >
-        {deals.map(deal => (
+        {deals.map((deal) => (
           <View key={deal.id} style={styles.cardWrapper}>
             <StoreDealCard
               deal={deal}
@@ -129,11 +174,9 @@ const styles = StyleSheet.create({
   },
   heroTint: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(232, 80, 28, 0.55)',
   },
   heroTextWrap: { flex: 1 },
   heroKicker: {
-    // Tazty brand wordmark — Cooper Black (the actual brand face).
     fontFamily: 'CooperBlack',
     fontSize: 13,
     letterSpacing: 1.2,
@@ -148,7 +191,7 @@ const styles = StyleSheet.create({
   },
   heroSubtitle: {
     fontFamily: 'Poppins',
-    fontWeight: 400,
+    fontWeight: '400',
     fontSize: 12,
     letterSpacing: 0.1,
     color: 'rgba(255, 255, 255, 0.92)',
@@ -161,7 +204,7 @@ const styles = StyleSheet.create({
   },
   heroButtonText: {
     fontFamily: 'Poppins',
-    fontWeight: 600,
+    fontWeight: '600',
     fontSize: 12,
     letterSpacing: 0.2,
     color: ORANGE,
@@ -175,7 +218,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: 'Poppins',
-    fontWeight: 600,
+    fontWeight: '600',
     fontSize: 15,
     letterSpacing: 0,
     color: '#1A1A1A',

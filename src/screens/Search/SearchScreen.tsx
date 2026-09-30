@@ -10,12 +10,14 @@ import {
   ActivityIndicator,
   Dimensions,
   ScrollView,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { OptimizedImage } from '@/components/OptimizedImage';
 import { searchService, SearchSuggestion } from '@/services/search.service';
 import { SearchBar } from '@/components/SearchBar';
+import { BrandedLoader } from '@/components/BrandedLoader';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GUEST_SELECTED_LOCATION_KEY } from '@/services/storage.service';
@@ -270,12 +272,15 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     );
   };
 
+  const isTyping = searchQuery.trim().length >= 2;
   return (
-    <View style={styles.outerContainer}>
-      <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
-        <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
-      </SafeAreaView>
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+    <View style={styles.overlayRoot}>
+      {/* The sheet: compact (recent + popular over dimmed home) when empty,
+          full-screen results while typing. */}
+      <View style={[styles.sheet, isTyping ? styles.sheetFull : styles.sheetCompact]}>
+        <SafeAreaView style={styles.sheetTop} edges={['top']}>
+          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        </SafeAreaView>
         {/* Header with Back Button and Search Input */}
         <SearchBar
           onBack={onBack}
@@ -283,17 +288,17 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           onChangeText={setSearchQuery}
           showClearButton={true}
           onClear={onClearSearch}
-          backButtonColor="#001E1F"
+          backButtonColor="#14181B"
           autoFocus={true}
           cursorColor="#00B14F"
         />
 
         {/* Content Area */}
-        <View style={styles.contentArea}>
+        <View style={[styles.contentArea, isTyping && styles.contentAreaFull]}>
           {/* Loading State */}
           {isLoading && (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#00B14F" />
+              <BrandedLoader fullScreen={false} />
             </View>
           )}
 
@@ -379,28 +384,47 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             </ScrollView>
           )}
         </View>
-      </SafeAreaView>
+      </View>
+      {/* Dimmed home shows below the compact sheet; tap to close. */}
+      {!isTyping && (
+        <Pressable style={styles.backdrop} onPress={onBack} testID="search-backdrop" />
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  outerContainer: {
+  overlayRoot: {
     flex: 1,
-    backgroundColor: '#00B14F',
+    backgroundColor: 'transparent',
   },
-  safeAreaTop: {
-    backgroundColor: '#00B14F',
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
   },
-  container: {
+  sheetCompact: {
+    maxHeight: '74%',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  sheetFull: {
     flex: 1,
+  },
+  sheetTop: {
     backgroundColor: '#FFFFFF',
   },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
   contentArea: {
+    // wraps content when compact (recent + popular)
+  },
+  contentAreaFull: {
     flex: 1,
   },
   discoverScroll: {
-    flex: 1,
+    flexGrow: 0,
   },
   discoverContent: {
     paddingHorizontal: 20,

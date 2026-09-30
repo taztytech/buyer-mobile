@@ -309,6 +309,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [dealSection, setDealSection] = React.useState<StoreDealSection>(
     DEFAULT_STORE_DEAL_SECTION,
   );
+  // Admin-configurable ₹99 section look & motion (separate so the labels type
+  // stays unchanged).
+  const [dealSectionStyle, setDealSectionStyle] = React.useState<{
+    bg?: string | null;
+    accent?: string | null;
+    anim?: string | null;
+    speed?: number | null;
+  }>({});
   // Wallet balance for the header pill. null = wallet off / not loaded (pill
   // still shows for guests, who are sent to login on tap).
   const [walletBalance, setWalletBalance] = React.useState<number | null>(null);
@@ -1306,6 +1314,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               sectionRaw.home_title || DEFAULT_STORE_DEAL_SECTION.home_title,
             hero_image_url: heroMediaUrl(sectionRaw.hero_image_url),
             hero_video_url: heroMediaUrl(sectionRaw.hero_video_url),
+          });
+          setDealSectionStyle({
+            bg: sectionRaw.bg_color || null,
+            accent: sectionRaw.accent_color || null,
+            anim: sectionRaw.anim_style || null,
+            speed: typeof sectionRaw.anim_speed === 'number' ? sectionRaw.anim_speed : null,
           });
         }
 
@@ -2537,6 +2551,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   homeTitle={dealSection.home_title}
                   heroImageUrl={dealSection.hero_image_url ?? null}
                   heroVideoUrl={dealSection.hero_video_url ?? null}
+                  bgColor={dealSectionStyle.bg}
+                  accentColor={dealSectionStyle.accent}
+                  animStyle={dealSectionStyle.anim}
+                  animSpeed={dealSectionStyle.speed}
                 />
 
                 {/* The reason the app is closed. Everything below this is

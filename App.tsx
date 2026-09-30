@@ -4208,7 +4208,9 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 8,
-    backgroundColor: '#FFFFFF',
+    // Transparent so the SearchScreen's own sheet + dimmed backdrop show the
+    // home underneath when the query is empty.
+    backgroundColor: 'transparent',
   },
   myAddressesOverlay: {
     position: 'absolute',

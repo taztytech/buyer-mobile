@@ -21,6 +21,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { AddAddressFormScreen } from './AddAddressFormScreen';
 import { analyticsService, AnalyticsEvents } from '@/services/analytics.service';
+import { MapPin } from '@/components/MapPin';
+import { apiService } from '@/services/api.service';
 
 // Dynamic import for MapView to prevent crash in Expo Go
 let MapView: any = null;
@@ -93,6 +95,23 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       : 'Move the pin or use "Use current location"'
   );
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  // Admin-configurable map pin icon (app_settings MAP_PIN_ICON_URL).
+  const [mapPinUrl, setMapPinUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    apiService
+      .get<any>('/app-settings/MAP_PIN_ICON_URL')
+      .then((res) => {
+        const val = (res?.data as any)?.value;
+        if (mounted && typeof val === 'string' && /^https?:\/\//i.test(val)) {
+          setMapPinUrl(val);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
   const [searchText, setSearchText] = useState(initialSearchQuery);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [geocodingData, setGeocodingData] = useState<Location.LocationGeocodedAddress | null>(null);
@@ -1372,10 +1391,9 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
           </View>
         )}
 
-        {/* Center Pin Marker */}
+        {/* Center Pin Marker — animated, admin-configurable icon */}
         <View style={styles.centerMarker}>
-          <MaterialIcons name="location-on" size={40} color="#00B14F" />
-          <View style={styles.pinShadow} />
+          <MapPin iconUrl={mapPinUrl} size={46} color="#00B14F" />
         </View>
 
         {/* Tooltip */}
