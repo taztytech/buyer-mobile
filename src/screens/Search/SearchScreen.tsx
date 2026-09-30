@@ -9,6 +9,7 @@ import {
   StatusBar,
   ActivityIndicator,
   Dimensions,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -27,6 +28,10 @@ const DEFAULT_LOCATION = {
 };
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const RECENT_SEARCHES_KEY = 'tazty_recent_searches';
+const MAX_RECENT = 8;
+const POPULAR_SEARCHES = ['Chicken Biryani', 'Dosa', 'Meals', 'Parotta', 'Idly', 'Ice Cream'];
 
 interface SearchResult {
   id: string;
@@ -73,6 +78,35 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Recent searches — persisted per device so every visit to search shows them.
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(RECENT_SEARCHES_KEY)
+      .then((raw) => {
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) setRecentSearches(parsed.filter((x) => typeof x === 'string'));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const saveRecentSearch = (termRaw: string) => {
+    const term = (termRaw || '').trim();
+    if (term.length < 2) return;
+    setRecentSearches((prev) => {
+      const next = [term, ...prev.filter((t) => t.toLowerCase() !== term.toLowerCase())].slice(0, MAX_RECENT);
+      AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
+
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
+    AsyncStorage.removeItem(RECENT_SEARCHES_KEY).catch(() => {});
+  };
   const { vegMode } = useVegMode();
 
   // Get user location on mount or when selectedLocation changes
@@ -190,6 +224,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
 
     // Handle item click
     const handlePress = () => {
+      saveRecentSearch(searchQuery);
       if (item.type === 'restaurant' && onSelectRestaurant) {
         onSelectRestaurant(item.id, item.name);
       } else if (item.type === 'item' && onSelectItem) {
@@ -292,17 +327,56 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             </View>
           )}
 
-          {/* Initial State */}
+          {/* Initial State — recent + popular searches */}
           {!isLoading && searchQuery.trim().length < 2 && (
-            <View style={styles.emptyState}>
-              <MaterialIcons name="search" size={64} color="rgba(0, 0, 0, 0.2)" />
-              <Text style={styles.emptyText}>Search for dishes & restaurants</Text>
-              <Text style={styles.emptySubtext}>
-                {searchQuery.trim().length === 0
-                  ? 'Type at least 2 characters to search'
-                  : 'Type one more character to search'}
+            <ScrollView
+              style={styles.discoverScroll}
+              contentContainerStyle={styles.discoverContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {recentSearches.length > 0 && (
+                <>
+                  <View style={styles.discoverHeader}>
+                    <Text style={styles.discoverTitle}>RECENT SEARCHES</Text>
+                    <TouchableOpacity onPress={clearRecentSearches} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={styles.clearRecent}>Clear</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.chipWrap}>
+                    {recentSearches.map((term) => (
+                      <TouchableOpacity
+                        key={`recent-${term}`}
+                        style={styles.chip}
+                        onPress={() => setSearchQuery(term)}
+                        activeOpacity={0.75}
+                        testID={`recent-search-${term}`}
+                      >
+                        <MaterialIcons name="history" size={15} color="#8A939B" />
+                        <Text style={styles.chipText}>{term}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              <Text style={[styles.discoverTitle, recentSearches.length > 0 && { marginTop: 22 }]}>
+                POPULAR SEARCHES
               </Text>
-            </View>
+              <View style={styles.chipWrap}>
+                {POPULAR_SEARCHES.map((term) => (
+                  <TouchableOpacity
+                    key={`popular-${term}`}
+                    style={styles.chip}
+                    onPress={() => setSearchQuery(term)}
+                    activeOpacity={0.75}
+                    testID={`popular-search-${term}`}
+                  >
+                    <Text style={styles.chipText}>{term}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
           )}
         </View>
       </SafeAreaView>
@@ -324,6 +398,58 @@ const styles = StyleSheet.create({
   },
   contentArea: {
     flex: 1,
+  },
+  discoverScroll: {
+    flex: 1,
+  },
+  discoverContent: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 24,
+  },
+  discoverHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  discoverTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 11.5,
+    letterSpacing: 1.2,
+    color: '#8A939B',
+    marginBottom: 12,
+  },
+  clearRecent: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 12,
+    color: '#0A6B36',
+    marginBottom: 12,
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E6DFD3',
+    borderRadius: 999,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+  },
+  chipText: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 13,
+    letterSpacing: 0.1,
+    color: '#14181B',
   },
   resultsContainer: {
     backgroundColor: '#FFFFFF',

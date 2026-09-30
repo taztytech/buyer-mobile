@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { APP_VERSION_NAME, APP_VERSION_CODE } from '@/config/appVersion.generated';
+import { APP_VERSION_NAME } from '@/config/appVersion.generated';
 import { storageService } from '@/services/storage.service';
 import { authService } from '@/services/auth.service';
 import { useConfirmation } from '@/context/ConfirmationContext';
@@ -57,6 +57,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const { showConfirmation } = useConfirmation();
   const [userName, setUserName] = useState('User');
   const [userPhone, setUserPhone] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [memberSince, setMemberSince] = useState('');
   const [creatorState, setCreatorState] = useState<VcCreatorState>('none');
 
   // Check creator status when the profile opens. We only use it to decide what
@@ -97,9 +99,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           const response = await authService.getProfile();
 
           if (response.success && response.data?.user) {
-            const user = response.data.user;
+            const user = response.data.user as any;
             setUserName(user.name || 'User');
             setUserPhone(user.phoneNumber || '');
+            setUserEmail(user.email || '');
+            const created = user.created_at || user.createdAt;
+            if (created) {
+              const d = new Date(created);
+              if (!Number.isNaN(d.getTime())) {
+                setMemberSince(
+                  d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+                );
+              }
+            }
           } else {
             // If API fails, try to get data from storage as fallback
             const userData = await storageService.getUser();
@@ -207,14 +219,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       >
         <View style={styles.menuItemLeft}>
           {icon && (
-            <MaterialIcons name={icon as any} size={20} color="#00B14F" />
+            <MaterialIcons name={icon as any} size={21} color="#3A3F45" />
           )}
           <Text style={styles.menuItemText}>{label}</Text>
         </View>
         <View style={styles.menuItemRight}>
           {!!rightText && <Text style={styles.menuItemRightText}>{rightText}</Text>}
           {showArrow && (
-            <MaterialIcons name="chevron-right" size={14} color="#000000" />
+            <MaterialIcons name="chevron-right" size={20} color="#C4CAD1" />
           )}
         </View>
       </TouchableOpacity>
@@ -224,25 +236,32 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     </>
   );
 
+  const initial = userName && userName.length ? userName.charAt(0).toUpperCase() : 'U';
+  const phoneText = userPhone ? `(+91) ${userPhone}` : '';
+  const filledFields =
+    1 +
+    (userName && userName.trim() && userName !== 'User' ? 1 : 0) +
+    (userEmail ? 1 : 0);
+  const completionPct = Math.round((filledFields / 3) * 100);
+
   return (
     <View style={styles.rootContainer}>
       <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
-        <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
+        <StatusBar barStyle="dark-content" backgroundColor="#FBF8F2" />
       </SafeAreaView>
 
-      {/* Green Header */}
+      {/* Header */}
       <View style={styles.header}>
         {onBack && (
           <TouchableOpacity
-            style={styles.backButton}
+            style={styles.backCircle}
             onPress={onBack}
             activeOpacity={0.7}
           >
-            <MaterialIcons name="arrow-back" size={24} color="#001E1F" />
+            <MaterialIcons name="arrow-back" size={22} color="#14181B" />
           </TouchableOpacity>
         )}
-        <Text style={styles.headerTitle} numberOfLines={1}>Profile</Text>
-        {onBack && <View style={styles.headerPlaceholder} />}
+        <Text style={styles.headerTitle} numberOfLines={1}>Account</Text>
       </View>
 
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
@@ -252,37 +271,55 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContentContainer}
           >
-            {/* Profile Header */}
-            <View style={styles.profileHeader}>
-              {/* Left side - Avatar and Info */}
-              <View style={styles.profileLeft}>
-                {/* Avatar with First Letter */}
-                <View style={styles.avatarContainer}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>
-                      {userName && userName.length > 0 ? userName.charAt(0).toUpperCase() : 'U'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Name and Phone */}
-                <View style={styles.profileInfo}>
-                  <Text style={styles.profileName}>{userName.toUpperCase()}</Text>
-                  <Text style={styles.profilePhone}>{userPhone ? `+91 ${userPhone}` : ''}</Text>
-                </View>
+            {/* Identity */}
+            <View style={styles.identity}>
+              <View style={styles.avatarBig}>
+                <Text style={styles.avatarBigText}>{initial}</Text>
               </View>
+              <View style={styles.identityText}>
+                <Text style={styles.name} numberOfLines={1}>{userName}</Text>
+                <Text style={styles.sub} numberOfLines={1}>
+                  {phoneText}
+                  {memberSince ? `  ✦  Tazty since ${memberSince}` : ''}
+                </Text>
+                {completionPct < 100 && (
+                  <TouchableOpacity
+                    style={styles.completeRow}
+                    onPress={onEditProfile}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.completeText}>{completionPct}% · Complete profile</Text>
+                    <MaterialIcons name="chevron-right" size={16} color="#E29A00" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
 
-              {/* Right side - Edit Profile Button */}
-              <TouchableOpacity
-                style={styles.editProfileButton}
-                onPress={onEditProfile}
-                activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={styles.editProfileText}>Edit Profile</Text>
-                <MaterialIcons name="chevron-right" size={9} color="#000000" />
+            {/* Quick tiles */}
+            <View style={styles.tiles}>
+              <TouchableOpacity style={styles.tile} onPress={onMyOrders} activeOpacity={0.8}>
+                <MaterialIcons name="shopping-bag" size={18} color="#8A939B" style={styles.tileIcon} />
+                <Text style={styles.tileLabel}>My{'\n'}Orders</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.tile} onPress={onWallet} activeOpacity={0.8}>
+                <MaterialIcons name="account-balance-wallet" size={18} color="#8A939B" style={styles.tileIcon} />
+                <Text style={styles.tileLabel}>My{'\n'}Wallet</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.tile} onPress={onContactUs} activeOpacity={0.8}>
+                <MaterialIcons name="headset-mic" size={18} color="#8A939B" style={styles.tileIcon} />
+                <Text style={styles.tileLabel}>Help &amp;{'\n'}Support</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Referral banner */}
+            <TouchableOpacity style={styles.refBanner} onPress={onEditProfile} activeOpacity={0.9}>
+              <View style={styles.refLeft}>
+                <Text style={styles.refTitle}>Invite friends &amp; earn</Text>
+                <Text style={styles.refSub}>Share Tazty · get wallet credits</Text>
+              </View>
+              <Text style={styles.refBig}>🎁</Text>
+              <View style={styles.refArrow}><MaterialIcons name="chevron-right" size={18} color="#FFFFFF" /></View>
+            </TouchableOpacity>
 
             {/* Menu Container */}
             <View style={styles.menuContainer}>
@@ -329,7 +366,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   testID="creator-dashboard-entry"
                 />
               )}
-              <MenuItem label="My Orders" icon="receipt-long" onPress={onMyOrders} />
+              <MenuItem label="Saved address" icon="location-on" onPress={onMyAddresses} />
+              <MenuItem label="Favourites" icon="favorite-border" onPress={onFavorites} />
               {walletBalance !== null && (
                 <MenuItem
                   label="Tazty Wallet"
@@ -339,69 +377,35 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   testID="profile-wallet"
                 />
               )}
-              <MenuItem label="My Addresses" icon="location-on" onPress={onMyAddresses} />
-              <MenuItem label="Favorites" icon="favorite" onPress={onFavorites} />
-              <MenuItem label="Contact Us" icon="chat" onPress={onContactUs} />
-
-              {/* Notification Toggle */}
-              {/* <View style={styles.menuItem}>
-              <View style={styles.menuItemLeft}>
-                <MaterialIcons name="notifications" size={20} color="#00B14F" />
-                <Text style={styles.menuItemText}>Notification</Text>
-              </View>
-              <View style={styles.switchContainer}>
-                <Switch
-                  value={notificationsEnabled}
-                  onValueChange={setNotificationsEnabled}
-                  trackColor={{ false: '#E0E0E0', true: '#00B14F' }}
-                  thumbColor="#FFFFFF"
-                  ios_backgroundColor="#E0E0E0"
-                />
-              </View>
-            </View>
-            <View style={styles.divider} /> */}
-
               <MenuItem
-                label="Privacy Policy"
-                icon="shield"
-                onPress={onPrivacyPolicy}
+                label="Notifications"
+                icon="notifications-none"
+                onPress={() => Linking.openSettings().catch(() => {})}
               />
+              <MenuItem label="Suggest a dish" icon="lightbulb-outline" onPress={onContactUs} />
+              <MenuItem label="Help & Support" icon="chat-bubble-outline" onPress={onContactUs} />
+              <MenuItem label="Privacy Policy" icon="shield" onPress={onPrivacyPolicy} />
+              <MenuItem label="Terms & Conditions" icon="description" onPress={onTermsConditions} />
+              <MenuItem label="FAQ" icon="help-outline" onPress={onFaq} />
               <MenuItem
-                label="FAQ"
-                icon="help-outline"
-                onPress={onFaq}
-              />
-              <MenuItem
-                label="Terms & Conditions"
-                icon="description"
-                onPress={onTermsConditions}
-              />
-              <MenuItem
-                label="Delete Account"
-                icon="delete-forever"
+                label="Delete account"
+                icon="delete-outline"
                 onPress={handleDeleteAccount}
+              />
+              <MenuItem
+                label="Log out"
+                icon="logout"
+                onPress={handleLogout}
+                showArrow={false}
                 showDivider={false}
               />
             </View>
+            {/* Brand footer */}
+            <View style={styles.brandFooter}>
+              <Text style={styles.brandWord}>tazty</Text>
+              <Text style={styles.brandVer}>{APP_VERSION_NAME}</Text>
+            </View>
           </ScrollView>
-
-          {/* Bottom Section - App Version & Logout Button */}
-          <View style={styles.bottomSection}>
-            {/* App Version */}
-            <Text style={styles.appVersion}>
-              App version {APP_VERSION_NAME}_{APP_VERSION_CODE}
-            </Text>
-
-            {/* Logout Button */}
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={handleLogout}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.logoutText}>LOGOUT</Text>
-              <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
         </View>
       </SafeAreaView>
     </View>
@@ -409,61 +413,159 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  rootContainer: {
-    flex: 1,
-    backgroundColor: '#00B14F',
-  },
-  safeAreaTop: {
-    backgroundColor: '#00B14F',
-  },
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  scrollContent: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
+  rootContainer: { flex: 1, backgroundColor: '#FBF8F2' },
+  safeAreaTop: { backgroundColor: '#FBF8F2' },
+  safeArea: { flex: 1, backgroundColor: '#FBF8F2' },
+  container: { flex: 1, backgroundColor: '#FBF8F2' },
+  scrollContent: { flex: 1, backgroundColor: '#FBF8F2' },
   scrollContentContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 15,
-    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 18,
+    paddingTop: 6,
+    paddingBottom: 24,
+    backgroundColor: '#FBF8F2',
   },
-  // Green Header
   header: {
-    backgroundColor: '#00B14F',
-    paddingHorizontal: 20,
-    paddingVertical: 18,
+    backgroundColor: '#FBF8F2',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    height: 76,
+    height: 60,
   },
-  // Back Button
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 50,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E4E4E4',
+  backCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F0EBE2',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    flex: 1,
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 18,
-    color: '#FFFFFF',
-    lineHeight: 27,
-    textAlign: 'center',
+    fontFamily: 'Poppins',
+    fontWeight: '800',
+    fontSize: 22,
+    color: '#14181B',
+    letterSpacing: -0.2,
   },
-  headerPlaceholder: {
-    width: 40,
+  identity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 6,
+    marginBottom: 18,
+  },
+  avatarBig: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#E7F7EE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#CDEBD6',
+  },
+  avatarBigText: {
+    fontFamily: 'Poppins',
+    fontWeight: '800',
+    fontSize: 28,
+    color: '#0A7A3C',
+  },
+  identityText: { flex: 1, minWidth: 0 },
+  name: {
+    fontFamily: 'Poppins',
+    fontWeight: '800',
+    fontSize: 22,
+    color: '#14181B',
+    letterSpacing: -0.3,
+  },
+  sub: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    color: '#7A828B',
+    marginTop: 3,
+  },
+  completeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 6,
+  },
+  completeText: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 12.5,
+    color: '#E29A00',
+  },
+  tiles: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  tile: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    height: 82,
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 1,
+  },
+  tileIcon: { alignSelf: 'flex-end' },
+  tileLabel: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 13,
+    color: '#14181B',
+    lineHeight: 17,
+  },
+  refBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E7F7EE',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 18,
+    gap: 10,
+  },
+  refLeft: { flex: 1, minWidth: 0 },
+  refTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: '800',
+    fontSize: 15,
+    color: '#0A6B36',
+  },
+  refSub: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 11.5,
+    color: '#4E6B57',
+    marginTop: 2,
+  },
+  refBig: { fontSize: 30 },
+  refArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#00B14F',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  brandFooter: { alignItems: 'center', paddingTop: 20, paddingBottom: 8 },
+  brandWord: {
+    fontFamily: 'Poppins',
+    fontWeight: '800',
+    fontSize: 22,
+    color: '#D8D2C6',
+    letterSpacing: -0.5,
+  },
+  brandVer: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 11,
+    color: '#C4BDB0',
+    marginTop: 2,
   },
   // Profile Header
   profileHeader: {
@@ -534,28 +636,34 @@ const styles = StyleSheet.create({
   // Menu Container
   menuContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 1,
   },
   menuItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    minHeight: 21,
-    paddingVertical: 2,
+    minHeight: 52,
+    paddingVertical: 13,
   },
   menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
   menuItemText: {
     fontFamily: 'Poppins',
-    fontWeight: '500',
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#000000',
+    fontWeight: '600',
+    fontSize: 14.5,
+    lineHeight: 20,
+    color: '#14181B',
   },
   menuItemRight: {
     flexDirection: 'row',
@@ -574,8 +682,8 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    marginVertical: 20,
+    backgroundColor: '#F0EBE2',
+    marginVertical: 0,
   },
   // Bottom Section
   bottomSection: {
