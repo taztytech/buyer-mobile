@@ -146,7 +146,7 @@ export const BecomeCreatorScreen: React.FC<BecomeCreatorScreenProps> = ({
           style={styles.backBtn}
           testID="become-creator-back"
         >
-          <MaterialIcons name="chevron-left" size={26} color="#001E1F" />
+          <MaterialIcons name="arrow-back" size={26} color="#001E1F" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
           Become a creator

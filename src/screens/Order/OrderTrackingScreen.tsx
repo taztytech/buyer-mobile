@@ -727,7 +727,7 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
       <SafeAreaView style={styles.headerContainer} edges={['top']}>
         <View style={styles.headerContent}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <MaterialIcons name="chevron-left" size={24} color="#000000" />
+            <MaterialIcons name="arrow-back" size={24} color="#000000" />
           </TouchableOpacity>
           <View style={styles.headerTitlePlaceholder} />
           <View style={styles.headerSpacer} />

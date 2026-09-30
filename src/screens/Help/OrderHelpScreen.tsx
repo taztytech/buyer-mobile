@@ -236,7 +236,7 @@ export const OrderHelpScreen: React.FC<OrderHelpScreenProps> = ({
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.7}>
-          <MaterialIcons name="chevron-left" size={24} color="#000000" />
+          <MaterialIcons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Help & Support</Text>
         <View style={styles.headerSpacer} />

@@ -92,7 +92,7 @@ export const CreatorProfileScreen: React.FC<CreatorProfileScreenProps> = ({
 
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.iconBtn} testID="creator-back">
-          <MaterialIcons name="chevron-left" size={26} color="#001E1F" />
+          <MaterialIcons name="arrow-back" size={26} color="#001E1F" />
         </TouchableOpacity>
         <Text style={styles.headerHandle} numberOfLines={1}>
           @{handle}

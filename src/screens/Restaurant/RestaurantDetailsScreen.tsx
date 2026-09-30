@@ -320,7 +320,7 @@ export const RestaurantDetailsScreen: React.FC<RestaurantDetailsScreenProps> = (
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+          <MaterialIcons name="arrow-back" size={24} color="#001E1F" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{restaurantName}</Text>
       </View>

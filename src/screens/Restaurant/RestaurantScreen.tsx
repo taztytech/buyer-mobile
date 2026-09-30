@@ -1728,7 +1728,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               <View style={[styles.headerOverlay, { paddingTop: insets.top + 10 }]}>
                 {/* Back Button */}
                 <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-                  <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+                  <MaterialIcons name="arrow-back" size={24} color="#001E1F" />
                 </TouchableOpacity>
 
                 {viewToggle}
@@ -1771,7 +1771,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               <View style={[styles.headerOverlay, { paddingTop: insets.top + 10, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}>
                 {/* Back Button */}
                 <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-                  <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+                  <MaterialIcons name="arrow-back" size={24} color="#001E1F" />
                 </TouchableOpacity>
 
                 {viewToggle}
@@ -2450,7 +2450,7 @@ export const RestaurantScreen: React.FC<RestaurantScreenProps> = ({
               activeOpacity={0.8}
               testID="reels-back-to-menu"
             >
-              <MaterialIcons name="chevron-left" size={22} color="#FFFFFF" />
+              <MaterialIcons name="arrow-back" size={22} color="#FFFFFF" />
               <Text style={styles.reelsBackText}>Menu</Text>
             </TouchableOpacity>
           </View>

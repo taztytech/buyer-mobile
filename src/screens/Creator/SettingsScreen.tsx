@@ -86,7 +86,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       </SafeAreaView>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backBtn} testID="settings-back">
-          <MaterialIcons name="chevron-left" size={26} color="#001E1F" />
+          <MaterialIcons name="arrow-back" size={26} color="#001E1F" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings</Text>
       </View>

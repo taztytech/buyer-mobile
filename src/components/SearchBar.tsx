@@ -54,7 +54,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           onPress={handleBack}
           activeOpacity={0.7}
         >
-          <MaterialIcons name="chevron-left" size={24} color={backButtonColor} />
+          <MaterialIcons name="arrow-back" size={24} color={backButtonColor} />
         </TouchableOpacity>
       )}
 

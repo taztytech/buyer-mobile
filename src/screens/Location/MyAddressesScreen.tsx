@@ -183,7 +183,7 @@ export const MyAddressesScreen: React.FC<MyAddressesScreenProps> = ({
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+          <MaterialIcons name="arrow-back" size={24} color="#001E1F" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Saved Addresses</Text>
       </View>

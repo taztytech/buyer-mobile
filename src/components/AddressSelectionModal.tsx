@@ -6,18 +6,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
+  Easing,
   ScrollView,
+  TextInput,
+  Pressable,
+  Dimensions,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
-import { useConfirmation } from '@/context/ConfirmationContext';
-
-interface Address {
-  id: string;
-  type: 'home' | 'work' | 'other';
-  label: string;
-  fullAddress: string;
-}
+import { AddressResponse } from '@/services/address.service';
 
 interface AddressSelectionModalProps {
   visible: boolean;
@@ -27,7 +23,28 @@ interface AddressSelectionModalProps {
   onSelectAddress: (addressId: string) => void;
   onAddNewAddress: () => void;
   onSetDefaultAddress?: (addressId: string) => Promise<void>;
+  /** When provided, shows the "Use current location" row. */
+  onUseCurrentLocation?: () => void;
+  /** Optional secondary line for the current-location row. */
+  currentLocationLabel?: string;
 }
+
+const { height: SCREEN_H } = Dimensions.get('window');
+const SHEET_MAX = Math.round(SCREEN_H * 0.85);
+
+const GREEN = '#00B14F';
+const GREEN_INK = '#0A6B36';
+
+const tileStyleFor = (type: string) => {
+  switch (type) {
+    case 'home':
+      return { bg: '#E7F7EE', fg: '#0A7A3C', icon: 'home' as const };
+    case 'work':
+      return { bg: '#E0ECFF', fg: '#2E6FD6', icon: 'apartment' as const };
+    default:
+      return { bg: '#FFEDE2', fg: '#FF6A2B', icon: 'location-on' as const };
+  }
+};
 
 export const AddressSelectionModal: React.FC<AddressSelectionModalProps> = ({
   visible,
@@ -37,296 +54,308 @@ export const AddressSelectionModal: React.FC<AddressSelectionModalProps> = ({
   onSelectAddress,
   onAddNewAddress,
   onSetDefaultAddress,
+  onUseCurrentLocation,
+  currentLocationLabel,
 }) => {
-  const slideAnim = useRef(new Animated.Value(1000)).current;
-  const [selectedId, setSelectedId] = useState(selectedAddressId);
-  const { showConfirmation } = useConfirmation();
+  const translateY = useRef(new Animated.Value(SHEET_MAX)).current;
+  const [rendered, setRendered] = useState(visible);
+  const [query, setQuery] = useState('');
 
+  // Smooth slide up on open, smooth slide down on close (then unmount).
   useEffect(() => {
     if (visible) {
-      Animated.spring(slideAnim, {
+      setRendered(true);
+      translateY.setValue(SHEET_MAX);
+      Animated.timing(translateY, {
         toValue: 0,
+        duration: 300,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
-        tension: 65,
-        friction: 11,
       }).start();
-    } else {
-      slideAnim.setValue(1000);
+    } else if (rendered) {
+      Animated.timing(translateY, {
+        toValue: SHEET_MAX,
+        duration: 240,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) {
+          setRendered(false);
+          setQuery('');
+        }
+      });
     }
-  }, [visible]);
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    // Use the provided selectedAddressId if available, otherwise pre-select default address only if it exists
-    if (selectedAddressId) {
-      setSelectedId(selectedAddressId);
-    } else {
-      // Only pre-select default address if it exists
-      // Don't auto-select first address if no default exists
-      const defaultAddress = addresses.find(addr => addr.is_default);
-      if (defaultAddress) {
-        setSelectedId(defaultAddress.id.toString());
+  const formatAddress = (a: AddressResponse): string =>
+    [a.address1, a.address2, a.address3, a.city, a.state, a.pincode]
+      .filter(Boolean)
+      .join(', ');
+
+  const labelFor = (a: AddressResponse): string =>
+    (a.type || 'other').charAt(0).toUpperCase() + (a.type || 'other').slice(1);
+
+  const handleSelect = async (addressId: string) => {
+    const hasDefault = addresses.some((a) => a.is_default);
+    if (!hasDefault && onSetDefaultAddress) {
+      try {
+        await onSetDefaultAddress(addressId);
+      } catch {
+        // selection still applies
       }
-      // If no default address, don't pre-select any address - let user choose
     }
-  }, [selectedAddressId, addresses]);
-
-  const handleSelectAddress = async (addressId: string) => {
-    setSelectedId(addressId);
-    
-    // If there's no default address, automatically set the selected one as default
-    const hasDefaultAddress = addresses.some(addr => addr.is_default);
-    if (!hasDefaultAddress && onSetDefaultAddress) {
-      await onSetDefaultAddress(addressId);
-    }
-    
     onSelectAddress(addressId);
   };
 
-  const getIconName = (type: string): keyof typeof MaterialIcons.glyphMap => {
-    switch (type) {
-      case 'home':
-        return 'home';
-      case 'work':
-        return 'work';
-      default:
-        return 'location-on';
-    }
-  };
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? addresses.filter(
+        (a) =>
+          labelFor(a).toLowerCase().includes(q) ||
+          formatAddress(a).toLowerCase().includes(q),
+      )
+    : addresses;
 
-  const formatAddress = (address: AddressResponse): string => {
-    const parts = [
-      address.address1,
-      address.address2,
-      address.address3,
-      address.city,
-      address.state,
-      address.pincode,
-    ].filter(Boolean);
-    return parts.join(', ');
-  };
-
-  const getAddressLabel = (type: string): string => {
-    return type.charAt(0).toUpperCase() + type.slice(1);
-  };
+  if (!rendered) return null;
 
   return (
     <Modal
-      visible={visible}
+      visible={rendered}
       transparent
-      animationType="fade"
-      statusBarTranslucent={true}
+      animationType="none"
+      statusBarTranslucent
       onRequestClose={onClose}
     >
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <Animated.View
-          style={[
-            styles.modalContainer,
-            {
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
+      <Pressable style={styles.backdrop} onPress={onClose} testID="address-modal-backdrop" />
+      <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
+        <View style={styles.handle} />
+
+        <Text style={styles.title}>Select delivery location</Text>
+
+        {/* Search */}
+        <View style={styles.search}>
+          <MaterialIcons name="search" size={18} color={GREEN} />
+          <TextInput
+            style={styles.searchInput}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search area, street name…"
+            placeholderTextColor="#9AA0A6"
+            autoCorrect={false}
+            testID="address-modal-search"
+          />
+        </View>
+
+        {/* Use current location */}
+        {onUseCurrentLocation && (
           <TouchableOpacity
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
+            style={styles.actionRow}
+            onPress={onUseCurrentLocation}
+            activeOpacity={0.7}
+            testID="address-use-current"
           >
-              {/* Header */}
-              <View style={styles.header}>
-                <Text style={styles.title}>Choose Delivery Address</Text>
-                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                  <MaterialIcons name="close" size={24} color="#000000" />
-                </TouchableOpacity>
-              </View>
+            <MaterialIcons name="my-location" size={20} color={GREEN} />
+            <View style={styles.actionText}>
+              <Text style={styles.actionTitle}>Use current location</Text>
+              {!!currentLocationLabel && (
+                <Text style={styles.actionSub} numberOfLines={1}>
+                  {currentLocationLabel}
+                </Text>
+              )}
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color="#C4CAD1" />
+          </TouchableOpacity>
+        )}
 
-              {/* Address List */}
-              <ScrollView style={styles.addressList} showsVerticalScrollIndicator={false}>
-                {addresses.map((address) => (
-                  <TouchableOpacity
-                    key={address.id}
-                    style={styles.addressItem}
-                    onPress={() => handleSelectAddress(address.id.toString())}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.addressLeft}>
-                      <View style={styles.iconContainer}>
-                        <MaterialIcons
-                          name={getIconName(address.type)}
-                          size={24}
-                          color="#00B14F"
-                        />
-                      </View>
-                      <View style={styles.addressInfo}>
-                        <View style={styles.addressLabelRow}>
-                          <Text style={styles.addressLabel}>{getAddressLabel(address.type)}</Text>
-                          {address.is_default && (
-                            <View style={styles.defaultBadge}>
-                              <Text style={styles.defaultBadgeText}>Default</Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={styles.addressText}>{formatAddress(address)}</Text>
-                      </View>
-                    </View>
-                    <View style={[
-                      styles.radioButton,
-                      selectedId === address.id.toString() && styles.radioButtonSelected
-                    ]}>
-                      {selectedId === address.id.toString() && (
-                        <View style={styles.radioButtonInner} />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))}
+        {/* Add new address */}
+        <TouchableOpacity
+          style={styles.actionRow}
+          onPress={onAddNewAddress}
+          activeOpacity={0.7}
+          testID="address-add-new"
+        >
+          <MaterialIcons name="add" size={22} color={GREEN} />
+          <Text style={[styles.actionTitle, styles.actionTitleGrow]}>Add new address</Text>
+          <MaterialIcons name="chevron-right" size={22} color="#C4CAD1" />
+        </TouchableOpacity>
 
-                {/* Add New Address Button */}
-                <TouchableOpacity
-                  style={styles.addNewButton}
-                  onPress={() => {
-                    if (addresses.length >= MAX_ADDRESSES) {
-                      showConfirmation({
-                        title: 'Address limit reached',
-                        message: `You can save up to ${MAX_ADDRESSES} delivery addresses. Please delete one before adding a new address.`,
-                        confirmText: 'OK',
-                        cancelText: '',
-                        onConfirm: () => {},
-                      });
-                      return;
-                    }
-                    onAddNewAddress();
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.addNewText}>+ Add New Address</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </TouchableOpacity>
-        </Animated.View>
-      </TouchableOpacity>
+        <View style={styles.divider} />
+
+        {addresses.length > 0 && <Text style={styles.savedLabel}>SAVED ADDRESSES</Text>}
+
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {filtered.map((a) => {
+            const tile = tileStyleFor(a.type || 'other');
+            const active = selectedAddressId === a.id.toString();
+            return (
+              <TouchableOpacity
+                key={a.id}
+                style={[styles.addrCard, active && styles.addrCardActive]}
+                onPress={() => handleSelect(a.id.toString())}
+                activeOpacity={0.8}
+                testID={`address-card-${a.id}`}
+              >
+                <View style={[styles.tile, { backgroundColor: tile.bg }]}>
+                  <MaterialIcons name={tile.icon} size={20} color={tile.fg} />
+                </View>
+                <View style={styles.addrText}>
+                  <Text style={styles.addrLabel}>{labelFor(a)}</Text>
+                  <Text style={styles.addrLine} numberOfLines={2}>
+                    {formatAddress(a)}
+                  </Text>
+                </View>
+                {active && <MaterialIcons name="check-circle" size={20} color={GREEN} />}
+              </TouchableOpacity>
+            );
+          })}
+          {q && filtered.length === 0 && (
+            <Text style={styles.noResults}>No saved address matches "{query}"</Text>
+          )}
+        </ScrollView>
+      </Animated.View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  modalContainer: {
+  sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    maxHeight: SHEET_MAX,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    padding: 20,
-    maxHeight: '80%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingBottom: 24,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 30,
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E3E7EB',
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 14,
   },
   title: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 22,
-    lineHeight: 33,
-    color: '#000000',
-    flex: 1,
-  },
-  closeButton: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addressList: {
-    maxHeight: 400,
-  },
-  addressItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  addressLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 15,
-    marginRight: 15,
-  },
-  iconContainer: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#E8F5E9',
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addressInfo: {
-    flex: 1,
-    gap: 5,
-  },
-  addressLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  addressLabel: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#000000',
-  },
-  defaultBadge: {
-    backgroundColor: '#00B14F',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  defaultBadgeText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 10,
-    lineHeight: 12,
-    color: '#FFFFFF',
-  },
-  addressText: {
     fontFamily: 'Poppins',
-    fontSize: 13,
-    lineHeight: 20,
-    color: 'rgba(0, 0, 0, 0.6)',
+    fontWeight: '800',
+    fontSize: 19,
+    letterSpacing: 0.1,
+    color: '#14181B',
+    marginBottom: 14,
   },
-  radioButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#D9D9D9',
-    justifyContent: 'center',
+  search: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F4F6F8',
+    borderRadius: 14,
+    paddingHorizontal: 13,
+    height: 48,
+    marginBottom: 6,
   },
-  radioButtonSelected: {
-    borderColor: '#00B14F',
+  searchInput: {
+    flex: 1,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 13.5,
+    letterSpacing: 0.1,
+    color: '#14181B',
+    padding: 0,
   },
-  radioButtonInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#00B14F',
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0EBE2',
   },
-  addNewButton: {
-    paddingVertical: 25,
-    alignItems: 'flex-start',
+  actionText: { flex: 1, minWidth: 0 },
+  actionTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 0.1,
+    color: GREEN_INK,
   },
-  addNewText: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#000000',
+  actionTitleGrow: { flex: 1 },
+  actionSub: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 11.5,
+    letterSpacing: 0.1,
+    color: '#8A939B',
+    marginTop: 1,
+  },
+  divider: { height: 8 },
+  savedLabel: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: '#8A939B',
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  list: { alignSelf: 'stretch' },
+  listContent: { paddingBottom: 8, gap: 10 },
+  addrCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#F7F8FA',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  addrCardActive: {
+    borderColor: GREEN,
+    backgroundColor: '#F1FBF5',
+  },
+  tile: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addrText: { flex: 1, minWidth: 0 },
+  addrLabel: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 0.1,
+    color: '#14181B',
+  },
+  addrLine: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 11.5,
+    letterSpacing: 0.1,
+    color: '#8A939B',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  noResults: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 12.5,
+    color: '#8A939B',
+    textAlign: 'center',
+    paddingVertical: 20,
   },
 });

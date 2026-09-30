@@ -1798,6 +1798,23 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     handleNavigateToAddressSelection();
   }, []);
 
+  const handleAddressModalUseCurrent = React.useCallback(async () => {
+    try {
+      const loc = await resolveCurrentLocation(8000);
+      if (loc) {
+        setSelectedLocation({
+          name: 'Current location',
+          address: 'Near your current location',
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+        });
+        setShowAddressModal(false);
+      }
+    } catch {
+      // If GPS fails, keep the sheet open so the user can pick a saved address.
+    }
+  }, []);
+
   const handleBackFromAddressSelection = () => {
     // Guest without location: go back to login with smooth transition
     if (!isAuthenticatedRef.current && !selectedLocation) {
@@ -4007,6 +4024,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           onSelectAddress={handleAddressModalSelect}
           onAddNewAddress={handleAddressModalAddNew}
           onSetDefaultAddress={handleAddressModalSetDefault}
+          onUseCurrentLocation={handleAddressModalUseCurrent}
+          currentLocationLabel={selectedLocation?.address}
         />
         {isIosSwipeBackEnabled && (
           <View

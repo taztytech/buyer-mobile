@@ -1685,7 +1685,7 @@ export const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({
           <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
             <View style={styles.headerContent}>
               <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.7}>
-                <MaterialIcons name="chevron-left" size={24} color="#000000" />
+                <MaterialIcons name="arrow-back" size={24} color="#000000" />
               </TouchableOpacity>
               <View style={styles.headerTextContainer}>
                 {displayRestaurantName ? (

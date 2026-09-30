@@ -200,7 +200,7 @@ export const VideoUploadScreen: React.FC<VideoUploadScreenProps> = ({
       </SafeAreaView>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backBtn} testID="upload-back">
-          <MaterialIcons name="chevron-left" size={26} color="#001E1F" />
+          <MaterialIcons name="arrow-back" size={26} color="#001E1F" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Post a video</Text>
       </View>

@@ -1300,7 +1300,7 @@ export const LocationSelectionScreen: React.FC<LocationSelectionScreenProps> = (
       <SafeAreaView style={styles.headerSafeArea} edges={['top']}>
         <View style={styles.headerContainer}>
           <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
-            <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+            <MaterialIcons name="arrow-back" size={24} color="#001E1F" />
           </TouchableOpacity>
 
           {/* Search Bar */}

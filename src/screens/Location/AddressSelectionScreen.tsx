@@ -536,7 +536,7 @@ export const AddressSelectionScreen: React.FC<AddressSelectionScreenProps> = ({
       <SafeAreaView style={styles.safeAreaHeader} edges={['top']}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+            <MaterialIcons name="arrow-back" size={24} color="#001E1F" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Select a location</Text>
         </View>

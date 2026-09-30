@@ -324,7 +324,7 @@ export const TestFCMScreen: React.FC<TestFCMScreenProps> = ({
             onPress={onBack}
             activeOpacity={0.7}
           >
-            <MaterialIcons name="chevron-left" size={24} color="#001E1F" />
+            <MaterialIcons name="arrow-back" size={24} color="#001E1F" />
           </TouchableOpacity>
         )}
         <Text style={styles.headerTitle}>Test FCM</Text>

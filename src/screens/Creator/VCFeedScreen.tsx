@@ -402,7 +402,7 @@ export const VCFeedScreen: React.FC<VCFeedScreenProps> = ({
     >
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <TouchableOpacity style={styles.back} onPress={onBack} testID="vc-feed-back">
-        <MaterialIcons name="chevron-left" size={28} color="#FFFFFF" />
+        <MaterialIcons name="arrow-back" size={28} color="#FFFFFF" />
       </TouchableOpacity>
       <Text style={styles.brand}>Flix</Text>
       <TouchableOpacity

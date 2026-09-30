@@ -36,6 +36,8 @@ import { useCart } from '@/context/CartContext';
 import { useVegMode } from '@/context/VegModeContext';
 import { useConfirmation } from '@/context/ConfirmationContext';
 import { useSnackbar } from '@/context/SnackbarContext';
+import { ComingSoonScreen } from '@/screens/Home/components/ComingSoonScreen';
+import { waitlistService } from '@/services/waitlist.service';
 import { useHideOnScroll } from '@/hooks/useHideOnScroll';
 import { restaurantService } from '@/services/restaurant.service';
 import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from '@/services/analytics.service';
@@ -372,6 +374,57 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showRestaurantShimmer, setShowRestaurantShimmer] = React.useState(true);
   const [tempVegSelection, setTempVegSelection] = React.useState<'pure' | 'all'>('pure');
   const [selectedLocation, setSelectedLocation] = React.useState(externalSelectedLocation || { name: DEFAULT_LOCATION.name, address: DEFAULT_LOCATION.address });
+
+  // "Coming soon" waitlist (shown when the area is unserviceable).
+  const [waitlistLoading, setWaitlistLoading] = React.useState(false);
+  const [waitlistDone, setWaitlistDone] = React.useState(false);
+  // First human-readable locality in the address; skips Google plus-codes
+  // (e.g. "M3PW+984"), pure numbers and tiny fragments so the message reads
+  // naturally ("…reaches Anna Nagar") or falls back to "your area".
+  const unserviceableArea = React.useMemo(() => {
+    const addr = externalSelectedLocation?.address || '';
+    const parts = addr.split(',').map((p) => p.trim()).filter(Boolean);
+    const isPlusCode = (s: string) => /[A-Z0-9]{2,}\+[A-Z0-9]{2,}/i.test(s);
+    const isJunk = (s: string) => s.length < 3 || /^\d[\d\s/-]*$/.test(s) || isPlusCode(s);
+    return parts.find((p) => !isJunk(p));
+  }, [externalSelectedLocation?.address]);
+
+  const handleJoinWaitlist = React.useCallback(async () => {
+    if (waitlistLoading || waitlistDone) return;
+    setWaitlistLoading(true);
+    try {
+      const res = await waitlistService.submit({
+        area: unserviceableArea || externalSelectedLocation?.name,
+        address: externalSelectedLocation?.address,
+        latitude: externalSelectedLocation?.latitude,
+        longitude: externalSelectedLocation?.longitude,
+      });
+      if (res.success) {
+        setWaitlistDone(true);
+        showSnackbar({
+          message: "Great! We'll let you know the moment Tazty launches here.",
+          type: 'success',
+        });
+      } else {
+        showSnackbar({ message: res.error || 'Could not save. Please try again.', type: 'error' });
+      }
+    } catch {
+      showSnackbar({ message: 'Could not save. Please try again.', type: 'error' });
+    } finally {
+      setWaitlistLoading(false);
+    }
+  }, [waitlistLoading, waitlistDone, unserviceableArea, externalSelectedLocation, showSnackbar]);
+
+  const handleWaitlistHelp = React.useCallback(() => {
+    Linking.openURL(
+      'mailto:support@tazty.in?subject=' +
+        encodeURIComponent("Tazty isn't in my area yet"),
+    ).catch(() => {});
+  }, []);
+
+  const handleWaitlistInstagram = React.useCallback(() => {
+    Linking.openURL('https://www.instagram.com/tazty.app/').catch(() => {});
+  }, []);
 
   // Debug: Log whenever selectedLocation changes
   React.useEffect(() => {
@@ -2352,20 +2405,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           {/* Solid background for everything after the header */}
           <View style={{ backgroundColor: colors.background, flex: 1 }}>
 
-            {/* Unserviceable Location Error Screen */}
+            {/* Unserviceable area → branded "coming soon" + waitlist */}
             {!isLocationServiceable && !isLoadingBanners && !isLoadingCategories && !isLoadingRestaurants && (
-              <View style={styles.unserviceableContainer}>
-                <View style={styles.unserviceableIconContainer}>
-                  <MaterialIcons name="location-off" size={80} color="#CCCCCC" />
-                </View>
-                <Text style={styles.unserviceableTitle}>Sorry!</Text>
-                <Text style={styles.unserviceableMessage}>
-                  We are not yet serviceable at your location
-                </Text>
-                <Text style={styles.unserviceableSubtext}>
-                  Currently, we only serve in Madurai city. Stay tuned for expansion to your area!
-                </Text>
-              </View>
+              <ComingSoonScreen
+                areaName={unserviceableArea}
+                onNotify={handleJoinWaitlist}
+                notifyLoading={waitlistLoading}
+                notified={waitlistDone}
+                onHelp={handleWaitlistHelp}
+                onInstagram={handleWaitlistInstagram}
+              />
             )}
 
             {/* Ad Banner Carousel or Closed Banner */}
@@ -2848,17 +2897,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         />
       )}
 
-      {/* Floating bottom overlay: Crave·Active-orders pill + Flix pill (top-only). */}
-      <BottomNav
-        atTop={navAtTop}
-        activeOrderCount={activeOrderCount}
-        onActiveOrders={() => onNavigateToOrders?.()}
-        flixEnabled={flixEnabled}
-        onFlix={() => onNavigateToFlix?.()}
-        onFlixSuspended={() =>
-          showSnackbar({ message: 'Flix is suspended right now', type: 'info' })
-        }
-      />
+      {/* Floating bottom overlay: Crave·Active-orders pill + Flix pill (top-only).
+          Hidden in unserviceable areas — no Crave and no Flix there. */}
+      {isLocationServiceable && (
+        <BottomNav
+          atTop={navAtTop}
+          activeOrderCount={activeOrderCount}
+          onActiveOrders={() => onNavigateToOrders?.()}
+          flixEnabled={flixEnabled}
+          onFlix={() => onNavigateToFlix?.()}
+          onFlixSuspended={() =>
+            showSnackbar({ message: 'Flix is suspended right now', type: 'info' })
+          }
+        />
+      )}
 
       {/* Category Modal */}
       <CategoryModal
