@@ -9,7 +9,6 @@ import { authService } from '@/services/auth.service';
 import { homeService, BannerItem, CategoryItem, Restaurant, OrganizationBanner } from '@/services/home.service';
 import { OfferBannerSection } from '@/components/OfferBannerSection';
 import { StoreDealsSection } from '@/components/StoreDealsSection';
-import { TopDashAds } from '@/components/home/TopDashAds';
 import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
 import storeDealService, {
   type StoreDeal,
@@ -2434,9 +2433,49 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {/* Ad Banner Carousel or Closed Banner */}
             {isLocationServiceable && (
               <>
-                {/* Top-dash ads: admin-uploadable rolling cards under the header */}
-                {topDashAds.length > 0 && appOperationStatus?.is_open !== false && (
-                  <TopDashAds ads={topDashAds} onPressAd={handleTopDashAdPress} />
+                {/* Restaurant/promo banner carousel — right under the org hero */}
+                {(showBannerShimmer || carouselData.length > 0) && appOperationStatus?.is_open !== false && (
+                  <View style={[styles.carouselContainer, { marginTop: 8 }]}>
+                    {showBannerShimmer ? (
+                      <View style={styles.loadingContainer}>
+                        <Shimmer width="100%" height={STORE_BANNER_HEIGHT} borderRadius={20} />
+                      </View>
+                    ) : (
+                      <View style={styles.carouselWrapper}>
+                        <FlatList
+                          ref={flatListRef}
+                          data={carouselData}
+                          renderItem={renderCarouselItem}
+                          keyExtractor={(item) => item.id}
+                          extraData={currentSlide}
+                          horizontal
+                          pagingEnabled
+                          showsHorizontalScrollIndicator={false}
+                          onViewableItemsChanged={onViewRef.current}
+                          viewabilityConfig={viewConfigRef.current}
+                          decelerationRate="fast"
+                          snapToAlignment="start"
+                          snapToInterval={windowWidth}
+                          disableIntervalMomentum={true}
+                          removeClippedSubviews={false}
+                          bounces={false}
+                          overScrollMode="never"
+                          scrollEventThrottle={16}
+                          getItemLayout={(_data, index) => ({
+                            length: windowWidth,
+                            offset: windowWidth * index,
+                            index,
+                          })}
+                          onScrollToIndexFailed={(info) => {
+                            const wait = new Promise(resolve => setTimeout(resolve, 500));
+                            wait.then(() => {
+                              flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
+                            });
+                          }}
+                        />
+                      </View>
+                    )}
+                  </View>
                 )}
 
                 {/* Categories: large circular food images with a label below,
@@ -2508,60 +2547,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     <Text style={styles.appClosedMessage}>
                       {appOperationStatus.message}
                     </Text>
-                  </View>
-                )}
-
-                {(showBannerShimmer || carouselData.length > 0) && appOperationStatus?.is_open !== false && (
-                  <View
-                    style={[
-                      styles.carouselContainer,
-                      { marginTop: shouldShowBadgesRow ? 8 : 12 },
-                    ]}
-                  >
-                    {showBannerShimmer ? (
-                      <View style={styles.loadingContainer}>
-                        <Shimmer width="100%" height={STORE_BANNER_HEIGHT} borderRadius={20} />
-                      </View>
-                    ) : (
-                      <>
-                        <View style={styles.carouselWrapper}>
-                          <FlatList
-                            ref={flatListRef}
-                            data={carouselData}
-                            renderItem={renderCarouselItem}
-                            keyExtractor={(item) => item.id}
-                            extraData={currentSlide}
-                            horizontal
-                            pagingEnabled
-                            showsHorizontalScrollIndicator={false}
-                            onViewableItemsChanged={onViewRef.current}
-                            viewabilityConfig={viewConfigRef.current}
-                            decelerationRate="fast"
-                            snapToAlignment="start"
-                            snapToInterval={windowWidth}
-                            disableIntervalMomentum={true}
-                            removeClippedSubviews={false}
-                            bounces={false}
-                            overScrollMode="never"
-                            scrollEventThrottle={16}
-                            getItemLayout={(_data, index) => ({
-                              length: windowWidth,
-                              offset: windowWidth * index,
-                              index,
-                            })}
-                            onScrollToIndexFailed={(info) => {
-                              // Handle scroll to index failure
-                              const wait = new Promise(resolve => setTimeout(resolve, 500));
-                              wait.then(() => {
-                                flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
-                              });
-                            }}
-                          />
-
-                          {/* Navigation Buttons - removed but functionality preserved (manual sliding and auto-slide still work) */}
-                        </View>
-                      </>
-                    )}
                   </View>
                 )}
 
