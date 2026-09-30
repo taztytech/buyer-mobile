@@ -144,6 +144,12 @@ export interface HomeData {
    * out server-side by clock, so nothing expired can arrive here.
    */
   offer_banner?: any[];
+  /**
+   * Admin-uploadable rolling ad cards shown under the header (banner table,
+   * placement=home_top_dash). Each carries image/video, CTA label and a CTA
+   * target (promotion_type + promotion_link).
+   */
+  top_dash_ads?: any[];
 }
 
 class HomeService {

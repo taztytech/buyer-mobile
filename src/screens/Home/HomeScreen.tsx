@@ -9,6 +9,7 @@ import { authService } from '@/services/auth.service';
 import { homeService, BannerItem, CategoryItem, Restaurant, OrganizationBanner } from '@/services/home.service';
 import { OfferBannerSection } from '@/components/OfferBannerSection';
 import { StoreDealsSection } from '@/components/StoreDealsSection';
+import { TopDashAds } from '@/components/home/TopDashAds';
 import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
 import storeDealService, {
   type StoreDeal,
@@ -303,6 +304,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // ₹99 Store deals. Arrive with the home payload already carrying their
   // state, so the row renders without a request of its own.
   const [storeDeals, setStoreDeals] = React.useState<StoreDeal[]>([]);
+  const [topDashAds, setTopDashAds] = React.useState<any[]>([]);
   const [dealSection, setDealSection] = React.useState<StoreDealSection>(
     DEFAULT_STORE_DEAL_SECTION,
   );
@@ -1275,6 +1277,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           Array.isArray(storeDealsRaw) ? (storeDealsRaw as StoreDeal[]) : [],
         );
 
+        // Admin-uploadable rolling ad cards shown under the header.
+        const topDashRaw = (actualData as any).top_dash_ads;
+        setTopDashAds(Array.isArray(topDashRaw) ? topDashRaw : []);
+
         // Flix availability flag (server-controlled). Absent → default on.
         const flix = (actualData as any).flix;
         if (flix && typeof flix.enabled === 'boolean') {
@@ -1785,6 +1791,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         break;
     }
   }, [onNavigateToRestaurant, onNavigateToCategory, onNavigateToOffer, showConfirmation]);
+
+  // Top-dash ad tap reuses the banner routing (same promotion_type/link).
+  const handleTopDashAdPress = React.useCallback((ad: any) => {
+    handleBannerCTAClick({
+      promotionType: ad?.promotion_type,
+      promotionLink: ad?.promotion_link,
+    } as any);
+  }, [handleBannerCTAClick]);
 
   const renderCarouselItem = React.useCallback(({ item, index }: { item: CarouselItem; index: number }) => {
     // Only the slide on screen plays; the rest show their image/poster, so a
@@ -2420,6 +2434,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {/* Ad Banner Carousel or Closed Banner */}
             {isLocationServiceable && (
               <>
+                {/* Top-dash ads: admin-uploadable rolling cards under the header */}
+                {topDashAds.length > 0 && appOperationStatus?.is_open !== false && (
+                  <TopDashAds ads={topDashAds} onPressAd={handleTopDashAdPress} />
+                )}
+
                 {/* Categories: large circular food images with a label below,
                     under a "What's on your mind?" title; View All opens the grid. */}
                 {shouldShowBadgesRow && (
@@ -2458,6 +2477,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     </View>
                   </>
                 )}
+
+                {/* ₹99 Store: placed right after "What's on your mind?".
+                    Renders nothing when there are no live deals. */}
+                <StoreDealsSection
+                  deals={storeDeals}
+                  addingDealId={addingDealId}
+                  onAdd={deal => handleStoreDealAdd(deal)}
+                  onOpenStore={deal =>
+                    onNavigateToRestaurant?.(
+                      deal.restaurant_id,
+                      deal.restaurant?.name ?? '',
+                    )
+                  }
+                  onSeeAll={() => onNavigateToStore?.()}
+                  sectionName={dealSection.name}
+                  tagline={dealSection.tagline}
+                  homeTitle={dealSection.home_title}
+                  heroImageUrl={dealSection.hero_image_url ?? null}
+                  heroVideoUrl={dealSection.hero_video_url ?? null}
+                />
 
                 {/* The reason the app is closed. Everything below this is
                     hidden while closed, so without it a buyer just sees an
@@ -2531,26 +2570,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <OfferBannerSection
                   offers={offerBanners}
                   onOfferPress={offer => onNavigateToOffer?.(offer.id)}
-                />
-
-                {/* ₹99 Store: the banner and today's deals. Renders nothing
-                    when there are no live deals. */}
-                <StoreDealsSection
-                  deals={storeDeals}
-                  addingDealId={addingDealId}
-                  onAdd={deal => handleStoreDealAdd(deal)}
-                  onOpenStore={deal =>
-                    onNavigateToRestaurant?.(
-                      deal.restaurant_id,
-                      deal.restaurant?.name ?? '',
-                    )
-                  }
-                  onSeeAll={() => onNavigateToStore?.()}
-                  sectionName={dealSection.name}
-                  tagline={dealSection.tagline}
-                  homeTitle={dealSection.home_title}
-                  heroImageUrl={dealSection.hero_image_url ?? null}
-                  heroVideoUrl={dealSection.hero_video_url ?? null}
                 />
 
                 {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
