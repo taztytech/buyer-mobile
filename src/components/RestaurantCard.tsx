@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Animated, Modal, Pressable } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { favoritesService } from '@/services/favorites.service';
@@ -46,6 +46,8 @@ interface RestaurantCardProps {
   layoutMode?: 1 | 2 | 3 | 4;
   isGuest?: boolean;
   onNavigateToLogin?: () => void;
+  /** 3-dots menu: "Show similar restaurants" (hidden when not provided). */
+  onShowSimilar?: () => void;
 }
 
 export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
@@ -56,9 +58,11 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   layoutMode = 1,
   isGuest = false,
   onNavigateToLogin,
+  onShowSimilar,
 }) => {
   const [isFavorite, setIsFavorite] = useState(restaurant.isFavorite || false);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const imageOpacity = useState(new Animated.Value(0))[0];
 
@@ -345,21 +349,21 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
     );
   }
 
-  // Layout mode 4 => Home horizontal card: image left, details right; overlays on image (home)
+  // Layout mode 4 => Home card, Swiggy-style: full-width top image with heart +
+  // 3-dots overlaid, a delivery-time badge, then details below.
   if (layoutMode === 4) {
-    const showImageMeta = restaurant.rating > 0 || !!restaurant.deliveryTime;
     return (
       <TouchableOpacity
-        key="home-horizontal"
-        style={styles.cardHomeHorizontal}
+        key="home-swiggy"
+        style={styles.cardHomeV}
         onPress={onPress}
-        activeOpacity={0.7}
+        activeOpacity={0.85}
         testID={`restaurant-card-${restaurant.id}`}
       >
-        <View style={styles.imageContainerHomeHorizontal}>
+        <View style={styles.imageWrapV}>
           <OptimizedImage
             source={restaurant.image}
-            style={[styles.imageHomeHorizontal, !isRestaurantOpen && styles.imageClosed]}
+            style={[styles.imageV, !isRestaurantOpen && styles.imageClosed]}
             contentFit="cover"
             animatedOpacity={imageOpacity}
             onLoad={() => {
@@ -370,8 +374,8 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
               setImageLoaded(true);
               if (onImageLoad) onImageLoad();
             }}
-            shimmerWidth={140}
-            shimmerHeight={160}
+            shimmerWidth={340}
+            shimmerHeight={176}
             shimmerBorderRadius={18}
             transition={300}
             priority="high"
@@ -379,65 +383,109 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             testID={`restaurant-image-${restaurant.id}`}
           />
 
-          {/* Heart on top-right */}
-          <TouchableOpacity
-            style={styles.heartButtonHomeHorizontal}
-            onPress={handleFavoriteToggle}
-            disabled={isTogglingFavorite}
-            testID={`favorite-button-${restaurant.id}`}
-          >
-            {isTogglingFavorite ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <MaterialIcons
-                name={isFavorite ? 'favorite' : 'favorite-border'}
-                size={22}
-                color={isFavorite ? '#FF0000' : '#FFFFFF'}
-              />
-            )}
-          </TouchableOpacity>
+          {/* bottom scrim for the delivery-time badge */}
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.55)']}
+            style={styles.imageScrimV}
+            pointerEvents="none"
+          />
 
-        </View>
-
-        <View style={styles.detailsContainerHomeHorizontal}>
-          <View style={styles.nameRowHomeHorizontal}>
-            <Text style={styles.restaurantNameHomeHorizontal} numberOfLines={1} ellipsizeMode="tail">
-              {restaurant.name}
-            </Text>
+          {/* top-right actions: heart + 3-dots */}
+          <View style={styles.actionsV}>
+            <TouchableOpacity
+              style={styles.circleBtnV}
+              onPress={handleFavoriteToggle}
+              disabled={isTogglingFavorite}
+              testID={`favorite-button-${restaurant.id}`}
+            >
+              {isTogglingFavorite ? (
+                <ActivityIndicator size="small" color="#FF3B30" />
+              ) : (
+                <MaterialIcons
+                  name={isFavorite ? 'favorite' : 'favorite-border'}
+                  size={20}
+                  color={isFavorite ? '#FF3B30' : '#3A3F45'}
+                />
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.circleBtnV}
+              onPress={() => setMenuOpen(true)}
+              testID={`restaurant-menu-${restaurant.id}`}
+            >
+              <MaterialIcons name="more-vert" size={20} color="#3A3F45" />
+            </TouchableOpacity>
           </View>
 
-          {showImageMeta && (
-            <View style={styles.ratingDurationRowHomeHorizontal}>
-              {restaurant.rating > 0 && (
-                <>
-                  <MaterialIcons name="star" size={14} color="#00B14F" />
-                  <Text style={styles.ratingDurationTextHomeHorizontal}>{restaurant.rating.toFixed(1)}</Text>
-                  {restaurant.deliveryTime ? <Text style={styles.ratingDurationDotHomeHorizontal}>•</Text> : null}
-                </>
-              )}
-              {!!restaurant.deliveryTime && (
-                <Text style={styles.ratingDurationTextHomeHorizontal}>{restaurant.deliveryTime}</Text>
-              )}
-            </View>
-          )}
-
-          <Text style={styles.cuisineTextHomeHorizontal} numberOfLines={1} ellipsizeMode="tail">
-            {restaurant.cuisine}
-          </Text>
-
-          <Text style={styles.locationTextHomeHorizontal} numberOfLines={1} ellipsizeMode="tail">
-            {locationText}
-          </Text>
-
-          {!!restaurant.distance && (
-            <View style={styles.distanceRowHomeHorizontal}>
-              <MaterialIcons name="location-on" size={14} color="#00B14F" />
-              <Text style={styles.distanceRowTextHomeHorizontal} numberOfLines={1}>
-                {restaurant.distance}
-              </Text>
+          {!!restaurant.deliveryTime && (
+            <View style={styles.timeBadgeV}>
+              <Text style={styles.timeBadgeTextV}>{restaurant.deliveryTime}</Text>
             </View>
           )}
         </View>
+
+        <View style={styles.detailsV}>
+          <Text style={styles.nameV} numberOfLines={1} ellipsizeMode="tail">
+            {restaurant.name}
+          </Text>
+
+          {(restaurant.rating > 0 || !!restaurant.distance) && (
+            <View style={styles.metaRowV}>
+              {restaurant.rating > 0 && (
+                <View style={styles.ratePillV}>
+                  <MaterialIcons name="star" size={12} color="#FFFFFF" />
+                  <Text style={styles.ratePillTextV}>{restaurant.rating.toFixed(1)}</Text>
+                </View>
+              )}
+              {restaurant.rating > 0 && !!restaurant.reviewCount && (
+                <Text style={styles.metaMutedV}>({restaurant.reviewCount})</Text>
+              )}
+              {!!restaurant.distance && (
+                <>
+                  <Text style={styles.metaDotV}>•</Text>
+                  <Text style={styles.metaMutedV} numberOfLines={1}>{restaurant.distance}</Text>
+                </>
+              )}
+            </View>
+          )}
+
+          <Text style={styles.cuisineV} numberOfLines={1} ellipsizeMode="tail">
+            {restaurant.cuisine}
+            {restaurant.price ? `  ·  ${restaurant.price}` : ''}
+          </Text>
+        </View>
+
+        {/* 3-dots menu */}
+        <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+          <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)}>
+            <Pressable style={styles.menuSheet} onPress={() => {}}>
+              {!!onShowSimilar && (
+                <TouchableOpacity
+                  style={styles.menuRow}
+                  onPress={() => { setMenuOpen(false); onShowSimilar(); }}
+                  testID={`menu-similar-${restaurant.id}`}
+                >
+                  <MaterialIcons name="grid-view" size={20} color="#14181B" />
+                  <Text style={styles.menuRowText}>Show similar restaurants</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => { setMenuOpen(false); handleFavoriteToggle(); }}
+                testID={`menu-favourite-${restaurant.id}`}
+              >
+                <MaterialIcons
+                  name={isFavorite ? 'favorite' : 'favorite-border'}
+                  size={20}
+                  color={isFavorite ? '#FF3B30' : '#14181B'}
+                />
+                <Text style={styles.menuRowText}>
+                  {isFavorite ? 'Remove from favourites' : 'Add to favourites'}
+                </Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </TouchableOpacity>
     );
   }
@@ -1243,6 +1291,132 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     // marginBottom: 12,
+  },
+  // Swiggy-style home card (layoutMode 4)
+  cardHomeV: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  imageWrapV: {
+    width: '100%',
+    height: 176,
+    borderRadius: 18,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#EEE',
+  },
+  imageV: { width: '100%', height: '100%' },
+  imageScrimV: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 60,
+  },
+  actionsV: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  circleBtnV: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeBadgeV: {
+    position: 'absolute',
+    left: 10,
+    bottom: 10,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  timeBadgeTextV: {
+    fontFamily: 'Poppins',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 0.2,
+    color: '#14181B',
+  },
+  detailsV: { paddingTop: 10, paddingHorizontal: 2 },
+  nameV: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 16,
+    letterSpacing: -0.1,
+    color: '#14181B',
+  },
+  metaRowV: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 4,
+  },
+  ratePillV: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#00B14F',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  ratePillTextV: {
+    fontFamily: 'Poppins',
+    fontWeight: '800',
+    fontSize: 11.5,
+    color: '#FFFFFF',
+  },
+  metaMutedV: {
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 12.5,
+    color: '#566068',
+    flexShrink: 1,
+  },
+  metaDotV: { color: '#8A939B', fontSize: 12 },
+  cuisineV: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12.5,
+    color: '#8A939B',
+    marginTop: 3,
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  menuSheet: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 6,
+    overflow: 'hidden',
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 15,
+    paddingHorizontal: 18,
+  },
+  menuRowText: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 14.5,
+    color: '#14181B',
   },
   imageContainerHomeHorizontal: {
     width: 140,

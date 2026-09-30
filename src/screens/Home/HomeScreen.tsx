@@ -9,6 +9,8 @@ import { authService } from '@/services/auth.service';
 import { homeService, BannerItem, CategoryItem, Restaurant, OrganizationBanner } from '@/services/home.service';
 import { OfferBannerSection } from '@/components/OfferBannerSection';
 import { StoreDealsSection } from '@/components/StoreDealsSection';
+import { RotatingTitle } from '@/components/home/RotatingTitle';
+import { CloudsSky } from '@/components/home/CloudsSky';
 import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
 import storeDealService, {
   type StoreDeal,
@@ -303,7 +305,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // ₹99 Store deals. Arrive with the home payload already carrying their
   // state, so the row renders without a request of its own.
   const [storeDeals, setStoreDeals] = React.useState<StoreDeal[]>([]);
-  const [topDashAds, setTopDashAds] = React.useState<any[]>([]);
+  const [restaurantTitles, setRestaurantTitles] = React.useState<string[]>([]);
   const [dealSection, setDealSection] = React.useState<StoreDealSection>(
     DEFAULT_STORE_DEAL_SECTION,
   );
@@ -1276,9 +1278,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           Array.isArray(storeDealsRaw) ? (storeDealsRaw as StoreDeal[]) : [],
         );
 
-        // Admin-uploadable rolling ad cards shown under the header.
-        const topDashRaw = (actualData as any).top_dash_ads;
-        setTopDashAds(Array.isArray(topDashRaw) ? topDashRaw : []);
+        // Admin-editable rotating titles for the restaurants section.
+        const titlesRaw = (actualData as any).restaurants_section_titles;
+        setRestaurantTitles(
+          Array.isArray(titlesRaw) && titlesRaw.length
+            ? titlesRaw.filter((t: any) => typeof t === 'string' && t.trim())
+            : [],
+        );
 
         // Flix availability flag (server-controlled). Absent → default on.
         const flix = (actualData as any).flix;
@@ -1791,13 +1797,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [onNavigateToRestaurant, onNavigateToCategory, onNavigateToOffer, showConfirmation]);
 
-  // Top-dash ad tap reuses the banner routing (same promotion_type/link).
-  const handleTopDashAdPress = React.useCallback((ad: any) => {
-    handleBannerCTAClick({
-      promotionType: ad?.promotion_type,
-      promotionLink: ad?.promotion_link,
-    } as any);
-  }, [handleBannerCTAClick]);
 
   const renderCarouselItem = React.useCallback(({ item, index }: { item: CarouselItem; index: number }) => {
     // Only the slide on screen plays; the rest show their image/poster, so a
@@ -2003,7 +2002,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* Top background filler for pull-to-refresh overscroll - Layer 1 (Back) */}
       <View
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_BACKGROUND_HEIGHT, backgroundColor: homeTopBackgroundColor }}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_BACKGROUND_HEIGHT, backgroundColor: isLocationServiceable ? homeTopBackgroundColor : '#8FC4EE' }}
         pointerEvents="none"
       />
 
@@ -2041,9 +2040,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           {/* Header Content Wrapper */}
           <View style={styles.headerStack} testID="header-stack">
             <View
-              style={[styles.headerBackground, { paddingTop: insets.top + 10, backgroundColor: homeTopBackgroundColor }]}
+              style={[styles.headerBackground, { paddingTop: insets.top + 10, backgroundColor: isLocationServiceable ? homeTopBackgroundColor : '#BFE0F5' }]}
               testID="header-background"
             >
+              {/* Unserviceable area → soft clouds sky behind the header */}
+              {!isLocationServiceable && <CloudsSky />}
+
               {/* Location Section */}
               <View style={styles.locationSection} testID="location-section">
                 <TouchableOpacity
@@ -2068,15 +2070,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     <>
                       {/* City Name with Icon */}
                       <View style={styles.cityRow}>
-                        <MaterialIcons name="location-on" size={20} color="#FFFFFF" />
-                        <Text style={styles.cityName}>{selectedLocation.name}</Text>
+                        <MaterialIcons name="location-on" size={20} color={isLocationServiceable ? '#FFFFFF' : '#1E3A52'} />
+                        <Text style={[styles.cityName, !isLocationServiceable && { color: '#14232F' }]}>{selectedLocation.name}</Text>
                         <View style={styles.arrowIconWrapper}>
-                          <MaterialIcons name="keyboard-arrow-down" size={16} color="#FFFFFF" />
+                          <MaterialIcons name="keyboard-arrow-down" size={16} color={isLocationServiceable ? '#FFFFFF' : '#1E3A52'} />
                         </View>
                       </View>
                       {/* Address */}
                       <Text
-                        style={styles.addressText}
+                        style={[styles.addressText, !isLocationServiceable && { color: '#3A5568' }]}
                         numberOfLines={1}
                         ellipsizeMode="tail"
                       >
@@ -2566,7 +2568,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       end={{ x: 1, y: 0 }}
                       style={styles.restaurantsTitleLine}
                     />
-                    <Text style={styles.restaurantsTitle}>Restaurants Near You</Text>
+                    <RotatingTitle titles={restaurantTitles} textStyle={styles.restaurantsTitle} />
                     <LinearGradient
                       colors={['#000000', 'rgba(0, 0, 0, 0)']}
                       start={{ x: 0, y: 0 }}
@@ -2727,6 +2729,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                               }}
                               isGuest={isGuest}
                               onNavigateToLogin={onNavigateToLogin}
+                              onShowSimilar={() => {
+                                const cuisine = String(restaurant.cuisine || '')
+                                  .split(',')[0]
+                                  .trim();
+                                if (cuisine && onNavigateToCategory) {
+                                  onNavigateToCategory(cuisine);
+                                }
+                              }}
                             />
                           </View>
                         )}
