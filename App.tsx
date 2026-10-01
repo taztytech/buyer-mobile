@@ -26,7 +26,7 @@ import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScr
 import { MyAddressesScreen } from '@/screens/Location/MyAddressesScreen';
 import { addressService, AddressResponse } from '@/services/address.service';
 import { AddressSelectionModal } from '@/components/AddressSelectionModal';
-import { CategoryResultsScreen } from '@/screens/Category/CategoryResultsScreen';
+import { CategoryDishesScreen } from '@/screens/Category/CategoryDishesScreen';
 import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
 import { RestaurantDetailsScreen } from '@/screens/Restaurant/RestaurantDetailsScreen';
 import { OrderDetailsScreen } from '@/screens/Order/OrderDetailsScreen';
@@ -3857,11 +3857,17 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
             {/* Conditionally render CategoryResultsScreen only when needed */}
             {currentScreen === 'categoryResults' && (
               <View style={styles.categoryOverlay}>
-                <CategoryResultsScreen
+                {/* Instamart-style category page: rail, dish cards, restaurants. */}
+                <CategoryDishesScreen
                   categoryName={selectedCategory}
                   categories={categoryData}
                   onBack={handleBackFromCategoryResults}
-                  onNavigateToRestaurant={handleNavigateToRestaurantFromCategory}
+                  onNavigateToRestaurant={(id, name) => handleNavigateToRestaurantFromCategory(id, name)}
+                  onNavigateToCheckout={() => {
+                    if (cartRestaurantId) {
+                      handleNavigateToCheckout(cartRestaurantId, cartRestaurantName || '', undefined, 'home');
+                    }
+                  }}
                   selectedLocation={selectedLocation}
                   isGuest={!isAuthenticatedRef.current}
                   onNavigateToLogin={transitionGuestToLogin}

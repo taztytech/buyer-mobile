@@ -58,7 +58,42 @@ export interface SearchResultsResponse {
   restaurants: SearchResultRestaurant[];
 }
 
+export interface CategoryDish extends SearchResultDish {
+  images?: string[];
+  price?: { base_price: number; maximum_price: number; currency: string };
+  quantity?: { unit_type: string; unit_value: number; available_count: number };
+  has_options?: boolean;
+}
+
+export interface CategoryResultsResponse {
+  category?: { id: number; name: string; icon?: string };
+  dishes: CategoryDish[];
+  restaurants: SearchResultRestaurant[];
+}
+
 class SearchService {
+  /** A "What's on your mind?" category page: its dishes + restaurants. */
+  async getCategoryResults(
+    categoryId: number,
+    latitude?: number,
+    longitude?: number,
+    vegMode: VegModeType = 'off'
+  ): Promise<CategoryResultsResponse> {
+    const params: Record<string, any> = {};
+    if (latitude !== undefined && longitude !== undefined) {
+      params.lat = latitude;
+      params.lng = longitude;
+    }
+    if (vegMode === 'pure') params.veg_only = 'true';
+    const response: any = await apiService.get<any>(`/api/buyer/categories/${categoryId}/results`, params);
+    let node = response;
+    for (let i = 0; i < 4 && node && !Array.isArray(node.dishes); i++) node = node.data;
+    if (!node || !Array.isArray(node.dishes)) {
+      throw new Error(response?.message || 'Could not load this category');
+    }
+    return node as CategoryResultsResponse;
+  }
+
   /**
    * Full results (voice or keyboard "search"): real dishes and restaurants,
    * spelling-tolerant, with the intent decided by the server.

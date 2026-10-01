@@ -328,6 +328,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [foodTabImageUrl, setFoodTabImageUrl] = React.useState<string | null>(null);
   const [foodTabTitle, setFoodTabTitle] = React.useState('Food');
   const [tabShape, setTabShape] = React.useState<TabShapeSpec | null>(null);
+  const [woymTitle, setWoymTitle] = React.useState("What's on your mind?");
   // Restaurant-list filters (filter bar) and their sheets; voice search.
   const [homeFilters, setHomeFilters] = React.useState<HomeFilterState>(EMPTY_FILTERS);
   const homeFiltersRef = React.useRef<HomeFilterState>(EMPTY_FILTERS);
@@ -657,6 +658,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         if (cfg.food_title) setFoodTabTitle(cfg.food_title);
         setFoodTabImageUrl(cfg.food_image_url || null);
         setTabShape(cfg.shape || null);
+        if ((cfg as any).woym_title) setWoymTitle((cfg as any).woym_title);
       }, 400);
     });
     return () => {
@@ -1406,6 +1408,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setFoodTabImageUrl((actualData as any).home_food_tab_image_url || null);
         setFoodTabTitle((actualData as any).home_food_tab_title || 'Food');
         setTabShape((actualData as any).home_tab_shape || null);
+        if ((actualData as any).whats_on_your_mind_title) {
+          setWoymTitle((actualData as any).whats_on_your_mind_title);
+        }
         const cuisinesRaw = (actualData as any).restaurant_filter_options?.cuisines;
         if (Array.isArray(cuisinesRaw)) setCuisineOptions(cuisinesRaw);
 
@@ -2544,7 +2549,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 {shouldShowBadgesRow && (
                   <>
                     {!isCategorySectionSticky && (
-                      <Text style={styles.whatsOnTitle}>What's on your mind?</Text>
+                      <Text style={styles.whatsOnTitle}>{woymTitle}</Text>
                     )}
                     <View style={[
                       styles.categoryListContainer,
