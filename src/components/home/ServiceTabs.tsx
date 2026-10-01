@@ -27,6 +27,8 @@ interface ServiceTabsProps {
   foodImageUrl?: string | null;
   /** Admin-set name of the first card (HOME_FOOD_TAB_TITLE). */
   foodTitle?: string;
+  /** Admin-drawn card shape (HOME_TAB_SHAPE); default card when unset. */
+  shape?: TabShapeSpec | null;
   onSelect: (tab: TopDashTab | null) => void;
 }
 
@@ -66,35 +68,53 @@ const roundedPolygon = (pts: Pt[], r: number): string => {
   return `${d}Z`;
 };
 
-/**
- * Card outline inside a w×h box: a little narrower at the top than the bottom
- * and, for the unselected cards, a top edge that dips to the right — the
- * tilted-tile look of the reference.
- */
-const cardPath = (w: number, h: number, inset: number, tilt: boolean): string => {
-  const x0 = inset;
-  const y0 = inset;
-  const x1 = w - inset;
-  const y1 = h - inset;
-  const cw = x1 - x0;
-  const ch = y1 - y0;
-  const topIn = cw * 0.05;
-  const dip = tilt ? ch * 0.07 : ch * 0.02;
-  const pts: Pt[] = [
-    [x0 + topIn, y0],
-    [x1 - topIn * 0.6, y0 + dip],
-    [x1, y1],
-    [x0, y1],
-  ];
-  return roundedPolygon(pts, Math.min(cw, ch) * 0.3);
+/** Admin-drawn card outline: points 0..1 of the card box + corner roundness. */
+export interface TabShapeSpec {
+  points: Array<[number, number]>;
+  roundness: number;
+}
+
+/** The card as first designed; used until the admin saves a shape. */
+export const DEFAULT_TAB_SHAPE: TabShapeSpec = {
+  points: [
+    [0.05, 0],
+    [0.97, 0.07],
+    [1, 1],
+    [0, 1],
+  ],
+  roundness: 0.3,
 };
 
-const TabShape: React.FC<{ w: number; h: number; selected: boolean; gradId: string }> = ({
-  w,
-  h,
-  selected,
-  gradId,
-}) => (
+/** Accepts only a usable shape; anything else falls back to the default. */
+export const normalizeTabShape = (raw: any): TabShapeSpec => {
+  const pts = raw?.points;
+  if (!Array.isArray(pts) || pts.length < 3 || pts.length > 12) return DEFAULT_TAB_SHAPE;
+  const points: Array<[number, number]> = [];
+  for (const p of pts) {
+    const x = Number(p?.[0]);
+    const y = Number(p?.[1]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return DEFAULT_TAB_SHAPE;
+    points.push([Math.min(1, Math.max(0, x)), Math.min(1, Math.max(0, y))]);
+  }
+  const r = Number(raw?.roundness);
+  return { points, roundness: Number.isFinite(r) ? Math.min(0.5, Math.max(0, r)) : 0.3 };
+};
+
+/** Card outline inside a w×h box, inset (for the halo ring) on every side. */
+const cardPath = (shape: TabShapeSpec, w: number, h: number, inset: number): string => {
+  const cw = w - inset * 2;
+  const ch = h - inset * 2;
+  const pts: Pt[] = shape.points.map(([x, y]) => [inset + x * cw, inset + y * ch]);
+  return roundedPolygon(pts, Math.min(cw, ch) * shape.roundness);
+};
+
+const TabShape: React.FC<{
+  w: number;
+  h: number;
+  selected: boolean;
+  gradId: string;
+  shape: TabShapeSpec;
+}> = ({ w, h, selected, gradId, shape }) => (
   <Svg width={w} height={h} style={StyleSheet.absoluteFill} pointerEvents="none">
     <Defs>
       <SvgGradient id={gradId} x1="0.15" y1="0" x2="0.85" y2="1">
@@ -105,18 +125,18 @@ const TabShape: React.FC<{ w: number; h: number; selected: boolean; gradId: stri
     </Defs>
     {/* soft drop shadow */}
     <Path
-      d={cardPath(w, h, RING, !selected)}
+      d={cardPath(shape, w, h, RING)}
       fill="rgba(0,45,20,0.18)"
       transform="translate(1.5, 3)"
     />
     {selected ? (
       <>
-        <Path d={cardPath(w, h, 0, false)} fill="rgba(255,255,255,0.42)" />
-        <Path d={cardPath(w, h, RING, false)} fill={CREAM} />
+        <Path d={cardPath(shape, w, h, 0)} fill="rgba(255,255,255,0.42)" />
+        <Path d={cardPath(shape, w, h, RING)} fill={CREAM} />
       </>
     ) : (
       <Path
-        d={cardPath(w, h, RING, true)}
+        d={cardPath(shape, w, h, RING)}
         fill={`url(#${gradId})`}
         stroke="rgba(255,255,255,0.32)"
         strokeWidth={1}
@@ -135,8 +155,10 @@ export const ServiceTabs: React.FC<ServiceTabsProps> = ({
   selectedId,
   foodImageUrl,
   foodTitle,
+  shape,
   onSelect,
 }) => {
+  const cardShape = React.useMemo(() => normalizeTabShape(shape ?? DEFAULT_TAB_SHAPE), [shape]);
   const { width } = useWindowDimensions();
   const [page, setPage] = useState(0);
 
@@ -195,7 +217,7 @@ export const ServiceTabs: React.FC<ServiceTabsProps> = ({
               accessibilityState={{ selected }}
               accessibilityLabel={title}
             >
-              <TabShape w={cardW} h={cardH} selected={selected} gradId={`tabg-${key}`} />
+              <TabShape w={cardW} h={cardH} selected={selected} gradId={`tabg-${key}`} shape={cardShape} />
               <View style={[styles.inner, { paddingLeft: i === 0 ? 6 : OVERLAP }]}>
                 <View style={[styles.art, { height: artH }]}>
                   {image ? (

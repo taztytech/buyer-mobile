@@ -59,7 +59,26 @@ const findListing = (response: any): HomeTabListing | null => {
   return null;
 };
 
+export interface HomeTabsConfig {
+  food_title?: string;
+  food_image_url?: string | null;
+  shape?: { points: Array<[number, number]>; roundness: number } | null;
+  tabs: HomeTabSummary[];
+}
+
 class HomeTabService {
+  /** Tabs, first-tab name/image and card shape (for the live refresh). */
+  async getActive(): Promise<HomeTabsConfig | null> {
+    try {
+      const response: any = await apiService.get('/home-tabs/active');
+      let node = response;
+      for (let i = 0; i < 4 && node && !Array.isArray(node.tabs); i++) node = node.data;
+      return node && Array.isArray(node.tabs) ? (node as HomeTabsConfig) : null;
+    } catch {
+      return null;
+    }
+  }
+
   async getListing(id: number, lat?: number, lng?: number): Promise<HomeTabListing> {
     const params: Record<string, any> = {};
     if (lat != null) params.lat = lat;

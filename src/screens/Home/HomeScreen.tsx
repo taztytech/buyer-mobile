@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ScrollView, FlatList, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking, useWindowDimensions, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ScrollView, FlatList, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking, useWindowDimensions, BackHandler, DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { resolveBannerFont } from '../../constants/bannerFonts';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,9 @@ import type { HeroSlide, OrgCard } from '@/components/home/HomeTopDash';
 import { ServiceTabs } from '@/components/home/ServiceTabs';
 import type { TopDashTab } from '@/components/home/ServiceTabs';
 import type { HomeTabSummary } from '@/services/homeTab.service';
+import { homeTabService } from '@/services/homeTab.service';
+import { HOME_CONFIG_EVENT } from '@/services/fcmNotification.service';
+import type { TabShapeSpec } from '@/components/home/ServiceTabs';
 import { HomeTabContent } from '@/components/home/HomeTabContent';
 import {
   FilterBar,
@@ -324,6 +327,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [homeTabs, setHomeTabs] = React.useState<HomeTabSummary[]>([]);
   const [foodTabImageUrl, setFoodTabImageUrl] = React.useState<string | null>(null);
   const [foodTabTitle, setFoodTabTitle] = React.useState('Food');
+  const [tabShape, setTabShape] = React.useState<TabShapeSpec | null>(null);
   // Restaurant-list filters (filter bar) and their sheets; voice search.
   const [homeFilters, setHomeFilters] = React.useState<HomeFilterState>(EMPTY_FILTERS);
   const homeFiltersRef = React.useRef<HomeFilterState>(EMPTY_FILTERS);
@@ -640,6 +644,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       homeTabs.map(t => ({ id: t.id, title: t.title, imageUrl: t.image_url })),
     [homeTabs],
   );
+  // Admin changed the tabs or their shape: a silent push arrives, reload
+  // just the tab settings (no full home reload). Bursts are coalesced.
+  React.useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const sub = DeviceEventEmitter.addListener(HOME_CONFIG_EVENT, () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const cfg = await homeTabService.getActive();
+        if (!cfg) return;
+        setHomeTabs(cfg.tabs);
+        if (cfg.food_title) setFoodTabTitle(cfg.food_title);
+        setFoodTabImageUrl(cfg.food_image_url || null);
+        setTabShape(cfg.shape || null);
+      }, 400);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      sub.remove();
+    };
+  }, []);
+
   // A tab the admin removed or hid drops the selection back to Food.
   React.useEffect(() => {
     if (selectedHomeTab && !homeTabs.some(t => t.id === selectedHomeTab.id)) {
@@ -1380,6 +1405,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setHomeTabs(Array.isArray(homeTabsRaw) ? homeTabsRaw : []);
         setFoodTabImageUrl((actualData as any).home_food_tab_image_url || null);
         setFoodTabTitle((actualData as any).home_food_tab_title || 'Food');
+        setTabShape((actualData as any).home_tab_shape || null);
         const cuisinesRaw = (actualData as any).restaurant_filter_options?.cuisines;
         if (Array.isArray(cuisinesRaw)) setCuisineOptions(cuisinesRaw);
 
@@ -2374,6 +2400,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     selectedId={selectedHomeTab?.id ?? null}
                     foodImageUrl={foodTabImageUrl}
                     foodTitle={foodTabTitle}
+                    shape={tabShape}
                     onSelect={handleSelectHomeTab}
                   />
                 </View>

@@ -68,6 +68,8 @@ class FCMService : FirebaseMessagingService() {
      * notification.
      */
     private fun handleDataOnlyMessage(data: Map<String, String>) {
+        // Silent "home settings changed" signal: the app reloads, nothing shows.
+        if ((data["type"] ?: "") == "home_config") return
         val title = data["title"] ?: "Tazty"
         val body = data["body"] ?: ""
         val orderId = data["order_id"] ?: data["orderId"]
@@ -154,8 +156,9 @@ class FCMService : FirebaseMessagingService() {
             reactContext
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
                 .emit("FCMessageReceived", params)
-        } else {
-            // App is in background/quit state, use headless task
+        } else if ((remoteMessage.data["type"] ?: "") != "home_config") {
+            // App is in background/quit state, use headless task. A home-config
+            // signal is skipped: the app loads fresh settings when it opens.
             val intent = Intent(this, FCMHeadlessTaskService::class.java).apply {
                 putExtra("data", remoteMessage.data.toString())
                 putExtra("title", remoteMessage.notification?.title ?: remoteMessage.data["title"])

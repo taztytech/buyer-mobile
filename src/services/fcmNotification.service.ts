@@ -4,7 +4,16 @@
  * Replaces expo-notifications with native FCM
  */
 
-import { Platform, NativeEventEmitter, NativeModules, PermissionsAndroid } from 'react-native';
+import { Platform, NativeEventEmitter, NativeModules, PermissionsAndroid, DeviceEventEmitter } from 'react-native';
+
+/**
+ * Silent "home settings changed" signal (admin edited the top-dash tabs or
+ * their shape). Sent to this topic as data-only; never shown to the user.
+ */
+export const HOME_CONFIG_TOPIC = 'tz-home-config';
+export const HOME_CONFIG_EVENT = 'tazty:home-config-changed';
+
+const isHomeConfig = (data: any) => (data?.type || '') === 'home_config';
 import * as Notifications from 'expo-notifications';
 import { apiService } from './api.service';
 import { API_CONFIG } from '@/config/api.config';
@@ -127,6 +136,11 @@ class FCMNotificationService {
 
       // Get FCM token
       await this.getToken();
+
+      // Live home-settings refresh (silent topic push).
+      messaging()
+        .subscribeToTopic(HOME_CONFIG_TOPIC)
+        .catch((e: any) => console.warn('FCM: home-config subscribe failed', e?.message));
 
       // Set up listeners
       this.setupListeners();
@@ -457,6 +471,10 @@ class FCMNotificationService {
     // In foreground, FCM delivers to onMessage but does NOT show a system notification on iOS.
     // Android: FCMService.kt shows the notification. iOS: we show a local notification here.
     this.messageListener = messaging().onMessage(async (remoteMessage: any) => {
+      if (isHomeConfig(remoteMessage?.data)) {
+        DeviceEventEmitter.emit(HOME_CONFIG_EVENT, remoteMessage.data);
+        return;
+      }
       console.log('📨 FCM: Foreground message received:', remoteMessage.messageId);
       console.log('   Title:', remoteMessage.notification?.title || 'N/A');
       console.log('   Body:', remoteMessage.notification?.body || 'N/A');
@@ -531,6 +549,10 @@ class FCMNotificationService {
       if (FCMEventEmitter) {
         const eventEmitter = new NativeEventEmitter(FCMEventEmitter);
         eventEmitter.addListener('FCMessageReceived', (payload: NotificationPayload) => {
+          if (isHomeConfig(payload?.data)) {
+            DeviceEventEmitter.emit(HOME_CONFIG_EVENT, payload.data);
+            return;
+          }
           console.log('📨 FCM: Message received from native:', payload);
           this.onForegroundMessage(payload);
         });
