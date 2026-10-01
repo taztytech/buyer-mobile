@@ -11,8 +11,11 @@ import { OfferBannerSection } from '@/components/OfferBannerSection';
 import { StoreDealsSection } from '@/components/StoreDealsSection';
 import { RotatingTitle } from '@/components/home/RotatingTitle';
 import { CloudsSky } from '@/components/home/CloudsSky';
-import { ServiceTabs, HeroCarousel, OrgCards } from '@/components/home/HomeTopDash';
-import type { TopDashTab, HeroSlide, OrgCard } from '@/components/home/HomeTopDash';
+import { HeroCarousel, OrgCards } from '@/components/home/HomeTopDash';
+import type { HeroSlide, OrgCard } from '@/components/home/HomeTopDash';
+import { ServiceTabs } from '@/components/home/ServiceTabs';
+import type { TopDashTab } from '@/components/home/ServiceTabs';
+import type { HomeTabSummary } from '@/services/homeTab.service';
 import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
 import storeDealService, {
   type StoreDeal,
@@ -88,6 +91,8 @@ interface HomeScreenProps {
   onFlixIntroEnabledChange?: (enabled: boolean) => void;
   /** Open the ₹99 Store page (hero tap or "See all"). */
   onNavigateToStore?: () => void;
+  /** Open an admin top-dash tab (its restaurants and dishes). */
+  onNavigateToHomeTab?: (tab: HomeTabSummary) => void;
 }
 
 interface CarouselItem {
@@ -175,6 +180,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   isFocused = true,
   onForcedUpdateRequired,
   onNavigateToStore,
+  onNavigateToHomeTab,
 }) => {
   const {
     restaurantId,
@@ -305,6 +311,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   );
 
   const [organizationBanners, setOrganizationBanners] = React.useState<OrganizationBanner[]>([]);
+  // Top-dash tabs after "Food", from the home payload (admin-managed).
+  const [homeTabs, setHomeTabs] = React.useState<HomeTabSummary[]>([]);
+  const [foodTabImageUrl, setFoodTabImageUrl] = React.useState<string | null>(null);
   const [offerBanners, setOfferBanners] = React.useState<Offer[]>([]);
   // ₹99 Store deals. Arrive with the home payload already carrying their
   // state, so the row renders without a request of its own.
@@ -596,17 +605,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Top-dash data: category shortcuts beside "Food", restaurant banners in
   // the hero, and the home (org) banners as image/video cards.
+  // Admin-created tabs only (home_tabs); Food is fixed in ServiceTabs.
   const topDashTabs = React.useMemo<TopDashTab[]>(
     () =>
-      categoryData
-        .filter(c => c.id !== 'view-all' && c.name !== 'View All')
-        .slice(0, 8)
-        .map(c => ({
-          id: String(c.id),
-          name: c.name,
-          imageUrl: typeof c.icon === 'string' ? c.icon : undefined,
-        })),
-    [categoryData],
+      homeTabs.map(t => ({ id: t.id, title: t.title, imageUrl: t.image_url })),
+    [homeTabs],
   );
   const heroSlides = React.useMemo<HeroSlide[]>(
     () =>
@@ -1320,6 +1323,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setHomeBackgroundImageUrl(headerBgStr.length > 0 ? headerBgStr : null);
 
         // Handle organization banners for dynamic header
+        const homeTabsRaw = (actualData as any).home_tabs;
+        setHomeTabs(Array.isArray(homeTabsRaw) ? homeTabsRaw : []);
+        setFoodTabImageUrl((actualData as any).home_food_tab_image_url || null);
+
         const orgBannerRaw = (actualData as any).organization_banner;
         if (orgBannerRaw && Array.isArray(orgBannerRaw)) {
           setOrganizationBanners(orgBannerRaw);
@@ -2263,12 +2270,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 )}
               </View>
 
-              {/* Service tabs: Food (current) + category shortcuts. */}
+              {/* Service tabs: Food (fixed) + tabs the admin created. */}
               {isLocationServiceable && (
                 <View style={styles.serviceTabsWrap}>
                   <ServiceTabs
                     tabs={topDashTabs}
-                    onTabPress={(tab) => onNavigateToCategory?.(tab.name)}
+                    foodImageUrl={foodTabImageUrl}
+                    onTabPress={(tab) =>
+                      onNavigateToHomeTab?.({
+                        id: tab.id,
+                        title: tab.title,
+                        image_url: tab.imageUrl ?? null,
+                      })
+                    }
                   />
                 </View>
               )}
