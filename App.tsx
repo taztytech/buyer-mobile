@@ -163,6 +163,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     };
   }, [currentScreen]);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchAutoSubmit, setSearchAutoSubmit] = React.useState<{ query: string; nonce: number } | null>(null);
   const [searchResults, setSearchResults] = React.useState<SearchSuggestion[]>([]);
   const [locationSearchQuery, setLocationSearchQuery] = React.useState('');
   const [forcedUpdateRequired, setForcedUpdateRequired] = React.useState(false);
@@ -2997,6 +2998,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const handleNavigateToSearch = (query?: string) => {
     if (typeof query === 'string' && query.trim()) {
       setSearchQuery(query.trim());
+      // Voice: open straight onto the grouped dish / restaurant results.
+      setSearchAutoSubmit({ query: query.trim(), nonce: Date.now() });
     }
     setHasSearchMounted(true);
     searchScreenSlide.stopAnimation();
@@ -3690,6 +3693,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
                   searchQuery={searchQuery}
                   searchResults={searchResults}
                   onSearchQueryChange={setSearchQuery}
+                  autoSubmit={searchAutoSubmit}
                   onSearchResultsChange={setSearchResults}
                   onClearSearch={handleClearSearch}
                   onSelectResult={(_result) => {

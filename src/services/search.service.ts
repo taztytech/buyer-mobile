@@ -21,7 +21,69 @@ export interface SearchSuggestionsResponse {
   restaurants: SearchSuggestion[];
 }
 
+export interface SearchResultDish {
+  id: number;
+  name: string;
+  image_url?: string;
+  base_price?: number;
+  dietary_preference?: string | null;
+  is_available?: boolean;
+  store_id: number | null;
+  store_name: string | null;
+  distance?: number | null;
+  delivery_time?: string;
+  rating?: number;
+  is_open?: boolean;
+}
+
+export interface SearchResultRestaurant {
+  id: number;
+  name: string;
+  logo_url?: string;
+  cuisine_tags?: string;
+  rating?: number;
+  total_reviews?: number;
+  delivery_time?: string;
+  distance?: number | null;
+  is_open?: boolean;
+  location?: { locality?: string; city?: string };
+}
+
+export interface SearchResultsResponse {
+  query: string;
+  cleaned_query: string;
+  /** What the buyer most likely meant; decides which section leads. */
+  intent: 'dish' | 'restaurant';
+  dishes: SearchResultDish[];
+  restaurants: SearchResultRestaurant[];
+}
+
 class SearchService {
+  /**
+   * Full results (voice or keyboard "search"): real dishes and restaurants,
+   * spelling-tolerant, with the intent decided by the server.
+   */
+  async getSearchResults(
+    query: string,
+    latitude?: number,
+    longitude?: number,
+    vegMode: VegModeType = 'off'
+  ): Promise<SearchResultsResponse> {
+    const body: any = { query };
+    if (latitude !== undefined && longitude !== undefined) {
+      body.lat = latitude;
+      body.lng = longitude;
+    }
+    if (vegMode === 'pure') body.veg_only = true;
+    const response: any = await apiService.post<any>('/api/buyer/search/results', body);
+    let node = response;
+    for (let i = 0; i < 4 && node && !Array.isArray(node.dishes); i++) node = node.data;
+    if (!node || !Array.isArray(node.dishes)) {
+      throw new Error(response?.message || 'Search failed');
+    }
+    return node as SearchResultsResponse;
+  }
+
   /**
    * Get search suggestions based on query
    * @param query - Search query string

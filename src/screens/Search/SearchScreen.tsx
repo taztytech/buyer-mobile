@@ -17,6 +17,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { OptimizedImage } from '@/components/OptimizedImage';
 import { searchService, SearchSuggestion } from '@/services/search.service';
 import { SearchBar } from '@/components/SearchBar';
+import { SearchResultsView } from '@/screens/Search/SearchResultsView';
 import { BrandedLoader } from '@/components/BrandedLoader';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -53,6 +54,8 @@ interface SearchScreenProps {
   onSearchQueryChange?: (query: string) => void;
   onSearchResultsChange?: (results: SearchSuggestion[]) => void;
   onClearSearch?: () => void;
+  /** Show full results for this query straight away (voice search). */
+  autoSubmit?: { query: string; nonce: number } | null;
 }
 
 export const SearchScreen: React.FC<SearchScreenProps> = ({
@@ -66,6 +69,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   onSearchQueryChange,
   onSearchResultsChange,
   onClearSearch,
+  autoSubmit,
 }) => {
   // Use props if provided, otherwise fall back to local state for backward compatibility
   const [localSearchQuery, setLocalSearchQuery] = useState('');
@@ -78,6 +82,14 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   const setSearchResults = onSearchResultsChange || setLocalSearchResults;
 
   const [isLoading, setIsLoading] = useState(false);
+  // Query whose full results are showing (voice, keyboard search, chips).
+  // Editing the text drops back to the live suggestions.
+  const [resultsFor, setResultsFor] = useState<string | null>(null);
+
+  useEffect(() => {
+    const q = autoSubmit?.query?.trim();
+    if (q) setResultsFor(q);
+  }, [autoSubmit?.nonce]);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -273,6 +285,13 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   };
 
   const isTyping = searchQuery.trim().length >= 2;
+  const showingResults = !!resultsFor && resultsFor === searchQuery.trim();
+  const submitSearch = (term: string) => {
+    const t = term.trim();
+    if (t.length < 2) return;
+    saveRecentSearch(t);
+    setResultsFor(t);
+  };
   return (
     <View style={styles.overlayRoot}>
       {/* The sheet: compact (recent + popular over dimmed home) when empty,
@@ -291,20 +310,45 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           backButtonColor="#14181B"
           autoFocus={true}
           cursorColor="#00B14F"
+          returnKeyType="search"
+          onSubmitEditing={() => submitSearch(searchQuery)}
         />
 
         {/* Content Area */}
         <View style={[styles.contentArea, isTyping && styles.contentAreaFull]}>
+          {/* Full results: dishes / restaurants, grouped by intent. */}
+          {showingResults && (
+            <SearchResultsView
+              query={resultsFor!}
+              lat={userLocation?.lat}
+              lng={userLocation?.lng}
+              vegMode={vegMode}
+              onOpenRestaurant={(id, name) => onSelectRestaurant?.(id, name)}
+            />
+          )}
+
           {/* Loading State */}
-          {isLoading && (
+          {!showingResults && isLoading && (
             <View style={styles.loadingContainer}>
               <BrandedLoader fullScreen={false} />
             </View>
           )}
 
           {/* Search Results */}
-          {!isLoading && searchResults.length > 0 && (
+          {!showingResults && !isLoading && searchResults.length > 0 && (
             <View style={styles.resultsContainer}>
+              <TouchableOpacity
+                style={styles.seeAllRow}
+                onPress={() => submitSearch(searchQuery)}
+                activeOpacity={0.75}
+                testID="search-see-all"
+              >
+                <MaterialIcons name="search" size={20} color="#00B14F" />
+                <Text style={styles.seeAllText} numberOfLines={1}>
+                  See all results for “{searchQuery.trim()}”
+                </Text>
+                <MaterialIcons name="arrow-forward" size={18} color="#00B14F" />
+              </TouchableOpacity>
               <FlatList
                 data={searchResults}
                 renderItem={({ item, index }) => renderSearchResult({ item, index })}
@@ -322,7 +366,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           )}
 
           {/* Empty State */}
-          {!isLoading && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
+          {!showingResults && !isLoading && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
             <View style={styles.emptyState}>
               <MaterialIcons name="search-off" size={64} color="rgba(0, 0, 0, 0.2)" />
               <Text style={styles.emptyText}>No results found</Text>
@@ -353,7 +397,10 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                       <TouchableOpacity
                         key={`recent-${term}`}
                         style={styles.chip}
-                        onPress={() => setSearchQuery(term)}
+                        onPress={() => {
+                          setSearchQuery(term);
+                          submitSearch(term);
+                        }}
                         activeOpacity={0.75}
                         testID={`recent-search-${term}`}
                       >
@@ -373,7 +420,10 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                   <TouchableOpacity
                     key={`popular-${term}`}
                     style={styles.chip}
-                    onPress={() => setSearchQuery(term)}
+                    onPress={() => {
+                      setSearchQuery(term);
+                      submitSearch(term);
+                    }}
                     activeOpacity={0.75}
                     testID={`popular-search-${term}`}
                   >
@@ -394,6 +444,23 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  seeAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF1EF',
+  },
+  seeAllText: {
+    flex: 1,
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 14,
+    letterSpacing: 0.1,
+    color: '#0A7A3C',
+  },
   overlayRoot: {
     flex: 1,
     backgroundColor: 'transparent',
