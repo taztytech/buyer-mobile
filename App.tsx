@@ -27,8 +27,6 @@ import { MyAddressesScreen } from '@/screens/Location/MyAddressesScreen';
 import { addressService, AddressResponse } from '@/services/address.service';
 import { AddressSelectionModal } from '@/components/AddressSelectionModal';
 import { CategoryResultsScreen } from '@/screens/Category/CategoryResultsScreen';
-import { HomeTabScreen } from '@/screens/HomeTab/HomeTabScreen';
-import type { HomeTabSummary } from '@/services/homeTab.service';
 import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
 import { RestaurantDetailsScreen } from '@/screens/Restaurant/RestaurantDetailsScreen';
 import { OrderDetailsScreen } from '@/screens/Order/OrderDetailsScreen';
@@ -99,7 +97,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const { showConfirmation } = useConfirmation();
 
   // Default to login so we never flash location overlays before auth resolves; logged-in startup sets home/orders explicitly.
-  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat' | 'offerDetail' | 'storeDeals' | 'wallet' | 'becomeCreator' | 'creatorProfile' | 'settings' | 'uploadVideo' | 'vcFeed' | 'homeTab'>('login');
+  const [currentScreen, setCurrentScreen] = React.useState<'login' | 'otp' | 'welcome' | 'home' | 'profile' | 'editProfile' | 'orders' | 'orderDetail' | 'rateOrder' | 'orderTracking' | 'search' | 'myAddresses' | 'addressSelection' | 'locationSelection' | 'categoryResults' | 'restaurant' | 'restaurantDetails' | 'exploreDishes' | 'checkout' | 'privacyPolicy' | 'termsConditions' | 'help' | 'contactUs' | 'faq' | 'orderHelp' | 'chat' | 'offerDetail' | 'storeDeals' | 'wallet' | 'becomeCreator' | 'creatorProfile' | 'settings' | 'uploadVideo' | 'vcFeed'>('login');
 
   // Right-edge left-swipe on Home opens the Flix feed (Instagram-style) - but
   // only when there is something to watch; otherwise a toast, never a blank
@@ -190,9 +188,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   const [selectedRestaurantId, setSelectedRestaurantId] = React.useState<number>(1);
   const [selectedRestaurantName, setSelectedRestaurantName] = React.useState('');
   const [selectedRestaurantAddress, setSelectedRestaurantAddress] = React.useState<string>('');
-  const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites' | 'orders' | 'checkout' | 'homeTab'>('home');
-  // The admin top-dash tab open in the 'homeTab' screen.
-  const [selectedHomeTab, setSelectedHomeTab] = React.useState<HomeTabSummary | null>(null);
+  const [restaurantCameFrom, setRestaurantCameFrom] = React.useState<'home' | 'category' | 'search' | 'favorites' | 'orders' | 'checkout'>('home');
   const [checkoutCameFrom, setCheckoutCameFrom] = React.useState<'restaurant' | 'home' | 'orders'>('restaurant');
   const [hasCheckoutMounted, setHasCheckoutMounted] = React.useState(false);
   const [hasSearchMounted, setHasSearchMounted] = React.useState(false);
@@ -672,7 +668,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       settings: 'Settings',
       uploadVideo: 'Upload Video',
       vcFeed: 'Video Commerce Feed',
-      homeTab: 'Home Tab',
     };
 
     const screenName = screenNameMap[currentScreen];
@@ -1230,10 +1225,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         setCurrentScreen('home');
         return true;
       case 'storeDeals':
-        setCurrentScreen('home');
-        return true;
-      case 'homeTab':
-        setSelectedHomeTab(null);
         setCurrentScreen('home');
         return true;
       case 'wallet':
@@ -2400,8 +2391,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
         setCurrentScreen('home');
       } else if (restaurantCameFrom === 'category') {
         setCurrentScreen('categoryResults');
-      } else if (restaurantCameFrom === 'homeTab') {
-        setCurrentScreen('homeTab');
       } else if (restaurantCameFrom === 'search') {
         setCurrentScreen('search');
         // Re-open search screen with animation
@@ -3333,10 +3322,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
               onNavigateToLogin={transitionGuestToLogin}
               onNavigateToOffer={handleNavigateToOffer}
               onNavigateToStore={() => setCurrentScreen('storeDeals')}
-              onNavigateToHomeTab={(tab) => {
-                setSelectedHomeTab(tab);
-                setCurrentScreen('homeTab');
-              }}
               onNavigateToWallet={(openAddMoney?: boolean) => {
                 setWalletCameFrom('home');
                 setWalletInitialAddOpen(!!openAddMoney);
@@ -3594,28 +3579,6 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           {currentScreen === 'wallet' && (
             <View style={styles.chatOverlay}>
               <WalletScreen onBack={handleBackFromWallet} initialAddOpen={walletInitialAddOpen} />
-            </View>
-          )}
-
-          {/* Admin top-dash tab: its restaurants and dishes. */}
-          {currentScreen === 'homeTab' && selectedHomeTab && (
-            <View style={styles.chatOverlay}>
-              <HomeTabScreen
-                tab={selectedHomeTab}
-                latitude={selectedLocation?.latitude}
-                longitude={selectedLocation?.longitude}
-                onBack={() => {
-                  setSelectedHomeTab(null);
-                  setCurrentScreen('home');
-                }}
-                onOpenRestaurant={(storeId, name) => {
-                  handleNavigateToRestaurantFromHome(storeId, name);
-                  // Back from the restaurant returns to this tab.
-                  setRestaurantCameFrom('homeTab');
-                }}
-                isGuest={!isAuthenticatedRef.current}
-                onNavigateToLogin={transitionGuestToLogin}
-              />
             </View>
           )}
 

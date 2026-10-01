@@ -9,7 +9,7 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Defs, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 import { OptimizedImage } from '@/components/OptimizedImage';
 
 /** An admin-created tab (home_tabs). Food is fixed and not one of these. */
@@ -21,33 +21,133 @@ export interface TopDashTab {
 
 interface ServiceTabsProps {
   tabs: TopDashTab[];
+  /** Selected admin tab id; null means Food. */
+  selectedId: number | null;
   /** Cut-out image for the Food card; the 🍔 emoji stands in when unset. */
   foodImageUrl?: string | null;
-  onTabPress: (tab: TopDashTab) => void;
+  onSelect: (tab: TopDashTab | null) => void;
 }
 
 const CREAM = '#FFF6EA';
 const FOOD_GREEN = '#0A7A3C';
 const UNDERLINE = '#FFD54A';
 const SIDE = 14;
-const OVERLAP = 14;
+const OVERLAP = 12;
+const RING = 4; // white halo around the selected card
+
+type Pt = [number, number];
 
 /**
- * Top-dash tabs: a raised cream "Food" card (the screen you are on), then
- * glossy green cards that tuck under the one before, each with a cut-out food
- * image, a two-line title and a short underline. Page dots follow the scroll.
+ * Closed path through `pts` with each corner rounded by `r` (quadratic
+ * curves), so the card keeps the soft, slightly lopsided look of the
+ * reference instead of a plain rounded rectangle.
  */
-export const ServiceTabs: React.FC<ServiceTabsProps> = ({ tabs, foodImageUrl, onTabPress }) => {
+const roundedPolygon = (pts: Pt[], r: number): string => {
+  const n = pts.length;
+  let d = '';
+  for (let i = 0; i < n; i++) {
+    const prev = pts[(i - 1 + n) % n];
+    const cur = pts[i];
+    const next = pts[(i + 1) % n];
+    const toward = (a: Pt, b: Pt): Pt => {
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      const len = Math.hypot(dx, dy) || 1;
+      const k = Math.min(r, len / 2) / len;
+      return [a[0] + dx * k, a[1] + dy * k];
+    };
+    const start = toward(cur, prev);
+    const end = toward(cur, next);
+    d += `${i === 0 ? 'M' : 'L'}${start[0].toFixed(1)},${start[1].toFixed(1)} `;
+    d += `Q${cur[0].toFixed(1)},${cur[1].toFixed(1)} ${end[0].toFixed(1)},${end[1].toFixed(1)} `;
+  }
+  return `${d}Z`;
+};
+
+/**
+ * Card outline inside a w×h box: a little narrower at the top than the bottom
+ * and, for the unselected cards, a top edge that dips to the right — the
+ * tilted-tile look of the reference.
+ */
+const cardPath = (w: number, h: number, inset: number, tilt: boolean): string => {
+  const x0 = inset;
+  const y0 = inset;
+  const x1 = w - inset;
+  const y1 = h - inset;
+  const cw = x1 - x0;
+  const ch = y1 - y0;
+  const topIn = cw * 0.05;
+  const dip = tilt ? ch * 0.07 : ch * 0.02;
+  const pts: Pt[] = [
+    [x0 + topIn, y0],
+    [x1 - topIn * 0.6, y0 + dip],
+    [x1, y1],
+    [x0, y1],
+  ];
+  return roundedPolygon(pts, Math.min(cw, ch) * 0.3);
+};
+
+const TabShape: React.FC<{ w: number; h: number; selected: boolean; gradId: string }> = ({
+  w,
+  h,
+  selected,
+  gradId,
+}) => (
+  <Svg width={w} height={h} style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Defs>
+      <SvgGradient id={gradId} x1="0.15" y1="0" x2="0.85" y2="1">
+        <Stop offset="0" stopColor="#3DDA83" />
+        <Stop offset="0.55" stopColor="#14A954" />
+        <Stop offset="1" stopColor="#0A8F43" />
+      </SvgGradient>
+    </Defs>
+    {/* soft drop shadow */}
+    <Path
+      d={cardPath(w, h, RING, !selected)}
+      fill="rgba(0,45,20,0.18)"
+      transform="translate(1.5, 3)"
+    />
+    {selected ? (
+      <>
+        <Path d={cardPath(w, h, 0, false)} fill="rgba(255,255,255,0.42)" />
+        <Path d={cardPath(w, h, RING, false)} fill={CREAM} />
+      </>
+    ) : (
+      <Path
+        d={cardPath(w, h, RING, true)}
+        fill={`url(#${gradId})`}
+        stroke="rgba(255,255,255,0.32)"
+        strokeWidth={1}
+      />
+    )}
+  </Svg>
+);
+
+/**
+ * Top-dash tabs: Food first, then the admin tabs, each tucked under the one
+ * before. The selected one is the cream card; tapping another switches Home
+ * in place (no new screen).
+ */
+export const ServiceTabs: React.FC<ServiceTabsProps> = ({
+  tabs,
+  selectedId,
+  foodImageUrl,
+  onSelect,
+}) => {
   const { width } = useWindowDimensions();
   const [page, setPage] = useState(0);
 
-  // Four cards fill the row like the reference: Food a little larger.
-  const foodW = Math.round(width * 0.29);
-  const foodH = Math.round(foodW * 1.0);
-  const tabW = Math.round(width * 0.265);
-  const tabH = Math.round(foodH * 0.92);
+  // Four cards across, like the reference.
+  const cardW = Math.round((width - SIDE * 2 + OVERLAP * 3) / 4);
+  const cardH = Math.round(cardW * 0.9);
+  const artH = Math.round(cardH * 0.46);
 
-  const contentW = SIDE * 2 + foodW + tabs.length * (tabW - OVERLAP);
+  const all: Array<{ key: string; tab: TopDashTab | null }> = [
+    { key: 'food', tab: null },
+    ...tabs.map(t => ({ key: `t-${t.id}`, tab: t })),
+  ];
+
+  const contentW = SIDE * 2 + cardW + tabs.length * (cardW - OVERLAP);
   const pages = Math.max(1, Math.ceil((contentW - 1) / width));
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -66,70 +166,62 @@ export const ServiceTabs: React.FC<ServiceTabsProps> = ({ tabs, foodImageUrl, on
         onScroll={onScroll}
         scrollEventThrottle={32}
       >
-        <View
-          style={[styles.foodCard, { width: foodW, height: foodH }]}
-          testID="service-tab-food"
-          accessibilityRole="tab"
-          accessibilityState={{ selected: true }}
-          accessibilityLabel="Food"
-        >
-          <View style={[styles.foodArt, { height: foodH * 0.56 }]}>
-            {foodImageUrl ? (
-              <OptimizedImage
-                source={foodImageUrl}
-                style={styles.fill}
-                contentFit="contain"
-                showShimmer={false}
-                cachePolicy="memory-disk"
-              />
-            ) : (
-              <Text style={[styles.foodEmoji, { fontSize: foodH * 0.34 }]}>🍔</Text>
-            )}
-          </View>
-          <Text style={styles.foodLabel}>Food</Text>
-          <View style={[styles.underline, styles.underlineFood]} />
-        </View>
-
-        {tabs.map((tab, i) => (
-          <TouchableOpacity
-            key={tab.id}
-            activeOpacity={0.88}
-            onPress={() => onTabPress(tab)}
-            style={[
-              styles.tabCard,
-              { width: tabW, height: tabH, zIndex: tabs.length - i, elevation: 4 },
-            ]}
-            testID={`service-tab-${tab.id}`}
-            accessibilityRole="tab"
-            accessibilityLabel={tab.title}
-          >
-            <LinearGradient
-              colors={['#34D27A', '#12A853', '#0B9446']}
-              locations={[0, 0.55, 1]}
-              start={{ x: 0.1, y: 0 }}
-              end={{ x: 0.9, y: 1 }}
-              style={[styles.tabFill, { paddingLeft: OVERLAP }]}
+        {all.map(({ key, tab }, i) => {
+          const isFood = tab === null;
+          const selected = isFood ? selectedId === null : selectedId === tab!.id;
+          const title = isFood ? 'Food' : tab!.title;
+          const image = isFood ? foodImageUrl : tab!.imageUrl;
+          return (
+            <TouchableOpacity
+              key={key}
+              activeOpacity={0.9}
+              onPress={() => onSelect(tab)}
+              style={[
+                styles.card,
+                {
+                  width: cardW,
+                  height: cardH,
+                  marginLeft: i === 0 ? 0 : -OVERLAP,
+                  // Selected card on top; otherwise each sits over the next.
+                  zIndex: selected ? 100 : all.length - i,
+                  transform: [{ translateY: selected ? -2 : 0 }],
+                },
+              ]}
+              testID={isFood ? 'service-tab-food' : `service-tab-${tab!.id}`}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              accessibilityLabel={title}
             >
-              {/* Gloss along the top edge, as on the reference cards. */}
-              <View style={styles.gloss} pointerEvents="none" />
-              <View style={[styles.tabArt, { height: tabH * 0.5 }]}>
-                {tab.imageUrl ? (
-                  <OptimizedImage
-                    source={tab.imageUrl}
-                    style={styles.fill}
-                    contentFit="contain"
-                    showShimmer={false}
-                    cachePolicy="memory-disk"
-                  />
-                ) : null}
+              <TabShape w={cardW} h={cardH} selected={selected} gradId={`tabg-${key}`} />
+              <View style={[styles.inner, { paddingLeft: i === 0 ? 6 : OVERLAP }]}>
+                <View style={[styles.art, { height: artH }]}>
+                  {image ? (
+                    <OptimizedImage
+                      source={image}
+                      style={styles.fill}
+                      contentFit="contain"
+                      showShimmer={false}
+                      cachePolicy="memory-disk"
+                    />
+                  ) : isFood ? (
+                    <Text style={[styles.emoji, { fontSize: artH * 0.78 }]}>🍔</Text>
+                  ) : null}
+                </View>
+                <Text
+                  style={[
+                    styles.title,
+                    isFood && styles.titleFood,
+                    selected ? styles.titleSelected : styles.titlePlain,
+                  ]}
+                  numberOfLines={2}
+                >
+                  {title}
+                </Text>
+                <View style={[styles.underline, selected && styles.underlineSelected]} />
               </View>
-              <Text style={styles.tabLabel} numberOfLines={2}>
-                {tab.title}
-              </Text>
-              <View style={styles.underline} />
-            </LinearGradient>
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
       {pages > 1 && (
@@ -144,99 +236,56 @@ export const ServiceTabs: React.FC<ServiceTabsProps> = ({ tabs, foodImageUrl, on
 };
 
 const styles = StyleSheet.create({
-  content: { paddingTop: 4, paddingBottom: 6, alignItems: 'center' },
+  content: { paddingTop: 4, paddingBottom: 2, alignItems: 'center' },
   fill: { width: '100%', height: '100%' },
-
-  foodCard: {
-    borderRadius: 30,
-    backgroundColor: CREAM,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 6,
-    zIndex: 99,
-    elevation: 8,
-    shadowColor: '#00391A',
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    shadowOffset: { width: 2, height: 5 },
-    borderWidth: 4,
-    borderColor: 'rgba(255,255,255,0.65)',
-  },
-  foodArt: { width: '86%', alignItems: 'center', justifyContent: 'center' },
-  foodEmoji: { textAlign: 'center' },
-  foodLabel: {
-    fontFamily: 'Poppins',
-    fontWeight: '800',
-    fontSize: 21,
-    lineHeight: 26,
-    letterSpacing: 0.2,
-    color: FOOD_GREEN,
-  },
-
-  tabCard: {
-    marginLeft: -OVERLAP,
-    borderRadius: 26,
-    shadowColor: '#00391A',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: -3, height: 4 },
-  },
-  tabFill: {
+  card: { justifyContent: 'center' },
+  inner: {
     flex: 1,
-    borderRadius: 26,
-    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     paddingRight: 6,
-    paddingTop: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
+    paddingTop: 6,
+    paddingBottom: 6,
   },
-  gloss: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '38%',
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-  },
-  tabArt: { width: '92%', alignItems: 'center', justifyContent: 'center' },
-  tabLabel: {
+  art: { width: '84%', alignItems: 'center', justifyContent: 'center' },
+  emoji: { textAlign: 'center' },
+  title: {
     fontFamily: 'Poppins',
     fontWeight: '800',
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 11.5,
+    lineHeight: 14,
     letterSpacing: 0.1,
-    color: '#FFFFFF',
     textAlign: 'center',
     marginTop: 2,
-    textShadowColor: 'rgba(0,0,0,0.18)',
+  },
+  titleFood: { fontSize: 16, lineHeight: 19 },
+  titlePlain: {
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+  titleSelected: { color: FOOD_GREEN },
   underline: {
-    width: 30,
-    height: 3.5,
+    width: 24,
+    height: 3,
     borderRadius: 2,
     backgroundColor: UNDERLINE,
-    marginTop: 4,
+    marginTop: 3,
   },
-  underlineFood: { backgroundColor: FOOD_GREEN, width: 34 },
-
+  underlineSelected: { backgroundColor: FOOD_GREEN, width: 28 },
   dots: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 6,
   },
   dot: {
-    width: 10,
-    height: 6,
+    width: 8,
+    height: 5,
     borderRadius: 3,
     backgroundColor: 'rgba(255,255,255,0.45)',
     marginHorizontal: 3,
   },
-  dotActive: { width: 20, backgroundColor: '#FFFFFF' },
+  dotActive: { width: 18, backgroundColor: '#FFFFFF' },
 });

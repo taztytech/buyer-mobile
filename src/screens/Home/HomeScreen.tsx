@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ScrollView, FlatList, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, Image, ScrollView, FlatList, Keyboard, Platform, ActivityIndicator, Animated, RefreshControl, Linking, useWindowDimensions, BackHandler } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { resolveBannerFont } from '../../constants/bannerFonts';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ import type { HeroSlide, OrgCard } from '@/components/home/HomeTopDash';
 import { ServiceTabs } from '@/components/home/ServiceTabs';
 import type { TopDashTab } from '@/components/home/ServiceTabs';
 import type { HomeTabSummary } from '@/services/homeTab.service';
+import { HomeTabContent } from '@/components/home/HomeTabContent';
 import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
 import storeDealService, {
   type StoreDeal,
@@ -91,8 +92,6 @@ interface HomeScreenProps {
   onFlixIntroEnabledChange?: (enabled: boolean) => void;
   /** Open the ₹99 Store page (hero tap or "See all"). */
   onNavigateToStore?: () => void;
-  /** Open an admin top-dash tab (its restaurants and dishes). */
-  onNavigateToHomeTab?: (tab: HomeTabSummary) => void;
 }
 
 interface CarouselItem {
@@ -180,7 +179,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   isFocused = true,
   onForcedUpdateRequired,
   onNavigateToStore,
-  onNavigateToHomeTab,
 }) => {
   const {
     restaurantId,
@@ -314,6 +312,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Top-dash tabs after "Food", from the home payload (admin-managed).
   const [homeTabs, setHomeTabs] = React.useState<HomeTabSummary[]>([]);
   const [foodTabImageUrl, setFoodTabImageUrl] = React.useState<string | null>(null);
+  // Selected top-dash tab; null = Food (the normal home feed). Switching is in
+  // place - the tabs and search stay, only the content below changes.
+  const [selectedHomeTab, setSelectedHomeTab] = React.useState<HomeTabSummary | null>(null);
+  const selectedHomeTabRef = React.useRef<HomeTabSummary | null>(null);
+  selectedHomeTabRef.current = selectedHomeTab;
   const [offerBanners, setOfferBanners] = React.useState<Offer[]>([]);
   // ₹99 Store deals. Arrive with the home payload already carrying their
   // state, so the row renders without a request of its own.
@@ -611,6 +614,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       homeTabs.map(t => ({ id: t.id, title: t.title, imageUrl: t.image_url })),
     [homeTabs],
   );
+  // A tab the admin removed or hid drops the selection back to Food.
+  React.useEffect(() => {
+    if (selectedHomeTab && !homeTabs.some(t => t.id === selectedHomeTab.id)) {
+      setSelectedHomeTab(null);
+    }
+  }, [homeTabs, selectedHomeTab]);
+
+  // Hardware back on a selected tab returns to Food instead of leaving Home.
+  React.useEffect(() => {
+    if (!selectedHomeTab || !isFocused) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSelectedHomeTab(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [selectedHomeTab, isFocused]);
+
+  const handleSelectHomeTab = React.useCallback((tab: TopDashTab | null) => {
+    setSelectedHomeTab(
+      tab ? { id: tab.id, title: tab.title, image_url: tab.imageUrl ?? null } : null,
+    );
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+  }, []);
+
   const heroSlides = React.useMemo<HeroSlide[]>(
     () =>
       carouselData.map(c => ({
@@ -2050,7 +2077,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         restaurant_scroll_count: scrollCount,
       });
     }
-    if (distanceFromBottom < 500) {
+    if (distanceFromBottom < 500 && !selectedHomeTabRef.current) {
       if (hasMoreRestaurants && !isLoadingMore && !isLoadingRestaurants) {
         loadMoreRestaurants();
       }
@@ -2275,14 +2302,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <View style={styles.serviceTabsWrap}>
                   <ServiceTabs
                     tabs={topDashTabs}
+                    selectedId={selectedHomeTab?.id ?? null}
                     foodImageUrl={foodTabImageUrl}
-                    onTabPress={(tab) =>
-                      onNavigateToHomeTab?.({
-                        id: tab.id,
-                        title: tab.title,
-                        image_url: tab.imageUrl ?? null,
-                      })
-                    }
+                    onSelect={handleSelectHomeTab}
                   />
                 </View>
               )}
@@ -2374,7 +2396,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
               {/* Hero: rotating restaurant banners, then the home (org)
                   banners as small image/video cards - all on the green. */}
-              {isLocationServiceable && (
+              {isLocationServiceable && !selectedHomeTab && (
                 <View style={styles.topDashBleed}>
                   <HeroCarousel
                     slides={heroSlides}
@@ -2386,7 +2408,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <OrgCards cards={orgCards} />
                 </View>
               )}
-              {isLocationServiceable && heroSlides.length === 0 && orgCards.length === 0 && (
+              {isLocationServiceable && (!!selectedHomeTab || (heroSlides.length === 0 && orgCards.length === 0)) && (
                 <View style={{ height: 16 }} />
               )}
             </View>
@@ -2409,7 +2431,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             )}
 
             {/* Ad Banner Carousel or Closed Banner */}
-            {isLocationServiceable && (
+            {/* A selected top-dash tab replaces the Food feed below. */}
+            {isLocationServiceable && selectedHomeTab && (
+              <HomeTabContent
+                tab={selectedHomeTab}
+                latitude={externalSelectedLocation?.latitude || defaultAddressCoords?.latitude}
+                longitude={externalSelectedLocation?.longitude || defaultAddressCoords?.longitude}
+                onOpenRestaurant={(id, name) => onNavigateToRestaurant?.(id, name)}
+                isGuest={isGuest}
+                onNavigateToLogin={onNavigateToLogin}
+              />
+            )}
+
+            {isLocationServiceable && !selectedHomeTab && (
               <>
                 {/* Categories: large circular food images with a label below,
                     under a "What's on your mind?" title; View All opens the grid. */}
@@ -2903,8 +2937,8 @@ const styles = StyleSheet.create({
   headerBackground: {
     width: '100%',
     paddingHorizontal: 20,
-    paddingBottom: 12,
-    gap: 12,
+    paddingBottom: 6,
+    gap: 8,
     minHeight: 180,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
@@ -3106,7 +3140,7 @@ const styles = StyleSheet.create({
   // Search section
   // The top-dash pieces size themselves to the window, so they step out of
   // the header's 20px side padding.
-  serviceTabsWrap: { marginHorizontal: -20, marginTop: 8 },
+  serviceTabsWrap: { marginHorizontal: -20, marginTop: 2 },
   topDashBleed: { marginHorizontal: -20, marginTop: -4 },
   searchBarWhite: {
     backgroundColor: '#FFFFFF',
@@ -3122,13 +3156,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    height: 50,
+    height: 48,
     gap: 11,
-    marginTop: 16,
+    marginTop: 6,
   },
   searchBar: {
     flex: 1,
-    height: 50,
+    height: 48,
     borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',

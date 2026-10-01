@@ -37,7 +37,7 @@ const VIDEO_MS = 10000;
 export const HeroCarousel: React.FC<HeroCarouselProps> = ({ slides, onPress }) => {
   const { width } = useWindowDimensions();
   const cardW = width - SIDE * 2;
-  const cardH = Math.round(cardW * 0.5);
+  const cardH = Math.round(cardW * 0.34);
   const ref = useRef<ScrollView>(null);
   const [index, setIndex] = useState(0);
   const draggingRef = useRef(false);
@@ -151,7 +151,7 @@ export const OrgCards: React.FC<OrgCardsProps> = ({ cards, onPress }) => {
   const perRow = Math.min(4, cards.length);
   const avail = width - SIDE * 2 - CARD_GAP * (perRow - 1);
   const cardW = cards.length > 4 ? (width - SIDE * 2 - CARD_GAP * 4) / 4.3 : avail / perRow;
-  const cardH = Math.round(Math.max(118, Math.min(150, cardW * 1.15)));
+  const cardH = 76;
 
   return (
     <ScrollView
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     borderRadius: 20,
     overflow: 'hidden',
-    marginTop: 14,
+    marginTop: 10,
     backgroundColor: FOOD_GREEN,
   },
   heroFallbackTitle: {
@@ -255,8 +255,8 @@ const styles = StyleSheet.create({
   /* org cards */
   orgRow: {
     paddingHorizontal: SIDE,
-    paddingTop: 12,
-    paddingBottom: 16,
+    paddingTop: 10,
+    paddingBottom: 14,
   },
   orgCard: {
     borderRadius: 16,
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 64,
+    height: 44,
   },
   orgTitle: {
     position: 'absolute',
@@ -278,8 +278,8 @@ const styles = StyleSheet.create({
     right: 8,
     fontFamily: 'Poppins',
     fontWeight: '800',
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 13,
     letterSpacing: 0.1,
     color: '#FFFFFF',
     textAlign: 'center',
