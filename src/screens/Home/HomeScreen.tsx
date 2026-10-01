@@ -49,6 +49,7 @@ import { OptimizedImage } from '@/components/OptimizedImage';
 import { AppFooter } from '@/components/AppFooter';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path as SvgPath } from 'react-native-svg';
 import { Video, ResizeMode } from 'expo-av';
 import { ViewCartBar } from '@/components/ViewCartBar';
 import { BottomNav } from '@/components/BottomNav';
@@ -71,6 +72,36 @@ const HEADER_BACKGROUND_HEIGHT = 300;
 /** Tint behind a picked category and its results, and its tab outline. */
 const WOYM_PANEL = '#EAF8EF';
 const WOYM_TAB_BORDER = '#9BD8B2';
+/** Size of every item in the row while a category is picked. */
+const WOYM_ITEM_W = 80;
+const WOYM_ITEM_H = 112;
+const WOYM_TOP_R = 22; // rounded top corners
+const WOYM_FLARE = 12; // inverted corners where the sides meet the line
+const WOYM_STROKE = 1.4;
+
+/** Outline (open at the bottom) and fill of the picked-category tab. */
+const woymTabPaths = () => {
+  const w = WOYM_ITEM_W;
+  const h = WOYM_ITEM_H;
+  const r = WOYM_TOP_R;
+  const f = WOYM_FLARE;
+  const s = WOYM_STROKE / 2;
+  const x0 = f; // tab's left edge inside the wider canvas
+  const x1 = f + w; // right edge
+  const outline =
+    `M0,${h - s} ` +
+    `C${f * 0.55},${h - s} ${x0},${h - f * 0.45} ${x0},${h - f} ` +
+    `L${x0},${r + s} ` +
+    `C${x0},${s + r * 0.45} ${x0 + r * 0.45},${s} ${x0 + r},${s} ` +
+    `L${x1 - r},${s} ` +
+    `C${x1 - r * 0.45},${s} ${x1},${s + r * 0.45} ${x1},${r + s} ` +
+    `L${x1},${h - f} ` +
+    `C${x1},${h - f * 0.45} ${x1 + f * 0.45},${h - s} ${x1 + f},${h - s}`;
+  // Same shape closed along the bottom: paints over the line under the tab.
+  const fill = `${outline} L${x1 + f},${h} L0,${h} Z`;
+  return { outline, fill, width: w + f * 2, height: h };
+};
+const WOYM_TAB = woymTabPaths();
 /** Promotional carousel banner card height */
 const STORE_BANNER_HEIGHT = 220;
 const HOME_TOP_BG_FALLBACK = '#8B1D2C';
@@ -2134,6 +2165,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         }}
         activeOpacity={0.7}
       >
+        {isSelected && (
+          <Svg
+            width={WOYM_TAB.width}
+            height={WOYM_TAB.height}
+            style={styles.woymTabSvg}
+            pointerEvents="none"
+          >
+            <SvgPath d={WOYM_TAB.fill} fill={WOYM_PANEL} />
+            <SvgPath
+              d={WOYM_TAB.outline}
+              fill="none"
+              stroke={WOYM_TAB_BORDER}
+              strokeWidth={WOYM_STROKE}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </Svg>
+        )}
         <View
           style={[
             styles.categoryBadgeImageWrap,
@@ -2644,7 +2693,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                           keyExtractor={(item) => item.id.toString()}
                           horizontal
                           showsHorizontalScrollIndicator={false}
-                          contentContainerStyle={styles.categoryListContent}
+                          contentContainerStyle={[
+                            styles.categoryListContent,
+                            selectedWoym && styles.categoryListContentPanel,
+                          ]}
                           extraData={selectedWoym}
                           testID="category-list"
                         />
@@ -3839,28 +3891,31 @@ const styles = StyleSheet.create({
   categoryListContainerPanel: {
     backgroundColor: 'transparent',
     paddingBottom: 0,
+    paddingLeft: 0,
   },
+  // Inside the list so the first tab's flared corner is not clipped.
+  categoryListContentPanel: { paddingLeft: 20, alignItems: 'flex-end' },
   woymRowLine: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: 1,
+    height: WOYM_STROKE,
     backgroundColor: WOYM_TAB_BORDER,
   },
   categoryBadgeOnPanel: {
-    marginRight: 2,
-    paddingTop: 8,
-    paddingBottom: 10,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    borderColor: 'transparent',
+    width: WOYM_ITEM_W,
+    height: WOYM_ITEM_H,
+    marginRight: 4,
+    paddingTop: 10,
+    justifyContent: 'flex-start',
   },
-  categoryBadgeSelected: {
-    backgroundColor: WOYM_PANEL,
-    borderColor: WOYM_TAB_BORDER,
+  // Above its neighbours so the flared corners draw over the gaps.
+  categoryBadgeSelected: { zIndex: 2 },
+  woymTabSvg: {
+    position: 'absolute',
+    left: -WOYM_FLARE,
+    top: 0,
   },
   categoryBadgeImageWrapPanel: {
     backgroundColor: '#F6FCF8',
