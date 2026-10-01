@@ -68,6 +68,9 @@ import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from '@/se
 // Only needs to cover pull-to-refresh overscroll; taller would show through
 // the header's rounded bottom corners.
 const HEADER_BACKGROUND_HEIGHT = 300;
+/** Tint behind a picked category and its results, and its tab outline. */
+const WOYM_PANEL = '#EAF8EF';
+const WOYM_TAB_BORDER = '#9BD8B2';
 /** Promotional carousel banner card height */
 const STORE_BANNER_HEIGHT = 220;
 const HOME_TOP_BG_FALLBACK = '#8B1D2C';
@@ -334,6 +337,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // replace the feed below the row, in place. Back clears it.
   const [selectedWoym, setSelectedWoym] = React.useState<CategoryItem | null>(null);
   const categoriesRowY = React.useRef(0);
+  const lastScrollY = React.useRef(0);
+  const scrollBeforeWoym = React.useRef<number | null>(null);
   // Restaurant-list filters (filter bar) and their sheets; voice search.
   const [homeFilters, setHomeFilters] = React.useState<HomeFilterState>(EMPTY_FILTERS);
   const homeFiltersRef = React.useRef<HomeFilterState>(EMPTY_FILTERS);
@@ -699,8 +704,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [selectedWoym, isFocused]);
 
   React.useEffect(() => {
-    if (selectedWoym && categoriesRowY.current > 0) {
-      scrollViewRef.current?.scrollTo({ y: Math.max(0, categoriesRowY.current - 60), animated: true });
+    if (selectedWoym) {
+      if (categoriesRowY.current > 0) {
+        scrollViewRef.current?.scrollTo({ y: Math.max(0, categoriesRowY.current - 60), animated: true });
+      }
+      return;
+    }
+    // Back from a category: return to exactly where the user was.
+    const y = scrollBeforeWoym.current;
+    if (y !== null) {
+      scrollBeforeWoym.current = null;
+      requestAnimationFrame(() => scrollViewRef.current?.scrollTo({ y, animated: false }));
     }
   }, [selectedWoym]);
 
@@ -2102,18 +2116,31 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
     return (
       <TouchableOpacity
-        style={[styles.categoryBadge, isSelected && styles.categoryBadgeSelected]}
+        style={[
+          styles.categoryBadge,
+          selectedWoym && styles.categoryBadgeOnPanel,
+          isSelected && styles.categoryBadgeSelected,
+        ]}
         testID={`category-${item.id}`}
         onPress={() => {
           if (isViewAll) {
             setShowCategoryModal(true);
           } else {
-            setSelectedWoym(prev => (prev && String(prev.id) === String(item.id) ? null : item));
+            setSelectedWoym(prev => {
+              if (!prev) scrollBeforeWoym.current = lastScrollY.current;
+              return prev && String(prev.id) === String(item.id) ? null : item;
+            });
           }
         }}
         activeOpacity={0.7}
       >
-        <View style={[styles.categoryBadgeImageWrap, isViewAll && styles.categoryBadgeImageWrapViewAll]}>
+        <View
+          style={[
+            styles.categoryBadgeImageWrap,
+            isViewAll && styles.categoryBadgeImageWrapViewAll,
+            selectedWoym && styles.categoryBadgeImageWrapPanel,
+          ]}
+        >
           {isViewAll ? (
             <MaterialIcons name="apps" size={30} color="#00B14F" testID={`category-image-${item.id}`} />
           ) : (
@@ -2134,7 +2161,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           )}
         </View>
         <Text
-          style={[styles.categoryBadgeLabel, isSelected && styles.categoryBadgeLabelSelected]}
+          style={[
+            styles.categoryBadgeLabel,
+            selectedWoym && !isSelected && styles.categoryBadgeLabelDim,
+            isSelected && styles.categoryBadgeLabelSelected,
+          ]}
           numberOfLines={1}
           testID={`category-name-${item.id}`}
         >
@@ -2164,6 +2195,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Handle scroll to detect when category section becomes sticky and load more restaurants
   const handleScroll = React.useCallback((event: any) => {
     const scrollY = event.nativeEvent.contentOffset.y;
+    lastScrollY.current = scrollY;
 
     // Cart pill gets out of the way while the customer browses.
     hideCartBarOnScroll(scrollY);
@@ -2252,7 +2284,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          removeClippedSubviews={true}
+          // Off on purpose: with it on, Android left re-shown sections blank
+          // until the next scroll (white page after leaving a category).
+          removeClippedSubviews={false}
           decelerationRate="normal"
           refreshControl={
             <RefreshControl
@@ -2575,15 +2609,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     under a "What's on your mind?" title; View All opens the grid. */}
                 {shouldShowBadgesRow && (
                   <View
+                    style={selectedWoym ? styles.woymPanel : undefined}
                     onLayout={(e) => {
                       categoriesRowY.current = solidTopY.current + e.nativeEvent.layout.y;
                     }}
                   >
                     {!isCategorySectionSticky && (
-                      <Text style={styles.whatsOnTitle}>{woymTitle}</Text>
+                      <Text style={[styles.whatsOnTitle, selectedWoym && styles.transparentBg]}>{woymTitle}</Text>
                     )}
                     <View style={[
                       styles.categoryListContainer,
+                      selectedWoym && styles.categoryListContainerPanel,
                       isCategorySectionSticky && styles.categoryListContainerSticky
                     ]}>
                       {showCategoryShimmer ? (
@@ -2600,6 +2636,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                           ))}
                         </ScrollView>
                       ) : (
+                        <>
+                        {selectedWoym && <View style={styles.woymRowLine} pointerEvents="none" />}
                         <FlatList
                           data={categoryData}
                           renderItem={renderCategoryItem}
@@ -2610,6 +2648,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                           extraData={selectedWoym}
                           testID="category-list"
                         />
+                        </>
                       )}
                     </View>
                   </View>
@@ -2618,6 +2657,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 {/* A picked category: its dishes + restaurants, in place of
                     the feed below. */}
                 {selectedWoym && (
+                  <LinearGradient
+                    colors={[WOYM_PANEL, '#F4FBF6', colors.background]}
+                    locations={[0, 0.3, 0.55]}
+                  >
                   <CategoryResultsBody
                     categoryId={selectedWoym.id}
                     categoryName={selectedWoym.name}
@@ -2627,10 +2670,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     isGuest={isGuest}
                     onNavigateToLogin={onNavigateToLogin}
                   />
+                  </LinearGradient>
                 )}
 
-                {!selectedWoym && (
-                <>
+                {/* The normal feed stays mounted (hidden) while a category is
+                    open, so Back shows it instantly with its state intact. */}
+                <View style={selectedWoym ? styles.feedHidden : undefined}>
                 {/* ₹99 Store: placed right after "What's on your mind?".
                     Renders nothing when there are no live deals. */}
                 <StoreDealsSection
@@ -2882,7 +2927,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         )}
                         keyExtractor={(restaurant) => restaurant.id.toString()}
                         scrollEnabled={false}
-                        removeClippedSubviews={true}
+                        removeClippedSubviews={false}
                         maxToRenderPerBatch={3}
                         windowSize={3}
                         initialNumToRender={2}
@@ -2904,8 +2949,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     )}
                   </View>
                 )}
-                </>
-                )}
+                </View>
               </>
             )}
 
@@ -3787,14 +3831,42 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  categoryBadgeSelected: {
-    backgroundColor: '#DDF4E5',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#00B14F',
-    paddingTop: 6,
-    paddingBottom: 6,
+  // "What's on your mind?" with a category picked: one tinted panel, the
+  // picked item a folder tab opening into the results (reference style).
+  woymPanel: { backgroundColor: WOYM_PANEL },
+  transparentBg: { backgroundColor: 'transparent' },
+  feedHidden: { display: 'none' },
+  categoryListContainerPanel: {
+    backgroundColor: 'transparent',
+    paddingBottom: 0,
   },
+  woymRowLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 1,
+    backgroundColor: WOYM_TAB_BORDER,
+  },
+  categoryBadgeOnPanel: {
+    marginRight: 2,
+    paddingTop: 8,
+    paddingBottom: 10,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: 'transparent',
+  },
+  categoryBadgeSelected: {
+    backgroundColor: WOYM_PANEL,
+    borderColor: WOYM_TAB_BORDER,
+  },
+  categoryBadgeImageWrapPanel: {
+    backgroundColor: '#F6FCF8',
+    borderColor: 'rgba(255,255,255,0.9)',
+  },
+  categoryBadgeLabelDim: { fontWeight: '500', color: '#3B4540' },
   categoryBadgeLabelSelected: { color: '#0A7A3C', fontWeight: '700' },
   categoryBadgeLabel: {
     marginTop: 8,
