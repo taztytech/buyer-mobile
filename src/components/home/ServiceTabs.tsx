@@ -25,6 +25,8 @@ interface ServiceTabsProps {
   selectedId: number | null;
   /** Cut-out image for the Food card; the 🍔 emoji stands in when unset. */
   foodImageUrl?: string | null;
+  /** Admin-set name of the first card (HOME_FOOD_TAB_TITLE). */
+  foodTitle?: string;
   onSelect: (tab: TopDashTab | null) => void;
 }
 
@@ -132,6 +134,7 @@ export const ServiceTabs: React.FC<ServiceTabsProps> = ({
   tabs,
   selectedId,
   foodImageUrl,
+  foodTitle,
   onSelect,
 }) => {
   const { width } = useWindowDimensions();
@@ -169,7 +172,7 @@ export const ServiceTabs: React.FC<ServiceTabsProps> = ({
         {all.map(({ key, tab }, i) => {
           const isFood = tab === null;
           const selected = isFood ? selectedId === null : selectedId === tab!.id;
-          const title = isFood ? 'Food' : tab!.title;
+          const title = isFood ? foodTitle || 'Food' : tab!.title;
           const image = isFood ? foodImageUrl : tab!.imageUrl;
           return (
             <TouchableOpacity

@@ -312,6 +312,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Top-dash tabs after "Food", from the home payload (admin-managed).
   const [homeTabs, setHomeTabs] = React.useState<HomeTabSummary[]>([]);
   const [foodTabImageUrl, setFoodTabImageUrl] = React.useState<string | null>(null);
+  const [foodTabTitle, setFoodTabTitle] = React.useState('Food');
   // Selected top-dash tab; null = Food (the normal home feed). Switching is in
   // place - the tabs and search stay, only the content below changes.
   const [selectedHomeTab, setSelectedHomeTab] = React.useState<HomeTabSummary | null>(null);
@@ -1353,6 +1354,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         const homeTabsRaw = (actualData as any).home_tabs;
         setHomeTabs(Array.isArray(homeTabsRaw) ? homeTabsRaw : []);
         setFoodTabImageUrl((actualData as any).home_food_tab_image_url || null);
+        setFoodTabTitle((actualData as any).home_food_tab_title || 'Food');
 
         const orgBannerRaw = (actualData as any).organization_banner;
         if (orgBannerRaw && Array.isArray(orgBannerRaw)) {
@@ -2304,6 +2306,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     tabs={topDashTabs}
                     selectedId={selectedHomeTab?.id ?? null}
                     foodImageUrl={foodTabImageUrl}
+                    foodTitle={foodTabTitle}
                     onSelect={handleSelectHomeTab}
                   />
                 </View>
