@@ -2584,21 +2584,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               {/* Hero: rotating restaurant banners, then the home (org)
                   banners as small image/video cards - all on the green. */}
               {isLocationServiceable && !selectedHomeTab && (
-                <View style={styles.topDashBleed}>
-                  <HeroCarousel
-                    slides={heroSlides}
-                    onPress={(s) => {
-                      const item = carouselData.find(c => c.id === s.id);
-                      if (item) handleBannerCTAClick(item);
-                    }}
-                  />
+                <View style={[styles.topDashBleed, styles.orgCardsOnly]}>
                   <OrgCards cards={orgCards} />
                 </View>
               )}
-              {isLocationServiceable && (!!selectedHomeTab || (heroSlides.length === 0 && orgCards.length === 0)) && (
+              {isLocationServiceable && (!!selectedHomeTab || orgCards.length === 0) && (
                 <View style={{ height: 16 }} />
               )}
             </View>
+
+            {/* Rotating restaurant banners: on white, just under the green
+                top-dash and above the filter pills. */}
+            {isLocationServiceable && !selectedHomeTab && heroSlides.length > 0 && (
+              <View style={styles.heroBelowDash}>
+                <HeroCarousel
+                  slides={heroSlides}
+                  onPress={(s) => {
+                    const item = carouselData.find(c => c.id === s.id);
+                    if (item) handleBannerCTAClick(item);
+                  }}
+                />
+              </View>
+            )}
           </View>
 
 
@@ -3437,6 +3444,8 @@ const styles = StyleSheet.create({
   // the header's 20px side padding.
   serviceTabsWrap: { marginHorizontal: -20, marginTop: 2 },
   topDashBleed: { marginHorizontal: -20, marginTop: -4 },
+  orgCardsOnly: { marginTop: 2 },
+  heroBelowDash: { backgroundColor: colors.background, paddingTop: 4 },
   searchBarWhite: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
