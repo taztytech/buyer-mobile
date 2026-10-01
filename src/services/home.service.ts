@@ -385,11 +385,13 @@ class HomeService {
     latitude?: number,
     longitude?: number,
     vegMode?: 'off' | 'pure' | 'all',
-    page: number = 1
+    page: number = 1,
+    /** Restaurant-list filters from the home filter bar (sort, min_rating…). */
+    filterParams?: Record<string, string>
   ): Promise<ApiResponse<HomeData>> {
     try {
       // Build query params as object (apiService.get will handle URL encoding)
-      const params: Record<string, any> = {};
+      const params: Record<string, any> = { ...(filterParams || {}) };
 
       if (latitude !== undefined && longitude !== undefined) {
         params.latitude = latitude.toString();

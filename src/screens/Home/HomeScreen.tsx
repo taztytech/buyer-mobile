@@ -17,6 +17,16 @@ import { ServiceTabs } from '@/components/home/ServiceTabs';
 import type { TopDashTab } from '@/components/home/ServiceTabs';
 import type { HomeTabSummary } from '@/services/homeTab.service';
 import { HomeTabContent } from '@/components/home/HomeTabContent';
+import {
+  FilterBar,
+  FilterSheet,
+  SortSheet,
+  EMPTY_FILTERS,
+  filtersToParams,
+  activeFilterCount,
+} from '@/components/home/HomeFilters';
+import type { HomeFilterState } from '@/components/home/HomeFilters';
+import { VoiceSearchOverlay } from '@/components/home/VoiceSearchOverlay';
 import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
 import storeDealService, {
   type StoreDeal,
@@ -73,7 +83,8 @@ interface HomeScreenProps {
     meta?: { distanceKm?: number; isOpen?: boolean; itemCount?: number }
   ) => void;
   onNavigateToCheckout?: (restaurantId: number, restaurantName: string, restaurantAddress?: string, from?: 'home' | 'restaurant') => void;
-  onNavigateToSearch?: () => void;
+  /** Opens search; a query (e.g. from voice) is filled in and searched. */
+  onNavigateToSearch?: (query?: string) => void;
   onNavigateToLocationSelection?: () => void;
   selectedLocation?: { name: string; address: string; latitude?: number; longitude?: number };
   onCategoriesLoaded?: (categories: CategoryItem[]) => void;
@@ -313,6 +324,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [homeTabs, setHomeTabs] = React.useState<HomeTabSummary[]>([]);
   const [foodTabImageUrl, setFoodTabImageUrl] = React.useState<string | null>(null);
   const [foodTabTitle, setFoodTabTitle] = React.useState('Food');
+  // Restaurant-list filters (filter bar) and their sheets; voice search.
+  const [homeFilters, setHomeFilters] = React.useState<HomeFilterState>(EMPTY_FILTERS);
+  const homeFiltersRef = React.useRef<HomeFilterState>(EMPTY_FILTERS);
+  homeFiltersRef.current = homeFilters;
+  const [cuisineOptions, setCuisineOptions] = React.useState<string[]>([]);
+  const [filterSheetOpen, setFilterSheetOpen] = React.useState(false);
+  const [sortSheetOpen, setSortSheetOpen] = React.useState(false);
+  const [voiceOpen, setVoiceOpen] = React.useState(false);
+  const restaurantsTitleY = React.useRef(0);
+  const solidTopY = React.useRef(0);
+  // Filter bar position, and whether it is pinned (needs status-bar padding).
+  const filterBarY = React.useRef(0);
+  const filterStuckRef = React.useRef(false);
+  const [filterStuck, setFilterStuck] = React.useState(false);
   // Selected top-dash tab; null = Food (the normal home feed). Switching is in
   // place - the tabs and search stay, only the content below changes.
   const [selectedHomeTab, setSelectedHomeTab] = React.useState<HomeTabSummary | null>(null);
@@ -1301,7 +1326,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         return;
       }
 
-      const response = await homeService.getHomeData(lat, lng, vegMode, 1);
+      const response = await homeService.getHomeData(lat, lng, vegMode, 1, filtersToParams(homeFiltersRef.current));
 
       // Check if API indicates forced update is required
       // Response format: { success: false, statusCode: 426, message: "Please update your app..." }
@@ -1355,6 +1380,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setHomeTabs(Array.isArray(homeTabsRaw) ? homeTabsRaw : []);
         setFoodTabImageUrl((actualData as any).home_food_tab_image_url || null);
         setFoodTabTitle((actualData as any).home_food_tab_title || 'Food');
+        const cuisinesRaw = (actualData as any).restaurant_filter_options?.cuisines;
+        if (Array.isArray(cuisinesRaw)) setCuisineOptions(cuisinesRaw);
 
         const orgBannerRaw = (actualData as any).organization_banner;
         if (orgBannerRaw && Array.isArray(orgBannerRaw)) {
@@ -1631,19 +1658,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [vegMode]);
 
   // Load more restaurants function for pagination
-  const loadMoreRestaurants = React.useCallback(async () => {
+  // With { reset: true } this reloads page 1 (filters changed) and replaces
+  // the list; otherwise it appends the next page.
+  const loadMoreRestaurants = React.useCallback(async (opts?: { reset?: boolean }) => {
+    const reset = !!opts?.reset;
     // Don't load if already loading, no more data, or initial load is still in progress
-    if (isLoadingMore || !hasMoreRestaurants || isLoadingRestaurants) {
+    if (!reset && (isLoadingMore || !hasMoreRestaurants || isLoadingRestaurants)) {
       return;
     }
 
     try {
-      setIsLoadingMore(true);
+      if (reset) setIsLoadingRestaurants(true);
+      else setIsLoadingMore(true);
 
-      const nextPage = currentPage + 1;
+      const nextPage = reset ? 1 : currentPage + 1;
       const coords = defaultAddressCoords || { latitude: DEFAULT_LOCATION.latitude, longitude: DEFAULT_LOCATION.longitude };
 
-      const response = await homeService.getHomeData(coords.latitude, coords.longitude, vegMode, nextPage);
+      const response = await homeService.getHomeData(
+        coords.latitude,
+        coords.longitude,
+        vegMode,
+        nextPage,
+        filtersToParams(homeFiltersRef.current),
+      );
 
       // Check if API indicates forced update is required
       if (!response.success && response.statusCode === 426) {
@@ -1710,8 +1747,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           });
 
           // Append new restaurants to existing list with deduplication
+          setNoRestaurantsFound(false);
           setRestaurantData(prevData => {
-            const combined = [...prevData, ...transformedRestaurants];
+            const combined = [...(reset ? [] : prevData), ...transformedRestaurants];
             return Array.from(
               new Map(combined.map(item => [item.id.toString(), item])).values()
             );
@@ -1726,6 +1764,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           }
         } else {
           setHasMoreRestaurants(false);
+          if (reset) {
+            setRestaurantData([]);
+            setNoRestaurantsFound(true);
+          }
         }
       } else {
         setHasMoreRestaurants(false);
@@ -1734,8 +1776,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       setHasMoreRestaurants(false);
     } finally {
       setIsLoadingMore(false);
+      if (reset) setIsLoadingRestaurants(false);
     }
   }, [isLoadingMore, hasMoreRestaurants, isLoadingRestaurants, currentPage, defaultAddressCoords, vegMode]);
+
+  // Filter bar: apply, reload the list, and bring it into view.
+  const applyHomeFilters = React.useCallback((next: HomeFilterState) => {
+    homeFiltersRef.current = next;
+    setHomeFilters(next);
+    loadMoreRestaurants({ reset: true });
+    if (restaurantsTitleY.current > 0) {
+      scrollViewRef.current?.scrollTo({ y: Math.max(0, restaurantsTitleY.current - 70), animated: true });
+    }
+  }, [loadMoreRestaurants]);
+
+  const togglePureVeg = React.useCallback(() => {
+    setVegMode(vegMode === 'off' ? 'pure' : 'off', true);
+  }, [vegMode, setVegMode]);
+
+  const filtersActive = activeFilterCount(homeFilters) > 0 || vegMode !== 'off';
+  const showFilterBar = isLocationServiceable && !selectedHomeTab && !isLoadingLocation;
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleLogout = async () => {
@@ -2070,6 +2130,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const threshold = 520;
     setIsCategorySectionSticky(scrollY > threshold);
 
+    const stuck = filterBarY.current > 0 && scrollY >= filterBarY.current;
+    if (stuck !== filterStuckRef.current) {
+      filterStuckRef.current = stuck;
+      setFilterStuck(stuck);
+    }
+
     // Check if user has scrolled near the bottom (within 500px)
     const distanceFromBottom = contentHeight - (scrollY + layoutHeight);
     const scrollCount = Math.max(0, Math.floor(scrollY / 500));
@@ -2118,7 +2184,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           contentContainerStyle={{
             paddingBottom: totalCartItems > 0 ? 100 + insets.bottom : 0
           }}
-          stickyHeaderIndices={[3]}
+          // The filter bar (child 1) sticks under the status bar on scroll.
+          stickyHeaderIndices={showFilterBar ? [1] : []}
           testID="home-screen"
           alwaysBounceVertical={true}
           overScrollMode="always"
@@ -2321,79 +2388,54 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 }}
               >
                 {isLoadingLocation ? (
-                  <>
-                    {/* Search Bar Shimmer */}
-                    <View style={{ flex: 1 }}>
-                      <Shimmer width="100%" height={60} borderRadius={10} />
-                    </View>
-
-                    {/* VEG Mode Shimmer */}
-                    <Shimmer width={46} height={60} borderRadius={10} />
-                  </>
+                  <View style={{ flex: 1 }}>
+                    <Shimmer width="100%" height={48} borderRadius={14} />
+                  </View>
                 ) : (
-                  <>
+                  <View
+                    style={[
+                      styles.searchBar,
+                      styles.searchBarWhite,
+                      !isLocationServiceable && styles.searchBarDisabled
+                    ]}
+                  >
                     <TouchableOpacity
-                      style={{ flex: 1, }}
-                      onPress={onNavigateToSearch}
+                      style={styles.searchTapArea}
+                      onPress={() => onNavigateToSearch?.()}
                       activeOpacity={0.7}
                       disabled={!isLocationServiceable}
+                      testID="home-search-bar"
                     >
-                      <View
-                        style={[
-                          styles.searchBar,
-                          styles.searchBarWhite,
-                          !isLocationServiceable && styles.searchBarDisabled
-                        ]}
-                      >
-                        <MaterialIcons
-                          name="search"
-                          size={24}
-                          color={isLocationServiceable ? '#3A3A3A' : 'rgba(255, 255, 255, 0.4)'}
-                        />
-                        <Text
-                          style={[
-                            styles.searchInput,
-                            isLocationServiceable && styles.searchInputDark,
-                            !isLocationServiceable && styles.searchInputDisabled
-                          ]}
-                          numberOfLines={1}
-                        >
-                          Search Restaurants & foods..
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    {/* VEG Mode Toggle */}
-                    <TouchableOpacity
-                      style={[
-                        styles.vegModeContainer,
-                        !isLocationServiceable && styles.vegModeContainerDisabled
-                      ]}
-                      onPress={handleVegModeToggle}
-                      disabled={!isLocationServiceable}
-                      testID="veg-mode-toggle"
-                    >
+                      <MaterialIcons
+                        name="search"
+                        size={24}
+                        color={isLocationServiceable ? '#3A3A3A' : 'rgba(255, 255, 255, 0.4)'}
+                      />
                       <Text
                         style={[
-                          styles.vegModeLabel,
-                          !isLocationServiceable && styles.vegModeLabelDisabled
+                          styles.searchInput,
+                          isLocationServiceable && styles.searchInputDark,
+                          !isLocationServiceable && styles.searchInputDisabled
                         ]}
+                        numberOfLines={1}
                       >
-                        VEG
+                        Search Restaurants & foods...
                       </Text>
-                      <View style={[
-                        styles.vegToggle,
-                        isVegModeEnabled && styles.vegToggleActive,
-                        !isLocationServiceable && styles.vegToggleDisabled
-                      ]}>
-                        <View style={[
-                          styles.vegToggleThumb,
-                          isVegModeEnabled && styles.vegToggleThumbActive,
-                          !isLocationServiceable && styles.vegToggleThumbDisabled
-                        ]} />
-                      </View>
                     </TouchableOpacity>
-                  </>
+                    {/* Voice search: full-screen listening overlay. */}
+                    <View style={styles.searchDivider} />
+                    <TouchableOpacity
+                      style={styles.micButton}
+                      onPress={() => setVoiceOpen(true)}
+                      disabled={!isLocationServiceable}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Search by voice"
+                      testID="home-voice-search"
+                    >
+                      <MaterialIcons name="mic" size={24} color="#F15A24" />
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
 
@@ -2418,8 +2460,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </View>
 
 
+          {/* Filter bar: sticky, filters the restaurant list only. */}
+          {showFilterBar && (
+            <View
+              style={[styles.filterBarWrap, filterStuck && { paddingTop: insets.top }]}
+              onLayout={(e) => {
+                if (!filterStuckRef.current) filterBarY.current = e.nativeEvent.layout.y;
+              }}
+            >
+              <FilterBar
+                filters={homeFilters}
+                pureVeg={vegMode !== 'off'}
+                onChange={applyHomeFilters}
+                onTogglePureVeg={togglePureVeg}
+                onOpenFilter={() => setFilterSheetOpen(true)}
+                onOpenSort={() => setSortSheetOpen(true)}
+              />
+            </View>
+          )}
+
           {/* Solid background for everything after the header */}
-          <View style={{ backgroundColor: colors.background, flex: 1 }}>
+          <View
+            style={{ backgroundColor: colors.background, flex: 1 }}
+            onLayout={(e) => { solidTopY.current = e.nativeEvent.layout.y; }}
+          >
 
             {/* Unserviceable area → branded "coming soon" + waitlist */}
             {!isLocationServiceable && !isLoadingBanners && !isLoadingCategories && !isLoadingRestaurants && (
@@ -2533,7 +2597,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
                 {/* Restaurants Near You Section - Only show if there's data, still loading, or error states */}
                 {(showRestaurantShimmer || restaurantData.length > 0 || noRestaurantsFound || hasNetworkError) && (
-                  <View style={styles.restaurantsSectionTitleContainer}>
+                  <View
+                    style={styles.restaurantsSectionTitleContainer}
+                    onLayout={(e) => {
+                      restaurantsTitleY.current = solidTopY.current + e.nativeEvent.layout.y;
+                    }}
+                  >
                     <LinearGradient
                       colors={['rgba(0, 0, 0, 0)', '#000000']}
                       start={{ x: 0, y: 0 }}
@@ -2615,6 +2684,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                           </View>
                         ))}
                       </>
+                    ) : noRestaurantsFound && filtersActive ? (
+                      <View style={styles.noRestaurantsContainer} testID="filters-no-results">
+                        <MaterialIcons name="filter-alt-off" size={56} color="rgba(0, 0, 0, 0.2)" />
+                        <Text style={styles.noRestaurantsTitle}>No restaurants match</Text>
+                        <Text style={styles.noRestaurantsMessage}>
+                          Try removing a filter or two to see more places.
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.retryButton}
+                          onPress={() => {
+                            if (vegMode !== 'off') setVegMode('off', true);
+                            applyHomeFilters(EMPTY_FILTERS);
+                          }}
+                          activeOpacity={0.7}
+                          testID="filters-clear-empty"
+                        >
+                          <Text style={styles.retryButtonText}>Clear filters</Text>
+                        </TouchableOpacity>
+                      </View>
                     ) : noRestaurantsFound ? (
                       <View style={styles.noRestaurantsContainer}>
                         <MaterialIcons name="store" size={64} color="rgba(0, 0, 0, 0.2)" />
@@ -2866,6 +2954,32 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      <FilterSheet
+        visible={filterSheetOpen}
+        value={homeFilters}
+        pureVeg={vegMode !== 'off'}
+        cuisines={cuisineOptions}
+        onClose={() => setFilterSheetOpen(false)}
+        onApply={(next, veg) => {
+          if (veg !== (vegMode !== 'off')) setVegMode(veg ? 'pure' : 'off', true);
+          applyHomeFilters(next);
+        }}
+      />
+      <SortSheet
+        visible={sortSheetOpen}
+        value={homeFilters.sort}
+        onClose={() => setSortSheetOpen(false)}
+        onPick={(sort) => applyHomeFilters({ ...homeFilters, sort })}
+      />
+      <VoiceSearchOverlay
+        visible={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+        onResult={(text) => {
+          setVoiceOpen(false);
+          onNavigateToSearch?.(text);
+        }}
+      />
 
       {/* View Cart Bar - shows when cart has items and location is serviceable */}
       {isLocationServiceable && (
@@ -3155,6 +3269,21 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   searchInputDark: { color: '#8A8A8A', letterSpacing: 0.1 },
+  searchTapArea: {
+    flex: 1,
+    height: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E2E5E3',
+    marginHorizontal: 10,
+  },
+  micButton: { height: '100%', justifyContent: 'center', paddingLeft: 2 },
+  filterBarWrap: { backgroundColor: '#FFFFFF' },
   searchSection: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3169,8 +3298,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    gap: 6,
+    paddingLeft: 16,
+    paddingRight: 14,
+    gap: 0,
   },
   searchBarDisabled: {
     opacity: 0.4,

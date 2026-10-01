@@ -2993,14 +2993,20 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
   };
 
   // Search Navigation
-  const handleNavigateToSearch = () => {
+  // `query` (from voice search) is filled in and searched straight away.
+  const handleNavigateToSearch = (query?: string) => {
+    if (typeof query === 'string' && query.trim()) {
+      setSearchQuery(query.trim());
+    }
     setHasSearchMounted(true);
     searchScreenSlide.stopAnimation();
     searchScreenSlide.setValue(SCREEN_WIDTH);
     setCurrentScreen('search');
 
     // Track search start
-    analyticsService.logEvent(AnalyticsEvents.SEARCH, { source: 'home_search' });
+    analyticsService.logEvent(AnalyticsEvents.SEARCH, {
+      source: typeof query === 'string' && query.trim() ? 'home_voice' : 'home_search',
+    });
 
     // Keep home fixed and slide search over it to avoid exposing base white layer.
     Animated.timing(searchScreenSlide, {

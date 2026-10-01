@@ -168,7 +168,15 @@ module.exports = {
     plugins: [
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
-      "@react-native-firebase/crashlytics"
+      "@react-native-firebase/crashlytics",
+      [
+        "expo-speech-recognition",
+        {
+          microphonePermission: "Tazty uses the microphone for voice search.",
+          speechRecognitionPermission: "Tazty uses speech recognition to search by voice.",
+          androidSpeechServicePackages: ["com.google.android.googlequicksearchbox"],
+        },
+      ],
     ],
 
     ios: {
