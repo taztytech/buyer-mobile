@@ -11,7 +11,8 @@ import { OfferBannerSection } from '@/components/OfferBannerSection';
 import { StoreDealsSection } from '@/components/StoreDealsSection';
 import { RotatingTitle } from '@/components/home/RotatingTitle';
 import { CloudsSky } from '@/components/home/CloudsSky';
-import { CompactAds } from '@/components/home/CompactAds';
+import { ServiceTabs, HeroCarousel, OrgCards } from '@/components/home/HomeTopDash';
+import type { TopDashTab, HeroSlide, OrgCard } from '@/components/home/HomeTopDash';
 import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
 import storeDealService, {
   type StoreDeal,
@@ -46,7 +47,9 @@ import { restaurantService } from '@/services/restaurant.service';
 import { analyticsService, AnalyticsEvents, AnalyticsUserProperties } from '@/services/analytics.service';
 
 /** Fixed header / hero block height (independent of screen size and background image) */
-const HEADER_BACKGROUND_HEIGHT = 660;
+// Only needs to cover pull-to-refresh overscroll; taller would show through
+// the header's rounded bottom corners.
+const HEADER_BACKGROUND_HEIGHT = 300;
 /** Promotional carousel banner card height */
 const STORE_BANNER_HEIGHT = 220;
 const HOME_TOP_BG_FALLBACK = '#8B1D2C';
@@ -590,6 +593,47 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       ? { color: activeOrganizationBanner.subtitle_color }
       : {}),
   };
+
+  // Top-dash data: category shortcuts beside "Food", restaurant banners in
+  // the hero, and the home (org) banners as image/video cards.
+  const topDashTabs = React.useMemo<TopDashTab[]>(
+    () =>
+      categoryData
+        .filter(c => c.id !== 'view-all' && c.name !== 'View All')
+        .slice(0, 8)
+        .map(c => ({
+          id: String(c.id),
+          name: c.name,
+          imageUrl: typeof c.icon === 'string' ? c.icon : undefined,
+        })),
+    [categoryData],
+  );
+  const heroSlides = React.useMemo<HeroSlide[]>(
+    () =>
+      carouselData.map(c => ({
+        id: c.id,
+        imageUrl: c.imageUrl,
+        videoUrl: c.videoUrl,
+        title: c.title,
+        backgroundColor: c.backgroundColor,
+      })),
+    [carouselData],
+  );
+  const orgCards = React.useMemo<OrgCard[]>(
+    () =>
+      organizationBanners.map((b, i) => {
+        const isVideo = b.media_type === 'video' && Boolean(b.video_url);
+        return {
+          id: `${i}-${b.title ?? ''}`,
+          title: b.title,
+          imageUrl: b.image_url,
+          videoUrl: isVideo ? b.video_url : undefined,
+          posterUrl: b.poster_url,
+          backgroundColor: b.background_color,
+        };
+      }),
+    [organizationBanners],
+  );
 
   const shouldShowBadgesRow =
     appOperationStatus?.is_open !== false && (showCategoryShimmer || categoryData.length > 0);
@@ -2219,26 +2263,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 )}
               </View>
 
-              {/* Green dash row: "Food" pill, then compact ads in the space
-                  where other service tabs would be. */}
+              {/* Service tabs: Food (current) + category shortcuts. */}
               {isLocationServiceable && (
-                <View style={styles.foodAdsRow} testID="food-ads-row">
-                  <View style={styles.foodPill}>
-                    <Text style={styles.foodPillEmoji}>🍔</Text>
-                    <Text style={styles.foodPillText}>Food</Text>
-                  </View>
-                  <View style={styles.foodAdsScroll}>
-                    <CompactAds
-                      mini
-                      ads={carouselData as any}
-                      onPress={(ad) =>
-                        handleBannerCTAClick({
-                          promotionType: (ad as any).promotionType,
-                          promotionLink: (ad as any).promotionLink,
-                        } as any)
-                      }
-                    />
-                  </View>
+                <View style={styles.serviceTabsWrap}>
+                  <ServiceTabs
+                    tabs={topDashTabs}
+                    onTabPress={(tab) => onNavigateToCategory?.(tab.name)}
+                  />
                 </View>
               )}
 
@@ -2268,30 +2299,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       activeOpacity={0.7}
                       disabled={!isLocationServiceable}
                     >
-                      <LinearGradient
-                        colors={['rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
+                      <View
                         style={[
                           styles.searchBar,
+                          styles.searchBarWhite,
                           !isLocationServiceable && styles.searchBarDisabled
                         ]}
                       >
                         <MaterialIcons
                           name="search"
                           size={24}
-                          color={isLocationServiceable ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)"}
+                          color={isLocationServiceable ? '#3A3A3A' : 'rgba(255, 255, 255, 0.4)'}
                         />
                         <Text
                           style={[
                             styles.searchInput,
+                            isLocationServiceable && styles.searchInputDark,
                             !isLocationServiceable && styles.searchInputDisabled
                           ]}
                           numberOfLines={1}
                         >
                           Search Restaurants & foods..
                         </Text>
-                      </LinearGradient>
+                      </View>
                     </TouchableOpacity>
 
                     {/* VEG Mode Toggle */}
@@ -2328,141 +2358,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 )}
               </View>
 
+              {/* Hero: rotating restaurant banners, then the home (org)
+                  banners as small image/video cards - all on the green. */}
+              {isLocationServiceable && (
+                <View style={styles.topDashBleed}>
+                  <HeroCarousel
+                    slides={heroSlides}
+                    onPress={(s) => {
+                      const item = carouselData.find(c => c.id === s.id);
+                      if (item) handleBannerCTAClick(item);
+                    }}
+                  />
+                  <OrgCards cards={orgCards} />
+                </View>
+              )}
+              {isLocationServiceable && heroSlides.length === 0 && orgCards.length === 0 && (
+                <View style={{ height: 16 }} />
+              )}
             </View>
           </View>
 
-          {/* Organization Banner Section (Overlay + Spacer) */}
-          {(isLoadingBanners || organizationBanners.length > 0 || (displayBackgroundImageUrl && displayBackgroundImageUrl.length > 0)) && (
-            <>
-              {/* Background image section (overlay, outside header) */}
-              <View
-                style={[
-                  styles.headerImageOverlay,
-                  {
-                    top: searchSectionBottomY + AFTER_SEARCH_SPACER,
-                    opacity: searchSectionBottomY > 0 ? 1 : 0
-                  },
-                ]}
-                pointerEvents="none"
-                testID="home-header-image-overlay"
-              >
-                {isLoadingBanners && !hasExistingBannerVisual ? (
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }]}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                  </View>
-                ) : bannerIsVideo && !headerVideoFailed ? (
-                  <Video
-                    source={{ uri: activeOrganizationBanner!.video_url! }}
-                    posterSource={bannerPosterUrl ? { uri: bannerPosterUrl } : undefined}
-                    usePoster={Boolean(bannerPosterUrl)}
-                    posterStyle={{ resizeMode: 'cover' }}
-                    style={StyleSheet.absoluteFill}
-                    resizeMode={ResizeMode.COVER}
-                    shouldPlay
-                    isLooping
-                    // Muted is not a preference: iOS refuses to autoplay with
-                    // sound, and a banner that starts talking is hostile.
-                    isMuted
-                    useNativeControls={false}
-                    onError={() => setHeaderVideoFailed(true)}
-                    testID="home-header-video-section-remote"
-                  />
-                ) : displayBackgroundImageUrl && !headerBackgroundLoadFailed ? (
-                  <OptimizedImage
-                    source={displayBackgroundImageUrl}
-                    style={StyleSheet.absoluteFill}
-                    contentFit="cover"
-                    showShimmer={false}
-                    transition={200}
-                    priority="high"
-                    cachePolicy="memory-disk"
-                    onError={() => setHeaderBackgroundLoadFailed(true)}
-                    testID="home-header-image-section-remote"
-                  />
-                ) : null}
-
-                {(!isLoadingBanners || hasExistingBannerVisual) && (
-                  <>
-                    <LinearGradient
-                      colors={
-                        bannerHasGradient
-                          ? [bannerGradientFrom!, bannerGradientTo!, 'rgba(0,0,0,0)']
-                          : [homeTopBackgroundColor, homeTopBackgroundColor, 'rgba(0,0,0,0)']
-                      }
-                      locations={[0, 0.6, 1]}
-                      start={bannerHasGradient ? bannerGradientStart : { x: 0, y: 0 }}
-                      end={bannerHasGradient ? bannerGradientEnd : { x: 0, y: 1 }}
-                      style={styles.headerImageSectionTopFade}
-                    />
-
-                    {/* Lighter at top, darker downwards */}
-                    <LinearGradient
-                      colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.10)', 'rgba(0,0,0,0.18)']}
-                      locations={[0, 0.55, 1]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
-                      style={styles.headerImageDarkenGradient}
-                    />
-                  </>
-                )}
-
-                {!isLoadingLocation && (
-                  <View style={styles.headerImageInnerContent}>
-                    {/* Sibling of the promo block rather than inside it: that
-                        block is pointerEvents="none" so the banner stays
-                        tappable as a whole. */}
-                    {bannerHasTamil && (
-                      <TouchableOpacity
-                        style={styles.bannerLanguageToggle}
-                        onPress={handleToggleBannerLanguage}
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          bannerIsTamil ? 'Show banner in English' : 'Show banner in Tamil'
-                        }
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        testID="home-banner-language-toggle"
-                      >
-                        <Text
-                          style={[
-                            styles.bannerLanguageText,
-                            !bannerIsTamil && styles.bannerLanguageTextActive,
-                          ]}
-                        >
-                          EN
-                        </Text>
-                        <Text style={styles.bannerLanguageDivider}>|</Text>
-                        <Text
-                          style={[
-                            styles.bannerLanguageText,
-                            styles.bannerLanguageTamilText,
-                            bannerIsTamil && styles.bannerLanguageTextActive,
-                          ]}
-                        >
-                          த
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    <View
-                      style={[styles.homePromoBlockInImageSection, !isLocationServiceable && styles.homePromoBlockDisabled]}
-                      pointerEvents="none"
-                    >
-                      {/* Banner overrides come second so they win, and are
-                          empty objects when the banner sets nothing. */}
-                      <Text style={[styles.homePromoHeadline, bannerTitleStyle]}>
-                        {promoTitle}
-                      </Text>
-                      <Text style={[styles.homePromoSubline, bannerSubtitleStyle]}>
-                        {promoSubtitle}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-
-              {/* Reserve space for overlay image section */}
-              <View style={styles.headerImageOverlaySpacer} />
-            </>
-          )}
 
           {/* Solid background for everything after the header */}
           <View style={{ backgroundColor: colors.background, flex: 1 }}>
@@ -2977,6 +2892,9 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     gap: 12,
     minHeight: 180,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    overflow: 'hidden',
   },
   headerStack: {
     position: 'relative',
@@ -3172,35 +3090,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   // Search section
-  foodAdsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    marginBottom: 2,
-  },
-  foodPill: {
-    width: 72,
-    height: 72,
-    borderRadius: 16,
+  // The top-dash pieces size themselves to the window, so they step out of
+  // the header's 20px side padding.
+  serviceTabsWrap: { marginHorizontal: -20, marginTop: 8 },
+  topDashBleed: { marginHorizontal: -20, marginTop: -4 },
+  searchBarWhite: {
     backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
+    borderRadius: 14,
+    elevation: 2,
+    shadowColor: '#003D1C',
     shadowOpacity: 0.12,
     shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
   },
-  foodPillEmoji: { fontSize: 28 },
-  foodPillText: {
-    fontFamily: 'Poppins',
-    fontWeight: '700',
-    fontSize: 12,
-    letterSpacing: 0.1,
-    color: '#0A7A3C',
-    marginTop: 1,
-  },
-  foodAdsScroll: { flex: 1, minWidth: 0 },
+  searchInputDark: { color: '#8A8A8A', letterSpacing: 0.1 },
   searchSection: {
     flexDirection: 'row',
     alignItems: 'center',
