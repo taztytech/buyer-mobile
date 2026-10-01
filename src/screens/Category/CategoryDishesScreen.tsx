@@ -84,17 +84,30 @@ const VegMark: React.FC<{ pref?: string | null }> = ({ pref }) => {
  * top (switches in place), the category's dishes as a horizontal row of
  * product cards with ADD, then the restaurants serving them.
  */
-export const CategoryDishesScreen: React.FC<CategoryDishesScreenProps> = ({
+interface CategoryResultsBodyProps {
+  /** Category id from the home row; a plain name (from search) uses search. */
+  categoryId?: number | string;
+  categoryName: string;
+  latitude?: number;
+  longitude?: number;
+  onNavigateToRestaurant: (restaurantId: number, name: string) => void;
+  isGuest?: boolean;
+  onNavigateToLogin?: () => void;
+}
+
+/**
+ * A category's dishes (horizontal product cards with ADD) and the
+ * restaurants serving them. Used inline on Home and by the category screen.
+ */
+export const CategoryResultsBody: React.FC<CategoryResultsBodyProps> = ({
+  categoryId,
   categoryName,
-  categories = [],
-  selectedLocation,
-  onBack,
+  latitude,
+  longitude,
   onNavigateToRestaurant,
-  onNavigateToCheckout,
   isGuest,
   onNavigateToLogin,
 }) => {
-  const insets = useSafeAreaInsets();
   const { vegMode } = useVegMode();
   const { showConfirmation } = useConfirmation();
   const {
@@ -104,37 +117,26 @@ export const CategoryDishesScreen: React.FC<CategoryDishesScreenProps> = ({
     clearCart,
     setRestaurantInfo,
     restaurantId: cartRestaurantId,
-    getTotalItems,
   } = useCart();
-
-  const rail = React.useMemo(
-    () => categories.filter(c => c.id !== 'view-all' && c.name !== 'View All'),
-    [categories],
-  );
-  const [selectedName, setSelectedName] = React.useState(categoryName);
-  React.useEffect(() => setSelectedName(categoryName), [categoryName]);
-  const selected = rail.find(c => c.name.toLowerCase() === selectedName.toLowerCase());
 
   const [dishes, setDishes] = React.useState<CategoryDish[]>([]);
   const [restaurants, setRestaurants] = React.useState<SearchResultRestaurant[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(false);
   const [favs, setFavs] = React.useState<Set<number>>(new Set());
-
-  const lat = selectedLocation?.latitude;
-  const lng = selectedLocation?.longitude;
+  const selectedName = categoryName;
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(false);
     try {
-      if (selected && typeof selected.id === 'number') {
-        const res = await searchService.getCategoryResults(selected.id, lat, lng, vegMode);
+      if (typeof categoryId === 'number') {
+        const res = await searchService.getCategoryResults(categoryId, latitude, longitude, vegMode);
         setDishes(res.dishes);
         setRestaurants(res.restaurants);
       } else {
         // Reached from search with a dish name that is not a category.
-        const res = await searchService.getSearchResults(selectedName, lat, lng, vegMode);
+        const res = await searchService.getSearchResults(categoryName, latitude, longitude, vegMode);
         setDishes(res.dishes as CategoryDish[]);
         setRestaurants(res.restaurants);
       }
@@ -143,19 +145,11 @@ export const CategoryDishesScreen: React.FC<CategoryDishesScreenProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [selected?.id, selectedName, lat, lng, vegMode]);
+  }, [categoryId, categoryName, latitude, longitude, vegMode]);
 
   React.useEffect(() => {
     load();
   }, [load]);
-
-  // Keep the selected category in view on the rail.
-  const railRef = React.useRef<ScrollView>(null);
-  const railX = React.useRef<Record<string, number>>({});
-  React.useEffect(() => {
-    const x = railX.current[selectedName.toLowerCase()];
-    if (x !== undefined) railRef.current?.scrollTo({ x: Math.max(0, x - 24), animated: true });
-  }, [selectedName, rail.length]);
 
   const toggleFav = async (d: CategoryDish) => {
     if (isGuest) {
@@ -338,6 +332,107 @@ export const CategoryDishesScreen: React.FC<CategoryDishesScreenProps> = ({
     );
   };
 
+  if (loading) {
+    return (
+      <View style={styles.centre}>
+        <BrandedLoader fullScreen={false} />
+      </View>
+    );
+  }
+  if (error) {
+    return (
+      <View style={styles.centre}>
+        <MaterialIcons name="wifi-off" size={40} color="rgba(0,0,0,0.25)" />
+        <Text style={styles.emptyTitle}>Couldn't load {selectedName}</Text>
+        <TouchableOpacity style={styles.retry} onPress={load} testID="category-retry">
+          <Text style={styles.retryText}>Try again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View testID={`category-results-${categoryName}`}>
+      {dishes.length > 0 && (
+        <>
+          <Text style={styles.section}>
+            {selectedName} dishes <Text style={styles.count}>({dishes.length})</Text>
+          </Text>
+          <FlatList
+            data={dishes}
+            horizontal
+            keyExtractor={d => String(d.id)}
+            renderItem={renderDish}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.dishRow}
+            extraData={{ cart, favs }}
+          />
+        </>
+      )}
+
+      {restaurants.length > 0 && (
+        <>
+          <Text style={styles.section}>
+            Restaurants serving {selectedName} <Text style={styles.count}>({restaurants.length})</Text>
+          </Text>
+          {restaurants.map(r => (
+            <View key={r.id} style={styles.restWrap}>
+              <RestaurantCard
+                restaurant={toRestaurant(r)}
+                layoutMode={4}
+                onPress={() => onNavigateToRestaurant(r.id, r.name)}
+                isGuest={isGuest}
+                onNavigateToLogin={onNavigateToLogin}
+              />
+            </View>
+          ))}
+        </>
+      )}
+
+      {!dishes.length && !restaurants.length && (
+        <View style={styles.centre}>
+          <MaterialIcons name="restaurant" size={44} color="rgba(0,0,0,0.2)" />
+          <Text style={styles.emptyTitle}>Nothing in {selectedName} near you yet</Text>
+          <Text style={styles.emptySub}>Try another category.</Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+/**
+ * Category page (from search / View All): header, category rail that
+ * switches in place, then the shared results body and the cart bar.
+ */
+export const CategoryDishesScreen: React.FC<CategoryDishesScreenProps> = ({
+  categoryName,
+  categories = [],
+  selectedLocation,
+  onBack,
+  onNavigateToRestaurant,
+  onNavigateToCheckout,
+  isGuest,
+  onNavigateToLogin,
+}) => {
+  const insets = useSafeAreaInsets();
+  const { getTotalItems } = useCart();
+
+  const rail = React.useMemo(
+    () => categories.filter(c => c.id !== 'view-all' && c.name !== 'View All'),
+    [categories],
+  );
+  const [selectedName, setSelectedName] = React.useState(categoryName);
+  React.useEffect(() => setSelectedName(categoryName), [categoryName]);
+  const selected = rail.find(c => c.name.toLowerCase() === selectedName.toLowerCase());
+
+  // Keep the selected category in view on the rail.
+  const railRef = React.useRef<ScrollView>(null);
+  const railX = React.useRef<Record<string, number>>({});
+  React.useEffect(() => {
+    const x = railX.current[selectedName.toLowerCase()];
+    if (x !== undefined) railRef.current?.scrollTo({ x: Math.max(0, x - 24), animated: true });
+  }, [selectedName, rail.length]);
+
   const totalItems = getTotalItems();
 
   return (
@@ -387,73 +482,26 @@ export const CategoryDishesScreen: React.FC<CategoryDishesScreenProps> = ({
         )}
       </LinearGradient>
 
-      {loading ? (
-        <View style={styles.centre}>
-          <BrandedLoader fullScreen={false} />
-        </View>
-      ) : error ? (
-        <View style={styles.centre}>
-          <MaterialIcons name="wifi-off" size={40} color="rgba(0,0,0,0.25)" />
-          <Text style={styles.emptyTitle}>Couldn't load {selectedName}</Text>
-          <TouchableOpacity style={styles.retry} onPress={load} testID="category-retry">
-            <Text style={styles.retryText}>Try again</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={{ paddingBottom: (totalItems > 0 ? 110 : 30) + insets.bottom }}
-          showsVerticalScrollIndicator={false}
-        >
-          {dishes.length > 0 && (
-            <>
-              <Text style={styles.section}>
-                {selectedName} dishes <Text style={styles.count}>({dishes.length})</Text>
-              </Text>
-              <FlatList
-                data={dishes}
-                horizontal
-                keyExtractor={d => String(d.id)}
-                renderItem={renderDish}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.dishRow}
-                extraData={{ cart, favs }}
-              />
-            </>
-          )}
-
-          {restaurants.length > 0 && (
-            <>
-              <Text style={styles.section}>
-                Restaurants serving {selectedName} <Text style={styles.count}>({restaurants.length})</Text>
-              </Text>
-              {restaurants.map(r => (
-                <View key={r.id} style={styles.restWrap}>
-                  <RestaurantCard
-                    restaurant={toRestaurant(r)}
-                    layoutMode={4}
-                    onPress={() => onNavigateToRestaurant(r.id, r.name)}
-                    isGuest={isGuest}
-                    onNavigateToLogin={onNavigateToLogin}
-                  />
-                </View>
-              ))}
-            </>
-          )}
-
-          {!dishes.length && !restaurants.length && (
-            <View style={styles.centre}>
-              <MaterialIcons name="restaurant" size={44} color="rgba(0,0,0,0.2)" />
-              <Text style={styles.emptyTitle}>Nothing in {selectedName} near you yet</Text>
-              <Text style={styles.emptySub}>Try another category above.</Text>
-            </View>
-          )}
-        </ScrollView>
-      )}
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: (totalItems > 0 ? 110 : 30) + insets.bottom }}
+        showsVerticalScrollIndicator={false}
+      >
+        <CategoryResultsBody
+          categoryId={selected?.id}
+          categoryName={selectedName}
+          latitude={selectedLocation?.latitude}
+          longitude={selectedLocation?.longitude}
+          onNavigateToRestaurant={onNavigateToRestaurant}
+          isGuest={isGuest}
+          onNavigateToLogin={onNavigateToLogin}
+        />
+      </ScrollView>
 
       {totalItems > 0 && onNavigateToCheckout && <ViewCartBar onPress={onNavigateToCheckout} />}
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },

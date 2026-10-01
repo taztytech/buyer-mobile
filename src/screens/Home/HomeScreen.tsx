@@ -30,6 +30,7 @@ import {
 } from '@/components/home/HomeFilters';
 import type { HomeFilterState } from '@/components/home/HomeFilters';
 import { VoiceSearchOverlay } from '@/components/home/VoiceSearchOverlay';
+import { CategoryResultsBody } from '@/screens/Category/CategoryDishesScreen';
 import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
 import storeDealService, {
   type StoreDeal,
@@ -329,6 +330,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [foodTabTitle, setFoodTabTitle] = React.useState('Food');
   const [tabShape, setTabShape] = React.useState<TabShapeSpec | null>(null);
   const [woymTitle, setWoymTitle] = React.useState("What's on your mind?");
+  // Category picked in "What's on your mind?": its dishes and restaurants
+  // replace the feed below the row, in place. Back clears it.
+  const [selectedWoym, setSelectedWoym] = React.useState<CategoryItem | null>(null);
+  const categoriesRowY = React.useRef(0);
   // Restaurant-list filters (filter bar) and their sheets; voice search.
   const [homeFilters, setHomeFilters] = React.useState<HomeFilterState>(EMPTY_FILTERS);
   const homeFiltersRef = React.useRef<HomeFilterState>(EMPTY_FILTERS);
@@ -684,10 +689,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     return () => sub.remove();
   }, [selectedHomeTab, isFocused]);
 
+  React.useEffect(() => {
+    if (!selectedWoym || !isFocused) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSelectedWoym(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [selectedWoym, isFocused]);
+
+  React.useEffect(() => {
+    if (selectedWoym && categoriesRowY.current > 0) {
+      scrollViewRef.current?.scrollTo({ y: Math.max(0, categoriesRowY.current - 60), animated: true });
+    }
+  }, [selectedWoym]);
+
   const handleSelectHomeTab = React.useCallback((tab: TopDashTab | null) => {
     setSelectedHomeTab(
       tab ? { id: tab.id, title: tab.title, image_url: tab.imageUrl ?? null } : null,
     );
+    setSelectedWoym(null);
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   }, []);
 
@@ -1826,7 +1847,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [vegMode, setVegMode]);
 
   const filtersActive = activeFilterCount(homeFilters) > 0 || vegMode !== 'off';
-  const showFilterBar = isLocationServiceable && !selectedHomeTab && !isLoadingLocation;
+  const showFilterBar =
+    isLocationServiceable && !selectedHomeTab && !selectedWoym && !isLoadingLocation;
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleLogout = async () => {
@@ -2076,16 +2098,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const renderCategoryItem = React.useCallback(({ item }: { item: CategoryItem }) => {
     const imageSource = typeof item.icon === 'string' ? { uri: item.icon } : item.icon;
     const isViewAll = item.id === 'view-all' || item.name === 'View All';
+    const isSelected = !!selectedWoym && String(selectedWoym.id) === String(item.id);
 
     return (
       <TouchableOpacity
-        style={styles.categoryBadge}
+        style={[styles.categoryBadge, isSelected && styles.categoryBadgeSelected]}
         testID={`category-${item.id}`}
         onPress={() => {
           if (isViewAll) {
             setShowCategoryModal(true);
-          } else if (onNavigateToCategory) {
-            onNavigateToCategory(item.name);
+          } else {
+            setSelectedWoym(prev => (prev && String(prev.id) === String(item.id) ? null : item));
           }
         }}
         activeOpacity={0.7}
@@ -2110,12 +2133,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             />
           )}
         </View>
-        <Text style={styles.categoryBadgeLabel} numberOfLines={1} testID={`category-name-${item.id}`}>
+        <Text
+          style={[styles.categoryBadgeLabel, isSelected && styles.categoryBadgeLabelSelected]}
+          numberOfLines={1}
+          testID={`category-name-${item.id}`}
+        >
           {item.name}
         </Text>
       </TouchableOpacity>
     );
-  }, [onNavigateToCategory]);
+  }, [selectedWoym]);
 
   // Handle pull-to-refresh
   const handleRefresh = React.useCallback(async () => {
@@ -2547,7 +2574,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 {/* Categories: large circular food images with a label below,
                     under a "What's on your mind?" title; View All opens the grid. */}
                 {shouldShowBadgesRow && (
-                  <>
+                  <View
+                    onLayout={(e) => {
+                      categoriesRowY.current = solidTopY.current + e.nativeEvent.layout.y;
+                    }}
+                  >
                     {!isCategorySectionSticky && (
                       <Text style={styles.whatsOnTitle}>{woymTitle}</Text>
                     )}
@@ -2576,13 +2607,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                           horizontal
                           showsHorizontalScrollIndicator={false}
                           contentContainerStyle={styles.categoryListContent}
+                          extraData={selectedWoym}
                           testID="category-list"
                         />
                       )}
                     </View>
-                  </>
+                  </View>
                 )}
 
+                {/* A picked category: its dishes + restaurants, in place of
+                    the feed below. */}
+                {selectedWoym && (
+                  <CategoryResultsBody
+                    categoryId={selectedWoym.id}
+                    categoryName={selectedWoym.name}
+                    latitude={externalSelectedLocation?.latitude || defaultAddressCoords?.latitude}
+                    longitude={externalSelectedLocation?.longitude || defaultAddressCoords?.longitude}
+                    onNavigateToRestaurant={(id, name) => onNavigateToRestaurant?.(id, name)}
+                    isGuest={isGuest}
+                    onNavigateToLogin={onNavigateToLogin}
+                  />
+                )}
+
+                {!selectedWoym && (
+                <>
                 {/* ₹99 Store: placed right after "What's on your mind?".
                     Renders nothing when there are no live deals. */}
                 <StoreDealsSection
@@ -2855,6 +2903,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       </View>
                     )}
                   </View>
+                )}
+                </>
                 )}
               </>
             )}
@@ -3737,6 +3787,15 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  categoryBadgeSelected: {
+    backgroundColor: '#DDF4E5',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#00B14F',
+    paddingTop: 6,
+    paddingBottom: 6,
+  },
+  categoryBadgeLabelSelected: { color: '#0A7A3C', fontWeight: '700' },
   categoryBadgeLabel: {
     marginTop: 8,
     fontFamily: 'Poppins',
