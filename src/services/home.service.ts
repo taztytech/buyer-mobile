@@ -73,6 +73,10 @@ export interface Restaurant {
   isVeg?: boolean;
   timings?: RestaurantTiming[];
   isOpen?: boolean;
+  /** Logo + dish photos for the card's rolling images (max 4). */
+  gallery?: string[];
+  /** Best live offer, e.g. "Flat 20% OFF" or "₹99 deals". */
+  offerLabel?: string | null;
 }
 
 export interface PaginationMetadata {

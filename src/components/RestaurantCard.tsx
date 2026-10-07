@@ -6,6 +6,7 @@ import { favoritesService } from '@/services/favorites.service';
 import { OptimizedImage } from '@/components/OptimizedImage';
 import { homeService } from '@/services/home.service';
 import { formatTime } from '@/utils/timing.utils';
+import { RestaurantGalleryCard } from '@/components/home/RestaurantGalleryCard';
 
 export interface RestaurantTiming {
   day: number;
@@ -29,6 +30,10 @@ export interface Restaurant {
   timings?: RestaurantTiming[];
   isOpen?: boolean;
   price?: number; // Price for two people
+  /** Logo + dish photos for the home card's rolling images (max 4). */
+  gallery?: string[];
+  /** Best live offer, e.g. "Flat 20% OFF" or "₹99 deals". */
+  offerLabel?: string | null;
 }
 
 interface RestaurantCardProps {
@@ -353,107 +358,30 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   // 3-dots overlaid, a delivery-time badge, then details below.
   if (layoutMode === 4) {
     return (
-      <TouchableOpacity
-        key="home-swiggy"
-        style={styles.cardHomeV}
-        onPress={onPress}
-        activeOpacity={0.85}
-        testID={`restaurant-card-${restaurant.id}`}
-      >
-        <View style={styles.imageWrapV}>
-          <OptimizedImage
-            source={restaurant.image}
-            style={[styles.imageV, !isRestaurantOpen && styles.imageClosed]}
-            contentFit="cover"
-            animatedOpacity={imageOpacity}
-            onLoad={() => {
-              setImageLoaded(true);
-              if (onImageLoad) onImageLoad();
-            }}
-            onError={() => {
-              setImageLoaded(true);
-              if (onImageLoad) onImageLoad();
-            }}
-            shimmerWidth={340}
-            shimmerHeight={176}
-            shimmerBorderRadius={18}
-            transition={300}
-            priority="high"
-            cachePolicy="memory-disk"
-            testID={`restaurant-image-${restaurant.id}`}
-          />
-
-          {/* bottom scrim for the delivery-time badge */}
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.55)']}
-            style={styles.imageScrimV}
-            pointerEvents="none"
-          />
-
-          {/* top-right actions: heart + 3-dots */}
-          <View style={styles.actionsV}>
-            <TouchableOpacity
-              style={styles.circleBtnV}
-              onPress={handleFavoriteToggle}
-              disabled={isTogglingFavorite}
-              testID={`favorite-button-${restaurant.id}`}
-            >
-              {isTogglingFavorite ? (
-                <ActivityIndicator size="small" color="#FF3B30" />
-              ) : (
-                <MaterialIcons
-                  name={isFavorite ? 'favorite' : 'favorite-border'}
-                  size={20}
-                  color={isFavorite ? '#FF3B30' : '#3A3F45'}
-                />
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.circleBtnV}
-              onPress={() => setMenuOpen(true)}
-              testID={`restaurant-menu-${restaurant.id}`}
-            >
-              <MaterialIcons name="more-vert" size={20} color="#3A3F45" />
-            </TouchableOpacity>
-          </View>
-
-          {!!restaurant.deliveryTime && (
-            <View style={styles.timeBadgeV}>
-              <Text style={styles.timeBadgeTextV}>{restaurant.deliveryTime}</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.detailsV}>
-          <Text style={styles.nameV} numberOfLines={1} ellipsizeMode="tail">
-            {restaurant.name}
-          </Text>
-
-          {(restaurant.rating > 0 || !!restaurant.distance) && (
-            <View style={styles.metaRowV}>
-              {restaurant.rating > 0 && (
-                <View style={styles.ratePillV}>
-                  <MaterialIcons name="star" size={12} color="#FFFFFF" />
-                  <Text style={styles.ratePillTextV}>{restaurant.rating.toFixed(1)}</Text>
-                </View>
-              )}
-              {restaurant.rating > 0 && !!restaurant.reviewCount && (
-                <Text style={styles.metaMutedV}>({restaurant.reviewCount})</Text>
-              )}
-              {!!restaurant.distance && (
-                <>
-                  <Text style={styles.metaDotV}>•</Text>
-                  <Text style={styles.metaMutedV} numberOfLines={1}>{restaurant.distance}</Text>
-                </>
-              )}
-            </View>
-          )}
-
-          <Text style={styles.cuisineV} numberOfLines={1} ellipsizeMode="tail">
-            {restaurant.cuisine}
-            {restaurant.price ? `  ·  ${restaurant.price}` : ''}
-          </Text>
-        </View>
+      <View key="home-gallery">
+        <RestaurantGalleryCard
+          restaurant={{
+            id: restaurant.id,
+            name: restaurant.name,
+            cuisine: restaurant.cuisine,
+            rating: restaurant.rating,
+            reviewCount: restaurant.reviewCount,
+            deliveryTime: restaurant.deliveryTime,
+            distance: restaurant.distance,
+            locality: typeof restaurant.location === 'string' ? undefined : locationText,
+            image: restaurant.image,
+            gallery: restaurant.gallery,
+            offerLabel: restaurant.offerLabel,
+            isVeg: restaurant.isVeg,
+          }}
+          isOpen={isRestaurantOpen}
+          closedNote={nextOpeningInfo?.message ?? null}
+          isFavorite={isFavorite}
+          togglingFavorite={isTogglingFavorite}
+          onPress={onPress}
+          onToggleFavorite={handleFavoriteToggle}
+          onOpenMenu={() => setMenuOpen(true)}
+        />
 
         {/* 3-dots menu */}
         <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
@@ -486,7 +414,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             </Pressable>
           </Pressable>
         </Modal>
-      </TouchableOpacity>
+      </View>
     );
   }
 

@@ -1709,6 +1709,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
               timings: timings,
               isOpen: isOpen,
+              gallery: Array.isArray(restaurant.gallery) ? restaurant.gallery : undefined,
+              offerLabel: restaurant.offer_label ?? null,
             };
           });
 
@@ -1840,6 +1842,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               isVeg: restaurant.is_veg || restaurant.dietary_preference === 'veg' || false,
               timings: timings,
               isOpen: isOpen,
+              gallery: Array.isArray(restaurant.gallery) ? restaurant.gallery : undefined,
+              offerLabel: restaurant.offer_label ?? null,
             };
           });
 
@@ -2992,8 +2996,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         initialNumToRender={2}
                         updateCellsBatchingPeriod={100}
                         getItemLayout={(data, index) => ({
-                          length: 380,
-                          offset: 380 * index,
+                          // RestaurantGalleryCard (172) + row gap (10).
+                          length: 182,
+                          offset: 182 * index,
                           index,
                         })}
                       />
