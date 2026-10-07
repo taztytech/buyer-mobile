@@ -91,6 +91,11 @@ export const RestaurantGalleryCard: React.FC<Props> = ({
   const [index, setIndex] = React.useState(0);
   const dragging = React.useRef(false);
 
+  React.useEffect(() => {
+    scrollRef.current?.scrollTo({ x: index * (imgW + GAP), animated: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imgW]);
+
   // Roll one photo at a time while the card is on screen.
   React.useEffect(() => {
     if (photos.length < 2) return;
@@ -105,9 +110,18 @@ export const RestaurantGalleryCard: React.FC<Props> = ({
     return () => clearInterval(t);
   }, [photos.length, imgW]);
 
-  const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+  // Settle a hand swipe on the nearest photo. Positions are set here, not by
+  // native snapping, which left the photo a little short (a sliver of the
+  // next one showed on the right).
+  const settle = (x: number) => {
+    const stride = imgW + GAP;
+    const i = Math.max(0, Math.min(photos.length - 1, Math.round(x / stride)));
+    scrollRef.current?.scrollTo({ x: i * stride, animated: true });
+    setIndex(i);
     dragging.current = false;
-    setIndex(Math.round(e.nativeEvent.contentOffset.x / (imgW + GAP)));
+  };
+  const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (dragging.current) settle(e.nativeEvent.contentOffset.x);
   };
 
   // Cream panel with an S-curved right edge, and the orange line on it.
@@ -136,13 +150,12 @@ export const RestaurantGalleryCard: React.FC<Props> = ({
           ref={scrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
-          snapToInterval={imgW + GAP}
           decelerationRate="fast"
-          disableIntervalMomentum
           onScrollBeginDrag={() => {
             dragging.current = true;
           }}
-          onMomentumScrollEnd={onMomentumEnd}
+          onScrollEndDrag={onScrollEnd}
+          onMomentumScrollEnd={onScrollEnd}
           scrollEnabled={photos.length > 1}
         >
           {photos.length ? (
