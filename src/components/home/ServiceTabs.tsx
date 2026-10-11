@@ -29,10 +29,33 @@ interface ServiceTabsProps {
   foodTitle?: string;
   /** Admin-drawn card shape (HOME_TAB_SHAPE); default card when unset. */
   shape?: TabShapeSpec | null;
+  /** Theme colours; the original green look when not given. */
+  palette?: Partial<TabPalette> | null;
   onSelect: (tab: TopDashTab | null) => void;
 }
 
-const CREAM = '#FFF6EA';
+export interface TabPalette {
+  selectedFill: string;
+  selectedRing: string;
+  selectedText: string;
+  from: string;
+  to: string;
+  text: string;
+  underline: string;
+  underlineSelected: string;
+}
+
+export const DEFAULT_TAB_PALETTE: TabPalette = {
+  selectedFill: '#FFF6EA',
+  selectedRing: 'rgba(255,255,255,0.42)',
+  selectedText: '#0A7A3C',
+  from: '#3DDA83',
+  to: '#0A8F43',
+  text: '#FFFFFF',
+  underline: '#FFD54A',
+  underlineSelected: '#0A7A3C',
+};
+
 const FOOD_GREEN = '#0A7A3C';
 const UNDERLINE = '#FFD54A';
 const SIDE = 14;
@@ -114,13 +137,13 @@ const TabShape: React.FC<{
   selected: boolean;
   gradId: string;
   shape: TabShapeSpec;
-}> = ({ w, h, selected, gradId, shape }) => (
+  palette: TabPalette;
+}> = ({ w, h, selected, gradId, shape, palette }) => (
   <Svg width={w} height={h} style={StyleSheet.absoluteFill} pointerEvents="none">
     <Defs>
       <SvgGradient id={gradId} x1="0.15" y1="0" x2="0.85" y2="1">
-        <Stop offset="0" stopColor="#3DDA83" />
-        <Stop offset="0.55" stopColor="#14A954" />
-        <Stop offset="1" stopColor="#0A8F43" />
+        <Stop offset="0" stopColor={palette.from} />
+        <Stop offset="1" stopColor={palette.to} />
       </SvgGradient>
     </Defs>
     {/* soft drop shadow */}
@@ -131,8 +154,8 @@ const TabShape: React.FC<{
     />
     {selected ? (
       <>
-        <Path d={cardPath(shape, w, h, 0)} fill="rgba(255,255,255,0.42)" />
-        <Path d={cardPath(shape, w, h, RING)} fill={CREAM} />
+        <Path d={cardPath(shape, w, h, 0)} fill={palette.selectedRing} />
+        <Path d={cardPath(shape, w, h, RING)} fill={palette.selectedFill} />
       </>
     ) : (
       <Path
@@ -156,8 +179,13 @@ export const ServiceTabs: React.FC<ServiceTabsProps> = ({
   foodImageUrl,
   foodTitle,
   shape,
+  palette: paletteIn,
   onSelect,
 }) => {
+  const palette = React.useMemo<TabPalette>(
+    () => ({ ...DEFAULT_TAB_PALETTE, ...(paletteIn || {}) }),
+    [paletteIn],
+  );
   const cardShape = React.useMemo(() => normalizeTabShape(shape ?? DEFAULT_TAB_SHAPE), [shape]);
   const { width } = useWindowDimensions();
   const [page, setPage] = useState(0);
@@ -217,7 +245,14 @@ export const ServiceTabs: React.FC<ServiceTabsProps> = ({
               accessibilityState={{ selected }}
               accessibilityLabel={title}
             >
-              <TabShape w={cardW} h={cardH} selected={selected} gradId={`tabg-${key}`} shape={cardShape} />
+              <TabShape
+                w={cardW}
+                h={cardH}
+                selected={selected}
+                gradId={`tabg-${key}`}
+                shape={cardShape}
+                palette={palette}
+              />
               <View style={[styles.inner, { paddingLeft: i === 0 ? 6 : OVERLAP }]}>
                 <View style={[styles.art, { height: artH }]}>
                   {image ? (
@@ -237,12 +272,19 @@ export const ServiceTabs: React.FC<ServiceTabsProps> = ({
                     styles.title,
                     isFood && styles.titleFood,
                     selected ? styles.titleSelected : styles.titlePlain,
+                    { color: selected ? palette.selectedText : palette.text },
                   ]}
                   numberOfLines={2}
                 >
                   {title}
                 </Text>
-                <View style={[styles.underline, selected && styles.underlineSelected]} />
+                <View
+                  style={[
+                    styles.underline,
+                    selected && styles.underlineSelected,
+                    { backgroundColor: selected ? palette.underlineSelected : palette.underline },
+                  ]}
+                />
               </View>
             </TouchableOpacity>
           );

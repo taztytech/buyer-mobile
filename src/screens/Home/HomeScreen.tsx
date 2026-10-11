@@ -31,6 +31,21 @@ import {
 import type { HomeFilterState } from '@/components/home/HomeFilters';
 import { VoiceSearchOverlay } from '@/components/home/VoiceSearchOverlay';
 import { CategoryResultsBody } from '@/screens/Category/CategoryDishesScreen';
+import {
+  ThemedDashBackground,
+  ThemedDashForeground,
+  useThemeEngine,
+} from '@/components/theme/ThemedDash';
+import { ThemeGreeting } from '@/components/theme/ThemeExtras';
+import {
+  DEFAULT_THEME_CONFIG,
+  effectiveColors,
+  greetingText,
+  isNightNow,
+  tabPaletteFrom,
+  type ActiveTheme,
+} from '@/components/theme/themeTypes';
+import { homeThemeService, parseActiveTheme } from '@/services/homeTheme.service';
 import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
 import storeDealService, {
   type StoreDeal,
@@ -364,6 +379,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [foodTabTitle, setFoodTabTitle] = React.useState('Food');
   const [tabShape, setTabShape] = React.useState<TabShapeSpec | null>(null);
   const [woymTitle, setWoymTitle] = React.useState("What's on your mind?");
+  // Top-dash theme (festival / season), its night variant and size.
+  const [activeTheme, setActiveTheme] = React.useState<ActiveTheme | null>(null);
+  const [isNight, setIsNight] = React.useState(isNightNow());
+  const [dashSize, setDashSize] = React.useState({ width: 0, height: 0 });
+  const [dashOnScreen, setDashOnScreen] = React.useState(true);
+  const dashOnScreenRef = React.useRef(true);
+  const dashSizeRef = React.useRef(0);
   // Category picked in "What's on your mind?": its dishes and restaurants
   // replace the feed below the row, in place. Back clears it.
   const [selectedWoym, setSelectedWoym] = React.useState<CategoryItem | null>(null);
@@ -699,6 +721,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         if (cfg.food_title) setFoodTabTitle(cfg.food_title);
         setFoodTabImageUrl(cfg.food_image_url || null);
         setTabShape(cfg.shape || null);
+        const t = await homeThemeService.getActive(themeAddressRef.current);
+        if (t) setActiveTheme(t);
         if ((cfg as any).woym_title) setWoymTitle((cfg as any).woym_title);
       }, 400);
     });
@@ -1419,7 +1443,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         return;
       }
 
-      const response = await homeService.getHomeData(lat, lng, vegMode, 1, filtersToParams(homeFiltersRef.current));
+      const response = await homeService.getHomeData(lat, lng, vegMode, 1, {
+        ...filtersToParams(homeFiltersRef.current),
+        ...(themeAddressRef.current ? { city: themeAddressRef.current.slice(0, 200) } : {}),
+      });
 
       // Check if API indicates forced update is required
       // Response format: { success: false, statusCode: 426, message: "Please update your app..." }
@@ -1474,6 +1501,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setFoodTabImageUrl((actualData as any).home_food_tab_image_url || null);
         setFoodTabTitle((actualData as any).home_food_tab_title || 'Food');
         setTabShape((actualData as any).home_tab_shape || null);
+        const themeRaw = (actualData as any).home_theme;
+        if (themeRaw) setActiveTheme(parseActiveTheme(themeRaw));
         if ((actualData as any).whats_on_your_mind_title) {
           setWoymTitle((actualData as any).whats_on_your_mind_title);
         }
@@ -2249,6 +2278,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const handleScroll = React.useCallback((event: any) => {
     const scrollY = event.nativeEvent.contentOffset.y;
     lastScrollY.current = scrollY;
+    const onScreen = scrollY < Math.max(200, dashSizeRef.current - 40);
+    if (onScreen !== dashOnScreenRef.current) {
+      dashOnScreenRef.current = onScreen;
+      setDashOnScreen(onScreen);
+    }
 
     // Cart pill gets out of the way while the customer browses.
     hideCartBarOnScroll(scrollY);
@@ -2295,6 +2329,37 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [hasMoreRestaurants, isLoadingMore, isLoadingRestaurants, loadMoreRestaurants]);
 
+  // ---- top-dash theme ----
+  const themeAddressRef = React.useRef('');
+  themeAddressRef.current = String(externalSelectedLocation?.address || '');
+  const themeCfg = activeTheme?.config ?? DEFAULT_THEME_CONFIG;
+  const themeColors = React.useMemo(() => effectiveColors(themeCfg, isNight), [themeCfg, isNight]);
+  const tabPalette = React.useMemo(() => tabPaletteFrom(themeColors), [themeColors]);
+  const themeEngine = useThemeEngine(
+    themeCfg,
+    !!isFocused && isLocationServiceable && dashOnScreen,
+  );
+  const greeting = greetingText(themeCfg.greeting, false);
+  const roundEdge = themeCfg.edge.preset === 'round';
+
+  // Night colours switch on/off on their own.
+  React.useEffect(() => {
+    const id = setInterval(() => setIsNight(isNightNow()), 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // A scheduled theme starts/ends: refetch exactly then.
+  React.useEffect(() => {
+    const at = activeTheme?.next_change_at ? Date.parse(activeTheme.next_change_at) : NaN;
+    if (!Number.isFinite(at)) return;
+    const wait = Math.min(Math.max(at - Date.now() + 1500, 1000), 24 * 60 * 60 * 1000);
+    const id = setTimeout(async () => {
+      const t = await homeThemeService.getActive(themeAddressRef.current);
+      if (t) setActiveTheme(t);
+    }, wait);
+    return () => clearTimeout(id);
+  }, [activeTheme?.next_change_at, activeTheme?.version]);
+
   const handleCartPress = React.useCallback(async () => {
     if (!restaurantId || !onNavigateToCheckout || !hasCartItems) {
       return;
@@ -2311,11 +2376,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <View style={[styles.outerContainer, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar
+        barStyle={isLocationServiceable && themeColors.statusBar === 'dark' ? 'dark-content' : 'light-content'}
+        backgroundColor="transparent"
+        translucent
+      />
 
       {/* Top background filler for pull-to-refresh overscroll - Layer 1 (Back) */}
       <View
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_BACKGROUND_HEIGHT, backgroundColor: isLocationServiceable ? '#00B14F' : '#8FC4EE' }}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_BACKGROUND_HEIGHT, backgroundColor: isLocationServiceable ? themeColors.dashFrom : '#8FC4EE' }}
         pointerEvents="none"
       />
 
@@ -2347,7 +2416,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               onRefresh={handleRefresh}
               colors={['#FFFFFF']}
               tintColor="#FFFFFF"
-              progressBackgroundColor="#00B14F"
+              progressBackgroundColor={themeColors.accent}
               {...(Platform.OS === 'android' ? { progressViewOffset: insets.top + 30 } : {})}
             />
           }
@@ -2356,9 +2425,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           {/* Header Content Wrapper */}
           <View style={styles.headerStack} testID="header-stack">
             <View
-              style={[styles.headerBackground, { paddingTop: insets.top + 10, backgroundColor: isLocationServiceable ? '#00B14F' : '#BFE0F5' }]}
+              style={[
+                styles.headerBackground,
+                { paddingTop: insets.top + 10, backgroundColor: isLocationServiceable ? themeColors.dashFrom : '#BFE0F5' },
+                isLocationServiceable && !roundEdge && styles.headerBackgroundSquare,
+              ]}
+              onLayout={(e) => {
+                const { width, height } = e.nativeEvent.layout;
+                dashSizeRef.current = height;
+                if (Math.abs(width - dashSize.width) > 1 || Math.abs(height - dashSize.height) > 1) {
+                  setDashSize({ width, height });
+                }
+              }}
               testID="header-background"
             >
+              {/* Theme: gradient, art, particles, layers, 3D, tap bursts. */}
+              {isLocationServiceable && (
+                <ThemedDashBackground
+                  cfg={themeCfg}
+                  colors={themeColors}
+                  engine={themeEngine}
+                  width={dashSize.width}
+                  height={dashSize.height}
+                />
+              )}
               {/* Unserviceable area → soft clouds sky behind the header */}
               {!isLocationServiceable && <CloudsSky />}
 
@@ -2386,15 +2476,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     <>
                       {/* City Name with Icon */}
                       <View style={styles.cityRow}>
-                        <MaterialIcons name="location-on" size={20} color={isLocationServiceable ? '#FFFFFF' : '#1E3A52'} />
-                        <Text style={[styles.cityName, !isLocationServiceable && { color: '#14232F' }]}>{selectedLocation.name}</Text>
+                        <MaterialIcons name="location-on" size={20} color={isLocationServiceable ? themeColors.onDash : '#1E3A52'} />
+                        <Text style={[styles.cityName, { color: isLocationServiceable ? themeColors.onDash : '#14232F' }]}>{selectedLocation.name}</Text>
                         <View style={styles.arrowIconWrapper}>
-                          <MaterialIcons name="keyboard-arrow-down" size={16} color={isLocationServiceable ? '#FFFFFF' : '#1E3A52'} />
+                          <MaterialIcons name="keyboard-arrow-down" size={16} color={isLocationServiceable ? themeColors.onDash : '#1E3A52'} />
                         </View>
                       </View>
                       {/* Address */}
                       <Text
-                        style={[styles.addressText, !isLocationServiceable && { color: '#3A5568' }]}
+                        style={[styles.addressText, { color: isLocationServiceable ? themeColors.onDash : '#3A5568', opacity: isLocationServiceable ? 0.92 : 1 }]}
                         numberOfLines={1}
                         ellipsizeMode="tail"
                       >
@@ -2511,6 +2601,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 )}
               </View>
 
+              {isLocationServiceable && !!greeting && (
+                <View style={styles.greetingRow}>
+                  <ThemeGreeting
+                    text={greeting}
+                    color={themeCfg.greeting.color}
+                    effect={themeCfg.greeting.effect}
+                    time={themeEngine.time}
+                  />
+                </View>
+              )}
+
               {/* Service tabs: Food (fixed) + tabs the admin created. */}
               {isLocationServiceable && (
                 <View style={styles.serviceTabsWrap}>
@@ -2520,6 +2621,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     foodImageUrl={foodTabImageUrl}
                     foodTitle={foodTabTitle}
                     shape={tabShape}
+                    palette={tabPalette}
                     onSelect={handleSelectHomeTab}
                   />
                 </View>
@@ -2542,6 +2644,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     style={[
                       styles.searchBar,
                       styles.searchBarWhite,
+                      isLocationServiceable && { backgroundColor: themeColors.searchBg },
                       !isLocationServiceable && styles.searchBarDisabled
                     ]}
                   >
@@ -2555,12 +2658,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       <MaterialIcons
                         name="search"
                         size={24}
-                        color={isLocationServiceable ? '#3A3A3A' : 'rgba(255, 255, 255, 0.4)'}
+                        color={isLocationServiceable ? themeColors.searchIcon : 'rgba(255, 255, 255, 0.4)'}
                       />
                       <Text
                         style={[
                           styles.searchInput,
                           isLocationServiceable && styles.searchInputDark,
+                          isLocationServiceable && { color: themeColors.searchText },
                           !isLocationServiceable && styles.searchInputDisabled
                         ]}
                         numberOfLines={1}
@@ -2579,7 +2683,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       accessibilityLabel="Search by voice"
                       testID="home-voice-search"
                     >
-                      <MaterialIcons name="mic" size={24} color="#F15A24" />
+                      <MaterialIcons name="mic" size={24} color={themeColors.micColor} />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -2594,6 +2698,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               )}
               {isLocationServiceable && (!!selectedHomeTab || orgCards.length === 0) && (
                 <View style={{ height: 16 }} />
+              )}
+
+              {isLocationServiceable && (
+                <ThemedDashForeground
+                  cfg={themeCfg}
+                  engine={themeEngine}
+                  width={dashSize.width}
+                  height={dashSize.height}
+                  topInset={insets.top}
+                  pageColor={colors.background}
+                />
               )}
             </View>
 
@@ -3451,6 +3566,9 @@ const styles = StyleSheet.create({
   topDashBleed: { marginHorizontal: -20, marginTop: -4 },
   orgCardsOnly: { marginTop: 2 },
   heroBelowDash: { backgroundColor: colors.background, paddingTop: 4 },
+  // Themed edges (wave/scallop/zigzag/flat) draw their own bottom shape.
+  headerBackgroundSquare: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  greetingRow: { marginTop: 2, marginBottom: -2, alignItems: 'flex-start' },
   searchBarWhite: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
