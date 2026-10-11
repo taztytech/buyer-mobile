@@ -46,6 +46,7 @@ import {
   type ActiveTheme,
 } from '@/components/theme/themeTypes';
 import { homeThemeService, parseActiveTheme } from '@/services/homeTheme.service';
+import { normalizeCardStyle, DEFAULT_CARD_STYLE, type CardStyle } from '@/components/home/cardStyle';
 import { useStoreDealAdd } from '@/hooks/useStoreDealAdd';
 import storeDealService, {
   type StoreDeal,
@@ -381,6 +382,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [woymTitle, setWoymTitle] = React.useState("What's on your mind?");
   // Top-dash theme (festival / season), its night variant and size.
   const [activeTheme, setActiveTheme] = React.useState<ActiveTheme | null>(null);
+  // Card Studio global look for the restaurant cards.
+  const [cardStyle, setCardStyle] = React.useState<CardStyle>(DEFAULT_CARD_STYLE);
   const [isNight, setIsNight] = React.useState(isNightNow());
   const [dashSize, setDashSize] = React.useState({ width: 0, height: 0 });
   const [dashOnScreen, setDashOnScreen] = React.useState(true);
@@ -401,6 +404,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [sortSheetOpen, setSortSheetOpen] = React.useState(false);
   const [voiceOpen, setVoiceOpen] = React.useState(false);
   const restaurantsTitleY = React.useRef(0);
+  const cardsReloadRef = React.useRef<(() => void) | null>(null);
   const solidTopY = React.useRef(0);
   // Filter bar position, and whether it is pinned (needs status-bar padding).
   const filterBarY = React.useRef(0);
@@ -712,7 +716,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // just the tab settings (no full home reload). Bursts are coalesced.
   React.useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const sub = DeviceEventEmitter.addListener(HOME_CONFIG_EVENT, () => {
+    const sub = DeviceEventEmitter.addListener(HOME_CONFIG_EVENT, (data: any) => {
+      // Card Studio change: reload the restaurant list (style + overrides).
+      if (data?.what === 'cards') {
+        cardsReloadRef.current?.();
+        return;
+      }
       if (timer) clearTimeout(timer);
       timer = setTimeout(async () => {
         const cfg = await homeTabService.getActive();
@@ -1501,6 +1510,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setFoodTabImageUrl((actualData as any).home_food_tab_image_url || null);
         setFoodTabTitle((actualData as any).home_food_tab_title || 'Food');
         setTabShape((actualData as any).home_tab_shape || null);
+        const cardStyleRaw = (actualData as any).restaurant_card_style;
+        if (cardStyleRaw) setCardStyle(normalizeCardStyle(cardStyleRaw));
         const themeRaw = (actualData as any).home_theme;
         if (themeRaw) setActiveTheme(parseActiveTheme(themeRaw));
         if ((actualData as any).whats_on_your_mind_title) {
@@ -1740,6 +1751,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               isOpen: isOpen,
               gallery: Array.isArray(restaurant.gallery) ? restaurant.gallery : undefined,
               offerLabel: restaurant.offer_label ?? null,
+              card: restaurant.card ?? null,
             };
           });
 
@@ -1825,6 +1837,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         const actualData = (response.data as any).data || response.data;
         const nearbyRestaurants = actualData.nearby_restaurants;
         const pagination = actualData.pagination;
+        if (reset && actualData.restaurant_card_style) {
+          setCardStyle(normalizeCardStyle(actualData.restaurant_card_style));
+        }
 
         if (nearbyRestaurants && Array.isArray(nearbyRestaurants) && nearbyRestaurants.length > 0) {
           // Filter restaurants based on vegMode and food_type (same as initial load)
@@ -1873,6 +1888,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               isOpen: isOpen,
               gallery: Array.isArray(restaurant.gallery) ? restaurant.gallery : undefined,
               offerLabel: restaurant.offer_label ?? null,
+              card: restaurant.card ?? null,
             };
           });
 
@@ -1909,6 +1925,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       if (reset) setIsLoadingRestaurants(false);
     }
   }, [isLoadingMore, hasMoreRestaurants, isLoadingRestaurants, currentPage, defaultAddressCoords, vegMode]);
+
+  cardsReloadRef.current = () => loadMoreRestaurants({ reset: true });
 
   // Filter bar: apply, reload the list, and bring it into view.
   const applyHomeFilters = React.useCallback((next: HomeFilterState) => {
@@ -2328,6 +2346,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       }
     }
   }, [hasMoreRestaurants, isLoadingMore, isLoadingRestaurants, loadMoreRestaurants]);
+
+  const cardRowHeight =
+    (cardStyle.layout === 'split' ? 172 : cardStyle.layout === 'classic' ? Math.round(cardStyle.height * 0.62) + 96 : cardStyle.height) + 10;
 
   // ---- top-dash theme ----
   const themeAddressRef = React.useRef('');
@@ -3069,6 +3090,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                             <RestaurantCard
                               restaurant={restaurant}
                               layoutMode={4}
+                              cardStyle={cardStyle}
                               onPress={() => {
                                 if (onNavigateToRestaurant) {
                                   const restaurantId = typeof restaurant.id === 'string' ? parseInt(restaurant.id, 10) : restaurant.id;
@@ -3111,9 +3133,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         initialNumToRender={2}
                         updateCellsBatchingPeriod={100}
                         getItemLayout={(data, index) => ({
-                          // RestaurantGalleryCard (172) + row gap (10).
-                          length: 182,
-                          offset: 182 * index,
+                          // Card height from the Card Studio style + row gap.
+                          length: cardRowHeight,
+                          offset: cardRowHeight * index,
                           index,
                         })}
                       />

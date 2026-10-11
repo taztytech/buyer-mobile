@@ -7,6 +7,13 @@ import { OptimizedImage } from '@/components/OptimizedImage';
 import { homeService } from '@/services/home.service';
 import { formatTime } from '@/utils/timing.utils';
 import { RestaurantGalleryCard } from '@/components/home/RestaurantGalleryCard';
+import { StudioRestaurantCard } from '@/components/home/StudioRestaurantCard';
+import {
+  DEFAULT_CARD_STYLE,
+  cardStyleFor,
+  type CardExtras,
+  type CardStyle,
+} from '@/components/home/cardStyle';
 
 export interface RestaurantTiming {
   day: number;
@@ -34,6 +41,8 @@ export interface Restaurant {
   gallery?: string[];
   /** Best live offer, e.g. "Flat 20% OFF" or "₹99 deals". */
   offerLabel?: string | null;
+  /** Card Studio extras: badge, tagline, chips, layout tweaks. */
+  card?: CardExtras | null;
 }
 
 interface RestaurantCardProps {
@@ -53,6 +62,8 @@ interface RestaurantCardProps {
   onNavigateToLogin?: () => void;
   /** 3-dots menu: "Show similar restaurants" (hidden when not provided). */
   onShowSimilar?: () => void;
+  /** Card Studio global look (layout 4); default overlay design when unset. */
+  cardStyle?: CardStyle | null;
 }
 
 export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
@@ -64,6 +75,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   isGuest = false,
   onNavigateToLogin,
   onShowSimilar,
+  cardStyle,
 }) => {
   const [isFavorite, setIsFavorite] = useState(restaurant.isFavorite || false);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
@@ -357,8 +369,46 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
   // Layout mode 4 => Home card, Swiggy-style: full-width top image with heart +
   // 3-dots overlaid, a delivery-time badge, then details below.
   if (layoutMode === 4) {
+    const look = cardStyleFor(cardStyle ?? DEFAULT_CARD_STYLE, restaurant.card);
+    const photos = (restaurant.gallery?.length ? restaurant.gallery : [restaurant.image]).filter(
+      (u): u is string => typeof u === 'string' && !!u,
+    );
     return (
       <View key="home-gallery">
+        {look.layout !== 'split' ? (
+          <StudioRestaurantCard
+            restaurant={{
+              id: restaurant.id,
+              name: restaurant.name,
+              cuisine: restaurant.cuisine,
+              rating: restaurant.rating,
+              reviewCount: restaurant.reviewCount,
+              deliveryTime: restaurant.deliveryTime,
+              distance: restaurant.distance,
+              locality: typeof restaurant.location === 'string' ? undefined : locationText,
+              photos,
+            }}
+            style={look}
+            extras={
+              restaurant.card ?? {
+                // Lists without Card Studio data still show the offer.
+                badge: restaurant.offerLabel
+                  ? { text: restaurant.offerLabel, color: '#F4511E', icon: 'local-offer' }
+                  : null,
+                tagline: null,
+                chips: [],
+                layout: {},
+              }
+            }
+            isOpen={isRestaurantOpen}
+            closedNote={nextOpeningInfo?.message ?? null}
+            isFavorite={isFavorite}
+            togglingFavorite={isTogglingFavorite}
+            onPress={onPress}
+            onToggleFavorite={handleFavoriteToggle}
+            onOpenMenu={() => setMenuOpen(true)}
+          />
+        ) : (
         <RestaurantGalleryCard
           restaurant={{
             id: restaurant.id,
@@ -371,9 +421,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
             locality: typeof restaurant.location === 'string' ? undefined : locationText,
             image: restaurant.image,
             gallery: restaurant.gallery,
-            offerLabel: restaurant.offerLabel,
+            offerLabel: restaurant.card?.badge?.text ?? restaurant.offerLabel,
             isVeg: restaurant.isVeg,
           }}
+          chips={restaurant.card?.chips}
           isOpen={isRestaurantOpen}
           closedNote={nextOpeningInfo?.message ?? null}
           isFavorite={isFavorite}
@@ -382,6 +433,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = React.memo(({
           onToggleFavorite={handleFavoriteToggle}
           onOpenMenu={() => setMenuOpen(true)}
         />
+        )}
 
         {/* 3-dots menu */}
         <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>

@@ -38,6 +38,8 @@ interface Props {
   onPress?: () => void;
   onToggleFavorite: () => void;
   onOpenMenu: () => void;
+  /** Card Studio chips; when given they replace Pure Veg / Quick Bites. */
+  chips?: Array<{ key: string; label: string; icon: string }>;
 }
 
 const ORANGE = '#F26A1B';
@@ -74,6 +76,7 @@ export const RestaurantGalleryCard: React.FC<Props> = ({
   onPress,
   onToggleFavorite,
   onOpenMenu,
+  chips: studioChips,
 }) => {
   const { width } = useWindowDimensions();
   // Real width from layout (lists use different side padding).
@@ -229,6 +232,15 @@ export const RestaurantGalleryCard: React.FC<Props> = ({
           <Text style={styles.closedNote} numberOfLines={1}>
             {closedNote}
           </Text>
+        ) : studioChips && studioChips.length ? (
+          <View style={styles.chips}>
+            {studioChips.slice(0, 2).map(c => (
+              <View key={c.key + c.label} style={styles.chip}>
+                <MaterialIcons name={c.icon as any} size={13} color={ORANGE} />
+                <Text style={styles.chipText} numberOfLines={1}>{c.label}</Text>
+              </View>
+            ))}
+          </View>
         ) : (
           (r.isVeg || quick) && (
             <View style={styles.chips}>
