@@ -504,7 +504,12 @@ const TrainCards: React.FC<BannerCardsProps & { running: boolean; reduceMotion: 
 }) => {
   const { width: W } = useWindowDimensions();
   const tr = style.train;
-  const h = style.box.height;
+  // A train longer than the screen is shrunk so every coach shows when it
+  // stops (same as the Studio preview).
+  // Train length is 1.25·(h + 28) + n·(18 + ratio·h); solve for the h that fits.
+  const n = cards.length;
+  const fitH = (W - 16 - 35 - 18 * n) / (1.25 + n * style.box.widthRatio);
+  const h = Math.max(40, Math.floor(Math.min(style.box.height, fitH)));
   const photoW = Math.round(h * style.box.widthRatio);
   const pad = 5;
   const stripeH = 4;
