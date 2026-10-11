@@ -69,7 +69,7 @@ type Pt = [number, number];
  * curves), so the card keeps the soft, slightly lopsided look of the
  * reference instead of a plain rounded rectangle.
  */
-const roundedPolygon = (pts: Pt[], r: number): string => {
+export const roundedPolygon = (pts: Pt[], r: number): string => {
   const n = pts.length;
   let d = '';
   for (let i = 0; i < n; i++) {

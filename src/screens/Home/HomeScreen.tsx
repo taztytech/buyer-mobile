@@ -11,7 +11,14 @@ import { OfferBannerSection } from '@/components/OfferBannerSection';
 import { StoreDealsSection } from '@/components/StoreDealsSection';
 import { RotatingTitle } from '@/components/home/RotatingTitle';
 import { CloudsSky } from '@/components/home/CloudsSky';
-import { HeroCarousel, OrgCards } from '@/components/home/HomeTopDash';
+import { HeroCarousel } from '@/components/home/HomeTopDash';
+import { BannerCards } from '@/components/home/BannerCards';
+import {
+  normalizeBannerCardsStyle,
+  DEFAULT_BANNER_CARDS_STYLE,
+  type BannerCardsStyle,
+} from '@/components/home/bannerCardsStyle';
+import { apiService } from '@/services/api.service';
 import type { HeroSlide, OrgCard } from '@/components/home/HomeTopDash';
 import { ServiceTabs } from '@/components/home/ServiceTabs';
 import type { TopDashTab } from '@/components/home/ServiceTabs';
@@ -384,6 +391,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [activeTheme, setActiveTheme] = React.useState<ActiveTheme | null>(null);
   // Card Studio global look for the restaurant cards.
   const [cardStyle, setCardStyle] = React.useState<CardStyle>(DEFAULT_CARD_STYLE);
+  const [bannerCardsStyle, setBannerCardsStyle] = React.useState<BannerCardsStyle>(DEFAULT_BANNER_CARDS_STYLE);
   const [isNight, setIsNight] = React.useState(isNightNow());
   const [dashSize, setDashSize] = React.useState({ width: 0, height: 0 });
   const [dashOnScreen, setDashOnScreen] = React.useState(true);
@@ -732,6 +740,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setTabShape(cfg.shape || null);
         const t = await homeThemeService.getActive(themeAddressRef.current);
         if (t) setActiveTheme(t);
+        // Banner boxes (Banner Cards Studio, or the live theme's own style).
+        try {
+          const params: Record<string, string> = {};
+          if (themeAddressRef.current) params.city = themeAddressRef.current.slice(0, 200);
+          let node: any = await apiService.get('/banner-cards/style', params);
+          for (let i = 0; i < 4 && node && !node.style; i++) node = node.data;
+          if (node?.style) setBannerCardsStyle(normalizeBannerCardsStyle(node.style));
+        } catch {
+          // keep the current style
+        }
         if ((cfg as any).woym_title) setWoymTitle((cfg as any).woym_title);
       }, 400);
     });
@@ -1512,6 +1530,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setTabShape((actualData as any).home_tab_shape || null);
         const cardStyleRaw = (actualData as any).restaurant_card_style;
         if (cardStyleRaw) setCardStyle(normalizeCardStyle(cardStyleRaw));
+        const bannerStyleRaw = (actualData as any).banner_cards_style;
+        if (bannerStyleRaw) setBannerCardsStyle(normalizeBannerCardsStyle(bannerStyleRaw));
         const themeRaw = (actualData as any).home_theme;
         if (themeRaw) setActiveTheme(parseActiveTheme(themeRaw));
         if ((actualData as any).whats_on_your_mind_title) {
@@ -2714,7 +2734,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   banners as small image/video cards - all on the green. */}
               {isLocationServiceable && !selectedHomeTab && (
                 <View style={[styles.topDashBleed, styles.orgCardsOnly]}>
-                  <OrgCards cards={orgCards} />
+                  <BannerCards
+                    cards={orgCards}
+                    style={bannerCardsStyle}
+                    active={!!isFocused && isLocationServiceable && dashOnScreen}
+                  />
                 </View>
               )}
               {isLocationServiceable && (!!selectedHomeTab || orgCards.length === 0) && (

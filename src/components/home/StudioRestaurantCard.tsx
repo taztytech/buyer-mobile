@@ -117,7 +117,10 @@ const RollingPhotos: React.FC<{
 };
 
 const Tagline: React.FC<{ t: CardTagline; width: number; height: number }> = ({ t, width, height }) => {
-  const boxW = Math.min(170, width * 0.46);
+  // Same as the Card Studio preview: 19px × size, at most 55% wide,
+  // centred on (x, y).
+  const boxW = width * 0.55;
+  const [boxH, setBoxH] = React.useState(Math.round(21 * t.size));
   const font =
     t.font === 'script'
       ? { fontFamily: 'Kalam_700Bold' }
@@ -132,14 +135,15 @@ const Tagline: React.FC<{ t: CardTagline; width: number; height: number }> = ({ 
         {
           width: boxW,
           left: t.x * width - boxW / 2,
-          top: t.y * height - 22,
+          top: t.y * height - boxH / 2,
           transform: [{ rotate: `${t.rotate}deg` }],
         },
       ]}
+      onLayout={e => setBoxH(e.nativeEvent.layout.height)}
     >
       <Text
         allowFontScaling={false}
-        style={[styles.taglineText, font, { color: t.color, fontSize: 17 * t.size, lineHeight: 21 * t.size }]}
+        style={[styles.taglineText, font, { color: t.color, fontSize: 19 * t.size, lineHeight: 21 * t.size }]}
       >
         {t.text}
       </Text>
