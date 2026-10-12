@@ -215,6 +215,8 @@ module.exports = {
         // notifications (Android 13+)
         "android.permission.POST_NOTIFICATIONS"
       ],
+      // expo-sensors' pedometer permission; only the accelerometer is used.
+      blockedPermissions: ["android.permission.ACTIVITY_RECOGNITION"],
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
