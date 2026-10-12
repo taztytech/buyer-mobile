@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, Image, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, BackHandler } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, Image, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, BackHandler, Animated, Easing } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { colors } from '@/theme';
 import { authService } from '@/services/auth.service';
 
 interface LoginScreenProps {
@@ -95,323 +95,420 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   };
 
+  const [focused, setFocused] = useState(false);
+  const ready = validatePhoneNumber(phoneNumber);
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
-
-      <View style={styles.whiteBackgroundWrapper}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ flex: 1 }}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A6B35" translucent={false} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          bounces={false}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <ScrollView
-            contentContainerStyle={{ flexGrow: 1 }}
-            bounces={false}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+          {/* Hero */}
+          <LinearGradient
+            colors={['#0A6B35', '#1E9A45', '#7DC242']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.hero}
           >
-            <View style={styles.mainContainer}>
-              {/* Green Background Section */}
-              <View style={styles.greenSection}>
-                {/* Header: Title + Subtitle */}
-                <View style={styles.headerRow}>
-                  <View>
-                    <Text style={styles.title}>Log In</Text>
-                    <Text style={styles.subtitle}>Login with Your Mobile Number</Text>
-                  </View>
+            <SafeAreaView edges={['top']}>
+              <View style={styles.heroInner}>
+                <View style={styles.heroText}>
+                  <Wordmark />
+                  <Text style={styles.heroTagline}>
+                    {"Madurai's favourite food,\nhot at your door."}
+                  </Text>
                 </View>
-
-                {/* Delivery Illustration */}
-                <Image
-                  source={require('@/assets/login-illustration.png')}
-                  style={styles.illustrationImage}
-                  resizeMode="contain"
-                />
+                <FoodCluster />
               </View>
+            </SafeAreaView>
+          </LinearGradient>
 
-              {/* White Bottom Sheet */}
-              <View style={styles.bottomSheet}>
-                <View style={styles.formContainer}>
-                  {/* Mobile Number Label */}
-                  <Text style={styles.inputLabel}>MOBILE NUMBER</Text>
+          {/* Form */}
+          <View style={styles.form}>
+            <Text style={styles.welcome}>Welcome back 👋</Text>
+            <Text style={styles.welcomeSub}>Log in or sign up with your mobile number</Text>
 
-                  {/* Phone Input Row */}
-                  <View style={styles.phoneInputRow}>
-                    {/* Country Code Box */}
-                    <View style={styles.countryCodeBox}>
-                      <Text style={styles.flagEmoji}>🇮🇳</Text>
-                      <Text style={styles.countryCodeText}>+91</Text>
-                    </View>
-
-                    {/* Phone Number Input */}
-                    <TextInput
-                      autoCorrect={false}
-                      style={styles.phoneInput}
-                      placeholder="Mobile Number"
-                      placeholderTextColor="#999"
-                      keyboardType="phone-pad"
-                      maxLength={10}
-                      value={phoneNumber}
-                      onChangeText={handlePhoneChange}
-                    />
-                  </View>
-
-                  {/* Inline Error Message */}
-                  {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-                  {/* LOG IN Button */}
-                  <TouchableOpacity
-                    style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-                    onPress={handleLogin}
-                    activeOpacity={0.8}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <Text style={styles.loginButtonText}>LOG IN</Text>
-                        <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
+            <View
+              style={[styles.phoneField, focused && styles.phoneFieldFocused, !!error && styles.phoneFieldError]}
+            >
+              <View style={styles.cc}>
+                <Text style={styles.flag}>🇮🇳</Text>
+                <Text style={styles.ccText}>+91</Text>
               </View>
+              <View style={styles.ccDivider} />
+              <TextInput
+                autoCorrect={false}
+                style={styles.phoneInput}
+                placeholder="Mobile number"
+                placeholderTextColor="#9AA39A"
+                keyboardType="phone-pad"
+                maxLength={10}
+                value={phoneNumber}
+                onChangeText={handlePhoneChange}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                onSubmitEditing={handleLogin}
+                testID="login-phone-input"
+              />
+              {ready && <MaterialIcons name="check-circle" size={20} color="#1E9A45" />}
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
 
-        {/* Terms & Privacy anchored above system nav area */}
-        <SafeAreaView style={styles.bottomSafeArea} edges={['bottom']}>
-          <View style={styles.bottomTermsContainer}>
-            <Text style={styles.termsText}>
-              By Clicking, You agree our{' '}
-              <Text
-                style={styles.termsLink}
-                onPress={onOpenTerms}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <TouchableOpacity
+              onPress={handleLogin}
+              activeOpacity={0.85}
+              disabled={isLoading}
+              style={styles.ctaTouch}
+              testID="login-continue-button"
+            >
+              <LinearGradient
+                colors={ready ? ['#0A6B35', '#7DC242'] : ['#8FBF9F', '#C2DDA6']}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={styles.cta}
               >
-                T&C
-              </Text>
-              {' and '}
-              <Text
-                style={styles.termsLink}
-                onPress={onOpenPrivacy}
-              >
-                Privacy Policy
-              </Text>
-            </Text>
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.ctaText}>Continue</Text>
+                    <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+            <Text style={styles.otpHint}>{"We'll send a 6-digit OTP to verify it's you"}</Text>
+
+            <View style={styles.perksDivider}>
+              <View style={styles.line} />
+              <Text style={styles.perksTitle}>Why foodies love Tazty</Text>
+              <View style={styles.line} />
+            </View>
+            <View style={styles.perks}>
+              <Perk emoji="🍛" title="Local favourites" sub="Madurai's best kitchens" />
+              <Perk emoji="⚡" title="Quick delivery" sub="Hot and fresh" />
+              <Perk emoji="🔒" title="Secure login" sub="OTP, no password" />
+            </View>
           </View>
-        </SafeAreaView>
-      </View>
-    </SafeAreaView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <SafeAreaView edges={['bottom']} style={styles.bottom}>
+        <Text style={styles.termsText}>
+          By continuing, you agree to our{' '}
+          <Text style={styles.termsLink} onPress={onOpenTerms} testID="login-terms-link">
+            Terms
+          </Text>
+          {' and '}
+          <Text style={styles.termsLink} onPress={onOpenPrivacy} testID="login-privacy-link">
+            Privacy Policy
+          </Text>
+        </Text>
+      </SafeAreaView>
+    </View>
   );
 };
 
+/* The real logo letters; "ty" in lime for a two-tone wordmark. */
+const WORD = [
+  { src: require('@/assets/splash-letters/T_cap.png'), w: 85, lime: false },
+  { src: require('@/assets/splash-letters/a.png'), w: 119, lime: false },
+  { src: require('@/assets/splash-letters/z.png'), w: 109, lime: false },
+  { src: require('@/assets/splash-letters/t.png'), w: 63, lime: true },
+  { src: require('@/assets/splash-letters/y.png'), w: 118, lime: true },
+];
+const WORD_H = 40;
+const LIME = '#D4F55A';
+
+const Wordmark: React.FC = () => (
+  <View style={styles.wordmark} accessibilityLabel="Tazty">
+    {WORD.map((l, i) => (
+      <Image
+        key={i}
+        source={l.src}
+        style={{ width: (l.w * WORD_H) / 251, height: WORD_H, tintColor: l.lime ? LIME : '#FFFFFF' }}
+        resizeMode="contain"
+      />
+    ))}
+    <View style={styles.wordDot} />
+  </View>
+);
+
+const FOODS = [
+  { e: '🍛', size: 50, x: 34, y: 18, d: 0 },
+  { e: '🍔', size: 30, x: 0, y: 92, d: 600 },
+  { e: '🍕', size: 30, x: 92, y: 96, d: 1200 },
+  { e: '🍗', size: 24, x: 100, y: 0, d: 300 },
+  { e: '🥤', size: 22, x: 2, y: 8, d: 900 },
+];
+const BOB_MS = 3200;
+
+/* Food bubbles bobbing gently in the hero. */
+const FoodCluster: React.FC = () => {
+  const t = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(t, { toValue: 1, duration: BOB_MS, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [t]);
+  const pts = Array.from({ length: 9 }, (_, k) => k / 8);
+  return (
+    <View style={styles.cluster} pointerEvents="none">
+      <View style={styles.blob} />
+      {FOODS.map((f, i) => {
+        const phase = (f.d / BOB_MS) * 2 * Math.PI;
+        const box = f.size + 18;
+        return (
+          <Animated.View
+            key={i}
+            style={[
+              styles.foodBubble,
+              {
+                left: f.x,
+                top: f.y,
+                width: box,
+                height: box,
+                borderRadius: box / 2,
+                transform: [
+                  {
+                    translateY: t.interpolate({
+                      inputRange: pts,
+                      outputRange: pts.map(p => Math.sin(p * 2 * Math.PI + phase) * 5),
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Text style={{ fontSize: f.size, lineHeight: Math.round(f.size * 1.25) }}>{f.e}</Text>
+          </Animated.View>
+        );
+      })}
+    </View>
+  );
+};
+
+const Perk: React.FC<{ emoji: string; title: string; sub: string }> = ({ emoji, title, sub }) => (
+  <View style={styles.perk}>
+    <View style={styles.perkIcon}>
+      <Text style={styles.perkEmoji}>{emoji}</Text>
+    </View>
+    <Text style={styles.perkTitle}>{title}</Text>
+    <Text style={styles.perkSub}>{sub}</Text>
+  </View>
+);
+
+const GREEN = '#0A6B35';
+const INK = '#14201A';
+const MUTED = '#8A938C';
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#00B14F',
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  flex: { flex: 1 },
+  scroll: { flexGrow: 1 },
+  hero: {
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    paddingBottom: 26,
+    overflow: 'hidden',
   },
-  whiteBackgroundWrapper: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  mainContainer: {
-    flex: 1,
-  },
-  bottomSafeArea: {
-    backgroundColor: '#FFFFFF',
-  },
-  bottomTermsContainer: {
-    paddingTop: 8,
-    paddingBottom: 12,
-    paddingHorizontal: 20,
-    backgroundColor: '#FFFFFF',
-  },
-  greenSection: {
-    height: 258,
-    backgroundColor: '#00B14F',
-    paddingHorizontal: 20,
-    paddingTop: 24,
-  },
-  headerRow: {
-    paddingBottom: 8,
-  },
-  title: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 30,
-    lineHeight: 45,
-    color: '#FFFFFF',
-  },
-  subtitle: {
-    marginTop: 4,
-    marginBottom: 4,
-    width: 180,
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 16,
-    lineHeight: 26,
-    color: '#FFFFFF',
-    opacity: 0.85,
-  },
-  illustrationImage: {
-    position: 'absolute',
-    left: 100,
-    top: 40,
-    width: 378,
-    height: 252,
-  },
-  bottomSheet: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 36,
-    minHeight: 400,
+  heroInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 22,
+    paddingTop: 26,
+    minHeight: 190,
   },
-  formContainer: {
-    width: '100%',
-    alignItems: 'center',
-    gap: 16,
-  },
-  inputLabel: {
-    width: '100%',
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 14,
-    lineHeight: 21,
-    textTransform: 'uppercase',
-    color: '#001E1F',
+  heroText: { flex: 1, paddingRight: 8 },
+  wordmark: { flexDirection: 'row', alignItems: 'flex-end' },
+  wordDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: LIME,
+    marginLeft: 3,
     marginBottom: 4,
   },
-  phoneInputRow: {
-    flexDirection: 'row',
-    width: '100%',
-    height: 60,
-    gap: 9,
-    marginBottom: 8,
+  heroTagline: {
+    marginTop: 12,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 15,
+    lineHeight: 22,
+    letterSpacing: 0.2,
+    color: 'rgba(255,255,255,0.92)',
   },
-  countryCodeBox: {
-    flexDirection: 'row',
+  cluster: { width: 140, height: 150 },
+  blob: {
+    position: 'absolute',
+    left: 10,
+    top: 16,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(212,245,90,0.22)',
+  },
+  foodBubble: {
+    position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
-    width: 91,
-    height: 60,
-    backgroundColor: '#F7F7F7',
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    gap: 8,
-  },
-  flagEmoji: {
-    fontSize: 20,
-    textAlign: 'center',
-  },
-  countryCodeText: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#001E1F',
-    textAlign: 'center',
-  },
-  phoneInput: {
-    flex: 1,
-    height: 60,
-    backgroundColor: '#F7F7F7',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 0,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  form: { paddingHorizontal: 22, paddingTop: 28, paddingBottom: 16 },
+  welcome: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 26,
+    lineHeight: 34,
+    letterSpacing: -0.2,
+    color: INK,
+  },
+  welcomeSub: {
+    marginTop: 4,
+    marginBottom: 22,
     fontFamily: 'Poppins',
     fontWeight: '400',
     fontSize: 14,
-    lineHeight: 21,
-    color: '#001E1F',
-    textAlignVertical: 'center',
+    lineHeight: 20,
+    letterSpacing: 0.1,
+    color: '#6B756E',
   },
-  errorText: {
-    width: '100%',
-    marginTop: 4,
-    marginBottom: 4,
-    fontFamily: 'Poppins',
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#D32F2F',
-  },
-  loginButton: {
+  phoneField: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    width: '100%',
-    height: 60,
-    backgroundColor: '#00B14F',
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 19,
-    gap: 10,
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: '#F3F6EE',
+    borderWidth: 1.5,
+    borderColor: '#F3F6EE',
+    paddingHorizontal: 16,
   },
-  loginButtonText: {
+  phoneFieldFocused: { borderColor: '#1E9A45', backgroundColor: '#FFFFFF' },
+  phoneFieldError: { borderColor: '#E53935' },
+  cc: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  flag: { fontSize: 18 },
+  ccText: {
     fontFamily: 'Poppins',
     fontWeight: '600',
+    fontSize: 15,
+    letterSpacing: 0.2,
+    color: INK,
+  },
+  ccDivider: { width: 1, height: 26, backgroundColor: '#D5DCD2', marginHorizontal: 12 },
+  phoneInput: {
+    flex: 1,
+    height: 58,
+    paddingVertical: 0,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
     fontSize: 16,
-    lineHeight: 24,
+    letterSpacing: 1,
+    color: INK,
+  },
+  errorText: {
+    marginTop: 8,
+    marginLeft: 4,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.1,
+    color: '#D32F2F',
+  },
+  ctaTouch: { marginTop: 20, borderRadius: 29, overflow: 'hidden' },
+  cta: {
+    height: 56,
+    borderRadius: 29,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  ctaText: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 16,
+    letterSpacing: 0.3,
     color: '#FFFFFF',
   },
-  loginButtonDisabled: {
-    opacity: 0.6,
-  },
-  socialSection: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    width: 217,
-    gap: 20,
-  },
-  orText: {
+  otpHint: {
+    marginTop: 10,
+    textAlign: 'center',
     fontFamily: 'Poppins',
     fontWeight: '400',
-    fontSize: 16,
-    lineHeight: 24,
-    textAlign: 'center',
-    color: '#646982',
+    fontSize: 12,
+    letterSpacing: 0.1,
+    color: MUTED,
   },
-  googleButton: {
-    flexDirection: 'row',
+  perksDivider: { flexDirection: 'row', alignItems: 'center', marginTop: 30, marginBottom: 16 },
+  line: { flex: 1, height: 1, backgroundColor: '#E6EAE4' },
+  perksTitle: {
+    marginHorizontal: 10,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 12,
+    letterSpacing: 0.3,
+    color: MUTED,
+  },
+  perks: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
+  perk: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    borderRadius: 16,
+    backgroundColor: '#F7FAF3',
+  },
+  perkIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-    height: 60,
-    backgroundColor: '#F8F8F8',
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 19,
-    gap: 10,
-  },
-  googleIcon: {
-    width: 16,
-    height: 16,
-  },
-  googleButtonText: {
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#001E1F',
-  },
-  termsText: {
-    width: '100%',
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 14,
-    lineHeight: 24,
-    textAlign: 'center',
-    color: 'rgba(0, 30, 31, 0.5)',
+    backgroundColor: '#FFFFFF',
     marginBottom: 8,
   },
-  termsLink: {
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.primary,
-    textDecorationLine: 'underline',
+  perkEmoji: { fontSize: 22 },
+  perkTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 12,
+    letterSpacing: 0.1,
+    color: INK,
+    textAlign: 'center',
   },
+  perkSub: {
+    marginTop: 2,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 10.5,
+    letterSpacing: 0.1,
+    color: '#7A847D',
+    textAlign: 'center',
+  },
+  bottom: { backgroundColor: '#FFFFFF' },
+  termsText: {
+    paddingHorizontal: 24,
+    paddingTop: 6,
+    paddingBottom: 12,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    letterSpacing: 0.1,
+    textAlign: 'center',
+    color: MUTED,
+  },
+  termsLink: { fontFamily: 'Poppins', fontWeight: '600', color: GREEN, textDecorationLine: 'underline' },
 });
