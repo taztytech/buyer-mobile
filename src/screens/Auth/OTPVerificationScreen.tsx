@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { colors } from '@/theme';
 import { authService } from '@/services/auth.service';
 
 interface OTPVerificationScreenProps {
@@ -15,6 +15,7 @@ interface OTPVerificationScreenProps {
 
 export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   phoneNumber = '',
+  onBack,
   onSuccess,
   onOpenTerms,
   onOpenPrivacy,
@@ -236,325 +237,360 @@ export const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
     }
   };
 
+  // All four digits in (typed or SMS autofill): verify straight away.
+  const otpCode = otp.join('');
+  const lastAutoRef = useRef('');
+  useEffect(() => {
+    if (otpCode.length === 4 && !isVerifying && lastAutoRef.current !== otpCode) {
+      lastAutoRef.current = otpCode;
+      handleVerify();
+    }
+    if (otpCode.length < 4) lastAutoRef.current = '';
+  }, [otpCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const complete = otpCode.length === 4;
+  const masked = phoneNumber ? `+91 ${phoneNumber.slice(0, 5)} ${phoneNumber.slice(5)}` : 'your number';
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="#00B14F" />
-
-      <View style={styles.whiteBackgroundWrapper}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ flex: 1 }}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A6B35" translucent={false} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          bounces={false}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <ScrollView
-            contentContainerStyle={{ flexGrow: 1 }}
-            bounces={false}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+          {/* Hero */}
+          <LinearGradient
+            colors={['#0A6B35', '#1E9A45', '#7DC242']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.hero}
           >
-            <View style={styles.mainContainer}>
-              {/* Green Background Section */}
-              <View style={styles.greenSection}>
-                {/* Verification Title */}
-                <Text style={styles.title}>Verification</Text>
-
-                {/* Subtitle */}
-                <Text style={styles.subtitle}>
-                  We have sent a 4 digit code to your number
-                </Text>
-
-                {/* OTP Illustration */}
-                <Image
-                  source={require('@/assets/OTP-asset.png')}
-                  style={styles.illustrationImage}
-                  resizeMode="contain"
-                />
-              </View>
-
-              {/* White Bottom Sheet */}
-              <View style={styles.bottomSheet}>
-                <View style={styles.formContainer}>
-                  {/* Verification Code Label */}
-                  <Text style={styles.inputLabel}>ENTER VERIFICATION CODE</Text>
-
-                  {/* OTP Input Row */}
-                  <View style={styles.otpInputRow}>
-                    {otp.map((digit, index) => (
-                      <TextInput
-                        autoCorrect={false}
-                        key={index}
-                        ref={inputRefs[index]}
-                        style={[
-                          styles.otpBox,
-                          digit ? styles.otpBoxFilled : null,
-                        ]}
-                        value={digit}
-                        onChangeText={(value) => handleOtpChange(value, index)}
-                        onKeyPress={(e) => handleKeyPress(e, index)}
-                        keyboardType="number-pad"
-                        maxLength={6}
-                        textAlign="center"
-                        textContentType={index === 0 ? 'oneTimeCode' : 'none'}
-                        autoComplete={index === 0 ? 'sms-otp' : 'off'}
-                        importantForAutofill={index === 0 ? 'yes' : 'no'}
-                      />
-                    ))}
+            <SafeAreaView edges={['top']}>
+              {onBack ? (
+                <TouchableOpacity onPress={onBack} style={styles.back} hitSlop={12} testID="otp-back-button">
+                  <MaterialIcons name="arrow-back" size={22} color="#FFFFFF" />
+                </TouchableOpacity>
+              ) : null}
+              <View style={styles.heroInner}>
+                <View style={styles.heroText}>
+                  <Text style={styles.heroTitle}>Verify your{'\n'}number</Text>
+                  <Text style={styles.heroTagline}>Almost there, your food is waiting!</Text>
+                </View>
+                <View style={styles.lockWrap}>
+                  <View style={styles.lockBlob} />
+                  <View style={styles.lockBubble}>
+                    <Text style={styles.lockEmoji}>🔐</Text>
                   </View>
-
-                  {/* Inline status messages */}
-                  {error ? <Text style={styles.errorText}>{error}</Text> : null}
-                  {info ? <Text style={styles.infoText}>{info}</Text> : null}
-
-                  {/* Bottom Action Row - Timer and Resend Code */}
-                  <View style={styles.resendRow}>
-                    <View style={styles.resendRightGroup}>
-                      <TouchableOpacity
-                        onPress={handleResendCode}
-                        disabled={timer > 0 || isResending}
-                      >
-                        <Text style={[
-                          styles.resendText,
-                          timer === 0 && !isResending && styles.resendTextActive
-                        ]}>
-                          {isResending ? 'Sending...' : 'Resend Code'}
-                        </Text>
-                      </TouchableOpacity>
-                      <Text style={styles.timerText}>0.{timer.toString().padStart(2, '0')} s</Text>
-                    </View>
+                  <View style={[styles.miniBubble, styles.miniA]}>
+                    <Text style={styles.miniEmoji}>🍛</Text>
                   </View>
-
-                  {/* VERIFY & PROCEED Button */}
-                  <TouchableOpacity
-                    style={[styles.verifyButton, isVerifying && styles.verifyButtonDisabled]}
-                    onPress={handleVerify}
-                    activeOpacity={0.8}
-                    disabled={isVerifying}
-                  >
-                    <View style={styles.verifyButtonContent}>
-                      <Text style={styles.verifyButtonText}>
-                        {isVerifying ? 'VERIFYING...' : 'VERIFY & PROCEED'}
-                      </Text>
-                      {!isVerifying && <MaterialIcons name="arrow-forward" size={24} color="#FFFFFF" />}
-                    </View>
-                  </TouchableOpacity>
+                  <View style={[styles.miniBubble, styles.miniB]}>
+                    <Text style={styles.miniEmoji}>💬</Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+            </SafeAreaView>
+          </LinearGradient>
 
-        {/* Terms & Privacy - Fixed to bottom */}
-        <View style={styles.bottomTermsContainer}>
-          <Text style={styles.termsText}>
-            By Clicking, You agree our{' '}
-            <Text
-              style={styles.termsLink}
-              onPress={onOpenTerms}
+          {/* Form */}
+          <View style={styles.form}>
+            <Text style={styles.welcome}>Enter the 4-digit code</Text>
+            <View style={styles.sentRow}>
+              <Text style={styles.welcomeSub}>Sent by SMS to </Text>
+              <Text style={styles.phone}>{masked}</Text>
+              {onBack ? (
+                <TouchableOpacity onPress={onBack} hitSlop={8} testID="otp-change-number">
+                  <Text style={styles.change}>  Change</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <View style={styles.otpRow}>
+              {otp.map((digit, index) => (
+                <TextInput
+                  autoCorrect={false}
+                  key={index}
+                  ref={inputRefs[index]}
+                  style={[styles.otpBox, digit ? styles.otpBoxFilled : null, !!error && styles.otpBoxError]}
+                  value={digit}
+                  onChangeText={value => handleOtpChange(value, index)}
+                  onKeyPress={e => handleKeyPress(e, index)}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  textAlign="center"
+                  textContentType={index === 0 ? 'oneTimeCode' : 'none'}
+                  autoComplete={index === 0 ? 'sms-otp' : 'off'}
+                  importantForAutofill={index === 0 ? 'yes' : 'no'}
+                  testID={`otp-input-${index}`}
+                />
+              ))}
+            </View>
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {info ? <Text style={styles.infoText}>{info}</Text> : null}
+
+            <TouchableOpacity
+              onPress={handleVerify}
+              activeOpacity={0.85}
+              disabled={isVerifying}
+              style={styles.ctaTouch}
+              testID="otp-verify-button"
             >
-              T&C
-            </Text>
-            {' and '}
-            <Text
-              style={styles.termsLink}
-              onPress={onOpenPrivacy}
-            >
-              Privacy Policy
-            </Text>
+              <LinearGradient
+                colors={complete ? ['#0A6B35', '#7DC242'] : ['#8FBF9F', '#C2DDA6']}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={styles.cta}
+              >
+                {isVerifying ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.ctaText}>Verify & continue</Text>
+                    <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <View style={styles.resendRow}>
+              {timer > 0 ? (
+                <Text style={styles.resendWait}>
+                  {"Didn't get it? Resend in "}
+                  <Text style={styles.timer}>{`0:${timer.toString().padStart(2, '0')}`}</Text>
+                </Text>
+              ) : (
+                <TouchableOpacity onPress={handleResendCode} disabled={isResending} testID="otp-resend-button">
+                  <Text style={styles.resendActive}>{isResending ? 'Sending…' : 'Resend code'}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <SafeAreaView edges={['bottom']} style={styles.bottom}>
+        <Text style={styles.termsText}>
+          By continuing, you agree to our{' '}
+          <Text style={styles.termsLink} onPress={onOpenTerms} testID="otp-terms-link">
+            Terms
           </Text>
-        </View>
-      </View>
-    </SafeAreaView>
+          {' and '}
+          <Text style={styles.termsLink} onPress={onOpenPrivacy} testID="otp-privacy-link">
+            Privacy Policy
+          </Text>
+        </Text>
+      </SafeAreaView>
+    </View>
   );
 };
 
+const GREEN = '#0A6B35';
+const INK = '#14201A';
+const MUTED = '#8A938C';
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#00B14F',
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  flex: { flex: 1 },
+  scroll: { flexGrow: 1 },
+  hero: {
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    paddingBottom: 26,
+    overflow: 'hidden',
   },
-  whiteBackgroundWrapper: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  mainContainer: {
-    flex: 1,
-  },
-  bottomTermsContainer: {
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    backgroundColor: '#FFFFFF',
-  },
-  greenSection: {
-    height: 258,
-    backgroundColor: '#00B14F',
-    paddingHorizontal: 20,
-  },
-  title: {
-    position: 'absolute',
-    left: 20,
-    top: 64,
-    width: 181,
-    height: 45,
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 25,
-    lineHeight: 45,
-    color: '#FFFFFF',
-  },
-  subtitle: {
-    position: 'absolute',
-    left: 20,
-    top: 113,
-    width: 180,
-    height: 52,
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#FFFFFF',
-    opacity: 0.85,
-  },
-  illustrationImage: {
-    position: 'absolute',
-    left: 103,
-    top: 44,
-    width: 339,
-    height: 255,
-  },
-  bottomSheet: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 20,
-    minHeight: 400,
-    justifyContent: 'space-between',
-  },
-  formContainer: {
-    width: '100%',
+  back: {
+    marginLeft: 14,
+    marginTop: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
-  inputLabel: {
-    width: '100%',
+  heroInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 22,
+    paddingTop: 10,
+    minHeight: 160,
+  },
+  heroText: { flex: 1, paddingRight: 8 },
+  heroTitle: {
+    fontFamily: 'Poppins',
+    fontWeight: '800',
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.2,
+    color: '#FFFFFF',
+  },
+  heroTagline: {
+    marginTop: 10,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: 0.2,
+    color: 'rgba(255,255,255,0.92)',
+  },
+  lockWrap: { width: 130, height: 130 },
+  lockBlob: {
+    position: 'absolute',
+    left: 8,
+    top: 8,
+    width: 114,
+    height: 114,
+    borderRadius: 57,
+    backgroundColor: 'rgba(212,245,90,0.22)',
+  },
+  lockBubble: {
+    position: 'absolute',
+    left: 28,
+    top: 28,
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  lockEmoji: { fontSize: 38, lineHeight: 46 },
+  miniBubble: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  miniA: { left: 0, top: 80 },
+  miniB: { right: 0, top: 4 },
+  miniEmoji: { fontSize: 20, lineHeight: 26 },
+  form: { paddingHorizontal: 22, paddingTop: 28, paddingBottom: 16 },
+  welcome: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 24,
+    lineHeight: 32,
+    letterSpacing: -0.2,
+    color: INK,
+  },
+  sentRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 4, marginBottom: 24 },
+  welcomeSub: {
     fontFamily: 'Poppins',
     fontWeight: '400',
     fontSize: 14,
-    lineHeight: 21,
-    textTransform: 'uppercase',
-    color: '#001E1F',
-    marginBottom: 4,
+    lineHeight: 20,
+    letterSpacing: 0.1,
+    color: '#6B756E',
   },
-  otpInputRow: {
-    flexDirection: 'row',
-    width: '100%',
-    height: 60,
-    gap: 9,
-    marginBottom: 8,
-  },
-  errorText: {
-    width: '100%',
-    marginTop: 4,
+  phone: {
     fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: 0.3,
+    color: INK,
+  },
+  change: {
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: 0.1,
+    color: '#1E9A45',
+  },
+  otpRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  otpBox: {
+    flex: 1,
+    height: 64,
+    borderRadius: 18,
+    backgroundColor: '#F3F6EE',
+    borderWidth: 1.5,
+    borderColor: '#F3F6EE',
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 24,
+    letterSpacing: 0,
+    color: INK,
+  },
+  otpBoxFilled: { backgroundColor: '#FFFFFF', borderColor: '#1E9A45' },
+  otpBoxError: { borderColor: '#E53935' },
+  errorText: {
+    marginTop: 10,
+    marginLeft: 4,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
     fontSize: 13,
     lineHeight: 18,
+    letterSpacing: 0.1,
     color: '#D32F2F',
   },
   infoText: {
-    width: '100%',
-    marginTop: 2,
+    marginTop: 10,
+    marginLeft: 4,
     fontFamily: 'Poppins',
+    fontWeight: '400',
     fontSize: 13,
     lineHeight: 18,
-    color: colors.primary,
+    letterSpacing: 0.1,
+    color: '#1E9A45',
   },
-  otpBox: {
-    flex: 1,
-    height: 60,
-    backgroundColor: '#F7F7F7',
-    borderRadius: 10,
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#001E1F',
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  otpBoxFilled: {
-    backgroundColor: '#D8D8D8',
-    borderColor: '#515151',
-  },
-  resendRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    width: '100%',
-    height: 21,
-    marginBottom: 0,
-  },
-  resendRightGroup: {
+  ctaTouch: { marginTop: 22, borderRadius: 29, overflow: 'hidden' },
+  cta: {
+    height: 56,
+    borderRadius: 29,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
   },
-  timerText: {
+  ctaText: {
     fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 14,
-    lineHeight: 21,
-    color: colors.primary,
-    width: 60,
-    textAlign: 'right',
-  },
-  resendText: {
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    fontSize: 13,
-    lineHeight: 20,
-    color: 'rgba(0, 30, 31, 0.5)',
-  },
-  resendTextActive: {
-    color: colors.primary,
-  },
-  verifyButton: {
-    width: '100%',
-    height: 60,
-    backgroundColor: '#00B14F',
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  verifyButtonDisabled: {
-    opacity: 0.6,
-  },
-  verifyButtonContent: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 19,
-    gap: 10,
-  },
-  verifyButtonText: {
-    fontFamily: 'Poppins',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 16,
-    lineHeight: 24,
+    letterSpacing: 0.3,
     color: '#FFFFFF',
   },
-  termsText: {
-    width: '100%',
-    fontFamily: 'Poppins_400Regular',
+  resendRow: { alignItems: 'center', marginTop: 16 },
+  resendWait: {
+    fontFamily: 'Poppins',
+    fontWeight: '400',
     fontSize: 13,
-    lineHeight: 20,
-    textAlign: 'center',
-    color: 'rgba(0, 30, 31, 0.5)',
-    marginBottom: 8,
+    letterSpacing: 0.1,
+    color: MUTED,
   },
-  termsLink: {
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.primary,
+  timer: { fontFamily: 'Poppins', fontWeight: '700', color: GREEN },
+  resendActive: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 0.2,
+    color: GREEN,
     textDecorationLine: 'underline',
   },
+  bottom: { backgroundColor: '#FFFFFF' },
+  termsText: {
+    paddingHorizontal: 24,
+    paddingTop: 6,
+    paddingBottom: 12,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
+    letterSpacing: 0.1,
+    textAlign: 'center',
+    color: MUTED,
+  },
+  termsLink: { fontFamily: 'Poppins', fontWeight: '600', color: GREEN, textDecorationLine: 'underline' },
 });

@@ -1,4 +1,5 @@
 import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 
 /** A delivery location resolved from the device GPS at app launch. */
 export interface ResolvedCurrentLocation {
@@ -8,6 +9,13 @@ export interface ResolvedCurrentLocation {
   address: string;
   latitude: number;
   longitude: number;
+  /** Reverse-geocoded parts, for saving this spot as an address. */
+  parts?: {
+    line1: string;
+    city: string;
+    state: string;
+    pincode: string;
+  };
 }
 
 /** Reject a promise if it does not settle within `ms`. Returns null on timeout. */
@@ -78,6 +86,7 @@ export async function resolveCurrentLocation(
     // to render and to fetch nearby restaurants, so a slow/failed geocode just
     // falls back to a generic label.
     let address = 'Your current location';
+    let parts: ResolvedCurrentLocation['parts'];
     try {
       const results = await withTimeout(
         Location.reverseGeocodeAsync({ latitude, longitude }),
@@ -97,13 +106,58 @@ export async function resolveCurrentLocation(
         if (line) {
           address = line;
         }
+        parts = {
+          line1: [place.name, place.street].filter(Boolean).join(', ') || place.district || '',
+          city: place.city || place.subregion || '',
+          state: place.region || '',
+          pincode: (place.postalCode || '').replace(/\D/g, '').slice(0, 6),
+        };
       }
     } catch {
       // Keep the generic label.
     }
 
-    return { name: 'Current location', address, latitude, longitude };
+    return { name: 'Current location', address, latitude, longitude, parts };
   } catch {
     return null;
   }
+}
+
+/**
+ * Makes sure location can be read: asks for permission, and when the phone's
+ * location (GPS) is switched off shows the system "Turn on location" popup
+ * (Android). Returns true when location is on and allowed.
+ */
+export async function ensureLocationOn(): Promise<boolean> {
+  try {
+    let { status } = await Location.getForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      status = (await Location.requestForegroundPermissionsAsync()).status;
+    }
+    if (status !== 'granted') return false;
+    if (await Location.hasServicesEnabledAsync()) return true;
+    if (Platform.OS === 'android') {
+      // Throws when the user taps "No thanks".
+      await Location.enableNetworkProviderAsync();
+      return await Location.hasServicesEnabledAsync();
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/** Distance in metres between two points (haversine). */
+export function distanceMeters(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLng = toRad(b.longitude - a.longitude);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
 }

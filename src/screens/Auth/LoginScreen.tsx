@@ -183,7 +183,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 )}
               </LinearGradient>
             </TouchableOpacity>
-            <Text style={styles.otpHint}>{"We'll send a 6-digit OTP to verify it's you"}</Text>
+            <Text style={styles.otpHint}>{"We'll send a 4-digit OTP to verify it's you"}</Text>
 
             <View style={styles.perksDivider}>
               <View style={styles.line} />

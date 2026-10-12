@@ -24,7 +24,7 @@ import { SearchScreen } from '@/screens/Search/SearchScreen';
 import { AddressSelectionScreen } from '@/screens/Location/AddressSelectionScreen';
 import { LocationSelectionScreen } from '@/screens/Location/LocationSelectionScreen';
 import { MyAddressesScreen } from '@/screens/Location/MyAddressesScreen';
-import { addressService, AddressResponse } from '@/services/address.service';
+import { addressService, AddressResponse, MAX_ADDRESSES } from '@/services/address.service';
 import { AddressSelectionModal } from '@/components/AddressSelectionModal';
 import { CategoryDishesScreen } from '@/screens/Category/CategoryDishesScreen';
 import { RestaurantScreen } from '@/screens/Restaurant/RestaurantScreen';
@@ -46,7 +46,13 @@ import { authService } from '@/services/auth.service';
 import { apiService } from '@/services/api.service';
 import { storageService, GUEST_SELECTED_LOCATION_KEY } from '@/services/storage.service';
 import { homeService } from '@/services/home.service';
-import { resolveCurrentLocation } from '@/services/currentLocation.service';
+import {
+  resolveCurrentLocation,
+  ensureLocationOn,
+  distanceMeters,
+  type ResolvedCurrentLocation,
+} from '@/services/currentLocation.service';
+import { NewLocationSheet } from '@/components/NewLocationSheet';
 import { CartProvider, useCart } from '@/context/CartContext';
 import { VegModeProvider } from '@/context/VegModeContext';
 import { ConfirmationProvider, useConfirmation } from '@/context/ConfirmationContext';
@@ -1074,6 +1080,7 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           resolveCurrentLocation(6000),
           new Promise<null>((resolve) => setTimeout(() => resolve(null), 6500)),
         ]);
+        startupLocationRef.current = currentLoc;
 
         if (isLoggedIn) {
           // Get current user and set analytics / crashlytics user ID
@@ -1815,6 +1822,85 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
       // If GPS fails, keep the sheet open so the user can pick a saved address.
     }
   }, []);
+
+  // ---- On app open: location on, and offer to save a new spot ----
+  const startupLocationRef = React.useRef<ResolvedCurrentLocation | null>(null);
+  const locationCheckDoneRef = React.useRef(false);
+  const [newLocationPrompt, setNewLocationPrompt] = React.useState<ResolvedCurrentLocation | null>(null);
+
+  const savedToSelected = (addr: AddressResponse) => ({
+    name: addr.type === 'work' ? 'Work' : addr.type === 'home' ? 'Home' : String(addr.address1 || '').split(',')[0] || 'Address',
+    address: [addr.address1, addr.address2, addr.address3, addr.city]
+      .filter(Boolean)
+      .map((x) => String(x).trim())
+      .join(', '),
+    latitude: addr.latitude,
+    longitude: addr.longitude,
+    type: addr.type,
+  });
+
+  React.useEffect(() => {
+    if (isCheckingAuth || locationCheckDoneRef.current) return;
+    locationCheckDoneRef.current = true;
+    (async () => {
+      // Location off: the system "Turn on location" popup (logged in or not).
+      const on = await ensureLocationOn();
+      if (!on) return;
+      const loc = startupLocationRef.current ?? (await resolveCurrentLocation(10000));
+      if (!loc) return;
+
+      if (!isAuthenticatedRef.current) {
+        if (!startupLocationRef.current) {
+          setSelectedLocation(loc);
+          saveGuestLocation(loc);
+        }
+        return;
+      }
+
+      const res = await addressService.getAddresses();
+      const saved = res.success && res.data ? res.data : [];
+      // At (or next to) a saved address: deliver there, by its name.
+      const near = saved
+        .filter((a) => Number.isFinite(a.latitude) && Number.isFinite(a.longitude))
+        .map((a) => ({ a, d: distanceMeters(a, loc) }))
+        .sort((x, y) => x.d - y.d)[0];
+      if (near && near.d <= 200) {
+        setSelectedLocation(savedToSelected(near.a));
+        return;
+      }
+      setSelectedLocation(loc);
+      if (saved.length >= MAX_ADDRESSES) return;
+
+      // "Not now" for this spot: don't ask again here.
+      try {
+        const raw = await AsyncStorage.getItem(NEW_LOCATION_DISMISSED_KEY);
+        const dismissed: Array<{ latitude: number; longitude: number }> = raw ? JSON.parse(raw) : [];
+        if (dismissed.some((p) => distanceMeters(p, loc) <= 200)) return;
+      } catch {
+        // ask anyway
+      }
+      setNewLocationPrompt(loc);
+    })().catch(() => undefined);
+  }, [isCheckingAuth]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const dismissNewLocation = React.useCallback(async () => {
+    const loc = newLocationPrompt;
+    setNewLocationPrompt(null);
+    if (!loc) return;
+    try {
+      const raw = await AsyncStorage.getItem(NEW_LOCATION_DISMISSED_KEY);
+      const list: Array<{ latitude: number; longitude: number }> = raw ? JSON.parse(raw) : [];
+      list.push({ latitude: loc.latitude, longitude: loc.longitude });
+      await AsyncStorage.setItem(NEW_LOCATION_DISMISSED_KEY, JSON.stringify(list.slice(-20)));
+    } catch {
+      // ignore
+    }
+  }, [newLocationPrompt]);
+
+  const handleNewLocationSaved = React.useCallback((addr: AddressResponse) => {
+    setNewLocationPrompt(null);
+    setSelectedLocation(savedToSelected(addr));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleBackFromAddressSelection = () => {
     // Guest without location: go back to login with smooth transition
@@ -4064,6 +4150,15 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
           />
         )}
 
+        {/* Somewhere new on app open: save it as Home / Office / Other. */}
+        {currentScreen === 'home' && (
+          <NewLocationSheet
+            location={newLocationPrompt}
+            onSaved={handleNewLocationSaved}
+            onDismiss={dismissNewLocation}
+          />
+        )}
+
         {/* Full-screen "Order Placed" celebration — floats above every screen. */}
         {orderPlacedInfo && (
           <OrderPlacedScreen
@@ -4076,6 +4171,8 @@ function AppContent({ onNotificationNavigateToOrders }: { onNotificationNavigate
     </>
   );
 }
+
+const NEW_LOCATION_DISMISSED_KEY = 'tz-new-location-dismissed';
 
 // Wrapper App component with providers
 export default function App() {
